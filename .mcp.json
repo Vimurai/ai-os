@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem@2026.1.14",
+        "."
+      ],
+      "description": "Scoped filesystem access — enforces CAPABILITIES.md path restrictions. Restricts to project root by default."
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory@2026.1.26"
+      ],
+      "description": "Knowledge-graph memory store. Queryable alternative/supplement to DIGEST.md for semantic lookups."
+    },
+    "TestSprite": {
+      "command": "npx",
+      "args": [
+        "@testsprite/testsprite-mcp@latest"
+      ],
+      "env": {
+        "API_KEY": "your-testsprite-api-key"
+      },
+      "description": "TestSprite MCP — AI-powered test generation and verification. Third brain in the Tripartite Engine (Plan→Build→Test)."
+    }
+  }
+}

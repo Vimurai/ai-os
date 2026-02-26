@@ -1,0 +1,27 @@
+# AI-OS — sensitive .ai/ files should not be committed
+# Rename this to .gitignore inside .ai/ (done by ai init)
+
+# Contains env var names and secret storage details
+ENV.md
+
+# Contains architecture decisions that may reveal security posture
+# Comment out if you want to track decisions in git
+# DECISIONS.md
+
+# Contains AI session logs (may include sensitive context)
+SESSION.md
+LOG.md
+
+# Contains questions/answers that may include sensitive business logic
+# Comment out if you want to track Q&A in git
+# QUESTIONS.md
+
+# Contains cross-agent messages (may include sensitive context)
+COMM.md
+
+# Archive directory
+archive/
+
+# DIGEST.md is committed by default — it's the primary AI cache and usually safe.
+# If your DIGEST contains sensitive architecture details, uncomment:
+# DIGEST.md

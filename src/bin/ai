@@ -1,0 +1,519 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AIOS="${HOME}/.ai-os"
+VERSION="3.2"
+
+usage() {
+  cat <<USAGE
+ai — AI-OS v${VERSION}
+
+Commands:
+  ai install          Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot; enable agent teams; set up hooks
+  ai init             Create/upgrade .ai/ in current repo (safe, no overwrite)
+  ai onboard          Print the Principal Architect reverse-engineering prompt for existing repos
+  ai update           Prepare UPDATE.md + print override prompt for new sessions
+  ai preflight        Print DIGEST-first read order + SESSION stamp template
+  ai review <who>     Print parallel critic prompts (who = claude|gemini)
+  ai test             Run automated test suite (npx testsprite run)
+  ai archive          Move old LOG/COMM/REVIEWS entries to .ai/archive/YYYY-MM/
+  ai digest           Print prompt to regenerate DIGEST.md (run when stale)
+  ai sync             Re-sync agent/skill files from ~/.ai-os to ~/.claude, ~/.gemini, ~/.config/github-copilot
+  ai doctor           Diagnose PATH, config, hooks, MCP, Copilot CLI
+  ai where            Print install paths
+  ai version          Print version
+USAGE
+}
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+ensure_file_if_missing() {
+  local src="$1" dst="$2"
+  if [[ ! -f "$dst" ]]; then
+    cp "$src" "$dst"
+  fi
+}
+
+ensure_ai_templates() {
+  mkdir -p .ai .ai/archive
+
+  local T="${AIOS}/templates"
+
+  ensure_file_if_missing "$T/RULES.md"         ".ai/RULES.md"
+  ensure_file_if_missing "$T/SEED.md"          ".ai/SEED.md"
+  ensure_file_if_missing "$T/DIGEST.md"        ".ai/DIGEST.md"
+  ensure_file_if_missing "$T/BRIEF.md"         ".ai/BRIEF.md"
+  ensure_file_if_missing "$T/TASKS.md"         ".ai/TASKS.md"
+  ensure_file_if_missing "$T/UPDATE.md"        ".ai/UPDATE.md"
+  ensure_file_if_missing "$T/LOG.md"           ".ai/LOG.md"
+  ensure_file_if_missing "$T/architect.md.template" ".ai/architect.md"
+
+  # .gitignore for sensitive .ai/ files
+  if [[ ! -f ".ai/.gitignore" ]]; then
+    cp "$T/_gitignore" ".ai/.gitignore"
+    echo "Created .ai/.gitignore (review it — sensitive files excluded from git)"
+  fi
+
+  # .mcp.json in project root (enables MCP servers)
+  if [[ ! -f ".mcp.json" ]]; then
+    cp "$T/.mcp.json" ".mcp.json"
+    echo "Created .mcp.json (MCP servers: filesystem + memory — requires npx)"
+  fi
+
+  # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
+  local C="${AIOS}/copilot"
+  if [[ -f "${C}/copilot-instructions.md" && ! -f ".github/copilot-instructions.md" ]]; then
+    mkdir -p .github
+    cp "${C}/copilot-instructions.md" ".github/copilot-instructions.md"
+    echo "Created .github/copilot-instructions.md (fill in project-specific Copilot context)"
+  fi
+}
+
+migrate_legacy_ai_if_present() {
+  local legacy=0
+  for f in MASTER.md HANDOFF.md OWNERSHIP.md RUNBOOK.md 00_context.md 01_repo_state.md 05_input.md 50_acceptance.md 40_implementation_log.md; do
+    [[ -f ".ai/$f" ]] && legacy=1 && break
+  done
+  if [[ $legacy -eq 1 ]]; then
+    mkdir -p .ai/legacy
+    for f in MASTER.md HANDOFF.md OWNERSHIP.md RUNBOOK.md 00_context.md 01_repo_state.md 05_input.md 50_acceptance.md 40_implementation_log.md; do
+      [[ -f ".ai/$f" ]] && mv ".ai/$f" ".ai/legacy/$f"
+    done
+    { echo ""; echo "## Legacy migration ($(date '+%Y-%m-%d'))"; echo "- Moved legacy .ai files to .ai/legacy/"; echo "- Review and copy relevant content into BRIEF/TASKS/REPO."; } >> .ai/MIGRATION.md
+    echo "Legacy .ai files moved to .ai/legacy/ — review MIGRATION.md"
+  fi
+}
+
+enable_claude_agent_teams() {
+  mkdir -p "${HOME}/.claude"
+  python3 - <<'PY'
+import json, os, sys
+path = os.path.expanduser("~/.claude/settings.json")
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f) or {}
+    except Exception as e:
+        print(f"WARN: ~/.claude/settings.json is not valid JSON ({e}). Fix it, then re-run: ai install")
+        sys.exit(0)
+
+# Enable agent teams
+env = data.setdefault("env", {})
+env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+
+# Tighten Gemini permission: replace broad Bash(gemini *) with scoped Bash(gemini -p *)
+perms = data.setdefault("permissions", {})
+allow = perms.get("allow", [])
+# Replace any "Bash(gemini *)" with scoped version
+new_allow = []
+for entry in allow:
+    if entry == "Bash(gemini *)":
+        new_allow.append("Bash(gemini -p *)")
+        print("Tightened: Bash(gemini *) → Bash(gemini -p *)")
+    else:
+        new_allow.append(entry)
+# Add scoped gemini permission if not present at all
+if "Bash(gemini -p *)" not in new_allow and "Bash(gemini *)" not in new_allow:
+    new_allow.append("Bash(gemini -p *)")
+    print("Added: Bash(gemini -p *)")
+perms["allow"] = new_allow
+
+# Add hooks
+hooks = data.setdefault("hooks", {})
+
+# Stop hook — auto SESSION stamp + DIGEST update trigger
+stop_cmd = "bash $HOME/.ai-os/hooks/stop-hook.sh"
+stop_hooks = hooks.setdefault("Stop", [])
+already = any(
+    h.get("command") == stop_cmd
+    for entry in stop_hooks
+    for h in entry.get("hooks", [])
+)
+if not already:
+    stop_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": stop_cmd}]})
+    print("Added Stop hook: auto SESSION stamp")
+
+# PostToolUse — auto LOG append
+post_cmd = "bash $HOME/.ai-os/hooks/post-tool-log.sh"
+post_hooks = hooks.setdefault("PostToolUse", [])
+already = any(
+    h.get("command") == post_cmd
+    for entry in post_hooks
+    for h in entry.get("hooks", [])
+)
+if not already:
+    post_hooks.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": post_cmd}]})
+    print("Added PostToolUse hook: auto LOG append")
+
+# Metadata
+data["ai_os"] = {"installed_by": "ai-os", "version": "3.2"}
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+print("settings.json updated ✓")
+PY
+}
+
+install_global() {
+  echo "Preparing fresh AI-OS v2 installation..."
+  
+  # Destructive fresh install: remove old config to ensure v2 alignment
+  rm -rf "${HOME}/.gemini"
+  rm -rf "${HOME}/.claude"
+  rm -rf "${HOME}/.config/github-copilot"
+  echo "✓ Old configurations cleared"
+
+  # Gemini (Principal Architect)
+  mkdir -p "${HOME}/.gemini/agents" "${HOME}/.gemini/skills"
+  cp -f "${AIOS}/gemini/GEMINI.md"      "${HOME}/.gemini/GEMINI.md"
+  cp -f "${AIOS}/gemini/agents/"*.md    "${HOME}/.gemini/agents/" 2>/dev/null || true
+  cp -f "${AIOS}/gemini/skills/"*.md    "${HOME}/.gemini/skills/" 2>/dev/null || true
+  echo "✓ Installed Gemini (Principal Architect) config → ~/.gemini"
+
+  # Claude (Principal Software Engineer)
+  mkdir -p "${HOME}/.claude/agents" "${HOME}/.claude/skills"
+  cp -f "${AIOS}/claude/CLAUDE.md"      "${HOME}/.claude/CLAUDE.md"
+  cp -f "${AIOS}/claude/agents/"*.md    "${HOME}/.claude/agents/" 2>/dev/null || true
+  cp -f "${AIOS}/claude/skills/"*.md    "${HOME}/.claude/skills/" 2>/dev/null || true
+  echo "✓ Installed Claude (Principal Software Engineer) config → ~/.claude"
+
+  # Copilot CLI
+  mkdir -p "${HOME}/.config/github-copilot"
+  if [[ -f "${AIOS}/copilot/COPILOT.md" ]]; then
+    cp -f "${AIOS}/copilot/COPILOT.md" "${HOME}/.config/github-copilot/COPILOT.md"
+  fi
+  echo "✓ Installed Copilot config → ~/.config/github-copilot"
+  
+  if command -v gh &>/dev/null && gh extension list 2>/dev/null | grep -q "github/gh-copilot"; then
+    gh copilot config set telemetry false 2>/dev/null || true
+    echo "  gh copilot: configured ✓ (telemetry off)"
+  else
+    echo "  gh copilot: not installed — Recommended: gh extension install github/gh-copilot"
+  fi
+
+  # Hooks
+  chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
+  echo "✓ Hooks ready → ${AIOS}/hooks"
+
+  # Enable agent teams + fix permissions + add v2 hooks
+  enable_claude_agent_teams
+}
+
+do_init() {
+  ensure_ai_templates
+  migrate_legacy_ai_if_present
+
+  echo ""
+  echo "Initialized .ai/ + .github/ (safe — no overwrites) with AI-OS v${VERSION}"
+  echo ""
+  echo "Next (MANDATORY):"
+  echo "1) Fill in .ai/BRIEF.md and .ai/REPO.md"
+  echo "2) Fill in .ai/DIGEST.md — Include Triad Health (Planning/Execution/Testing)"
+  echo "3) Define the initial vision in .ai/architect.md (Template provided)"
+  echo "4) Fill in .github/copilot-instructions.md (project-specific context)"
+  echo "5) ai update     — start a peer agent session"
+  echo ""
+  echo "Triad Workflow:"
+  echo "  Architect (Gemini) → Writes to architect.md / Planning docs"
+  echo "  Engineer (Claude)  → Implements code based on blueprints"
+  echo "  Tester (TestSprite) → Mandatory quality gate via 'ai test'"
+  echo ""
+  echo "MCP servers enabled in .mcp.json (filesystem + memory)."
+}
+
+do_update() {
+  if [[ ! -d ".ai" ]]; then
+    echo "✗ No .ai/ directory found. Run: ai init"
+    exit 1
+  fi
+  ensure_ai_templates
+
+  # Warn if UPDATE.md still contains only the template placeholder lines
+  if [[ -f ".ai/UPDATE.md" ]]; then
+    CONTENT=$(grep -v '^#' .ai/UPDATE.md | grep -v '^$' | grep -v '^Write a small delta' | grep -v '^Then run Claude' | grep -v '^Clear this file' || true)
+    if [[ -z "$CONTENT" ]]; then
+      echo "⚠  .ai/UPDATE.md appears empty — fill it in before starting a session."
+      echo "   Describe what you want researched/planned (Architect) or executed (Engineer)."
+      echo ""
+    fi
+  fi
+
+  cat <<'PROMPT'
+
+━━ UNIFIED SYSTEM OVERRIDE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PREFLIGHT (Seeding .ai/ memory):
+1) Read .ai/DIGEST.md         ← for Triad Health & Project Snapshot
+2) Read .ai/architect.md      ← for Principal Architect blueprint
+3) Read .ai/UPDATE.md         ← for human intent
+4) Read .ai/TASKS.md          ← for assigned tasks
+
+ROLE: Principal Architect (Gemini) or Principal Software Engineer (Claude).
+AUTHORITY: Unified authority over whole system. .ai/ is absolute memory.
+
+⚠️ TOKEN ECONOMICS HARD RULE ⚠️
+Do NOT read files (`cat`, `view_file`) outside your immediate domain unless specified.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UPDATE.md is at: .ai/UPDATE.md
+PROMPT
+}
+
+do_onboard() {
+  cat <<'ONBD'
+
+━━ ONBOARDING SYSTEM OVERRIDE (For Existing Codebases) ━━━━━━━━━━━━━━
+Paste this prompt into Claude or Gemini:
+
+"You are the Principal Architect.
+I have just initialized AI-OS v2 in this existing codebase.
+Your task is to reverse-engineer this repository and establish the Triad.
+
+1. Analyze the project structure, dependencies, and core logic.
+2. Populate `.ai/DIGEST.md` with the snapshot (max 50 lines).
+3. Populate `.ai/BRIEF.md` with the system architecture summary.
+4. Draft the first `.ai/architect.md` blueprint.
+
+Do NOT write any application code. output only `.ai/` documentation."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ONBD
+}
+
+preflight() {
+  if [[ ! -f ".ai/SEED.md" ]]; then
+    echo "Missing .ai/SEED.md — run: ai init"
+    exit 1
+  fi
+  cat <<'PREF'
+
+━━ PREFLIGHT READ ORDER (DIGEST-FIRST) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Always read:
+  1. .ai/DIGEST.md        ← replaces most reads if current
+  2. .ai/architect.md     ← The Principal Architect's Blueprint
+  3. .ai/UPDATE.md        ← current request
+  4. .ai/TASKS.md         ← your assigned tasks
+
+The absolute source of truth is .ai/.
+Handover protocol (Engineer): Always record execution state back to LOG.md.
+Open only when task touches that domain:
+  • .ai/BRIEF.md (Project Rules & Lore)
+  • .ai/RULES.md (Token Economics & Triad Contract)
+
+SESSION.md is auto-stamped by Stop hook after your session ends.
+Manual stamp only if hook fails.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PREF
+}
+
+
+
+do_digest() {
+  cat <<'DGT'
+
+━━ REGENERATE DIGEST PROMPT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Paste into Claude Code:
+
+"Use the digest_updater agent to regenerate .ai/DIGEST.md from current
+ project state. Read: BRIEF, TASKS, DECISIONS, ARCH, SECURITY, REVIEWS
+ (recent), QUESTIONS (open), LOG (last 30 lines).
+ Keep DIGEST ≤ 60 lines, bullets only. Include Recent changes (last 10)."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DGT
+}
+
+do_test() {
+  echo "Running automated tests via TestSprite..."
+  if ! command -v npx &>/dev/null; then
+    echo "✗ npx not found. Please install Node.js."
+    exit 1
+  fi
+  npx testsprite run
+}
+
+do_sync() {
+  echo "Syncing agent/skill files from ${AIOS} → ~/.claude and ~/.gemini ..."
+
+  cp -f "${AIOS}/claude/CLAUDE.md"   "${HOME}/.claude/CLAUDE.md"
+  cp -f "${AIOS}/claude/agents/"*.md "${HOME}/.claude/agents/" 2>/dev/null || true
+  cp -f "${AIOS}/claude/skills/"*.md "${HOME}/.claude/skills/" 2>/dev/null || true
+  echo "  Claude agents + skills synced"
+
+  cp -f "${AIOS}/gemini/GEMINI.md"   "${HOME}/.gemini/GEMINI.md"
+  cp -f "${AIOS}/gemini/agents/"*.md "${HOME}/.gemini/agents/" 2>/dev/null || true
+  cp -f "${AIOS}/gemini/skills/"*.md "${HOME}/.gemini/skills/" 2>/dev/null || true
+  echo "  Gemini agents + skills synced"
+
+  cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
+  chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
+  echo "  Hooks synced"
+
+  mkdir -p "${HOME}/.config/github-copilot"
+  cp -f "${AIOS}/copilot/COPILOT.md" "${HOME}/.config/github-copilot/COPILOT.md" 2>/dev/null || true
+  echo "  Copilot config synced"
+
+  echo "Done. No settings.json changes — run: ai install to update hooks/permissions."
+}
+
+doctor() {
+  echo "AI-OS v${VERSION} — doctor"
+  echo ""
+
+  echo "Install root:  ${AIOS}"
+  echo "Bin:           ${AIOS}/bin/ai"
+  echo ""
+
+  echo "PATH contains ~/.ai-os/bin?"
+  if echo "$PATH" | tr ':' '\n' | grep -q "\.ai-os/bin"; then
+    echo "  ✓ yes"
+  else
+    echo "  ✗ NO — add to shell: export PATH=\"\$HOME/.ai-os/bin:\$PATH\""
+  fi
+  echo ""
+
+  echo "Gemini:"
+  [[ -d "${HOME}/.gemini" ]] && echo "  ✓ ~/.gemini exists" || echo "  ✗ ~/.gemini missing"
+  if [[ -f "${HOME}/.gemini/GEMINI.md" ]]; then
+    if diff -q "${AIOS}/gemini/GEMINI.md" "${HOME}/.gemini/GEMINI.md" &>/dev/null; then
+      echo "  ✓ GEMINI.md installed (integrity OK)"
+    else
+      echo "  ✗ GEMINI.md MISMATCH (drift detected) — run: ai sync"
+    fi
+  else
+    echo "  ✗ GEMINI.md missing — run: ai install"
+  fi
+  [[ -d "${HOME}/.gemini/agents" ]] && echo "  ✓ agents dir: $(ls "${HOME}/.gemini/agents" | wc -l | tr -d ' ') files" || echo "  ✗ agents dir missing"
+  echo ""
+
+  echo "Claude:"
+  [[ -d "${HOME}/.claude" ]] && echo "  ✓ ~/.claude exists" || echo "  ✗ ~/.claude missing"
+  if [[ -f "${HOME}/.claude/CLAUDE.md" ]]; then
+    if diff -q "${AIOS}/claude/CLAUDE.md" "${HOME}/.claude/CLAUDE.md" &>/dev/null; then
+      echo "  ✓ CLAUDE.md installed (integrity OK)"
+    else
+      echo "  ✗ CLAUDE.md MISMATCH (drift detected) — run: ai sync"
+    fi
+  else
+    echo "  ✗ CLAUDE.md missing — run: ai install"
+  fi
+  [[ -d "${HOME}/.claude/agents" ]] && echo "  ✓ agents dir: $(ls "${HOME}/.claude/agents" | wc -l | tr -d ' ') files" || echo "  ✗ agents dir missing"
+  echo ""
+
+  echo "Hooks:"
+  if [[ -f "${HOME}/.ai-os/hooks/stop-hook.sh" ]]; then
+    echo "  ✓ stop-hook.sh present (auto SESSION stamp)"
+  else
+    echo "  ✗ stop-hook.sh missing — run: ai install"
+  fi
+  if [[ -f "${HOME}/.ai-os/hooks/post-tool-log.sh" ]]; then
+    echo "  ✓ post-tool-log.sh present (auto LOG append)"
+  else
+    echo "  ✗ post-tool-log.sh missing — run: ai install"
+  fi
+  echo ""
+
+  echo "settings.json:"
+  local settings="${HOME}/.claude/settings.json"
+  if [[ -f "$settings" ]]; then
+    echo "  ✓ present"
+    python3 -c "
+import json
+with open('$settings') as f:
+    d = json.load(f)
+env = d.get('env', {})
+print('  agent teams:', env.get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', 'NOT SET'))
+hooks = d.get('hooks', {})
+print('  Stop hook:', 'yes ✓' if hooks.get('Stop') else 'NO - run: ai install')
+print('  PostToolUse hook:', 'yes ✓' if hooks.get('PostToolUse') else 'NO - run: ai install')
+allow = d.get('permissions', {}).get('allow', [])
+broad = [x for x in allow if x == 'Bash(gemini *)']
+print('  Gemini perm:', 'BROAD (Bash(gemini *)) - run: ai install to fix' if broad else 'scoped ✓')
+" 2>/dev/null || echo "  ✗ could not parse settings.json"
+  else
+    echo "  ✗ missing — run: ai install"
+  fi
+  echo ""
+
+  echo "GitHub Copilot CLI:"
+  if command -v gh &>/dev/null; then
+    echo "  ✓ gh installed: $(gh --version 2>/dev/null | head -1)"
+    if gh extension list 2>/dev/null | grep -q "github/gh-copilot"; then
+      echo "  ✓ gh copilot extension installed"
+    else
+      echo "  ✗ gh copilot not installed — run: gh extension install github/gh-copilot"
+    fi
+  else
+    echo "  ✗ gh not installed — run: brew install gh && gh auth login"
+  fi
+  [[ -f "${HOME}/.config/github-copilot/COPILOT.md" ]] \
+    && echo "  ✓ COPILOT.md installed" \
+    || echo "  ✗ COPILOT.md missing — run: ai install"
+  echo ""
+
+  echo "MCP (.mcp.json in current dir):"
+  if command -v node &>/dev/null; then
+    echo "  ✓ node $(node --version) (required for npx/MCP servers)"
+  else
+    echo "  ✗ node not found — MCP servers need Node.js: brew install node"
+  fi
+  if command -v npx &>/dev/null; then
+    echo "  ✓ npx available"
+    if npx testsprite --version &>/dev/null; then
+      echo "  ✓ TestSprite: available"
+    else
+      echo "  ✗ TestSprite: not installed — run: npm install -g testsprite (or use npx)"
+    fi
+  else
+    echo "  ✗ npx not found — install Node.js to use MCP servers and TestSprite"
+  fi
+  if [[ -f ".mcp.json" ]]; then
+    echo "  ✓ .mcp.json present"
+  else
+    echo "  ✗ .mcp.json not found in $(pwd) — run: ai init"
+  fi
+  echo ""
+
+  echo "Copilot repo instructions (.github/copilot-instructions.md in current dir):"
+  if [[ -f ".github/copilot-instructions.md" ]]; then
+    echo "  ✓ present (read automatically by GitHub Copilot Chat)"
+  else
+    echo "  ✗ not found in $(pwd) — run: ai init to scaffold it"
+  fi
+  echo ""
+
+  echo "Orphaned v2 contracts (should be gone):"
+  for f in 10_WORKFLOW.md 20_OWNERSHIP.md 30_TOKEN_DISCIPLINE.md 40_SECURITY.md 50_DEVOPS.md 60_SEO_COMPLIANCE.md; do
+    if [[ -f "${AIOS}/contracts/$f" ]]; then
+      echo "  ✗ ORPHAN: ${AIOS}/contracts/$f — run: ai install to remove"
+    fi
+  done
+  echo "  (if nothing listed above, contracts are clean ✓)"
+}
+
+# ── dispatch ──────────────────────────────────────────────────────────────────
+
+cmd="${1:-}"
+case "$cmd" in
+  install)   install_global ;;
+  init)      do_init ;;
+  onboard)   do_onboard ;;
+  update)    do_update ;;
+  preflight) preflight ;;
+  digest)    do_digest ;;
+  test)      do_test ;;
+  sync)      do_sync ;;
+  doctor)    doctor ;;
+  where)
+    echo "AI-OS:     ${AIOS}"
+    echo "bin:       ${AIOS}/bin"
+    echo "templates: ${AIOS}/templates"
+    echo "contracts: ${AIOS}/contracts"
+    echo "claude:    ${AIOS}/claude"
+    echo "gemini:    ${AIOS}/gemini"
+    echo "copilot:   ${AIOS}/copilot"
+    echo "hooks:     ${AIOS}/hooks"
+    ;;
+  version|-v|--version) echo "ai-os ${VERSION}" ;;
+  ""|help|-h|--help) usage ;;
+  *) echo "Unknown command: $cmd"; usage; exit 1 ;;
+esac
