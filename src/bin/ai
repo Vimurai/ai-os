@@ -322,6 +322,124 @@ Paste into Claude Code:
 DGT
 }
 
+do_archive() {
+  if [[ ! -d ".ai" ]]; then
+    echo "✗ No .ai/ directory found. Run: ai init"
+    exit 1
+  fi
+
+  local ARCHIVE_DIR
+  ARCHIVE_DIR=".ai/archive/$(date '+%Y-%m')"
+  mkdir -p "$ARCHIVE_DIR"
+
+  local SUFFIX
+  SUFFIX=$(date '+%Y%m%d_%H%M')
+
+  local ARCHIVED=0
+
+  # Files to archive (content files that accumulate over time)
+  for fname in LOG.md COMM.md REVIEWS.md SESSION.md; do
+    local src=".ai/${fname}"
+    [[ ! -f "$src" ]] && continue
+
+    # Only archive if non-empty (beyond header line)
+    local content
+    content=$(grep -v '^#' "$src" | grep -v '^$' | head -5 || true)
+    if [[ -z "$content" ]]; then
+      echo "  Skipped ${fname} (empty)"
+      continue
+    fi
+
+    local dst="${ARCHIVE_DIR}/${fname%.md}.${SUFFIX}.md"
+    mv "$src" "$dst"
+    echo "  Archived: ${fname} → ${dst}"
+    ARCHIVED=$((ARCHIVED + 1))
+
+    # Re-initialize from template or with header
+    local T="${AIOS}/templates"
+    if [[ -f "${T}/${fname}" ]]; then
+      cp "${T}/${fname}" "$src"
+    else
+      printf "# %s\n\n" "$fname" > "$src"
+    fi
+    echo "  Re-initialized: ${fname}"
+  done
+
+  if [[ $ARCHIVED -eq 0 ]]; then
+    echo "Nothing to archive — all content files are empty."
+  else
+    echo ""
+    echo "✓ Archive complete → ${ARCHIVE_DIR}"
+    echo "  ${ARCHIVED} file(s) archived and re-initialized."
+  fi
+}
+
+do_review() {
+  local who="${1:-}"
+  if [[ -z "$who" ]]; then
+    echo "Usage: ai review <claude|gemini>"
+    exit 1
+  fi
+
+  case "$who" in
+    claude)
+      cat <<'CLAUDE_PROMPT'
+
+━━ REVIEW PROMPT — Claude (Parallel Critics) ━━━━━━━━━━━━━━━━━━━━━━━━
+Paste this into Claude Code:
+
+"You are the Principal Software Engineer running a self-review.
+Execute these three critics IN PARALLEL using sub-agents:
+
+1. critic_arch     — Review src/ against .ai/architect.md. Flag any
+                     code that contradicts the System Philosophy or
+                     breaks domain sovereignty rules.
+
+2. critic_security — Review src/ and hooks/ for OWASP Top 10,
+                     shell injection, env variable leakage, and
+                     capability boundary violations per CAPABILITIES.md.
+
+3. critic_tests    — Review test coverage. Identify untested paths,
+                     missing edge cases, and quality gate gaps.
+
+After all three complete, synthesize findings and append to .ai/REVIEWS.md:
+  [CRITIC_STAMP] YYYY-MM-DD | <summary of critical findings>
+
+A [CRITIC_STAMP] is required to unblock Gate 2 (pre-commit hook)."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLAUDE_PROMPT
+      ;;
+    gemini)
+      cat <<'GEMINI_PROMPT'
+
+━━ REVIEW PROMPT — Gemini (Architectural Audit) ━━━━━━━━━━━━━━━━━━━━
+Paste this into Gemini (or gemini -p):
+
+"You are the Principal Architect performing an architectural audit.
+
+1. Read .ai/architect.md (your blueprint — the source of truth).
+2. Read .ai/DIGEST.md (current project snapshot).
+3. Read .ai/TASKS.md (open P-## and E-## tasks).
+4. Review the src/ directory structure.
+
+Evaluate:
+  - Are implemented features aligned with the blueprint?
+  - Are there any orphaned features (built but not in architect.md)?
+  - Are any blueprint sections ambiguous or missing implementation detail?
+  - What are the top 3 architectural risks?
+
+Output a structured audit to .ai/REVIEWS.md with section:
+  [ARCH_AUDIT] YYYY-MM-DD | <findings>"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GEMINI_PROMPT
+      ;;
+    *)
+      echo "✗ Unknown reviewer: ${who}. Use 'claude' or 'gemini'."
+      exit 1
+      ;;
+  esac
+}
+
 do_test() {
   echo "Running automated tests via TestSprite..."
   if ! command -v npx &>/dev/null; then
@@ -500,6 +618,8 @@ case "$cmd" in
   update)    do_update ;;
   preflight) preflight ;;
   digest)    do_digest ;;
+  archive)   do_archive ;;
+  review)    do_review "${2:-}" ;;
   test)      do_test ;;
   sync)      do_sync ;;
   doctor)    doctor ;;

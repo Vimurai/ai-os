@@ -19,6 +19,17 @@
 - Data model: Pure file-based memory (`.ai/` markdown files).
 - Integration points: Integrates with `~/.claude/settings.json`, GitHub Copilot instructions, and MCP server schemas.
 
-## Security/DevOps Notes (Claude-owned)
-- Secrets: No secrets managed. Relies on existing API keys in host tools.
-- Deployment: Bash-based installation via `install-ai-os.sh` to `~/.ai-os`, altering `~/.zshrc` and global tool configurations.
+## Optimized Workflow Patterns
+Based on 2025 best practices, AI-OS v2 implements:
+- **Hierarchical Oversight**: Gemini (Architect) designates high-risk tasks for explicit human or secondary-agent approval.
+- **Hypothesis-Fix Protocol**: Claude (Engineer) must state a technical hypothesis and expected outcome in `LOG.md` before executing logic changes.
+- **Swarm Critique**: The Architect can delegate Claude to "critique" a blueprint, acting as a temporary sub-agent to find design flaws.
+
+## Security & Governance (Architect-owned)
+- **"Default-Deny" Tool Registry**: Only MCP servers explicitly signed in `~/.ai-os/registry.json` can be executed with write/execute permissions.
+- **Capability Isolation**:
+  - **READ**: Filesystem and search tools (Low risk).
+  - **WRITE**: Code formatting and local file edits (Isolated in Worktrees).
+  - **EXECUTE**: Shell commands and script running (Mandatory User/Architect approval).
+- **OAuth Governance**: Third-party integrations must use Architect-managed OAuth flows.
+- **Verification Checkpoints**: Every session must end with a `LOG.md` entry that includes a "Security & Integrity" check.

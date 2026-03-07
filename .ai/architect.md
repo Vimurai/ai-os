@@ -6,6 +6,7 @@
 ## 1. System Philosophy
 - **Concept**: A Triad intelligence loop directly embedded within any codebase. AI-OS bridges the gap between raw LLM chats and structured agentic execution.
 - **Value Prop**: Low-friction onboarding, automatic token-saver hooks, clear separation of concerns (Planning vs Execution vs Testing).
+- **Agentic Intent**: `UPDATE.md` is an **Agent-Managed Buffer**. Humans *can* write to it, but Agents *should* autonomously update it based on direct chat instructions to maintain state.
 - **Aesthetic**: Command-line minimal, robust shell scripting, heavily structured markdown memory.
 
 ## 2. Information Architecture
@@ -20,9 +21,127 @@
 
 ## 4. Technical Strategy
 - **Framework**: Bash (Zero-dependency besides Node.js for MCP).
-- **State Management**: File paths `.ai/UPDATE.md`, `DIGEST.md`, `LOG.md` act as state machines between sessions.
+- **Architectural Intelligence**:
+  - `src/gemini/research/`: Integrated with `Firecrawl` and `deep-research` for landscape analysis.
+  - `src/gemini/design/`: `artifacts-builder` for prototyping; `GitMCP` for source-grounded documentation.
+  - `src/gemini/review/`: `review-implementing` and `Playwright` for Engineering Audit.
+- **Tool Registry & Governance**:
+  - `~/.ai-os/registry.json`: Signed list of authorized MCP servers.
+  - `src/bin/ai-exec`: Enforces Capability Isolation (Read/Write/Execute) based on registry signatures.
+  - **`vibe-check-mcp`**: A specialized MCP server (Node.js + Playwright) that exposes `run_vibe_audit` and `run_chaos_test` tools directly to Claude and Gemini.
 
-## 5. Development Cycle
+- **Command Implementation Guide (`ai archive`)**:
+  - **Logic**: Identify `.ai/` files with content (`LOG.md`, `COMM.md`, `REVIEWS.md`, `SESSION.md`).
+  - **Action**: Move identified files to `.ai/archive/YYYY-MM/` with a timestamped suffix (e.g., `LOG.20260303_1500.md`).
+  - **Re-initialization**: After moving, re-create the files using templates from `~/.ai-os/templates/` (specifically `LOG.md`) or initialize with a header (e.g., `REVIEWS.md`).
+- **Command Implementation Guide (`ai review`)**:
+  - **Logic**: Accepts a parameter (`claude` or `gemini`).
+  - **Action**: Output a formatted prompt to the terminal for the user to copy into the respective agent.
+  - **Claude Pattern**: Request parallel execution of `critic_arch`, `critic_security`, and `critic_tests`.
+  - **Gemini Pattern**: Request an architectural audit of the current codebase and `architect.md`.
+
+## 5. Security Architecture
+- **Isolation Baseline (`ai-exec`)**:
+  - **Goal**: Prevent accidental side effects on the primary branch and ensure task-level isolation.
+  - **Mechanism**: Use `git worktree` to create a temporary, isolated directory for each high-risk task.
+  - **Flow**: `ai update` -> (Check risk) -> `ai-exec` -> `git worktree add <path> <branch>` -> (Execute Task) -> `git worktree remove <path>`.
+  - **Capability Isolation**: `ai-exec` enforces restricted shell environments where only `READ` is default, and `WRITE`/`EXECUTE` require explicit capability flags.
+- **Audit Logs (`post-tool-log.sh`)**:
+  - **Logic Update**:
+    - If `tool_name` is `run_shell_command` or any tool that modifies the system state (e.g., `execute_python`).
+    - AND the command is not a simple `READ` operation (e.g., `cat`, `ls`).
+    - Append to `LOG.md` with a `[SECURITY]` prefix.
+    - Example: `- 2026-03-03 14:00 UTC | Claude | [SECURITY] run_shell_command | rm -rf tmp/`.
+  - **Scope**: Must capture all write/execute operations, not just `.ai/` file edits.
+- **Blueprint Enforcement**: Claude is prohibited from modifying source code that contradicts the "System Philosophy" section without an Architect-approved override.
+
+## 6. CAPABILITIES.md Schema
+- **Purpose**: Declarative list of allowed operations (Source of Truth for Security).
+- **Structure**:
+  - `filesystem.read`: List of allowed path patterns (e.g., `src/**`, `.ai/**`).
+  - `filesystem.write`: List of allowed path patterns.
+  - `shell.exec`: List of allowed commands/patterns (e.g., `npm test`, `git commit`).
+  - `network.outbound`: List of allowed domains (e.g., `npmjs.org`, `github.com`).
+- **Enforcement**: `ai-exec` and `.mcp.json` MUST align with these rules.
+
+## 8. Autonomous Governance (Gates)
+- **Gate 1: Intent Gate (`ai update`)**
+  - **Trigger**: When `ai update` is run and `UPDATE.md` has changed.
+  - **Logic**: Automatically invoke `prd_writer` (Gemini) to analyze the intent.
+  - **Output**: If the intent is "Vague" or "High Risk," the gate blocks the session and provides a "Clarification Prompt" to the user.
+- **Gate 2: Quality Gate (`pre-commit`)**
+  - **Trigger**: `git commit` command.
+  - **Logic**: Check `.ai/LOG.md` for a recent `[CRITIC_STAMP]`.
+  - **Action**: If no recent review exists, the hook blocks the commit and automatically runs `ai review claude` to provide the critic prompt.
+- **Gate 3: Execution Gate (`ai-exec`)**
+  - **Trigger**: Any shell command matching `EXECUTE` patterns in `CAPABILITIES.md`.
+  - **Logic**: Automatically pause execution and invoke `security_engineer` (Claude) to perform a "Just-in-Time" threat model of the specific command.
+  - **Approval**: Requires `[SEC_CLEARED]` tag in `LOG.md` to proceed.
+
+## 10. Advanced Agentic Skills
+- **Skill 1: Simulated User (Vibe Feedback)**
+  - **Role**: `ux_reviewer` (Gemini Vision + Playwright).
+  - **Logic**: Automatically spin up the dev server, navigate the UI, and provide a "Vibe Report" on animations, contrast, and layout shift.
+  - **Trigger**: Run `ai test --vibe`.
+- **Skill 2: Memory Palace (Cross-Project RAG)**
+  - **Role**: `knowledge_architect` (Gemini 1M+ Context).
+  - **Logic**: Index the `.ai/` directories of all local projects. When starting a new project, automatically pull "Best Practices" and "Signature Styles" from previous successful implementations.
+  - **Trigger**: Part of `ai init` (Knowledge Transfer).
+- **Skill 3: Chaos Engineer (Stress Gate)**
+  - **Role**: `chaos_monkey` (Claude).
+  - **Logic**: Deliberately inject invalid inputs, simulate network latency, and perform "Rapid-Click" stress tests to find race conditions in the "vibe-coded" UI.
+  - **Trigger**: Mandatory gate for "Production" release.
+
+## 11. Universal Autonomous Command Suite (UACS)
+- **Concept**: Shift from "User-triggered" prompts to "Agent-executed" autonomous tools (MCP).
+- **Core UACS Tools**:
+  - **`intent-refiner-mcp`**: **(PRIMARY)** Automatically populates and optimizes `UPDATE.md` based on terminal chat history or voice-to-text input. Eliminates the need for manual file editing.
+  - **`task-synchronizer-mcp`**: Automatically updates `TASKS.md` (P-## and E-##) as soon as a new intent is refined in `UPDATE.md`.
+  - **`safe-exec-mcp`**: Sandbox simulator that audits shell commands for side-effects and security breaches before execution.
+  - **`snapshot-auditor-mcp`**: Validates that `DIGEST.md` is technically accurate and synchronized with the codebase.
+  - **`context-guardian-mcp`**: Prevents the archival of files (`ai archive`) that contain uncompleted tasks (P-## or E-##) or open architectural questions.
+  - **`blueprint-aligner-mcp`**: Automatically audits code changes against `architect.md` and `SECURITY.md` before allowing a `git commit`.
+
+## 12. Strict Domain Isolation
+- **Architectural Sovereignty (Gemini)**:
+  - **Owned Files**: `architect.md`, `BRIEF.md`, `TASKS.md` (P-## prefix).
+  - **Mandate**: Gemini is the only agent authorized to define new features or change system design.
+  - **Restriction**: Forbidden from writing application source code.
+- **Engineering Sovereignty (Claude)**:
+  - **Owned Files**: `src/**`, `LOG.md`, `TASKS.md` (E-## prefix), `SECURITY.md`, `DEVOPS.md`.
+  - **Mandate**: Claude is the only agent authorized to implement logic, debug, and manage environment state.
+  - **Restriction**: Forbidden from creating new features or modifying `architect.md` without an Architect-approved blueprint.
+- **The Handover Protocol**:
+  - Claude will automatically reject any request for "New Features" and redirect the user to Gemini.
+  - Gemini will automatically reject any request for "Coding/Debugging" and redirect the user to Claude.
+
+## 13. Automatic Quality Gate (AQG)
+- **Concept**: Shift from "Human-triggered" testing to "Hook-triggered" autonomous verification.
+- **Immediate Logic (PostToolUse Hook)**:
+  - **Unit Testing**: Automatically run Vitest/Jest for any modified `src/**` file.
+  - **Linting**: Automatically run ESLint/Prettier to enforce "Premium" styling standards.
+  - **Action**: If a test fails, the agent is **LOCKED** until the fix is applied.
+- **Final Logic (Final Commit Hook)**:
+  - **TestSprite**: Automatically run full E2E journeys before any `git commit`.
+  - **Vibe Audit**: Automatically run Playwright for visual regression and animation checks.
+  - **Action**: Blocks the `git commit` if coverage drops or visual "vibe" is inconsistent.
+
+## 14. Token-Saving Risk Tiers (TSRT)
+- **Concept**: Categorize tasks by impact to minimize unnecessary LLM reasoning and context loading.
+- **Tier 1: Low Risk (CSS/Docs/Typos)**
+    - **Logic**: No logic changes, only visual or textual updates.
+    - **Action**: Skip all "Critic" and "Security" agents. Run only local Linter/Prettier (0 tokens).
+    - **Handover**: Auto-commit with `[TIER_1]` tag.
+- **Tier 2: Medium Risk (Logic/Refactor/Tests)**
+    - **Logic**: Modifies `src/**` logic but follows existing patterns.
+    - **Action**: Run local Unit Tests (0 tokens). Invoke `blueprint_aligner` (Claude) to verify pattern consistency.
+    - **Handover**: Requires manual "Thumbs Up" in chat.
+- **Tier 3: High Risk (Auth/Secrets/New Features/Breaking Changes)**
+    - **Logic**: Changes trust boundaries, adds dependencies, or implements new `architect.md` blueprints.
+    - **Action**: Full Triad invocation: `security_engineer` + `vibe_check` + `chaos_monkey` + Parallel Critics.
+    - **Handover**: Mandatory `[UACS_VERIFIED]` stamp and Architect (Gemini) review.
+
+## 15. Development Cycle
 1. **Plan**: Architecture updates planned here in `architect.md` by Gemini.
-2. **Build**: Claude uses `src/bin/ai` and scripts to implement changes, strictly following instructions.
-3. **Test**: `ai test` validates CLI behavior and template integrity.
+2. **Build**: Claude uses `src/bin/ai` and isolation scripts to implement changes, strictly following blueprints.
+3. **Test**: `ai test` validates CLI behavior, template integrity, and security hook triggers.
