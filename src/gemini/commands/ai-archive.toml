@@ -1,0 +1,2 @@
+description = "Archive accumulated .ai/ content files (LOG.md, COMM.md, REVIEWS.md, SESSION.md) to .ai/archive/YYYY-MM/ with timestamps, then re-initialize from templates. DESTRUCTIVE — only the user can trigger this. Equivalent to `ai archive`."
+prompt = "Please activate the 'ai-archive' skill. I am explicitly requesting the archive operation."

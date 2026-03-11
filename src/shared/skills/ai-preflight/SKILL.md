@@ -1,6 +1,6 @@
 ---
 name: ai-preflight
-description: Execute the standard AI-OS preflight sequence at the start of any session. Reads the DIGEST-first file order and stamps SESSION.md. Use at the beginning of every Claude Code session in an AI-OS project. Equivalent to `ai preflight`.
+description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → architect.md → UPDATE.md → TASKS.md) and stamps SESSION.md.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Glob
@@ -45,7 +45,7 @@ After reading, append to `.ai/SESSION.md`:
 ```
 ---
 - Time: YYYY-MM-DD HH:MM UTC
-- Actor: Claude (preflight)
+- Actor: <actor> (preflight)
 - Files read: DIGEST, architect.md, UPDATE.md, TASKS.md
 - Focus: <one-line summary of current task>
 ---

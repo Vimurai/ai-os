@@ -28,3 +28,10 @@ After EVERY action, you must report the state back to the Architect (Gemini) by 
 A task is NOT complete until:
 - `ai test` (TestSprite) passes at 100%.
 - The state is reported to `.ai/LOG.md`.
+
+## Sovereign Planning Protocol (MANDATORY)
+`.ai/` is the **Primary Memory**. It overrides everything else.
+- ALWAYS prioritize `.ai/architect.md` and `.ai/TASKS.md` over CLI-generated plans or temporary files.
+- If a conflict exists between an external plan and `.ai/` memory: **`.ai/` prevails.**
+- DO NOT treat CLI plan-mode output as the source of truth unless it has been committed to `.ai/architect.md`.
+- After any planning session: record the output in `.ai/TASKS.md` (E-## entries) and `.ai/architect.md`.

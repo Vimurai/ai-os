@@ -19,18 +19,24 @@ mkdir -p "${AIOS}"
 if command -v rsync &>/dev/null; then
   rsync -a --delete "${REPO_DIR}/src/contracts/"  "${AIOS}/contracts/"
   rsync -a --delete "${REPO_DIR}/src/templates/"  "${AIOS}/templates/"
+  rsync -a --delete "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
   rsync -a --delete "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
   rsync -a --delete "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
   rsync -a --delete "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
   rsync -a --delete "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
+  rsync -a --delete "${REPO_DIR}/src/config/"     "${AIOS}/config/"
+  rsync -a          "${REPO_DIR}/src/mcp/"        "${AIOS}/mcp/"
   rsync -a          "${REPO_DIR}/hooks/"           "${AIOS}/hooks/"
 else
   cp -rf "${REPO_DIR}/src/contracts/"  "${AIOS}/contracts/"
   cp -rf "${REPO_DIR}/src/templates/"  "${AIOS}/templates/"
+  cp -rf "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
   cp -rf "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
   cp -rf "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
   cp -rf "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
   cp -rf "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
+  cp -rf "${REPO_DIR}/src/config/"     "${AIOS}/config/"
+  cp -rf "${REPO_DIR}/src/mcp/"        "${AIOS}/mcp/"
   cp -rf "${REPO_DIR}/hooks/"          "${AIOS}/hooks/"
 fi
 
@@ -97,10 +103,9 @@ Next steps:
 
 4) Gemini: use /gemini skill from Claude — no separate session needed.
 
-5) MCP servers (optional, needs Node.js):
-   npx -y @modelcontextprotocol/server-filesystem@latest
-   npx -y @modelcontextprotocol/server-memory@latest
-   (auto-configured in .mcp.json created by ai init)
+5) MCP servers (auto-configured — requires Node.js):
+   ai mcp-setup   ← installs deps + regenerates .mcp.json with absolute paths
+   ai doctor      ← verify per-server health
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF

@@ -1,0 +1,2 @@
+description = "UX screen documentation template. Use when designing or reviewing UI screens/views. Captures purpose, entry points, layout regions, interaction states, accessibility, and mobile behavior."
+prompt = "Please activate the 'ux_template' skill and generate the UX screen documentation."

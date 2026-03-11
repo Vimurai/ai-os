@@ -2,24 +2,23 @@
 
 ## Triad Health
 - Stage: Implementation
-- Architect Focus: Oversight; next blueprint needed: P-06 (Vision & Memory Skillsets).
-- Engineer Focus: E-01–E-05 COMPLETE. Next: E-13 (Gate 2 pre-commit hook).
+- Architect Focus: Oversight; all blueprints P-01–P-13 DONE.
+- Engineer Focus: E-01–E-35 COMPLETE. All open tasks done.
 
 ## Current snapshot
 - Product: AI-OS — A framework/installer that scaffolds `.ai/` intelligence directories, configures Claude/Gemini agents, and sets up token-saving workflow hooks.
 - Stack: Bash, Markdown, JSON (MCP integration), Git Worktrees, Playwright (for UX Stress), Token-Saving Tiers.
-- Current focus: Gates implementation complete (E-01/E-14 done); E-13 (pre-commit Quality Gate) now unblocked.
+- Current focus: MCP Automation & Lifecycle complete (E-32–E-35). All tasks done.
 - Known risks: `git worktree` permissions and environment variable leakage during isolation.
 
 ## Recent changes
-- 2026-03-07: E-01 DONE — src/bin/ai-exec: git worktree isolation, Gate 3 ([SEC_CLEARED] enforcement), [SECURITY] logging.
-- 2026-03-07: E-02 DONE — hooks/post-tool-log.sh: [SECURITY] tags for EXECUTE-tier tools (Bash, run_shell_command, etc.).
-- 2026-03-07: E-03 DONE — src/templates/CAPABILITIES.md: declarative READ/WRITE/EXECUTE/network schema.
-- 2026-03-07: E-04 DONE — ai archive: moves LOG/COMM/REVIEWS/SESSION to .ai/archive/YYYY-MM/ with timestamp suffix.
-- 2026-03-07: E-05 DONE — ai review claude|gemini: outputs parallel critic prompts (critic_arch, critic_security, critic_tests) and Gemini arch audit.
-- 2026-03-07: E-14 DONE (as part of E-01) — Gate 3 Execution Gate live in ai-exec.
-- 2026-03-07: E-13 unblocked — Gate 2 (pre-commit Quality Gate) ready to implement.
-- 2026-03-03: Finalized blueprint for "Automatic Gates" (Intent/Quality/Execution).
-- 2026-03-03: Established Token-Saving Risk Tiers (TSRT).
+- 2026-03-11: E-32 DONE — generate_mcp_json() reads registry.json + writes .mcp.json with absolute paths; do_mcp_setup registry-driven
+- 2026-03-11: E-33 DONE — do_init + install_global auto-call do_mcp_setup; install-ai-os.sh syncs src/mcp/ + src/config/
+- 2026-03-11: E-34 DONE — doctor per-server health checks (source, node_modules, index.js, path integrity)
+- 2026-03-11: E-35 DONE — enable_claude_agent_teams adds mcp__<server>__<tool> permissions to settings.json
+- 2026-03-11: E-28–E-31 DONE — Slash Commands, Gemini .toml commands, shared skills, agent frontmatter auto-calling
+- 2026-03-11: E-15–E-27 DONE — vibe-test, UACS MCPs, Skills 2.0 migration, agents (prd_writer, ux_reviewer, etc.)
+- 2026-03-10: E-12/E-13 DONE — Gate 1 (Intent Gate) + Gate 2 (pre-commit Quality Gate)
+- 2026-03-07: E-01–E-05/E-14 DONE — ai-exec, hooks, CAPABILITIES.md, archive, review, Execution Gate
 
 

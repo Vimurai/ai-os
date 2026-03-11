@@ -1,0 +1,2 @@
+description = "Regenerate .ai/DIGEST.md from current project state. Use when DIGEST is stale (> 3 days old or after a major sprint). Reads all .ai/ files and produces a concise 20-60 line snapshot. Equivalent to `ai digest`."
+prompt = "Please activate the 'ai-digest' skill and regenerate DIGEST.md."

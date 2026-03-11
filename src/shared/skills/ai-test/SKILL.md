@@ -1,6 +1,6 @@
 ---
 name: ai-test
-description: Run the AI-OS test suite. Without arguments, runs TestSprite for automated E2E tests. With --vibe, triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey). Equivalent to `ai test` or `ai test --vibe`.
+description: Use activate_skill with this name when asked to run tests, before committing, or for Tier 3 releases (use --vibe flag). Runs TestSprite for E2E tests or triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey).
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Glob
@@ -48,7 +48,7 @@ get_performance_metrics(url: "http://localhost:3000")
 ```
 
 ### Phase 2 — Chaos Stress Test (chaos_monkey)
-Use the `chaos_monkey` agent (Claude) to:
+Use the `chaos_monkey` agent to:
 1. Verify `[SEC_CLEARED]` in `.ai/LOG.md` before starting.
 2. Run 5-phase chaos suite: invalid inputs, network latency, rapid-click, concurrent sessions, resource exhaustion.
 3. Append `[CHAOS_REPORT] YYYY-MM-DD` to `.ai/REVIEWS.md`.
@@ -58,4 +58,4 @@ Use the `chaos_monkey` agent (Claude) to:
 All three must exist in `.ai/REVIEWS.md` before committing:
 - `[VIBE_REPORT]` (≤ 7 days old)
 - `[CHAOS_CLEARED]`
-- `[CRITIC_STAMP]` (from `ai review claude`)
+- `[CRITIC_STAMP]` (from `ai review`)

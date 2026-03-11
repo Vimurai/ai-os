@@ -135,6 +135,19 @@
   - All slash command skills explicitly set `disable-model-invocation: true` to prevent autonomous execution loops. They can only be triggered explicitly by the user via `/command`.
   - State-mutating commands (like `ai archive`, `ai init`) should guide the user to run them in a separate terminal OR rely on the skill explicitly asking the Executor to invoke `shell_command` with user consent.
 
+### 11.2 Gemini CLI Custom Commands Configuration
+- **Concept**: Gemini CLI uses explicit `.toml` files located in `~/.gemini/commands/` to expose slash commands in its interface, unlike Claude Code which might infer them differently.
+- **Mechanism**:
+  - Maintain a directory `src/gemini/commands/`.
+  - For every skill in `src/gemini/skills/` (e.g., `ai-update`, `ai-review`, `seo_content_checklist`, `ux_template`), create a corresponding `<skill_name>.toml` file.
+  - Each `.toml` file defines the `description` and a `prompt` that specifically calls the `activate_skill` tool for that expertise.
+  - Example `ai-update.toml` structure:
+    ```toml
+    description = "Start a new Gemini Architect session using the ai-update skill."
+    prompt = "Please activate the 'ai-update' skill and proceed with the task."
+    ```
+- **Deployment logic**: Modify `src/bin/ai` (`install_global` and `do_sync` functions) to ensure that `src/gemini/commands/*.toml` files are copied to `~/.gemini/commands/` so that running `/commands reload` in Gemini CLI will surface them.
+
 ## 12. Strict Domain Isolation
 - **Architectural Sovereignty (Gemini)**:
   - **Owned Files**: `architect.md`, `BRIEF.md`, `TASKS.md` (P-## prefix).
@@ -196,6 +209,16 @@
     3. Add YAML frontmatter to `SKILL.md` based on `src/templates/SKILL.md`.
     4. Ensure `allowed-tools` is accurately populated based on the skill's content.
 
+### 16.1 Shared Skills Architecture
+- **Concept**: Some skills (like archiving, regenerating digests, running tests) are universal to the AI-OS Triad and should be accessible by both the Architect (Gemini) and Engineer (Claude) without duplicating the skill files.
+- **Mechanism**:
+  - Create a new directory `src/shared/skills/`.
+  - Move universally applicable skills into this shared folder (e.g., `ai-archive`, `ai-digest`, `ai-preflight`, `ai-test`).
+  - Keep domain-specific skills isolated:
+    - `src/claude/skills/`: Engineer-specific skills (`ci_gate`, `dependency_gate`, `scope_safety`, Claude's `ai-review`, Claude's `ai-update`).
+    - `src/gemini/skills/`: Architect-specific skills (`seo_content_checklist`, `ux_template`, Gemini's `ai-review`, Gemini's `ai-update`).
+- **Deployment Logic**: Update the `ai install` and `ai sync` routines in `src/bin/ai` to copy the contents of `src/shared/skills/` into **both** `~/.claude/skills/` and `~/.gemini/skills/` before copying the agent-specific ones. This ensures both CLI environments inherit the shared operational capabilities.
+
 ## 17. Missing Agent Blueprints
 ### 17.1 prd_writer (Gemini)
 - **Role**: Refines `UPDATE.md` into structured `TASKS.md` and `BRIEF.md` updates.
@@ -254,10 +277,59 @@
   - Deliberately inject invalid inputs and simulate network latency.
   - Perform "Rapid-Click" audits to find race conditions in the UI.
 
+### 17.5 Contextual Auto-Calling & Agent Frontmatter
+- **Claude Sub-Agents**: 
+  - To enable Claude Code to auto-call sub-agents based on context, all markdown files in `src/claude/agents/` must define their required `tools` array (e.g., `tools: [run_shell_command, read_file]`) in the YAML frontmatter. 
+  - The `description` field must explicitly state the trigger conditions (e.g., "Trigger this when asked to stress test the UI").
+  - Agent Teams should be enabled in the global settings via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` for cross-session delegation.
+- **Gemini Skills**: 
+  - Gemini CLI does not natively auto-spin agents in the background. Instead, it relies on the `activate_skill` tool.
+  - To simulate auto-calling, `SKILL.md` descriptions in `src/gemini/skills/` and `src/shared/skills/` must be written with imperative trigger conditions (e.g., "Use activate_skill with this name when the user requests an architectural review").
+  - Explicit slash commands (`.toml`) in `src/gemini/commands/` serve as the fallback manual triggers.
+
 ## 18. Autonomous Command Suite (UACS) Logic
 - **Concept**: Skills that run without human intervention between steps.
 - **Implementation**:
   - **`intent-refiner-mcp`**: Automatically bridges chat intent to `TASKS.md` (Gate 1).
   - **`blueprint-aligner-mcp`**: Blocks `git commit` if code deviates from `architect.md`.
   - **`safe-exec-mcp`**: Simulates `rm -rf` or other high-risk commands in a sandbox before execution.
-- **Automation Hook**: `post-tool-log.sh` will now trigger `blueprint-aligner-mcp` for any Tier 3 task.
+## 22. Minimal Bash Test Harness (E-40)
+- **Concept**: A lightweight, zero-dependency test runner designed specifically for the AI-OS bash ecosystem.
+- **Directory Structure**:
+    - `tests/run.sh`: The master test runner script.
+    - `tests/lib/assert.sh`: Core assertion library (e.g., `assert_status`, `assert_contains`).
+    - `tests/suites/`: Directory for individual test scripts (e.g., `mcp_test.sh`, `cli_test.sh`).
+- **The Runner (`run.sh`)**:
+    - Automatically discovers all `*_test.sh` files in `tests/suites/`.
+    - Executes each test suite in an isolated subshell.
+    - Aggregates results (Passed/Failed) and provides a summary report.
+    - Exits with non-zero status if any test fails.
+- **Assertions (`assert.sh`)**:
+    - `assert_status <expected> <command>`: Verifies the exit code of a command.
+    - `assert_contains <string> <substring>`: Verifies presence of a string in stdout/stderr.
+    - `assert_exists <path>`: Verifies file or directory presence.
+    - `assert_match <string> <regex>`: Verifies output against a regular expression.
+- **CLI Integration**:
+    - `ai test` MUST be updated to execute `bash tests/run.sh`.
+    - Successful test runs must emit `[TEST_PASSED]` in the terminal for the Quality Gate.
+- **Security**:
+    - Tests must be executed using `ai-exec` where possible to maintain worktree isolation during destructive tests (e.g., testing `ai archive`).
+- **Concept**: Zero-manual-configuration environment for MCP servers.
+- **Mechanism**:
+  - `ai mcp-setup`: The primary automation tool. It must:
+    1. Read `src/config/registry.json` as the source of truth.
+    2. Iterate through all servers in `src/mcp/`.
+    3. Run `npm install` and server-specific setup (e.g., `playwright install`).
+    4. Dynamically generate or update the project-root `.mcp.json` with correct relative/absolute paths to the server entry points (`index.js`).
+  - **Auto-Initialization**: `ai init` MUST automatically trigger `ai mcp-setup` after scaffolding the `.ai/` directory to ensure a "Battery-Included" developer experience.
+  - **Global Synchronization**: `ai install` and `ai sync` must ensure that the custom MCP server source code is copied from `src/mcp/` to `~/.ai-os/mcp/`.
+  - **Health Monitoring**: `ai doctor` must be updated to verify the existence and connectivity of all registered MCP servers, reporting on missing `node_modules` or misconfigured paths.
+- **Security**: The `registry.json` remains the authoritative whitelist. `ai mcp-setup` will not configure servers not present in the registry.
+
+## 20. Sovereign Planning & Execution Protocol
+- **Concept**: The `.ai/` directory is the **Primary Memory**. External CLI-native state (like temporary plan files or hidden session logs) is secondary and MUST NOT be used as a source of truth for engineering.
+- **Mechanism**:
+  - **The Architect's Mandate**: When using the `enter_plan_mode` tool, the Architect MUST NOT rely on the temporary file generated by the CLI as the final record. Instead, the resulting design MUST be committed to `.ai/architect.md` and `.ai/TASKS.md`.
+  - **The Engineer's Mandate**: Claude (Engineer) MUST prioritize `.ai/architect.md` and `.ai/TASKS.md` above any other implementation guides. If a conflict exists between a CLI-generated plan and the `.ai/` memory, the `.ai/` memory prevails.
+  - **Session Integration**: Every `ai update` (Gate 1) must ensure that the current task context is correctly reflected in `.ai/TASKS.md`.
+- **Enforcement**: Update `CLAUDE.md` and `GEMINI.md` to formally reflect this protocol.

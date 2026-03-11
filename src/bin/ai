@@ -35,6 +35,68 @@ ensure_file_if_missing() {
   fi
 }
 
+# Generates .mcp.json with absolute paths to ~/.ai-os/mcp/<server>/index.js
+# Uses registry.json as source of truth. Preserves user-set env values.
+generate_mcp_json() {
+  local DEST_DIR="${1:-.}"
+  local REGISTRY="${AIOS}/config/registry.json"
+  local MCP_FILE="${DEST_DIR}/.mcp.json"
+
+  if ! command -v python3 &>/dev/null; then
+    [[ -f "${AIOS}/templates/.mcp.json" ]] && cp "${AIOS}/templates/.mcp.json" "$MCP_FILE"
+    return
+  fi
+
+  python3 - "$REGISTRY" "$MCP_FILE" "$HOME" "$AIOS" <<'PY'
+import json, sys, os
+registry_path, mcp_path, home, aios = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+
+servers = {
+  "filesystem": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem@2026.1.14", "."],
+    "description": "Scoped filesystem access — enforces CAPABILITIES.md path restrictions. Restricts to project root by default."
+  },
+  "memory": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"],
+    "description": "Knowledge-graph memory store. Queryable alternative/supplement to DIGEST.md for semantic lookups."
+  },
+  "TestSprite": {
+    "command": "npx",
+    "args": ["@testsprite/testsprite-mcp@latest"],
+    "env": {"API_KEY": "your-testsprite-api-key"},
+    "description": "TestSprite MCP — AI-powered test generation and verification. Third brain in the Tripartite Engine (Plan->Build->Test)."
+  }
+}
+
+if os.path.exists(registry_path):
+    with open(registry_path) as f:
+        reg = json.load(f)
+    for name, info in reg.get("mcp_servers", {}).items():
+        if "path" in info:
+            abs_path = os.path.join(aios, "mcp", name, "index.js")
+            servers[name] = {"command": "node", "args": [abs_path]}
+
+# Preserve user-set env values from existing .mcp.json (e.g. real TestSprite API key)
+if os.path.exists(mcp_path):
+    try:
+        with open(mcp_path) as f:
+            existing = json.load(f)
+        for name, cfg in existing.get("mcpServers", {}).items():
+            if name in servers and "env" in cfg:
+                env = cfg["env"]
+                if env.get("API_KEY", "").strip() not in ("", "your-testsprite-api-key"):
+                    servers[name].setdefault("env", {}).update(env)
+    except Exception:
+        pass
+
+with open(mcp_path, "w") as f:
+    json.dump({"mcpServers": servers}, f, indent=2)
+    f.write("\n")
+PY
+}
+
 ensure_ai_templates() {
   mkdir -p .ai .ai/archive
 
@@ -55,10 +117,10 @@ ensure_ai_templates() {
     echo "Created .ai/.gitignore (review it — sensitive files excluded from git)"
   fi
 
-  # .mcp.json in project root (enables MCP servers)
+  # .mcp.json in project root — generated with absolute paths to ~/.ai-os/mcp/
   if [[ ! -f ".mcp.json" ]]; then
-    cp "$T/.mcp.json" ".mcp.json"
-    echo "Created .mcp.json (MCP servers: filesystem + memory — requires npx)"
+    generate_mcp_json "."
+    echo "Created .mcp.json (MCP servers: filesystem + memory + AI-OS custom servers)"
   fi
 
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
@@ -120,6 +182,22 @@ if "Bash(gemini -p *)" not in new_allow and "Bash(gemini *)" not in new_allow:
     print("Added: Bash(gemini -p *)")
 perms["allow"] = new_allow
 
+# E-35: Auto-enable AI-OS MCP tool permissions (registry-driven)
+_reg_path = os.path.expanduser("~/.ai-os/config/registry.json")
+if os.path.exists(_reg_path):
+    with open(_reg_path) as _rf:
+        _reg = json.load(_rf)
+    for _srv, _info in _reg.get("mcp_servers", {}).items():
+        if "path" not in _info:
+            continue
+        for _tool in _info.get("allowed-tools", []):
+            if _tool == "*":
+                continue
+            _perm = f"mcp__{_srv}__{_tool}"
+            if _perm not in new_allow:
+                new_allow.append(_perm)
+                print(f"Added MCP permission: {_perm}")
+
 # Add hooks
 hooks = data.setdefault("hooks", {})
 
@@ -156,6 +234,53 @@ print("settings.json updated ✓")
 PY
 }
 
+configure_gemini_mcp() {
+  local REGISTRY="${AIOS}/config/registry.json"
+  mkdir -p "${HOME}/.gemini"
+  python3 - "$REGISTRY" "$HOME" "$AIOS" <<'PY'
+import json, os, sys
+
+registry_path, home, aios = sys.argv[1], sys.argv[2], sys.argv[3]
+path = os.path.join(home, ".gemini", "settings.json")
+
+# Base npm-managed servers (not path-based, shared between Claude and Gemini)
+servers = {
+    "filesystem": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem@2026.1.14", os.getcwd()]
+    },
+    "memory": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"]
+    }
+}
+
+# Registry-driven custom servers (same source of truth as generate_mcp_json)
+if os.path.exists(registry_path):
+    with open(registry_path) as f:
+        reg = json.load(f)
+    for name, info in reg.get("mcp_servers", {}).items():
+        if "path" in info:
+            abs_path = os.path.join(aios, "mcp", name, "index.js")
+            servers[name] = {"command": "node", "args": [abs_path]}
+
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f) or {}
+    except Exception as e:
+        print(f"WARN: {path} is not valid JSON ({e}). Recreating.")
+
+data["mcpServers"] = servers
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+print("~/.gemini/settings.json MCP config updated ✓")
+PY
+}
+
 install_global() {
   echo "Preparing fresh AI-OS v2 installation..."
   
@@ -166,16 +291,20 @@ install_global() {
   echo "✓ Old configurations cleared"
 
   # Gemini (Principal Architect)
-  mkdir -p "${HOME}/.gemini/agents" "${HOME}/.gemini/skills"
+  mkdir -p "${HOME}/.gemini/agents" "${HOME}/.gemini/skills" "${HOME}/.gemini/commands"
   cp -f "${AIOS}/gemini/GEMINI.md"      "${HOME}/.gemini/GEMINI.md"
   cp -f "${AIOS}/gemini/agents/"*.md    "${HOME}/.gemini/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.gemini/skills"
   sync_skills_20 "${AIOS}/gemini/skills" "${HOME}/.gemini/skills"
+  cp -f "${AIOS}/gemini/commands/"*.toml "${HOME}/.gemini/commands/" 2>/dev/null || true
+  configure_gemini_mcp
   echo "✓ Installed Gemini (Principal Architect) config → ~/.gemini"
 
   # Claude (Principal Software Engineer)
   mkdir -p "${HOME}/.claude/agents" "${HOME}/.claude/skills"
   cp -f "${AIOS}/claude/CLAUDE.md"      "${HOME}/.claude/CLAUDE.md"
   cp -f "${AIOS}/claude/agents/"*.md    "${HOME}/.claude/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.claude/skills"
   sync_skills_20 "${AIOS}/claude/skills" "${HOME}/.claude/skills"
   echo "✓ Installed Claude (Principal Software Engineer) config → ~/.claude"
 
@@ -197,10 +326,17 @@ install_global() {
   chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
   echo "✓ Hooks ready → ${AIOS}/hooks"
 
-  # Copy MCP servers to ~/.ai-os/mcp/
+  # Copy MCP servers to ~/.ai-os/mcp/ (source already at AIOS since we ARE the install)
   if [[ -d "${AIOS}/mcp" ]]; then
-    cp -rf "${AIOS}/mcp" "${HOME}/.ai-os/" 2>/dev/null || true
-    echo "✓ MCP servers copied → ~/.ai-os/mcp (run: ai mcp-setup to install dependencies)"
+    echo "✓ MCP servers available → ${AIOS}/mcp"
+  fi
+
+  # Install MCP server npm dependencies
+  if command -v node &>/dev/null; then
+    echo "Setting up MCP server dependencies..."
+    do_mcp_setup 2>/dev/null || echo "  ⚠  MCP setup: some servers failed — run: ai mcp-setup"
+  else
+    echo "  ⚠  Node.js not found — MCP setup skipped. Install Node.js then run: ai mcp-setup"
   fi
 
   # Enable agent teams + fix permissions + add v2 hooks
@@ -253,6 +389,16 @@ do_init() {
   ensure_ai_templates
   migrate_legacy_ai_if_present
   install_git_hooks
+
+  # E-33: Auto-setup MCP server dependencies (Battery-Included onboarding)
+  if command -v node &>/dev/null && [[ -d "${AIOS}/mcp" ]]; then
+    echo ""
+    echo "Setting up MCP servers (Node.js detected)..."
+    do_mcp_setup 2>/dev/null || echo "  ⚠  MCP setup incomplete — run: ai mcp-setup"
+  else
+    echo ""
+    echo "MCP servers: Node.js not found — run 'ai mcp-setup' after installing Node.js"
+  fi
 
   echo ""
   echo "Initialized .ai/ + .github/ (safe — no overwrites) with AI-OS v${VERSION}"
@@ -805,6 +951,12 @@ do_test() {
     return
   fi
 
+  # Prefer local bash harness (P-15 / §22); fall back to TestSprite if absent
+  if [[ -f "tests/run.sh" ]]; then
+    bash tests/run.sh
+    return
+  fi
+
   echo "Running automated tests via TestSprite..."
   if ! command -v npx &>/dev/null; then
     echo "✗ npx not found. Please install Node.js."
@@ -902,8 +1054,7 @@ sync_skills_20() {
     if [[ -d "$skill_dir" && -f "${skill_dir}SKILL.md" ]]; then
       local skill_name
       skill_name=$(basename "$skill_dir")
-      mkdir -p "${dst_dir}/${skill_name}"
-      cp -rf "${skill_dir}" "${dst_dir}/"
+      cp -rf "${skill_dir%/}" "${dst_dir}/"
       count=$((count + 1))
     fi
   done
@@ -917,13 +1068,18 @@ do_sync() {
 
   cp -f "${AIOS}/claude/CLAUDE.md"   "${HOME}/.claude/CLAUDE.md"
   cp -f "${AIOS}/claude/agents/"*.md "${HOME}/.claude/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.claude/skills"
   sync_skills_20 "${AIOS}/claude/skills" "${HOME}/.claude/skills"
-  echo "  Claude agents synced"
+  echo "  Claude agents + shared skills synced"
 
+  mkdir -p "${HOME}/.gemini/commands"
   cp -f "${AIOS}/gemini/GEMINI.md"   "${HOME}/.gemini/GEMINI.md"
   cp -f "${AIOS}/gemini/agents/"*.md "${HOME}/.gemini/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.gemini/skills"
   sync_skills_20 "${AIOS}/gemini/skills" "${HOME}/.gemini/skills"
-  echo "  Gemini agents synced"
+  cp -f "${AIOS}/gemini/commands/"*.toml "${HOME}/.gemini/commands/" 2>/dev/null || true
+  configure_gemini_mcp
+  echo "  Gemini agents + shared skills + commands synced"
 
   cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
   chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
@@ -1046,24 +1202,70 @@ print('  Gemini perm:', 'BROAD (Bash(gemini *)) - run: ai install to fix' if bro
     || echo "  ✗ COPILOT.md missing — run: ai install"
   echo ""
 
-  echo "MCP (.mcp.json in current dir):"
+  echo "MCP Servers:"
   if command -v node &>/dev/null; then
-    echo "  ✓ node $(node --version) (required for npx/MCP servers)"
+    echo "  ✓ node $(node --version) (required for MCP servers)"
   else
     echo "  ✗ node not found — MCP servers need Node.js: brew install node"
   fi
   if command -v npx &>/dev/null; then
     echo "  ✓ npx available"
-    if npx testsprite --version &>/dev/null; then
+    if npx testsprite --version &>/dev/null 2>&1; then
       echo "  ✓ TestSprite: available"
     else
-      echo "  ✗ TestSprite: not installed — run: npm install -g testsprite (or use npx)"
+      echo "  ✗ TestSprite: not installed — run: npx @testsprite/testsprite-mcp@latest"
     fi
   else
-    echo "  ✗ npx not found — install Node.js to use MCP servers and TestSprite"
+    echo "  ✗ npx not found — install Node.js"
   fi
+
+  # E-34: Per-server health check from registry
+  local MCP_DIR="${AIOS}/mcp"
+  local REGISTRY="${AIOS}/config/registry.json"
+  if [[ -f "$REGISTRY" ]] && command -v python3 &>/dev/null; then
+    echo "  Custom MCP servers (registry: ${REGISTRY}):"
+    while IFS='|' read -r srv_name _; do
+      [[ -z "$srv_name" ]] && continue
+      local sdir="${MCP_DIR}/${srv_name}"
+      if [[ ! -d "$sdir" ]]; then
+        echo "    ✗ ${srv_name}: source missing at ${sdir} — run: ai install"
+      elif [[ ! -f "${sdir}/package.json" ]]; then
+        echo "    ✗ ${srv_name}: package.json missing"
+      elif [[ ! -d "${sdir}/node_modules" ]]; then
+        echo "    ✗ ${srv_name}: node_modules missing — run: ai mcp-setup"
+      elif [[ ! -f "${sdir}/index.js" ]]; then
+        echo "    ✗ ${srv_name}: index.js missing"
+      else
+        echo "    ✓ ${srv_name}"
+      fi
+    done < <(python3 -c "
+import json
+with open('$REGISTRY') as f:
+    d = json.load(f)
+for name, info in d.get('mcp_servers', {}).items():
+    if 'path' in info:
+        print(name + '|' + info['path'])
+" 2>/dev/null || true)
+  fi
+
   if [[ -f ".mcp.json" ]]; then
-    echo "  ✓ .mcp.json present"
+    echo "  ✓ .mcp.json present ($(pwd))"
+    # Verify absolute paths in .mcp.json are valid
+    python3 - <<'PY' 2>/dev/null || true
+import json, os
+with open(".mcp.json") as f:
+    cfg = json.load(f)
+broken = []
+for name, srv in cfg.get("mcpServers", {}).items():
+    for a in srv.get("args", []):
+        if a.startswith("/") and not os.path.exists(a):
+            broken.append(f"{name}: {a}")
+if broken:
+    for b in broken:
+        print(f"    ✗ broken path — {b} — run: ai mcp-setup")
+else:
+    print("  ✓ .mcp.json paths: all valid")
+PY
   else
     echo "  ✗ .mcp.json not found in $(pwd) — run: ai init"
   fi
@@ -1088,49 +1290,67 @@ print('  Gemini perm:', 'BROAD (Bash(gemini *)) - run: ai install to fix' if bro
 
 do_mcp_setup() {
   local MCP_DIR="${AIOS}/mcp"
-  if [[ ! -d "$MCP_DIR" ]]; then
-    echo "✗ MCP servers not found at ${MCP_DIR} — run: ai install"
-    exit 1
-  fi
+  local REGISTRY="${AIOS}/config/registry.json"
 
   if ! command -v node &>/dev/null; then
     echo "✗ Node.js not found — required for MCP servers. Install: brew install node"
     exit 1
   fi
 
+  if [[ ! -d "$MCP_DIR" ]]; then
+    echo "✗ MCP servers not found at ${MCP_DIR} — run: ai install"
+    exit 1
+  fi
+
+  # Read custom server list from registry.json (authoritative whitelist per P-13)
+  local CUSTOM_SERVERS=()
+  if command -v python3 &>/dev/null && [[ -f "$REGISTRY" ]]; then
+    while IFS= read -r srv; do
+      [[ -n "$srv" ]] && CUSTOM_SERVERS+=("$srv")
+    done < <(python3 -c "
+import json, sys
+with open('$REGISTRY') as f:
+    d = json.load(f)
+for name, info in d.get('mcp_servers', {}).items():
+    if 'path' in info:
+        print(name)
+" 2>/dev/null || true)
+  fi
+
+  # Fallback if registry parse fails
+  if [[ ${#CUSTOM_SERVERS[@]} -eq 0 ]]; then
+    CUSTOM_SERVERS=(vibe-check-mcp intent-refiner-mcp task-synchronizer-mcp safe-exec-mcp blueprint-aligner-mcp context-guardian-mcp risk-analyzer-mcp)
+  fi
+
   echo "Installing MCP server dependencies from ${MCP_DIR} ..."
   echo ""
 
-  local MCP_SERVERS=(
-    "vibe-check-mcp"
-    "intent-refiner-mcp"
-    "task-synchronizer-mcp"
-    "safe-exec-mcp"
-    "blueprint-aligner-mcp"
-    "context-guardian-mcp"
-    "risk-analyzer-mcp"
-  )
-
-  for server in "${MCP_SERVERS[@]}"; do
+  local SETUP_OK=0
+  for server in "${CUSTOM_SERVERS[@]}"; do
     local sdir="${MCP_DIR}/${server}"
     if [[ -d "$sdir" && -f "${sdir}/package.json" ]]; then
       echo "  Installing ${server}..."
       (cd "$sdir" && npm install --silent 2>&1 | tail -2) || echo "  ✗ ${server}: npm install failed"
-      # Playwright needs browser install
       if [[ "$server" == "vibe-check-mcp" ]]; then
         echo "  Installing Playwright browsers for ${server}..."
-        (cd "$sdir" && npx playwright install chromium --quiet 2>&1 | tail -2) || true
+        (cd "$sdir" && npx playwright install chromium 2>&1 | tail -2) || true
       fi
       echo "  ✓ ${server}: ready"
+      SETUP_OK=$((SETUP_OK + 1))
     else
       echo "  ⚠  ${server}: not found at ${sdir}"
     fi
   done
 
   echo ""
-  echo "✓ MCP setup complete."
-  echo "  To enable servers: edit .mcp.json and set \"disabled\": false for each server."
-  echo "  Registry: ${AIOS}/config/registry.json"
+  echo "✓ MCP setup complete (${SETUP_OK}/${#CUSTOM_SERVERS[@]} servers installed)."
+
+  # E-32: Dynamically regenerate .mcp.json with absolute paths if in a project
+  if [[ -d ".ai" || -f ".mcp.json" ]]; then
+    generate_mcp_json "."
+    echo "✓ .mcp.json regenerated with absolute paths → $(pwd)/.mcp.json"
+  fi
+  echo "  Registry: ${REGISTRY}"
 }
 
 # ── dispatch ──────────────────────────────────────────────────────────────────
@@ -1144,7 +1364,7 @@ case "$cmd" in
   preflight) preflight ;;
   digest)    do_digest ;;
   archive)   do_archive ;;
-  review)    do_review "${2:-}" ;;
+  review)    do_review "${@:2}" ;;
   test)      do_test "${@:2}" ;;
   sync)      do_sync ;;
   mcp-setup) do_mcp_setup ;;

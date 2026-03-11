@@ -1,6 +1,6 @@
 ---
 name: ai-update
-description: Start a new Gemini Architect session. Reads UPDATE.md intent, classifies it as Vague/Tier1/2/3, and generates structured P-## task entries or architectural blueprints. Equivalent to `ai update` for the Principal Architect role.
+description: Use activate_skill with this name when the user wants to start an Architect session, process a new UPDATE.md intent, or generate P-## task entries. Reads UPDATE.md, classifies intent as Vague/Tier1/2/3, and produces structured architectural blueprints.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob

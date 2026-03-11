@@ -1,6 +1,6 @@
 ---
 name: seo_content_checklist
-description: SEO and content compliance checklist for web pages. Apply before publishing new pages or updating content. Covers title tags, meta descriptions, H1/H2 structure, canonical tags, sitemap, and GDPR/compliance requirements.
+description: Use activate_skill with this name before publishing new pages or updating web content. Runs the full SEO and content compliance checklist covering title tags, meta descriptions, H1/H2 structure, canonical tags, sitemap, and GDPR requirements.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob

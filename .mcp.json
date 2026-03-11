@@ -7,7 +7,7 @@
         "@modelcontextprotocol/server-filesystem@2026.1.14",
         "."
       ],
-      "description": "Scoped filesystem access — enforces CAPABILITIES.md path restrictions. Restricts to project root by default."
+      "description": "Scoped filesystem access \u2014 enforces CAPABILITIES.md path restrictions. Restricts to project root by default."
     },
     "memory": {
       "command": "npx",
@@ -25,7 +25,49 @@
       "env": {
         "API_KEY": "your-testsprite-api-key"
       },
-      "description": "TestSprite MCP — AI-powered test generation and verification. Third brain in the Tripartite Engine (Plan→Build→Test)."
+      "description": "TestSprite MCP \u2014 AI-powered test generation and verification. Third brain in the Tripartite Engine (Plan->Build->Test)."
+    },
+    "vibe-check-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/vibe-check-mcp/index.js"
+      ]
+    },
+    "intent-refiner-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/intent-refiner-mcp/index.js"
+      ]
+    },
+    "task-synchronizer-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/task-synchronizer-mcp/index.js"
+      ]
+    },
+    "safe-exec-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/safe-exec-mcp/index.js"
+      ]
+    },
+    "blueprint-aligner-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/blueprint-aligner-mcp/index.js"
+      ]
+    },
+    "context-guardian-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/context-guardian-mcp/index.js"
+      ]
+    },
+    "risk-analyzer-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/risk-analyzer-mcp/index.js"
+      ]
     }
   }
 }

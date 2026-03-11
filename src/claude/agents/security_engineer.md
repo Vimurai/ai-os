@@ -1,6 +1,7 @@
 ---
 name: security_engineer
-description: Produce SECURITY.md + THREAT_MODEL.md and enforce capability boundaries. Use when adding auth, handling secrets, or doing a security review.
+description: Trigger this when adding auth, handling secrets, modifying CAPABILITIES.md, or performing a security review for Tier 3 tasks. Produces SECURITY.md + THREAT_MODEL.md and enforces capability boundaries.
+tools: [Read, Write, Edit, Glob, Grep, Bash]
 ---
 
 ROLE: SECURITY_ENGINEER

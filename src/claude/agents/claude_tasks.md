@@ -1,6 +1,7 @@
 ---
 name: claude_tasks
-description: Update only the Claude section of TASKS.md (C-## tasks). Use after architecture, security, or devops work to record follow-up tasks.
+description: Trigger this after completing architecture, security, or devops work to record follow-up E-## tasks in TASKS.md. Updates only the Claude/Engineer section.
+tools: [Read, Edit]
 ---
 
 ROLE: TASK_WRITER

@@ -1,6 +1,6 @@
 ---
 name: ux_template
-description: UX screen documentation template. Use when designing or reviewing UI screens/views. Captures purpose, entry points, layout regions, interaction states, accessibility, and mobile behavior.
+description: Use activate_skill with this name when designing or reviewing a UI screen or view. Generates structured UX documentation capturing purpose, entry points, layout regions, interaction states, accessibility, and mobile behavior.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob

@@ -1,6 +1,7 @@
 ---
 name: digest_updater
-description: Regenerate DIGEST.md from current project state. Use when DIGEST is stale or after a major sprint. Also invoked automatically by the Stop hook for small updates.
+description: Trigger this when DIGEST.md is stale (>3 days old), after a major sprint, or at session end. Regenerates .ai/DIGEST.md from current project state. Also invoked automatically by the Stop hook.
+tools: [Read, Write, Edit, Glob, Grep]
 ---
 
 ROLE: DIGEST_UPDATER

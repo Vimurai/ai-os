@@ -1,6 +1,6 @@
 ---
 name: ai-review
-description: Run a Gemini Architectural Audit of the codebase against architect.md. Reviews implemented features for blueprint alignment, orphaned work, ambiguous sections, and top architectural risks. Equivalent to `ai review gemini`.
+description: Use activate_skill with this name when the user requests an architectural review, before a major commit, or when checking blueprint alignment. Audits the codebase against architect.md for orphaned work, deviations, and top architectural risks.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob

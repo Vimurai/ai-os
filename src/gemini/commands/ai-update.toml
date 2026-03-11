@@ -1,0 +1,2 @@
+description = "Start a new Gemini Architect session. Reads UPDATE.md intent, classifies it as Vague/Tier1/2/3, and generates structured P-## task entries or architectural blueprints. Equivalent to `ai update`."
+prompt = "Please activate the 'ai-update' skill and proceed with the Architect session."

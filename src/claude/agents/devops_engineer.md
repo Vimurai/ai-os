@@ -1,6 +1,7 @@
 ---
 name: devops_engineer
-description: Produce DEVOPS.md — build/test/CI/release commands, observability baseline. Use when setting up CI, adding deployment, or establishing testing infrastructure.
+description: Trigger this when setting up CI/CD pipelines, adding deployment configs, or establishing testing infrastructure. Produces DEVOPS.md with build/test/CI/release commands and observability baseline.
+tools: [Read, Write, Edit, Bash, Glob, Grep]
 ---
 
 ROLE: DEVOPS_ENGINEER

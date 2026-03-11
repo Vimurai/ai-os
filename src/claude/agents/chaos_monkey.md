@@ -1,6 +1,7 @@
 ---
 name: chaos_monkey
-description: Stress testing, race condition hunting, and Rapid-Click audits. Mandatory gate for Tier 3 releases. Injects invalid inputs, simulates network latency, and stress-tests UI interactions to find edge cases before production.
+description: Trigger this when running `ai test --vibe`, for any Tier 3 release, or when asked to stress-test the UI. Injects invalid inputs, simulates network latency, and stress-tests UI interactions to find edge cases before production.
+tools: [Bash, Read, Glob, Grep]
 ---
 
 ROLE: CHAOS_MONKEY (Claude — Stress Engineer)

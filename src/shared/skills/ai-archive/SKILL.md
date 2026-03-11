@@ -1,6 +1,6 @@
 ---
 name: ai-archive
-description: Archive accumulated .ai/ content files (LOG.md, COMM.md, REVIEWS.md, SESSION.md) to .ai/archive/YYYY-MM/ with timestamps, then re-initialize from templates. DESTRUCTIVE — only the user can trigger this. Equivalent to `ai archive`.
+description: Use activate_skill with this name ONLY when the user explicitly requests an archive operation. DESTRUCTIVE — moves LOG.md, COMM.md, REVIEWS.md, SESSION.md to .ai/archive/YYYY-MM/ with timestamps and re-initializes from templates. Never invoke autonomously.
 disable-model-invocation: true
 user-invocable: true
 allowed-tools: Read, Bash
@@ -11,7 +11,7 @@ agent: default
 # AI-OS Archive (User-Triggered Only)
 
 ⚠️ **DESTRUCTIVE OPERATION** — `disable-model-invocation: true`
-This skill can only be triggered explicitly by the user. Claude cannot invoke it autonomously.
+This skill can only be triggered explicitly by the user. The agent cannot invoke it autonomously.
 
 ## Dynamic Context Injection
 Current .ai/ file sizes: !wc -l .ai/LOG.md .ai/REVIEWS.md .ai/SESSION.md .ai/COMM.md 2>/dev/null || echo "(files not found)"
@@ -47,7 +47,7 @@ This command:
 2. Verify `.ai/LOG.md` now contains only the new header.
 3. Note the archive in the new `LOG.md`:
    ```
-   YYYY-MM-DD | Claude | Archive | Moved LOG/REVIEWS/SESSION to .ai/archive/YYYY-MM/
+   YYYY-MM-DD | <actor> | Archive | Moved LOG/REVIEWS/SESSION to .ai/archive/YYYY-MM/
    ```
 
 ## Rules

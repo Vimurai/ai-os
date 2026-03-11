@@ -1,6 +1,6 @@
 ---
 name: ai-digest
-description: Regenerate .ai/DIGEST.md from current project state. Use when DIGEST is stale (> 3 days old or after a major sprint). Reads all .ai/ files and produces a concise 20-60 line snapshot. Equivalent to `ai digest`.
+description: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running ai archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob
@@ -68,5 +68,5 @@ Required sections:
 ## After Writing
 Append to `.ai/LOG.md`:
 ```
-YYYY-MM-DD | Claude (ai-digest) | Write | .ai/DIGEST.md regenerated
+YYYY-MM-DD | <actor> (ai-digest) | Write | .ai/DIGEST.md regenerated
 ```
