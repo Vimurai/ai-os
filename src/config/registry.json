@@ -1,0 +1,77 @@
+{
+  "version": "2.0",
+  "comment": "AI-OS v2 MCP Server Registry. All servers must be listed here before they can be used with WRITE or EXECUTE permissions.",
+  "mcp_servers": {
+    "filesystem": {
+      "package": "@modelcontextprotocol/server-filesystem",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["Read", "Glob", "Grep"]
+    },
+    "memory": {
+      "package": "@modelcontextprotocol/server-memory",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["*"]
+    },
+    "TestSprite": {
+      "package": "@testsprite/testsprite-mcp",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["*"],
+      "requires_api_key": true
+    },
+    "vibe-check-mcp": {
+      "path": "src/mcp/vibe-check-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["run_vibe_audit", "run_chaos_test", "get_performance_metrics"],
+      "requires_playwright": true,
+      "disable-model-invocation": false
+    },
+    "intent-refiner-mcp": {
+      "path": "src/mcp/intent-refiner-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["refine_intent", "write_update_md"],
+      "disable-model-invocation": false
+    },
+    "task-synchronizer-mcp": {
+      "path": "src/mcp/task-synchronizer-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["sync_tasks", "append_tasks"],
+      "disable-model-invocation": false
+    },
+    "safe-exec-mcp": {
+      "path": "src/mcp/safe-exec-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["analyze_command"],
+      "disable-model-invocation": true,
+      "_note": "disable-model-invocation: true — Claude cannot self-authorize execution bypass"
+    },
+    "blueprint-aligner-mcp": {
+      "path": "src/mcp/blueprint-aligner-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["align_diff"],
+      "disable-model-invocation": false
+    },
+    "context-guardian-mcp": {
+      "path": "src/mcp/context-guardian-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["check_workspace"],
+      "disable-model-invocation": false
+    },
+    "risk-analyzer-mcp": {
+      "path": "src/mcp/risk-analyzer-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["classify_risk", "get_tier_actions"],
+      "disable-model-invocation": false,
+      "_note": "TSRT classifier — invoked automatically by ai update and ai review"
+    }
+  }
+}

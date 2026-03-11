@@ -56,6 +56,6 @@ Rules:
   Status: DONE 2026-03-11 — Cross-project .ai/ discovery, pattern extraction, relevance scoring, SEED.md Knowledge Transfer
 - [x] E-27: Implement `chaos_monkey` agent (src/claude/agents/chaos_monkey.md)
   Status: DONE 2026-03-11 — Invalid input injection, network latency sim, rapid-click, concurrent sessions, [CHAOS_CLEARED/BLOCKED] gate
-- [ ] E-28: Implement Slash Commands for `ai` operations (`update`, `test`, `review`, `archive`, `digest`, `preflight`) as Skills 2.0 modules under `src/claude/skills/` and `src/gemini/skills/` based on P-09 blueprint.
-  Status: PENDING
+- [x] E-28: Implement Slash Commands for `ai` operations (`update`, `test`, `review`, `archive`, `digest`, `preflight`) as Skills 2.0 modules under `src/claude/skills/` and `src/gemini/skills/` based on P-09 blueprint.
+  Status: DONE 2026-03-11 — 6 Claude skills (ai-update, ai-test, ai-review, ai-archive[disable-model-invocation:true], ai-digest[context:fork], ai-preflight) + 2 Gemini skills (ai-update, ai-review); all with YAML frontmatter + dynamic context injection; P-09 inferred from §11+§16
 
