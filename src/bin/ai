@@ -12,10 +12,11 @@ Commands:
   ai install          Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot; enable agent teams; set up hooks
   ai init             Create/upgrade .ai/ in current repo (safe, no overwrite)
   ai onboard          Print the Principal Architect reverse-engineering prompt for existing repos
-  ai update           Prepare UPDATE.md + print override prompt for new sessions
+  ai update [--force] Prepare UPDATE.md + print TSRT-tiered session prompt (Gate 1)
   ai preflight        Print DIGEST-first read order + SESSION stamp template
-  ai review <who>     Print parallel critic prompts (who = claude|gemini)
-  ai test             Run automated test suite (npx testsprite run)
+  ai review <who> [--tier <1|2|3>]  Print tier-aware critic prompts (auto-detects tier)
+  ai test [--vibe]    Run automated tests (TestSprite) or Vibe/Chaos audit (--vibe)
+  ai mcp-setup        Install npm dependencies for all AI-OS MCP servers
   ai archive          Move old LOG/COMM/REVIEWS entries to .ai/archive/YYYY-MM/
   ai digest           Print prompt to regenerate DIGEST.md (run when stale)
   ai sync             Re-sync agent/skill files from ~/.ai-os to ~/.claude, ~/.gemini, ~/.config/github-copilot
@@ -168,14 +169,14 @@ install_global() {
   mkdir -p "${HOME}/.gemini/agents" "${HOME}/.gemini/skills"
   cp -f "${AIOS}/gemini/GEMINI.md"      "${HOME}/.gemini/GEMINI.md"
   cp -f "${AIOS}/gemini/agents/"*.md    "${HOME}/.gemini/agents/" 2>/dev/null || true
-  cp -f "${AIOS}/gemini/skills/"*.md    "${HOME}/.gemini/skills/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/gemini/skills" "${HOME}/.gemini/skills"
   echo "✓ Installed Gemini (Principal Architect) config → ~/.gemini"
 
   # Claude (Principal Software Engineer)
   mkdir -p "${HOME}/.claude/agents" "${HOME}/.claude/skills"
   cp -f "${AIOS}/claude/CLAUDE.md"      "${HOME}/.claude/CLAUDE.md"
   cp -f "${AIOS}/claude/agents/"*.md    "${HOME}/.claude/agents/" 2>/dev/null || true
-  cp -f "${AIOS}/claude/skills/"*.md    "${HOME}/.claude/skills/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/claude/skills" "${HOME}/.claude/skills"
   echo "✓ Installed Claude (Principal Software Engineer) config → ~/.claude"
 
   # Copilot CLI
@@ -196,13 +197,62 @@ install_global() {
   chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
   echo "✓ Hooks ready → ${AIOS}/hooks"
 
+  # Copy MCP servers to ~/.ai-os/mcp/
+  if [[ -d "${AIOS}/mcp" ]]; then
+    cp -rf "${AIOS}/mcp" "${HOME}/.ai-os/" 2>/dev/null || true
+    echo "✓ MCP servers copied → ~/.ai-os/mcp (run: ai mcp-setup to install dependencies)"
+  fi
+
   # Enable agent teams + fix permissions + add v2 hooks
   enable_claude_agent_teams
+}
+
+install_git_hooks() {
+  local GIT_HOOKS_DIR
+  GIT_HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
+  if [[ -z "$GIT_HOOKS_DIR" || ! -d "$GIT_HOOKS_DIR" ]]; then
+    echo "  ⚠  Not a git repo — skipping git hook install"
+    return
+  fi
+
+  local HOOK_SRC="${AIOS}/hooks/pre-commit.sh"
+  local HOOK_DST="${GIT_HOOKS_DIR}/pre-commit"
+
+  if [[ ! -f "$HOOK_SRC" ]]; then
+    echo "  ⚠  pre-commit.sh not found at ${HOOK_SRC} — run: ai install"
+    return
+  fi
+
+  if [[ -f "$HOOK_DST" ]]; then
+    # Check if it's already the AI-OS hook
+    if grep -q "AI-OS Gate 2" "$HOOK_DST" 2>/dev/null; then
+      echo "  ✓ pre-commit hook already installed (Gate 2)"
+      return
+    else
+      # Preserve existing hook — chain it
+      local BACKUP="${HOOK_DST}.pre-aios"
+      mv "$HOOK_DST" "$BACKUP"
+      echo "  ✓ Backed up existing pre-commit hook → pre-commit.pre-aios"
+      # Write wrapper that calls both
+      cat > "$HOOK_DST" <<WRAPPER
+#!/usr/bin/env bash
+# AI-OS pre-commit wrapper — calls original hook then AI-OS Gate 2
+bash "\$(dirname "\$0")/pre-commit.pre-aios" || exit 1
+bash "${HOOK_SRC}" || exit 1
+WRAPPER
+    fi
+  else
+    cp "$HOOK_SRC" "$HOOK_DST"
+  fi
+
+  chmod +x "$HOOK_DST"
+  echo "  ✓ Installed Gate 2 (Quality Gate) pre-commit hook → ${HOOK_DST}"
 }
 
 do_init() {
   ensure_ai_templates
   migrate_legacy_ai_if_present
+  install_git_hooks
 
   echo ""
   echo "Initialized .ai/ + .github/ (safe — no overwrites) with AI-OS v${VERSION}"
@@ -222,41 +272,275 @@ do_init() {
   echo "MCP servers enabled in .mcp.json (filesystem + memory)."
 }
 
+# ── TSRT: Tier classifier (bash-native, no MCP dependency) ──────────────────
+# Reads UPDATE.md + staged diff, returns 1/2/3 via stdout.
+# Used by do_update and do_review for gate skipping.
+detect_tier() {
+  local UPDATE_FILE=".ai/UPDATE.md"
+  local CONTENT=""
+  local DIFF=""
+
+  [[ -f "$UPDATE_FILE" ]] && CONTENT=$(cat "$UPDATE_FILE" 2>/dev/null || true)
+
+  # Try staged diff first, fall back to working tree diff
+  DIFF=$(git diff --staged 2>/dev/null || true)
+  [[ -z "$DIFF" ]] && DIFF=$(git diff HEAD 2>/dev/null || true)
+
+  local COMBINED="${CONTENT} ${DIFF}"
+
+  # Tier 3 signals — high-risk keywords
+  if echo "$COMBINED" | grep -qiE \
+    '\b(auth|oauth|jwt|secret|api.?key|token|password|credential|deploy|production|migration|breaking.?change|rbac|permission|role|access.?control|encryption|new.?feature|new.?service)\b'; then
+    echo "3"; return
+  fi
+
+  # Tier 3 file signals — sensitive file patterns in diff
+  if echo "$DIFF" | grep -qE '^\+\+\+ b/.*(auth|login|password|secret|\.env|migration|deploy|release|package\.json|credential|security|permission|token)'; then
+    echo "3"; return
+  fi
+
+  # Tier 1 signals — only docs/style/typo
+  if echo "$COMBINED" | grep -qiE '\b(typo|css|style|color|font|spacing|docs?|documentation|readme|comment|changelog|format|lint|prettier)\b'; then
+    # Only Tier 1 if there are no Tier 2 signals
+    if ! echo "$COMBINED" | grep -qiE '\b(refactor|logic|api|endpoint|model|database|test|implement|config|algorithm|function|class|method)\b'; then
+      echo "1"; return
+    fi
+  fi
+
+  # Tier 1 file signals — only non-source files changed
+  if [[ -n "$DIFF" ]]; then
+    local NON_TIER1
+    NON_TIER1=$(echo "$DIFF" | grep '^\+\+\+ b/' | grep -vE '\.(css|scss|less|md|txt|json)$|README|docs?/' || true)
+    if [[ -z "$NON_TIER1" ]]; then
+      echo "1"; return
+    fi
+  fi
+
+  # Default: Tier 2
+  echo "2"
+}
+
+# ── Gate 1: Intent Gate ───────────────────────────────────────────────────────
+# Returns: 0 = pass, 1 = vague (hard block), 2 = high-risk (soft block / warning)
+intent_gate() {
+  local UPDATE_FILE=".ai/UPDATE.md"
+  local HASH_FILE=".ai/.update.hash"
+
+  [[ ! -f "$UPDATE_FILE" ]] && return 0
+
+  # Strip template placeholder lines to get real user content
+  local CONTENT
+  CONTENT=$(grep -v '^#' "$UPDATE_FILE" \
+    | grep -v '^$' \
+    | grep -v '^Write a small delta' \
+    | grep -v '^Then run Claude' \
+    | grep -v '^Clear this file' \
+    | grep -v '^- Add:' \
+    | grep -v '^- Modify:' \
+    | grep -v '^- Remove:' \
+    | grep -v '^Constraints:' \
+    || true)
+
+  # Empty → separate warning path (handled below)
+  [[ -z "$CONTENT" ]] && return 0
+
+  # ── Change detection ─────────────────────────────────────────────────────
+  local CURRENT_HASH
+  CURRENT_HASH=$(md5 -q "$UPDATE_FILE" 2>/dev/null \
+                  || md5sum "$UPDATE_FILE" 2>/dev/null | cut -d' ' -f1 \
+                  || echo "")
+  local PREV_HASH=""
+  [[ -f "$HASH_FILE" ]] && PREV_HASH=$(cat "$HASH_FILE")
+
+  if [[ -n "$CURRENT_HASH" && "$CURRENT_HASH" == "$PREV_HASH" ]]; then
+    # Unchanged since last session — skip gate re-analysis (token saver)
+    return 0
+  fi
+  # Persist new hash regardless of gate outcome
+  [[ -n "$CURRENT_HASH" ]] && echo "$CURRENT_HASH" > "$HASH_FILE"
+
+  # ── Vagueness detection ───────────────────────────────────────────────────
+  local WORD_COUNT
+  WORD_COUNT=$(echo "$CONTENT" | wc -w | tr -d ' ')
+
+  local HAS_ACTION=0
+  echo "$CONTENT" | grep -qiE \
+    '\b(add|implement|fix|create|update|refactor|remove|delete|migrate|deploy|build|write|change|replace|integrate|scaffold|install|configure|test|debug|review|audit)\b' \
+    && HAS_ACTION=1
+
+  # Hard-block: < 8 words OR no action verb at all
+  if [[ $WORD_COUNT -lt 8 || $HAS_ACTION -eq 0 ]]; then
+    cat >&2 <<VAGUE
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 1: INTENT GATE — VAGUE INTENT DETECTED (BLOCKED)           ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  UPDATE.md is too vague for safe execution (${WORD_COUNT} words, no action verb). ║
+║  Clarify intent before starting a session.                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+Clarification required — answer these in .ai/UPDATE.md:
+  1. What specific component/file/system is the target?
+  2. What is the desired outcome (concrete acceptance criteria)?
+  3. Is this Tier 1 (docs/style), Tier 2 (logic), or Tier 3 (auth/infra)?
+
+Paste into Gemini (prd_writer) to refine intent:
+  "Refine this into structured TASKS.md P-## entries:
+   $(echo "$CONTENT" | head -3)"
+
+VAGUE
+    return 1
+  fi
+
+  # ── High-risk detection (Tier 3) ─────────────────────────────────────────
+  local IS_HIGH_RISK=0
+  echo "$CONTENT" | grep -qiE \
+    '\b(auth|oauth|jwt|secret|api.?key|token|password|credential|passphrase|env.var|deploy|production|migration|breaking.?change|drop.?table|delete.?all|rm -rf|truncate)\b' \
+    && IS_HIGH_RISK=1
+
+  if [[ $IS_HIGH_RISK -eq 1 ]]; then
+    cat >&2 <<HIGHRISK
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 1: INTENT GATE — HIGH-RISK INTENT DETECTED (TIER 3)        ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  UPDATE.md contains high-risk keywords (auth/deploy/secrets/migration). ║
+║  Architect (Gemini) review is required before execution begins.          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+Before executing, verify:
+  ✓ This change is covered by an existing blueprint in .ai/architect.md
+  ✓ A P-## task has been created by the Architect for this work
+  ✓ [SEC_CLEARED] tag has been added to .ai/LOG.md after threat model
+
+Paste into Gemini for Architect review:
+  "Audit this Tier 3 intent for security implications and create a P-## task:
+   $(echo "$CONTENT" | head -3)"
+
+⚠  Proceeding without Architect sign-off violates the Security Architecture.
+   Add [SEC_CLEARED] to .ai/LOG.md to acknowledge and continue.
+
+HIGHRISK
+    return 2
+  fi
+
+  return 0
+}
+
 do_update() {
+  local FORCE=0
+  for arg in "$@"; do [[ "$arg" == "--force" || "$arg" == "-f" ]] && FORCE=1; done
+
   if [[ ! -d ".ai" ]]; then
     echo "✗ No .ai/ directory found. Run: ai init"
     exit 1
   fi
   ensure_ai_templates
 
-  # Warn if UPDATE.md still contains only the template placeholder lines
-  if [[ -f ".ai/UPDATE.md" ]]; then
-    CONTENT=$(grep -v '^#' .ai/UPDATE.md | grep -v '^$' | grep -v '^Write a small delta' | grep -v '^Then run Claude' | grep -v '^Clear this file' || true)
-    if [[ -z "$CONTENT" ]]; then
+  # ── Gate 1: Intent Gate ────────────────────────────────────────────────────
+  if [[ $FORCE -eq 0 && -f ".ai/UPDATE.md" ]]; then
+    # Check if UPDATE.md has any real content first
+    RAW_CONTENT=$(grep -v '^#' .ai/UPDATE.md | grep -v '^$' \
+      | grep -v '^Write a small delta' | grep -v '^Then run Claude' \
+      | grep -v '^Clear this file' | grep -v '^- Add:' \
+      | grep -v '^- Modify:' | grep -v '^- Remove:' \
+      | grep -v '^Constraints:' || true)
+
+    if [[ -z "$RAW_CONTENT" ]]; then
       echo "⚠  .ai/UPDATE.md appears empty — fill it in before starting a session."
       echo "   Describe what you want researched/planned (Architect) or executed (Engineer)."
+      echo "   Tip: Use 'ai update --force' to skip the Intent Gate if needed."
       echo ""
+    else
+      GATE_RESULT=0
+      intent_gate || GATE_RESULT=$?
+
+      if [[ $GATE_RESULT -eq 1 ]]; then
+        # Vague — hard block
+        echo "Run 'ai update --force' to bypass the Intent Gate (not recommended)."
+        exit 1
+      fi
+      # GATE_RESULT=2 (high-risk) shows warning but allows session to proceed
     fi
   fi
 
-  cat <<'PROMPT'
+  # ── TSRT: Detect tier and emit tier-specific session prompt ────────────────
+  local TIER=2
+  if [[ -f ".ai/UPDATE.md" ]]; then
+    TIER=$(detect_tier 2>/dev/null || echo "2")
+  fi
 
-━━ UNIFIED SYSTEM OVERRIDE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PREFLIGHT (Seeding .ai/ memory):
-1) Read .ai/DIGEST.md         ← for Triad Health & Project Snapshot
-2) Read .ai/architect.md      ← for Principal Architect blueprint
-3) Read .ai/UPDATE.md         ← for human intent
-4) Read .ai/TASKS.md          ← for assigned tasks
+  case "$TIER" in
+    1)
+      cat <<'TIER1'
+
+━━ [TIER_1] LOW-RISK SESSION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TSRT: Tier 1 detected — CSS / Docs / Typos only.
+TOKEN SAVINGS: Skip Critic agents, Security review, Vibe audit, Chaos test.
+
+PREFLIGHT:
+1) Read .ai/DIGEST.md
+2) Read .ai/UPDATE.md
+
+ROLE: Principal Software Engineer (Claude).
+ACTION: Apply the change, run Linter/Prettier locally.
+HANDOVER: Commit with [TIER_1] tag. No agent review required.
+
+⚠️ TOKEN RULE: Do NOT invoke security_engineer, ux_reviewer, or chaos_monkey.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER1
+      ;;
+    3)
+      cat <<'TIER3'
+
+━━ [TIER_3] HIGH-RISK SESSION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TSRT: Tier 3 detected — Auth / Secrets / New Features / Breaking Changes.
+FULL TRIAD REQUIRED before commit.
+
+PREFLIGHT:
+1) Read .ai/DIGEST.md         ← Triad Health & Project Snapshot
+2) Read .ai/architect.md      ← Principal Architect blueprint
+3) Read .ai/UPDATE.md         ← human intent
+4) Read .ai/TASKS.md          ← assigned tasks
+5) Read .ai/CAPABILITIES.md   ← allowed scope (TIER_3 MANDATORY)
+
+ROLE: Principal Software Engineer (Claude).
+GATES REQUIRED (in order):
+  1. security_engineer agent   → threat model + [SEC_CLEARED] in LOG.md
+  2. blueprint-aligner-mcp     → align_diff before ANY commit
+  3. ai test --vibe             → [VIBE_REPORT] + [CHAOS_CLEARED] in REVIEWS.md
+  4. ai review claude           → [CRITIC_STAMP] in REVIEWS.md
+HANDOVER: Mandatory [UACS_VERIFIED] stamp + Architect (Gemini) review.
+
+⚠️ AUTHORITY: Do NOT commit until [UACS_VERIFIED] is in .ai/LOG.md.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER3
+      ;;
+    *)
+      cat <<'TIER2'
+
+━━ [TIER_2] MEDIUM-RISK SESSION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TSRT: Tier 2 detected — Logic / Refactor / Tests.
+TOKEN SAVINGS: Skip Security review, Vibe audit, Chaos test.
+
+PREFLIGHT:
+1) Read .ai/DIGEST.md         ← Triad Health & Project Snapshot
+2) Read .ai/architect.md      ← Principal Architect blueprint
+3) Read .ai/UPDATE.md         ← human intent
+4) Read .ai/TASKS.md          ← assigned tasks
 
 ROLE: Principal Architect (Gemini) or Principal Software Engineer (Claude).
 AUTHORITY: Unified authority over whole system. .ai/ is absolute memory.
 
-⚠️ TOKEN ECONOMICS HARD RULE ⚠️
-Do NOT read files (`cat`, `view_file`) outside your immediate domain unless specified.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GATES REQUIRED:
+  1. Unit tests (local, 0 tokens)
+  2. blueprint-aligner-mcp → align_diff (pattern consistency check)
+HANDOVER: Manual Thumbs Up required. Commit with [TIER_2] tag.
 
-UPDATE.md is at: .ai/UPDATE.md
-PROMPT
+⚠️ TOKEN RULE: Do NOT invoke security_engineer, ux_reviewer, or chaos_monkey.
+   Do NOT read files outside your immediate domain.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER2
+      ;;
+  esac
 }
 
 do_onboard() {
@@ -377,37 +661,109 @@ do_archive() {
 do_review() {
   local who="${1:-}"
   if [[ -z "$who" ]]; then
-    echo "Usage: ai review <claude|gemini>"
+    echo "Usage: ai review <claude|gemini> [--tier <1|2|3>]"
     exit 1
   fi
 
+  # Parse --tier flag (overrides auto-detection)
+  local TIER_OVERRIDE=""
+  local i=2
+  while [[ $i -le $# ]]; do
+    local arg="${!i}"
+    if [[ "$arg" == "--tier" ]]; then
+      i=$((i+1)); TIER_OVERRIDE="${!i}"
+    fi
+    i=$((i+1))
+  done
+
+  # Auto-detect tier from UPDATE.md + diff unless overridden
+  local TIER="${TIER_OVERRIDE}"
+  if [[ -z "$TIER" && -d ".ai" ]]; then
+    TIER=$(detect_tier 2>/dev/null || echo "2")
+  fi
+  TIER="${TIER:-2}"
+
   case "$who" in
     claude)
-      cat <<'CLAUDE_PROMPT'
+      # Tier 1 — skip review entirely
+      if [[ "$TIER" == "1" ]]; then
+        cat <<'TIER1_REVIEW'
 
-━━ REVIEW PROMPT — Claude (Parallel Critics) ━━━━━━━━━━━━━━━━━━━━━━━━
+━━ [TIER_1] REVIEW SKIPPED (TSRT) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tier 1 detected — CSS/Docs/Typos only. Critic review not required.
+
+ACTION:
+  1. Run linter/prettier locally: npx prettier --check . && npx eslint .
+  2. Commit with [TIER_1] tag: git commit -m "[TIER_1] <description>"
+
+No [CRITIC_STAMP] required for Tier 1 commits.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER1_REVIEW
+        return
+      fi
+
+      # Tier 2 — blueprint_aligner only (skip security/vibe/chaos)
+      if [[ "$TIER" == "2" ]]; then
+        cat <<'TIER2_REVIEW'
+
+━━ [TIER_2] REVIEW PROMPT — Claude (Blueprint Aligner) ━━━━━━━━━━━━━
+TSRT: Tier 2 — skipping Security, Vibe, and Chaos agents (token savings).
 Paste this into Claude Code:
 
-"You are the Principal Software Engineer running a self-review.
-Execute these three critics IN PARALLEL using sub-agents:
+"You are the Principal Software Engineer running a Tier 2 review.
+Run blueprint-aligner-mcp to verify pattern consistency:
 
-1. critic_arch     — Review src/ against .ai/architect.md. Flag any
-                     code that contradicts the System Philosophy or
-                     breaks domain sovereignty rules.
+1. Call blueprint-aligner-mcp → align_diff
+   → Confirm all changes follow existing patterns in architect.md
+   → Flag any [WARN] or [FAIL] deviations
 
-2. critic_security — Review src/ and hooks/ for OWASP Top 10,
-                     shell injection, env variable leakage, and
-                     capability boundary violations per CAPABILITIES.md.
+2. Run unit tests: npm test (or equivalent for this project)
 
-3. critic_tests    — Review test coverage. Identify untested paths,
-                     missing edge cases, and quality gate gaps.
+3. Synthesize findings and append to .ai/REVIEWS.md:
+   [CRITIC_STAMP] YYYY-MM-DD | [TIER_2] <summary>
 
-After all three complete, synthesize findings and append to .ai/REVIEWS.md:
-  [CRITIC_STAMP] YYYY-MM-DD | <summary of critical findings>
+Manual Thumbs Up required before committing.
+Commit with [TIER_2] tag: git commit -m \"[TIER_2] <description>\""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER2_REVIEW
+        return
+      fi
 
-A [CRITIC_STAMP] is required to unblock Gate 2 (pre-commit hook)."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CLAUDE_PROMPT
+      # Tier 3 — full Triad (default for high-risk or explicit --tier 3)
+      cat <<'TIER3_REVIEW'
+
+━━ [TIER_3] REVIEW PROMPT — Claude (Full Triad) ━━━━━━━━━━━━━━━━━━━━
+TSRT: Tier 3 — High Risk. Full Triad required before commit.
+Paste this into Claude Code:
+
+"You are the Principal Software Engineer running a Tier 3 full review.
+Execute ALL of the following IN PARALLEL where possible:
+
+1. security_engineer agent
+   → Threat model the changes. Verify no credential exposure.
+   → Append [SEC_CLEARED] YYYY-MM-DD to .ai/LOG.md if clear.
+
+2. critic_arch (sub-agent)
+   → Review src/ against .ai/architect.md. Flag sovereignty violations.
+
+3. critic_security (sub-agent)
+   → OWASP Top 10, shell injection, env variable leakage, CAPABILITIES.md.
+
+4. critic_tests (sub-agent)
+   → Coverage gaps, untested edge cases, quality gate holes.
+
+5. blueprint-aligner-mcp → align_diff
+   → Verify git diff aligns with blueprint. Return [PASS/FAIL].
+
+After ALL complete:
+  → Append to .ai/REVIEWS.md:
+    [CRITIC_STAMP] YYYY-MM-DD | [TIER_3] <critical findings>
+  → If all clear: append [UACS_VERIFIED] YYYY-MM-DD to .ai/LOG.md
+  → Then run: ai test --vibe (required for Tier 3 release)
+
+Do NOT commit until [UACS_VERIFIED] is in .ai/LOG.md."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIER3_REVIEW
       ;;
     gemini)
       cat <<'GEMINI_PROMPT'
@@ -441,6 +797,14 @@ GEMINI_PROMPT
 }
 
 do_test() {
+  local VIBE=0
+  for arg in "$@"; do [[ "$arg" == "--vibe" ]] && VIBE=1; done
+
+  if [[ $VIBE -eq 1 ]]; then
+    do_vibe_test
+    return
+  fi
+
   echo "Running automated tests via TestSprite..."
   if ! command -v npx &>/dev/null; then
     echo "✗ npx not found. Please install Node.js."
@@ -449,22 +813,121 @@ do_test() {
   npx testsprite run
 }
 
+do_vibe_test() {
+  if [[ ! -d ".ai" ]]; then
+    echo "✗ No .ai/ directory found. Run: ai init"
+    exit 1
+  fi
+
+  echo ""
+  echo "━━ AI-OS VIBE TEST (Chaos & UX Stress) ━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+
+  # ── Phase 1: UX Review (Gemini — ux_reviewer agent) ─────────────────────
+  echo "Phase 1: Visual Audit (ux_reviewer)"
+  echo ""
+
+  # Check for Playwright
+  if command -v npx &>/dev/null && npx playwright --version &>/dev/null 2>&1; then
+    echo "  ✓ Playwright detected — running automated visual audit..."
+    echo ""
+    echo "  Paste into Gemini (ux_reviewer agent) for full Vibe Report:"
+  else
+    echo "  ✗ Playwright not installed."
+    echo "    Install: npm install -D @playwright/test && npx playwright install"
+    echo ""
+    echo "  Paste into Gemini (ux_reviewer agent) for manual Vibe Report:"
+  fi
+
+  cat <<'UX_PROMPT'
+
+━━ VIBE PROMPT — Gemini (ux_reviewer) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"You are the UX Reviewer running a Vibe Audit.
+
+1. Start the dev server (check package.json for 'dev' or 'start' script).
+2. For each primary screen/route, check:
+   - Animation smoothness (no jank, < 16ms frame budget)
+   - Cumulative Layout Shift (CLS < 0.1)
+   - Color contrast (WCAG AA: 4.5:1 for text)
+   - Touch targets (≥ 44×44px)
+   - Focus visibility (visible ring on tab)
+3. Run Lighthouse audit: Performance ≥ 80, Accessibility ≥ 90.
+4. Run Rapid-Click stress: click primary CTA 10× rapidly.
+
+Append a [VIBE_REPORT] YYYY-MM-DD | Score: X/10 to .ai/REVIEWS.md.
+Tag [VIBE_BLOCKED] if any P0 issues found."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UX_PROMPT
+
+  # ── Phase 2: Chaos Monkey (Claude — chaos_monkey agent) ─────────────────
+  echo ""
+  echo "Phase 2: Chaos Stress Test (chaos_monkey)"
+  echo ""
+  echo "  Paste into Claude Code (chaos_monkey agent):"
+
+  cat <<'CHAOS_PROMPT'
+
+━━ CHAOS PROMPT — Claude (chaos_monkey) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"You are the Chaos Monkey running a stress gate audit.
+
+Verify [SEC_CLEARED] in .ai/LOG.md before proceeding (Tier 3 gate).
+
+Run these chaos tests against the local dev environment:
+1. Invalid input injection: empty, oversized (>10KB), special chars (XSS, SQLi, path traversal)
+2. Network latency: simulate 5s delay, connection drop, offline mode
+3. Rapid-click: 20 clicks on primary CTA in < 2s — check race conditions
+4. Concurrent sessions: 3 tabs simultaneously — check state corruption
+5. Resource exhaustion: 50MB file upload, 100 rapid API calls
+
+Append [CHAOS_REPORT] YYYY-MM-DD to .ai/REVIEWS.md.
+Tag [CHAOS_CLEARED] if no P0s found, [CHAOS_BLOCKED] if P0s exist.
+Add the result tag to .ai/LOG.md."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CHAOS_PROMPT
+
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Both reports must be in .ai/REVIEWS.md before Tier 3 release."
+  echo "Required stamps: [VIBE_REPORT] + [CHAOS_CLEARED] + [CRITIC_STAMP]"
+  echo ""
+}
+
+sync_skills_20() {
+  # Copy Skills 2.0 folder-based skills (skill-name/SKILL.md structure)
+  local src_dir="$1" dst_dir="$2"
+  local count=0
+  for skill_dir in "${src_dir}"/*/; do
+    if [[ -d "$skill_dir" && -f "${skill_dir}SKILL.md" ]]; then
+      local skill_name
+      skill_name=$(basename "$skill_dir")
+      mkdir -p "${dst_dir}/${skill_name}"
+      cp -rf "${skill_dir}" "${dst_dir}/"
+      count=$((count + 1))
+    fi
+  done
+  # Also copy any remaining legacy flat .md files
+  cp -f "${src_dir}"/*.md "${dst_dir}/" 2>/dev/null || true
+  echo "  $count Skills 2.0 folder(s) + legacy flat files synced from ${src_dir}"
+}
+
 do_sync() {
   echo "Syncing agent/skill files from ${AIOS} → ~/.claude and ~/.gemini ..."
 
   cp -f "${AIOS}/claude/CLAUDE.md"   "${HOME}/.claude/CLAUDE.md"
   cp -f "${AIOS}/claude/agents/"*.md "${HOME}/.claude/agents/" 2>/dev/null || true
-  cp -f "${AIOS}/claude/skills/"*.md "${HOME}/.claude/skills/" 2>/dev/null || true
-  echo "  Claude agents + skills synced"
+  sync_skills_20 "${AIOS}/claude/skills" "${HOME}/.claude/skills"
+  echo "  Claude agents synced"
 
   cp -f "${AIOS}/gemini/GEMINI.md"   "${HOME}/.gemini/GEMINI.md"
   cp -f "${AIOS}/gemini/agents/"*.md "${HOME}/.gemini/agents/" 2>/dev/null || true
-  cp -f "${AIOS}/gemini/skills/"*.md "${HOME}/.gemini/skills/" 2>/dev/null || true
-  echo "  Gemini agents + skills synced"
+  sync_skills_20 "${AIOS}/gemini/skills" "${HOME}/.gemini/skills"
+  echo "  Gemini agents synced"
 
   cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
   chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
-  echo "  Hooks synced"
+  echo "  Hooks synced (stop-hook, post-tool-log, pre-commit)"
 
   mkdir -p "${HOME}/.config/github-copilot"
   cp -f "${AIOS}/copilot/COPILOT.md" "${HOME}/.config/github-copilot/COPILOT.md" 2>/dev/null || true
@@ -527,6 +990,21 @@ doctor() {
     echo "  ✓ post-tool-log.sh present (auto LOG append)"
   else
     echo "  ✗ post-tool-log.sh missing — run: ai install"
+  fi
+  if [[ -f "${HOME}/.ai-os/hooks/pre-commit.sh" ]]; then
+    echo "  ✓ pre-commit.sh present (Gate 2: Quality Gate)"
+  else
+    echo "  ✗ pre-commit.sh missing — run: ai install"
+  fi
+  # Check git hook in current repo
+  if git rev-parse --git-dir &>/dev/null; then
+    local pc_hook
+    pc_hook="$(git rev-parse --git-dir)/hooks/pre-commit"
+    if [[ -f "$pc_hook" ]] && grep -q "AI-OS Gate 2" "$pc_hook" 2>/dev/null; then
+      echo "  ✓ .git/hooks/pre-commit: Gate 2 installed"
+    else
+      echo "  ✗ .git/hooks/pre-commit: Gate 2 NOT installed — run: ai init"
+    fi
   fi
   echo ""
 
@@ -608,6 +1086,53 @@ print('  Gemini perm:', 'BROAD (Bash(gemini *)) - run: ai install to fix' if bro
   echo "  (if nothing listed above, contracts are clean ✓)"
 }
 
+do_mcp_setup() {
+  local MCP_DIR="${AIOS}/mcp"
+  if [[ ! -d "$MCP_DIR" ]]; then
+    echo "✗ MCP servers not found at ${MCP_DIR} — run: ai install"
+    exit 1
+  fi
+
+  if ! command -v node &>/dev/null; then
+    echo "✗ Node.js not found — required for MCP servers. Install: brew install node"
+    exit 1
+  fi
+
+  echo "Installing MCP server dependencies from ${MCP_DIR} ..."
+  echo ""
+
+  local MCP_SERVERS=(
+    "vibe-check-mcp"
+    "intent-refiner-mcp"
+    "task-synchronizer-mcp"
+    "safe-exec-mcp"
+    "blueprint-aligner-mcp"
+    "context-guardian-mcp"
+    "risk-analyzer-mcp"
+  )
+
+  for server in "${MCP_SERVERS[@]}"; do
+    local sdir="${MCP_DIR}/${server}"
+    if [[ -d "$sdir" && -f "${sdir}/package.json" ]]; then
+      echo "  Installing ${server}..."
+      (cd "$sdir" && npm install --silent 2>&1 | tail -2) || echo "  ✗ ${server}: npm install failed"
+      # Playwright needs browser install
+      if [[ "$server" == "vibe-check-mcp" ]]; then
+        echo "  Installing Playwright browsers for ${server}..."
+        (cd "$sdir" && npx playwright install chromium --quiet 2>&1 | tail -2) || true
+      fi
+      echo "  ✓ ${server}: ready"
+    else
+      echo "  ⚠  ${server}: not found at ${sdir}"
+    fi
+  done
+
+  echo ""
+  echo "✓ MCP setup complete."
+  echo "  To enable servers: edit .mcp.json and set \"disabled\": false for each server."
+  echo "  Registry: ${AIOS}/config/registry.json"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 cmd="${1:-}"
@@ -615,13 +1140,14 @@ case "$cmd" in
   install)   install_global ;;
   init)      do_init ;;
   onboard)   do_onboard ;;
-  update)    do_update ;;
+  update)    do_update "${@:2}" ;;
   preflight) preflight ;;
   digest)    do_digest ;;
   archive)   do_archive ;;
   review)    do_review "${2:-}" ;;
-  test)      do_test ;;
+  test)      do_test "${@:2}" ;;
   sync)      do_sync ;;
+  mcp-setup) do_mcp_setup ;;
   doctor)    doctor ;;
   where)
     echo "AI-OS:     ${AIOS}"

@@ -28,7 +28,10 @@
 - **Tool Registry & Governance**:
   - `~/.ai-os/registry.json`: Signed list of authorized MCP servers.
   - `src/bin/ai-exec`: Enforces Capability Isolation (Read/Write/Execute) based on registry signatures.
-  - **`vibe-check-mcp`**: A specialized MCP server (Node.js + Playwright) that exposes `run_vibe_audit` and `run_chaos_test` tools directly to Claude and Gemini.
+  - **`vibe-check-mcp`**: A specialized MCP server (Node.js + Playwright) that exposes:
+    - `run_vibe_audit(url, options)`: Captures screenshots, calculates Cumulative Layout Shift (CLS), and audits contrast/accessibility.
+    - `run_chaos_test(url, interactions)`: Simulates rapid, random user interactions to find race conditions or state-management crashes.
+    - `get_performance_metrics(url)`: Returns LCP, FID, and CLS via Playwright's CDP session.
 
 - **Command Implementation Guide (`ai archive`)**:
   - **Logic**: Identify `.ai/` files with content (`LOG.md`, `COMM.md`, `REVIEWS.md`, `SESSION.md`).
@@ -93,14 +96,44 @@
   - **Trigger**: Mandatory gate for "Production" release.
 
 ## 11. Universal Autonomous Command Suite (UACS)
-- **Concept**: Shift from "User-triggered" prompts to "Agent-executed" autonomous tools (MCP).
-- **Core UACS Tools**:
-  - **`intent-refiner-mcp`**: **(PRIMARY)** Automatically populates and optimizes `UPDATE.md` based on terminal chat history or voice-to-text input. Eliminates the need for manual file editing.
-  - **`task-synchronizer-mcp`**: Automatically updates `TASKS.md` (P-## and E-##) as soon as a new intent is refined in `UPDATE.md`.
-  - **`safe-exec-mcp`**: Sandbox simulator that audits shell commands for side-effects and security breaches before execution.
-  - **`snapshot-auditor-mcp`**: Validates that `DIGEST.md` is technically accurate and synchronized with the codebase.
-  - **`context-guardian-mcp`**: Prevents the archival of files (`ai archive`) that contain uncompleted tasks (P-## or E-##) or open architectural questions.
-  - **`blueprint-aligner-mcp`**: Automatically audits code changes against `architect.md` and `SECURITY.md` before allowing a `git commit`.
+- **Concept**: Shift from "User-triggered" prompts to "Agent-executed" autonomous tools (MCP). Skills must be defined with explicit boundaries using frontmatter.
+- **Skill Configuration & Boundaries**:
+  - `disable-model-invocation: true`: Mandatory for destructive tools (`ai archive`, `git commit`, deployment scripts). The Executor cannot trigger these autonomously; they must be explicitly called by the user.
+  - `allowed-tools`: All skills must explicitly define `allowed-tools` (e.g., `Read, Grep`) to enforce the Principle of Least Privilege and prevent hallucinated tool execution.
+  - **Dynamic Context Injection**: Skill prompts can use shell interpolation (e.g., `!git diff`) to inject rapid, read-only context into the prompt *before* the Executor agent is spawned, saving tokens and round-trips.
+  - **Subagent Delegation**: Complex skills (like `ai batch` or `ai research`) must specify `context: fork` and define a target `agent` profile (e.g., `Plan`, `Explore`, `TestSprite`). This spins off an isolated subagent so the primary context window is not polluted.
+- **Core UACS Tools (Technical Specs)**:
+  - **`intent-refiner-mcp`**: 
+    - **Logic**: Parses the last 50 lines of terminal output or a specific `CHAT_LOG`.
+    - **Action**: Generates a structured JSON summary and writes it to `UPDATE.md`.
+  - **`task-synchronizer-mcp`**: 
+    - **Logic**: Watches `UPDATE.md` for changes.
+    - **Action**: Maps refined intent to `TASKS.md` by adding/updating P-## or E-## entries using fuzzy-match logic.
+  - **`safe-exec-mcp`**: 
+    - **Logic**: Uses `npm:shell-parser` to AST-analyze shell commands.
+    - **Action**: Detects `rm -rf /`, `curl | bash`, and other high-risk patterns before execution.
+  - **`blueprint-aligner-mcp`**: 
+    - **Logic**: Compares `git diff` against `architect.md` using a vector-similarity check or direct rule-matching.
+    - **Action**: Returns a `[PASS/FAIL]` and explains deviations.
+  - **`context-guardian-mcp`**: 
+    - **Logic**: Checks `TASKS.md` and `architect.md` for unresolved markers (`TODO`, `FIXME`, `Pending`).
+    - **Action**: Blocks `ai archive` or `git commit` if the workspace state is "Dirty" or "Unfinished".
+
+### 11.1 AI-OS Slash Command Integration (Skills 2.0)
+- **Concept**: Exposing core `ai` CLI tools as native slash commands (e.g., `/update`, `/test`) in Claude Code and Gemini to streamline Triad workflows without leaving the chat interface.
+- **Mechanism**:
+  - Each command is a modular skill wrapped in `src/<agent>/skills/<command>/SKILL.md`.
+  - Driven by **Dynamic Context Injection**: The skill's Markdown uses `!<bash-command>` to execute the CLI tool and embed its stdout directly into the prompt *before* the Executor agent sees it.
+- **Core Slash Commands**:
+  - `/update`: Executes `!ai update` to evaluate Gate 1 and inject the TSRT session prompt.
+  - `/test`: Executes `!ai test` to run the active test suite.
+  - `/test_vibe`: Executes `!ai test --vibe` for Playwright UX/Chaos audits.
+  - `/review`: Executes `!ai review claude` (or `gemini`) to fetch the parallel critic prompts matching the current risk tier.
+  - `/digest`: Executes `!ai digest` to fetch the prompt for regenerating `DIGEST.md`.
+  - `/preflight`: Executes `!ai preflight` to inject project read-order context.
+- **Security Boundaries**:
+  - All slash command skills explicitly set `disable-model-invocation: true` to prevent autonomous execution loops. They can only be triggered explicitly by the user via `/command`.
+  - State-mutating commands (like `ai archive`, `ai init`) should guide the user to run them in a separate terminal OR rely on the skill explicitly asking the Executor to invoke `shell_command` with user consent.
 
 ## 12. Strict Domain Isolation
 - **Architectural Sovereignty (Gemini)**:
@@ -145,3 +178,86 @@
 1. **Plan**: Architecture updates planned here in `architect.md` by Gemini.
 2. **Build**: Claude uses `src/bin/ai` and isolation scripts to implement changes, strictly following blueprints.
 3. **Test**: `ai test` validates CLI behavior, template integrity, and security hook triggers.
+
+## 16. Skills 2.0 Modular Migration
+- **Standard**: Transition from `src/<agent>/skills/<skill>.md` to `src/<agent>/skills/<skill-name>/SKILL.md`.
+- **Folder Structure**:
+  - `SKILL.md`: Mandatory instructions + YAML frontmatter.
+  - `scripts/`: Optional validation or automation scripts (bash/js).
+  - `references/`: On-demand resources (API docs, specs).
+- **Progressive Disclosure**:
+  - **Meta-Sync**: `ai update` only exposes skill descriptions (Level 1).
+  - **Activation**: Full skill content is loaded only when triggered (Level 2).
+  - **Deep-Dive**: `references/` are read only if the task requires it (Level 3).
+- **Migration Logic**:
+  - For each `<skill>.md` in `src/claude/skills/` and `src/gemini/skills/`:
+    1. Create a directory `src/<agent>/skills/<skill>/`.
+    2. Move `<skill>.md` to `src/<agent>/skills/<skill>/SKILL.md`.
+    3. Add YAML frontmatter to `SKILL.md` based on `src/templates/SKILL.md`.
+    4. Ensure `allowed-tools` is accurately populated based on the skill's content.
+
+## 17. Missing Agent Blueprints
+### 17.1 prd_writer (Gemini)
+- **Role**: Refines `UPDATE.md` into structured `TASKS.md` and `BRIEF.md` updates.
+- **Trigger**: `ai update` (Gate 1).
+- **File**: `src/gemini/agents/prd_writer.md`.
+- **Frontmatter**:
+  ```yaml
+  name: prd_writer
+  description: Analyzes UPDATE.md to refine product requirements and sync TASKS.md.
+  allowed-tools: Read, Grep, Glob, Replace, Write
+  ```
+- **Instruction Highlights**:
+  - Focus on extracting "Measurable Outcomes" from vague requests.
+  - Automatically bridge the gap between user intent and architectural constraints.
+  - Maintain the P-## (Planner) and E-## (Engineer) task sequencing.
+
+### 17.2 ux_reviewer (Gemini Vision)
+- **Role**: Automated visual audits of the codebase and UI.
+- **Trigger**: `ai test --vibe`.
+- **File**: `src/gemini/agents/ux_reviewer.md`.
+- **Frontmatter**:
+  ```yaml
+  name: ux_reviewer
+  description: Visual regression and UX audit agent using Playwright screenshots.
+  allowed-tools: Read, Shell, Playwright, Screenshot
+  ```
+- **Instruction Highlights**:
+  - Audit for contrast, layout shifts, and animation "vibe".
+  - Compare current UI state against "Signature Styles" in the Memory Palace.
+
+### 17.3 knowledge_architect (Gemini 1M+)
+- **Role**: Cross-project RAG and "Memory Palace" management.
+- **Trigger**: `ai init`.
+- **File**: `src/gemini/agents/knowledge_architect.md`.
+- **Frontmatter**:
+  ```yaml
+  name: knowledge_architect
+  description: Manages cross-project knowledge transfer and codebase indexing.
+  allowed-tools: Read, Search, Embeddings, Glob
+  ```
+- **Instruction Highlights**:
+  - Index the current `.ai/` directory and compare with historical project signatures.
+  - Suggest architectural patterns based on successful previous implementations.
+
+### 17.4 chaos_monkey (Claude)
+- **Role**: Stress testing, race condition hunting, and "Rapid-Click" audits.
+- **Trigger**: Mandatory for Tier 3 releases.
+- **File**: `src/claude/agents/chaos_monkey.md`.
+- **Frontmatter**:
+  ```yaml
+  name: chaos_monkey
+  description: Security stress-tester and race-condition hunter.
+  allowed-tools: Read, Shell, Playwright, Chaos-Scripts
+  ```
+- **Instruction Highlights**:
+  - Deliberately inject invalid inputs and simulate network latency.
+  - Perform "Rapid-Click" audits to find race conditions in the UI.
+
+## 18. Autonomous Command Suite (UACS) Logic
+- **Concept**: Skills that run without human intervention between steps.
+- **Implementation**:
+  - **`intent-refiner-mcp`**: Automatically bridges chat intent to `TASKS.md` (Gate 1).
+  - **`blueprint-aligner-mcp`**: Blocks `git commit` if code deviates from `architect.md`.
+  - **`safe-exec-mcp`**: Simulates `rm -rf` or other high-risk commands in a sandbox before execution.
+- **Automation Hook**: `post-tool-log.sh` will now trigger `blueprint-aligner-mcp` for any Tier 3 task.
