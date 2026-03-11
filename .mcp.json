@@ -68,6 +68,12 @@
       "args": [
         "/Users/emirkovacevic/.ai-os/mcp/risk-analyzer-mcp/index.js"
       ]
+    },
+    "context-invoker-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/context-invoker-mcp/index.js"
+      ]
     }
   }
 }

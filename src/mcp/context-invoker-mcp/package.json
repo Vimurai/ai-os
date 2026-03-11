@@ -1,0 +1,11 @@
+{
+  "name": "context-invoker-mcp",
+  "version": "1.0.0",
+  "description": "AI-OS UACS: Gives Claude dynamic access to skills and agents by name",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

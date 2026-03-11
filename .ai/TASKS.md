@@ -17,9 +17,9 @@ Rules:
   Status: DONE 2026-03-10 — Section 17.1, 17.4 in architect.md
 - [x] P-09: Blueprint for AI-OS Slash Command Integration (Skills 2.0)
   Status: DONE 2026-03-11 — Section 11.1 in architect.md
-- [ ] P-10: Blueprint for Gemini CLI Custom Commands (.toml) Configuration
+- [x] P-10: Blueprint for Gemini CLI Custom Commands (.toml) Configuration
   Status: DONE 2026-03-11 — Section 11.2 in architect.md
-- [ ] P-11: Blueprint for Shared Skills Architecture
+- [x] P-11: Blueprint for Shared Skills Architecture
   Status: DONE 2026-03-11 — Section 16.1 in architect.md
 - [x] P-12: Blueprint for Contextual Auto-Calling and Agent Configurations
   Status: DONE 2026-03-11 — Section 17.5 in architect.md
@@ -29,7 +29,21 @@ Rules:
   Status: DONE 2026-03-11 — Section 20 in architect.md
 - [x] P-15: Blueprint for E-40 Minimal Bash Test Harness
   Status: DONE 2026-03-11 — Section 22 in architect.md
+- [x] P-16: Implement `context-invoker-mcp` server to give Claude dynamic access to skills and agents. Create the MCP server with `activate_skill` and `activate_agent` tools, register it in `src/config/registry.json`, update `src/claude/CLAUDE.md` with invocation instructions and directory listings, and test via `ai mcp-setup` and `ai install`.
+  Status: DONE 2026-03-11 — E-42
 
+- [x] P-17: Implement `Repo-Oracle` skill for Gemini (historical awareness).
+  Status: DONE 2026-03-11 — E-43
+- [x] P-18: Implement `Vibe-Sentinel` agent for Claude (automated visual audit).
+  Status: DONE 2026-03-11 — E-43
+- [x] P-19: Implement `Token-Miser` shared skill (cost/context optimization).
+  Status: DONE 2026-03-11 — E-43
+- [x] P-20: Implement `Identity-Guardian` agent for Claude (PII and secrets specialist).
+  Status: DONE 2026-03-11 — E-43
+- [x] P-21: Implement `Architectural-Aligner` skill for Gemini (blueprint vs code consistency).
+  Status: DONE 2026-03-11 — E-43
+- [x] E-41: Verify all new agents and skills are synced and invocable (run `ai install` and test activation).
+  Status: DONE 2026-03-11 — install-ai-os.sh synced; ai mcp-setup 8/8; [TEST_PASSED] 22/22
 
 ## Engineer (Claude)
 - [x] E-01: Implement `ai-exec` CLI (Bash) based on P-01 blueprint
@@ -101,4 +115,12 @@ Adding explicit E-## trace entries so the blueprint-aligner can resolve the orph
 ## Quality Gate Escalation
 - [x] E-40: Wire test harness so `ai test` can satisfy the 100% Quality Gate
   Status: DONE 2026-03-11 — tests/run.sh (master runner, bash 3 compatible, SUITE_RESULT parsing); tests/lib/assert.sh (assert_status/contains/exists/match/not_contains + assert_summary); tests/suites/cli_test.sh (7 assertions: version, usage, where, unknown cmd); tests/suites/mcp_test.sh (14 assertions: registry JSON, custom servers, .mcp.json generation + trailing newline); do_test() in src/bin/ai now executes tests/run.sh when present (TestSprite fallback preserved); [TEST_PASSED] 21/21
+
+## P-16 Implementation
+- [x] E-42: Implement `context-invoker-mcp` server (P-16)
+  Status: DONE 2026-03-11 — src/mcp/context-invoker-mcp/ (activate_skill: multi-root Skills 2.0 + flat resolution from ~/.claude/skills/, ~/.gemini/skills/, ~/.ai-os/, src/ fallback; activate_agent: same pattern for ~/.claude/agents/; list_skills/list_agents discovery mode; not-found returns suggestions); registry.json updated (capability: READ); src/claude/CLAUDE.md updated with invocation section + skill/agent directory tables; [TEST_PASSED] 22/22
+
+## P-17 through P-21 Implementation
+- [x] E-43: Implement 5 new skills/agents + verify sync (P-17 to P-21 + E-41)
+  Status: DONE 2026-03-11 — repo-oracle (src/gemini/skills/repo-oracle/SKILL.md); vibe_sentinel (src/claude/agents/vibe_sentinel.md); token-miser (src/shared/skills/token-miser/SKILL.md); identity_guardian (src/claude/agents/identity_guardian.md); architectural-aligner (src/gemini/skills/architectural-aligner/SKILL.md); install-ai-os.sh synced all to ~/.ai-os/; ai mcp-setup 8/8; [TEST_PASSED] 22/22
 

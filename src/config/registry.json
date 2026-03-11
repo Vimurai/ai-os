@@ -72,6 +72,14 @@
       "allowed-tools": ["classify_risk", "get_tier_actions"],
       "disable-model-invocation": false,
       "_note": "TSRT classifier — invoked automatically by ai update and ai review"
+    },
+    "context-invoker-mcp": {
+      "path": "src/mcp/context-invoker-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["activate_skill", "activate_agent"],
+      "disable-model-invocation": false,
+      "_note": "Dynamic skill/agent loader — call activate_skill or activate_agent by name to inject instructions into context"
     }
   }
 }

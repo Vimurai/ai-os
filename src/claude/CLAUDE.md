@@ -35,3 +35,44 @@ A task is NOT complete until:
 - If a conflict exists between an external plan and `.ai/` memory: **`.ai/` prevails.**
 - DO NOT treat CLI plan-mode output as the source of truth unless it has been committed to `.ai/architect.md`.
 - After any planning session: record the output in `.ai/TASKS.md` (E-## entries) and `.ai/architect.md`.
+
+## Dynamic Skill & Agent Invocation (context-invoker-mcp)
+Use `mcp__context-invoker-mcp__activate_skill` and `mcp__context-invoker-mcp__activate_agent` to load
+skill or agent instructions into context on demand — without reading files manually.
+
+### activate_skill — Available Skills
+| Skill | Location | Purpose |
+| :---- | :------- | :------ |
+| `ai-update` | `src/claude/skills/` | Start a new AI-OS session, run Intent Gate |
+| `ai-review` | `src/claude/skills/` | Tier-aware critic review before committing |
+| `ai-preflight` | `src/shared/skills/` | DIGEST-first read order at session start |
+| `ai-test` | `src/shared/skills/` | Run tests / Vibe & Chaos audit |
+| `ai-archive` | `src/shared/skills/` | Archive .ai/ log files |
+| `ai-digest` | `src/shared/skills/` | Regenerate DIGEST.md snapshot |
+| `scope_safety` | `src/claude/skills/` | Enforce filesystem/shell scope boundaries |
+| `dependency_gate` | `src/claude/skills/` | Gate before adding new dependencies |
+| `ci_gate` | `src/claude/skills/` | Gate before changing CI/CD config |
+| `obs_baseline` | `src/claude/skills/` | Apply observability standards |
+| `copilot` | `src/claude/skills/` | Delegate shell/gh lookups to GitHub Copilot |
+
+### activate_agent — Available Agents
+| Agent | Location | Purpose |
+| :---- | :------- | :------ |
+| `chaos_monkey` | `src/claude/agents/` | Inject invalid inputs, stress-test UI |
+| `claude_tasks` | `src/claude/agents/` | Record follow-up E-## tasks in TASKS.md |
+| `devops_engineer` | `src/claude/agents/` | Set up CI/CD pipelines and deployment configs |
+| `digest_updater` | `src/claude/agents/` | Regenerate .ai/DIGEST.md |
+| `security_engineer` | `src/claude/agents/` | Security review, SECURITY.md + THREAT_MODEL.md |
+
+### Usage
+```
+# Load a skill
+mcp__context-invoker-mcp__activate_skill({ skill_name: "ai-preflight" })
+
+# Load an agent
+mcp__context-invoker-mcp__activate_agent({ agent_name: "security_engineer" })
+
+# Discover all available names
+mcp__context-invoker-mcp__activate_skill({ skill_name: "", list_skills: true })
+mcp__context-invoker-mcp__activate_agent({ agent_name: "", list_agents: true })
+```
