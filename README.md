@@ -1,23 +1,19 @@
 <div align="center">
-  <h1>🤖 AI-OS v3.2</h1>
-  <p><b>A High-Performance, Triad-Based Framework for AI-Native Software Engineering</b></p>
-  <p><i>Stop typing code. Start directing intelligence.</i></p>
+  <h1>🤖 AI-OS v3.2: The Autonomous Triad</h1>
+  <p><b>A Self-Regulating Framework for AI-Native Software Engineering</b></p>
+  <p><i>Don't copy-paste prompts. Command a self-aware engineering team.</i></p>
 </div>
 
 ---
 
-## 🚨 CRITICAL WARNING: Paradigm Shift
+## 🚨 The Core Philosophy
 
-**This framework will fundamentally override your existing development workflow.** 
+AI-OS is not a prompt library. It is an **autonomous operating system for AI agents** (Claude Code and Gemini CLI). By installing AI-OS, you are transforming your standalone CLIs into a highly structured, self-regulating team of experts.
 
-AI-OS is not a simple helper utility or a code autocomplete tool. It is an entirely new operational paradigm for building software. By adopting AI-OS, you are agreeing to the following absolute laws:
-
-1. **You are no longer the primary typist.** You are the Director and Operator. 
-2. **The `.ai/` directory is the Absolute Source of Truth.** If a decision, architecture plan, or task is not written in `.ai/`, *it does not exist*.
-3. **Strict Separation of Concerns.** You cannot ask the Engineer (Claude) to design the architecture, and you cannot ask the Architect (Gemini) to write the implementation logic.
-4. **No Unverified Commits.** High-risk changes cannot be committed without automated AI reviews, security checks, and visual (Vibe) audits.
-
-If you try to use AI-OS like a standard chat window, you will fail. Read this documentation carefully.
+**Key Innovations in v3.2:**
+1. **Dynamic Context Invocation:** Claude and Gemini automatically load specialized skills and agent personas (like the Security Engineer or Chaos Monkey) into their context on the fly using the custom `context-invoker-mcp`.
+2. **Automated State Tracking:** Built-in shell hooks (`stop-hook.sh`, `post-tool-log.sh`) automatically record every action your agents take into `.ai/LOG.md` and stamp `.ai/SESSION.md` when they exit.
+3. **The `.ai/` Sovereignty:** The `.ai/` directory acts as the system's "Absolute Memory." If it's not in the `.ai/` blueprints or task lists, the agents are explicitly forbidden from building it.
 
 ---
 
@@ -25,17 +21,15 @@ If you try to use AI-OS like a standard chat window, you will fail. Read this do
 
 AI-OS divides cognitive labor into a **Triad**, ensuring small context windows, focused expertise, and robust token-saving economics.
 
-| Entity | Intelligence | Role & Domain | Forbidden Actions |
+| Entity | Intelligence | Role | Autonomous Behaviors |
 | :--- | :--- | :--- | :--- |
-| **Principal Architect** | **Gemini** | Owns the `.ai/` directory. Writes system blueprints (`architect.md`), scopes tasks (`TASKS.md`), and dictates UX/SEO strategy. | **NEVER** writes or edits application source code. |
-| **Lead Engineer** | **Claude** | Owns `src/`. Reads blueprints, implements application logic, runs dev servers, and updates `LOG.md` with progress. | **NEVER** starts work without a blueprint. Cannot redefine architecture. |
-| **Quality/QA** | **TestSprite / Playwright** | Owns `tests/`. Runs automated E2E tests, visual "Vibe" audits, and Chaos Monkey stress tests. | Cannot modify business logic. |
+| **Principal Architect** | **Gemini** | Owns `.ai/architect.md` and `.ai/TASKS.md`. Designs systems, dictates UX/SEO strategy. | Auto-loads `ux_template` and `ai-update` skills to plan features and split them into tickets. **Never writes code.** |
+| **Lead Engineer** | **Claude** | Owns `src/`. Implements the Architect's blueprints. | Auto-loads `claude_tasks` or `devops_engineer` as needed. Updates `LOG.md` automatically via hooks. |
+| **Quality/QA** | **TestSprite** | Owns verification. | Runs automated tests, Vibe audits (visual UX), and Chaos Monkey stress tests via MCP. |
 
 ---
 
 ## 🚀 Installation & Setup
-
-AI-OS requires a global installation to configure your AI CLI tools (Claude Code, Gemini CLI), followed by local initialization in your specific project repositories.
 
 ### Prerequisites
 * macOS/Linux (Bash/Zsh)
@@ -45,12 +39,16 @@ AI-OS requires a global installation to configure your AI CLI tools (Claude Code
 
 ### 1. Global Installation
 
-Clone the AI-OS repository and run the global installer. This will copy the core engine to `~/.ai-os/`, inject AI-OS into your `$PATH`, and configure your `~/.claude/settings.json` and `~/.gemini/settings.json`.
+> ⚠️ **CAUTION: OVERWRITES EXISTING CONFIGURATIONS**
+> Running `ai install` configures `~/.claude/settings.json` and `~/.gemini/settings.json` to enforce strict AI-OS rules, injects MCP servers, and installs auto-logging hooks. **If you have custom CLI setups, use a sandbox first!**
 
 ```bash
 git clone <repository-url> ai-os-v2
 cd ai-os-v2
 ./install-ai-os.sh
+
+# Lock in the agent rules, MCPs, and system hooks
+ai install
 ```
 
 **Reload your shell profile:**
@@ -58,128 +56,90 @@ cd ai-os-v2
 source ~/.zshrc # or ~/.zprofile / ~/.bashrc
 ```
 
-### 2. Verify Installation
-Ensure the global configuration was successful and all MCP dependencies are installed:
+### 2. Verify System Health
+Ensure all MCP servers and hooks are online:
 ```bash
 ai doctor
 ```
-*(If any MCP servers show as missing dependencies, run `ai mcp-setup`)*
+*(If any MCP node modules are missing, run `ai mcp-setup`)*
 
 ---
 
 ## 📂 Project Integration (Local Setup)
 
-To use AI-OS in an existing or new project, you must initialize it. Navigate to your project's root directory and run:
+To activate the framework in a specific codebase, navigate to the project root and run:
 
 ```bash
 cd my-software-project
 ai init
 ```
 
-### What `ai init` actually does:
-1. **Scaffolds `.ai/`**: Creates the intelligence directory (`architect.md`, `DIGEST.md`, `UPDATE.md`, `TASKS.md`, `LOG.md`, `RULES.md`).
-2. **Git Hooks**: Installs the AI-OS `pre-commit` hook (Gate 2) to block misaligned architectural commits.
-3. **Copilot Sync**: Creates `.github/copilot-instructions.md` so standard GitHub Copilot chat knows about your `.ai/` rules.
-4. **MCP Configuration**: Generates a `.mcp.json` file in your project root pointing to the AI-OS custom servers.
+**What happens under the hood:**
+* **Memory Scaffold:** Creates the `.ai/` directory (`architect.md`, `DIGEST.md`, `TASKS.md`, `LOG.md`).
+* **Git Pre-commit Hook:** Installs Gate 2, blocking any commits that the `blueprint-aligner-mcp` flags as violating the Architect's rules.
+* **Copilot Sync:** Generates `.github/copilot-instructions.md` so your IDE's inline Copilot obeys the `.ai/` blueprint.
+* **Local MCP Config:** Generates `.mcp.json` pointing to local filesystem, memory, and custom AI-OS servers.
 
 ---
 
-## 🔄 The Core Workflow (How to build software)
+## 🔄 The Zero-Friction Workflow
 
-Do not just open Claude and say "build me a feature". Follow the AI-OS Lifecycle. Your entry point depends on whether you have a new request or are working from an existing backlog.
+You don't need to manually fill out forms or copy-paste giant prompts. Because of the `context-invoker-mcp`, the LLMs know how to use their tools automatically.
 
-### Pathway A: New Request
-If you are starting a new feature or task that isn't documented yet:
+### Step 1: Planning (The Architect)
+Open your terminal and launch the Gemini CLI. Tell the Architect what you want.
 
-**Step 1: The Intent (`UPDATE.md`)**
-Open `.ai/UPDATE.md` and write your request. Be specific.
-* *Bad:* "Fix the login."
-* *Good:* "Add: OAuth2 Google Login. Constraints: Must use existing User model. No new UI libraries."
+> **You:** "Plan a new OAuth2 login flow using our existing user models."
 
-**Step 2: The Intent Gate (`ai update`)**
-Run the update command:
+**What happens automatically:**
+1. Gemini dynamically loads the `ai-update` and `repo-oracle` skills into its context.
+2. It researches your codebase constraints.
+3. It drafts a technical blueprint in `.ai/architect.md`.
+4. It creates actionable `P-##` tickets in `.ai/TASKS.md`.
+
+### Step 2: Execution (The Engineer)
+Exit Gemini and launch Claude Code. Tell the Engineer to get to work.
+
+> **You:** "Execute the next open ticket in TASKS.md."
+
+**What happens automatically:**
+1. Claude reads the project `DIGEST.md` and the Architect's blueprint.
+2. Claude writes the source code and runs local dev servers to verify it.
+3. **The Hooks Fire:** As Claude works, the `post-tool-log.sh` hook automatically records every shell command and file edit into `.ai/LOG.md`. When you stop the session, `stop-hook.sh` stamps `.ai/SESSION.md`.
+
+### Step 3: Automated Quality Gates
+Before you commit, the system enforces safety and architectural alignment. 
+
+You can trigger these via terminal commands (which output the exact validation prompts for the agents to run):
 ```bash
-ai update
-```
-The system will analyze your `UPDATE.md`. If it is too vague, **it will hard-block you**. If it passes, it will classify the risk level (Tier 1, 2, or 3) and generate the exact prompt you must feed to the agent.
-
-### Pathway B: Existing Backlog (`TASKS.md`)
-If your task is already defined in `.ai/TASKS.md` (e.g., created during a previous planning session), you can **skip `UPDATE.md` entirely**.
-* To plan the task further, open the Gemini CLI directly.
-* To execute the task, open Claude Code directly (or run `ai update --force` to bypass the Intent Gate and get a session prompt).
-
-### Step 3: Planning (Architect)
-If this is a new feature or architectural change, use Gemini:
-1. Provide the intent (or refer to the task in `TASKS.md`).
-2. Gemini will research your codebase and write a blueprint into `.ai/architect.md`.
-3. Gemini will break the work down into `P-##` tickets in `.ai/TASKS.md`.
-
-### Step 4: Execution (Engineer)
-Open Claude Code:
-1. Paste the preflight prompt provided by `ai update` (or instruct Claude to read the next task in `TASKS.md`).
-2. Claude will read `DIGEST.md`, read the Architect's blueprint, and begin writing source code.
-3. As Claude works, it will document its actions in `.ai/LOG.md`.
-
-### Step 5: The Quality Gates
-Once code is written, it must be verified before committing.
-
-```bash
-ai review claude  # Triggers the Critic Agent to review code against the blueprint
-ai test           # Runs standard unit/E2E tests
+ai review claude  # Triggers Claude to run the blueprint-aligner-mcp on its own diff
+ai test           # Runs the test suite via TestSprite
 ai test --vibe    # Runs visual UX audits (Lighthouse/CLS) and Chaos Monkey stress tests
 ```
+*If a high-risk (Tier 3) feature is built, Git will actively reject your commit until the Security Engineer agent stamps `[SEC_CLEARED]` in the logs.*
 
 ---
 
-## 🚄 TSRT: Tiered Session Response Theory
+## 🔌 The MCP Nervous System
 
-To prevent wasting expensive API tokens on simple tasks (like fixing typos) while maintaining rigorous security for critical tasks, AI-OS enforces **TSRT**. Every session is automatically classified:
+AI-OS operates autonomously because it is powered by a custom Model Context Protocol (MCP) suite. These aren't just instructions; they are executable tools the agents use on themselves:
 
-* 🟢 **[TIER_1] (Low Risk):** CSS, Documentation, Typos. 
-  * *Workflow:* No Architect required. No security agents. Claude fixes and commits directly.
-* 🟡 **[TIER_2] (Medium Risk):** Standard Logic, Refactoring, Adding tests. 
-  * *Workflow:* Requires Blueprint Aligner to ensure changes match `architect.md`. Requires manual developer approval.
-* 🔴 **[TIER_3] (High Risk):** Auth, Secrets, Database Migrations, Core Features.
-  * *Workflow:* Full Triad lockdown. Requires Security Engineer threat modeling. Requires `ai test --vibe`. Requires Architect sign-off before Git will allow a commit.
+* **`context-invoker-mcp`**: The core engine that allows Claude and Gemini to dynamically fetch specialized personas (`security_engineer`, `chaos_monkey`) and skills without manual prompting.
+* **`blueprint-aligner-mcp`**: A tool Claude uses to `git diff` its own work against Gemini's `architect.md` to ensure it didn't drift from the plan.
+* **`vibe-check-mcp`**: Allows agents to spin up Headless Playwright, capture screenshots, measure Cumulative Layout Shift (CLS), and audit contrast.
+* **`context-guardian-mcp`**: Scans the workspace for unresolved `TODO`s and open tasks, blocking releases until the codebase is clean.
 
 ---
 
-## 🔌 Advanced Integrations
+## 🛠️ System Maintenance Utilities
 
-### Model Context Protocol (MCP) Nervous System
-AI-OS uses custom local MCP servers to give agents safe, scoped access to your machine:
-* **`blueprint-aligner-mcp`**: Compares `git diff` against `.ai/architect.md`. Will fail a commit if Claude tries to go rogue.
-* **`vibe-check-mcp`**: Uses Headless Playwright to capture screenshots, measure Cumulative Layout Shift (CLS), and run Accessibility audits.
-* **`risk-analyzer-mcp`**: Parses human intent to automatically apply the correct TSRT Tier.
-* **`context-guardian-mcp`**: Scans the codebase for unresolved `TODO`s or orphaned tasks before allowing a release.
+To keep token usage low and context windows razor-sharp, run these built-in utilities periodically:
 
-### Git & IDE Integration
-* **Pre-commit Hooks:** AI-OS natively integrates with Git. If Claude attempts a Tier 3 commit without a `[UACS_VERIFIED]` stamp in the log, Git will reject the commit.
-* **GitHub Copilot:** AI-OS automatically synchronizes project rules into `.github/copilot-instructions.md` so your inline IDE completions match the Architect's vision.
-
----
-
-## 🛠️ Maintaining the System
-
-Your AI context windows will get bloated if you do not perform maintenance. Use these built-in utilities:
-
-### 1. The Digest (`ai digest`)
-`DIGEST.md` is the "Token Saver Cache". It is a highly compressed snapshot of your project's state. If it gets older than 3 days, regenerate it:
-```bash
-ai digest
-```
-
-### 2. Archiving (`ai archive`)
-As Claude and Gemini work, `LOG.md`, `COMM.md`, and `REVIEWS.md` will grow massively. To save tokens, rotate them out:
-```bash
-ai archive
-```
-This moves historical logs to `.ai/archive/YYYY-MM/` and resets the active files.
-
-### 3. Syncing Updates (`ai sync`)
-If you pull a new version of the AI-OS core framework from GitHub, run `ai sync` to update your global agent skills (`~/.claude/skills`, `~/.gemini/skills`, etc.) without wiping out your personal configurations.
+* **`ai digest`**: The Token Saver Cache. Compresses your entire project state into a concise 50-line summary in `DIGEST.md`. Run this if the digest is >3 days old.
+* **`ai archive`**: Rotates bloated `LOG.md` and `REVIEWS.md` files into `.ai/archive/YYYY-MM/` and resets the active files.
+* **`ai sync`**: When you pull updates from the AI-OS repo, run this to update your global agent skills without wiping your environment.
 
 ---
 <p align="center">
-  <i>AI-OS — Built for architects who want to build faster. Optimized for agents who need to know why.</i>
+  <i>AI-OS — Stop typing. Start directing intelligence.</i>
 </p>
