@@ -18,12 +18,22 @@
 - **Primary Actions**:
 - **Feedback Loops**:
 
-## 4. Frontend Architecture
-- **Framework**:
+## 4. Architecture & Technical Strategy
+- **Framework & Stack**:
 - **State Management**:
-- **Component Strategy**:
+- **Component / Module Strategy**:
 
-## 5. Development Cycle (Plan-Build-Test)
-1. **Plan**: Architects the vision in `architect.md` (Gemini).
+## 5. Data Models & API Contracts
+- **Data Structures**: [Define entities, schemas, and relationships in detail]
+- **API Endpoints**: [List required routes, inputs, outputs, and status codes]
+- **Storage/Persistence**: [Database tech, caching layers, local storage]
+
+## 6. Error Handling & Edge Cases
+- **Failure Modes**: [What happens when APIs fail, network drops, or inputs are invalid?]
+- **Fallback UI**: [Loading states, error messages, offline behavior]
+- **Security**: [Auth requirements, permission boundaries, data validation]
+
+## 7. Development Cycle (Plan-Build-Test)
+1. **Plan**: Architects the vision in `architect.md` (Gemini). Mandatory: Ask questions to clarify ambiguities before finalizing the plan. Do not be lazy.
 2. **Build**: Implements the technical logic (Claude).
 3. **Test**: Verifies quality and performance (TestSprite).

@@ -19,19 +19,21 @@ Classify the UPDATE.md content before writing tasks:
 
 | Class     | Criteria                                             | Action                              |
 |-----------|------------------------------------------------------|-------------------------------------|
-| **Vague** | < 8 words, no action verb, no specific target        | Return clarification questions only |
+| **Vague** | Missing specific targets, edge-cases, error-handling, or constraints | Return clarification questions only |
 | **Tier 1**| Docs, style, typo fixes — no logic changes           | 1 P-## task, no security review     |
-| **Tier 2**| Logic refactor, test additions, pattern-following    | 1–3 P-## tasks, blueprint note      |
-| **Tier 3**| Auth, secrets, new dependencies, breaking changes    | P-## task + mandatory SEC_CLEARED   |
+| **Tier 2**| Logic refactor, test additions, pattern-following    | Deep P-## tasks, explicit data/logic blueprints |
+| **Tier 3**| Auth, secrets, new dependencies, breaking changes    | Detailed P-## tasks + mandatory SEC_CLEARED |
 
 ## For Vague Intent — Output Only
-Return this clarification prompt to the user (do NOT write to TASKS.md):
+If the intent lacks senior-level detail, return a clarification prompt to the user (do NOT write to TASKS.md):
 ```
-Intent is too vague to create structured tasks. Please clarify:
+Intent lacks sufficient architectural depth. Please clarify:
 1. What specific component/file/system is the target?
 2. What is the desired outcome (concrete acceptance criteria)?
-3. Is this Tier 1 (docs/style), Tier 2 (logic), or Tier 3 (auth/infra)?
+3. What are the edge cases, error states, and failovers?
+4. Are there any specific performance, security, or data model constraints?
 ```
+**Mandatory: You must proactively ask these questions if the intent is not 100% unambiguous. Do NOT guess or provide shallow tasks.**
 
 ## For Clear Intent — Produce P-## Tasks
 Each task must include:

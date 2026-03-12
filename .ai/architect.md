@@ -12,7 +12,7 @@
 ## 2. Information Architecture
 - **Global Installation**: `~/.ai-os` contains binaries, templates, hooks, and contracts. Extends host configuration (`~/.claude`, `~/.gemini`).
 - **Local Application (`.ai/`)**: Project intelligence core housing `DIGEST.md` (snapshot), `BRIEF.md` (lore), `architect.md` (blueprints).
-- **Agent Roles**: Gemini is the Principal Architect (owns "What"); Claude is Principal Engineer (owns "How", executes changes).
+- **Agent Roles**: Gemini is the Principal Architect (owns "What"; MUST provide senior-level depth, avoid laziness, and ask clarifying questions during planning); Claude is Principal Engineer (owns "How", executes changes).
 
 ## 3. UX / Interaction Flows
 - **User Entry**: Setup via `./install-ai-os.sh` -> Shell Reload.

@@ -29,6 +29,7 @@ const SKILL_ROOTS = [
 
 const AGENT_ROOTS = [
   join(HOME, ".claude", "agents"),
+  join(HOME, ".ai-os", "shared", "agents"),
   join(HOME, ".ai-os", "claude", "agents"),
   join(HOME, ".ai-os", "gemini", "agents"),
 ];
@@ -43,6 +44,7 @@ if (existsSync(srcBase)) {
     join(srcBase, "gemini", "skills")
   );
   AGENT_ROOTS.push(
+    join(srcBase, "shared", "agents"),
     join(srcBase, "claude", "agents"),
     join(srcBase, "gemini", "agents")
   );

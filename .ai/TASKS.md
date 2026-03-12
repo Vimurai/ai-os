@@ -45,6 +45,15 @@ Rules:
 - [x] E-41: Verify all new agents and skills are synced and invocable (run `ai install` and test activation).
   Status: DONE 2026-03-11 — install-ai-os.sh synced; ai mcp-setup 8/8; [TEST_PASSED] 22/22
 
+- [x] P-22: Upgrade Gemini Architect standards (Anti-Laziness & Questioning mandate) in src/gemini/GEMINI.md
+  Status: DONE 2026-03-12 — Added Senior Architect Standards section.
+- [x] P-23: Refine `prd_writer` (src/gemini/agents/prd_writer.md) with rigorous intent classification and mandatory questioning.
+  Status: DONE 2026-03-12 — Updated Vague classification and added mandatory clarification prompts.
+- [x] P-24: Expand `architect.md.template` with Backend/Data/API/Error-handling sections.
+  Status: DONE 2026-03-12 — Added Sections 5 & 6 to the template.
+- [x] P-25: Sync active `.ai/architect.md` roles with new Gemini mandate.
+  Status: DONE 2026-03-12 — Updated Agent Roles in Section 2.
+
 ## Engineer (Claude)
 - [x] E-01: Implement `ai-exec` CLI (Bash) based on P-01 blueprint
   Status: DONE 2026-03-07 — src/bin/ai-exec (worktree isolation, Gate 3, [SECURITY] logging)
@@ -123,4 +132,50 @@ Adding explicit E-## trace entries so the blueprint-aligner can resolve the orph
 ## P-17 through P-21 Implementation
 - [x] E-43: Implement 5 new skills/agents + verify sync (P-17 to P-21 + E-41)
   Status: DONE 2026-03-11 — repo-oracle (src/gemini/skills/repo-oracle/SKILL.md); vibe_sentinel (src/claude/agents/vibe_sentinel.md); token-miser (src/shared/skills/token-miser/SKILL.md); identity_guardian (src/claude/agents/identity_guardian.md); architectural-aligner (src/gemini/skills/architectural-aligner/SKILL.md); install-ai-os.sh synced all to ~/.ai-os/; ai mcp-setup 8/8; [TEST_PASSED] 22/22
+
+## 2026-03-12 Critic Review Follow-up
+
+### P0 — Critical (must fix before next release)
+
+- [ ] E-44: Add unit tests for safe-exec-mcp BLOCK_RULES
+  Owner: Claude | Tier: 3 | Area: mcp/safe-exec-mcp
+  Outcome: tests/suites/safe_exec_test.sh covers rm -rf, curl|bash, and secrets detection patterns; all assertions pass
+  Verify: `ai test` → [TEST_PASSED] with safe_exec_test.sh included in suite count
+
+- [ ] E-45: Add unit tests for blueprint-aligner-mcp secret detection regex
+  Owner: Claude | Tier: 3 | Area: mcp/blueprint-aligner-mcp
+  Outcome: tests/suites/blueprint_aligner_test.sh validates all secret-detection regex patterns (API keys, tokens, passwords)
+  Verify: `ai test` → [TEST_PASSED] with blueprint_aligner_test.sh included in suite count
+
+### P1 — High Priority
+
+- [ ] E-46: Fix .gitignore — add .env, .env.local, *.key, *.pem, /node_modules
+  Owner: Claude | Tier: 1 | Area: repo root
+  Outcome: .gitignore contains entries for .env, .env.local, *.key, *.pem, /node_modules
+  Verify: `git check-ignore -v .env` returns a match; `git check-ignore -v node_modules` returns a match
+
+- [ ] E-47: Refactor TestSprite API_KEY in .mcp.json to use environment variable
+  Owner: Claude | Tier: 2 | Area: config/.mcp.json + src/templates/.mcp.json
+  Outcome: TestSprite server config references ${TESTSPRITE_API_KEY} env var; hardcoded placeholder removed
+  Verify: grep for hardcoded "your-testsprite-api-key" in .mcp.json returns no match
+
+- [ ] E-48: Add input validation in context-invoker-mcp for skill/agent names
+  Owner: Claude | Tier: 2 | Area: mcp/context-invoker-mcp
+  Outcome: activate_skill and activate_agent reject names not matching [a-z0-9_-]; path traversal blocked
+  Verify: calling activate_skill with name "../etc/passwd" returns an error, not file contents
+
+- [ ] E-49: Add integration tests for all 8 MCP tool handlers
+  Owner: Claude | Tier: 2 | Area: tests/suites
+  Outcome: tests/suites/mcp_integration_test.sh exercises all 8 MCP server tool handlers end-to-end
+  Verify: `ai test` → [TEST_PASSED] with mcp_integration_test.sh; test count increases by ≥8
+
+- [ ] E-50: Set up CI pipeline (.github/workflows/test.yml)
+  Owner: Claude | Tier: 2 | Area: .github/workflows
+  Outcome: .github/workflows/test.yml runs `ai test` on push/PR to master; pipeline passes on clean repo
+  Verify: `gh run list` shows a successful workflow run after pushing
+
+- [ ] E-51: Create src/gemini/commands/ .toml files for all Gemini skills
+  Owner: Claude | Tier: 2 | Area: gemini/commands
+  Outcome: .toml files for ai-update, ai-review, ai-digest, ai-archive, ai-preflight, ai-test, seo_content_checklist, ux_template, architectural-aligner, repo-oracle; install/sync copies to ~/.gemini/commands/
+  Verify: `ls ~/.gemini/commands/` lists all .toml files after `ai install`
 

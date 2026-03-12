@@ -1,24 +1,41 @@
 # DIGEST (Token Saver Cache)
 
+## Product
+AI-OS: CLI framework scaffolding `.ai/` intelligence directories, configuring Claude/Gemini/TestSprite agents, and enforcing token-saving workflow hooks across any codebase.
+
+## Stack
+Bash (zero-dependency core), Markdown (file-based memory), Node.js + JSON (MCP servers), Git Worktrees (ai-exec isolation), Playwright (vibe/chaos audits), Skills 2.0 (YAML frontmatter modular skills).
+
 ## Triad Health
-- Stage: Implementation
-- Architect Focus: Oversight; all blueprints P-01–P-13 DONE.
-- Engineer Focus: E-01–E-35 COMPLETE. All open tasks done.
+- Claude (Engineer): E-01–E-43 complete. E-44–E-51 queued from 2026-03-12 review.
+- Gemini (Architect): P-01–P-25 complete. Senior Architect Standards enforced in GEMINI.md.
+- TestSprite (Tester): 22/22 tests passing. 2 P0 gaps (safe-exec-mcp + blueprint-aligner-mcp untested).
 
-## Current snapshot
-- Product: AI-OS — A framework/installer that scaffolds `.ai/` intelligence directories, configures Claude/Gemini agents, and sets up token-saving workflow hooks.
-- Stack: Bash, Markdown, JSON (MCP integration), Git Worktrees, Playwright (for UX Stress), Token-Saving Tiers.
-- Current focus: MCP Automation & Lifecycle complete (E-32–E-35). All tasks done.
-- Known risks: `git worktree` permissions and environment variable leakage during isolation.
+## Current Focus (top 3 open tasks)
+- E-44: Add unit tests for safe-exec-mcp BLOCK_RULES (P0 — security gate unverified)
+- E-45: Add unit tests for blueprint-aligner-mcp secret detection regex (P0)
+- E-46: Fix .gitignore — add .env, .env.local, *.key, *.pem, /node_modules (P1)
 
-## Recent changes
-- 2026-03-11: E-32 DONE — generate_mcp_json() reads registry.json + writes .mcp.json with absolute paths; do_mcp_setup registry-driven
-- 2026-03-11: E-33 DONE — do_init + install_global auto-call do_mcp_setup; install-ai-os.sh syncs src/mcp/ + src/config/
-- 2026-03-11: E-34 DONE — doctor per-server health checks (source, node_modules, index.js, path integrity)
-- 2026-03-11: E-35 DONE — enable_claude_agent_teams adds mcp__<server>__<tool> permissions to settings.json
-- 2026-03-11: E-28–E-31 DONE — Slash Commands, Gemini .toml commands, shared skills, agent frontmatter auto-calling
-- 2026-03-11: E-15–E-27 DONE — vibe-test, UACS MCPs, Skills 2.0 migration, agents (prd_writer, ux_reviewer, etc.)
-- 2026-03-10: E-12/E-13 DONE — Gate 1 (Intent Gate) + Gate 2 (pre-commit Quality Gate)
-- 2026-03-07: E-01–E-05/E-14 DONE — ai-exec, hooks, CAPABILITIES.md, archive, review, Execution Gate
+## Known Risks (from 2026-03-12 CRITIC_STAMP)
+- P0: safe-exec-mcp BLOCK_RULES completely untested — security-critical gate has zero tests
+- P0: blueprint-aligner-mcp secret detection regex untested — credential gate unverified
+- P1: .mcp.json hardcoded "your-testsprite-api-key" — must use env var (E-47)
+- P1: .gitignore missing .env, *.key, *.pem, /node_modules entries (E-46)
+- P1: context-invoker-mcp skill/agent names not validated — path traversal possible (E-48)
+- P1: All 8 MCP tool handlers untested — ~5% total coverage (E-49)
+- P1: No CI pipeline — .github/workflows/ empty (E-50)
+- P1: src/gemini/commands/ missing — Gemini CLI slash commands non-functional (E-51)
 
+## Last Review
+2026-03-12 | [CRITIC_STAMP] | Parallel critics (arch + security + tests) | 0 P0 security | 2 P0 test gaps | 6 P1 total | Arch Grade: A
 
+## Recent Changes
+- 2026-03-12: E-44–E-51 recorded in TASKS.md from parallel critic review findings
+- 2026-03-12: [CRITIC_STAMP] written to REVIEWS.md — parallel 3-critic review complete
+- 2026-03-12: Auto-dispatch + Mid-Execution Orchestration + Parallel Agent Teams added to CLAUDE.md + GEMINI.md
+- 2026-03-12: 4 new agents created (decision_recorder, review_synthesizer, task_validator, memory_curator)
+- 2026-03-12: ai-update-lifecycle shared skill created
+- 2026-03-12: P-22–P-25 DONE — GEMINI.md Senior Architect Standards, prd_writer refinement, architect.md.template expanded
+- 2026-03-11: E-28–E-43 DONE — Skills 2.0, Gemini .toml commands, shared skills, UACS MCPs, context-invoker-mcp
+
+2026-03-12: DIGEST regenerated after parallel critic review (critic_arch + critic_security + critic_tests)
