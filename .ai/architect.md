@@ -219,6 +219,17 @@
     - `src/gemini/skills/`: Architect-specific skills (`seo_content_checklist`, `ux_template`, Gemini's `ai-review`, Gemini's `ai-update`).
 - **Deployment Logic**: Update the `ai install` and `ai sync` routines in `src/bin/ai` to copy the contents of `src/shared/skills/` into **both** `~/.claude/skills/` and `~/.gemini/skills/` before copying the agent-specific ones. This ensures both CLI environments inherit the shared operational capabilities.
 
+### 16.2 Third-Party Skill Integrations
+- **Concept**: Enable users to import external domain-expertise skills from third-party repositories.
+- **Blueprint: `ai-seo` Integration**:
+  - **Source**: `coreyhaines31/marketingskills`
+  - **Role**: Expert in AI search optimization (AEO, LLMO) to ensure content is discoverable and cited by AI engines.
+  - **Mechanism**:
+    1. Copy the `skills/ai-seo/SKILL.md` and `skills/ai-seo/references/` from the repository into `src/gemini/skills/ai-seo/`.
+    2. Update YAML frontmatter trigger descriptions to match Gemini CLI auto-dispatch conventions (e.g., "Use activate_skill with this name when the user requests...").
+    3. Create `src/gemini/commands/ai-seo.toml` to explicitly expose the `/ai-seo` slash command.
+  - **Outcome**: When a user mentions "AEO", "LLM optimization", or asks "how do I show up in AI answers", Gemini can autonomously trigger `activate_skill` for `ai-seo` and guide the user through the audit.
+
 ## 17. Missing Agent Blueprints
 ### 17.1 prd_writer (Gemini)
 - **Role**: Refines `UPDATE.md` into structured `TASKS.md` and `BRIEF.md` updates.

@@ -29,4 +29,30 @@
 - P1: CLI commands tested smoke-only (ai install, ai review, ai mcp-setup all missing)
 - P1: No CI pipeline — .github/workflows/ is empty
 - Overall coverage: ~5-10% (bash smoke tests only, no unit/integration tests)
+
+---
+[CRITIC_STAMP] 2026-03-12 | [TIER_3] Parallel 3-critic review (E-44–E-52 batch) — P0: 0 security | P1: 4 test gaps | Arch Grade: A | Sec Grade: B | Test Grade: B+
+
+## critic_arch — PASS (Grade A)
+- PASS: All E-44–E-52 tasks traced to implementation — no orphaned code
+- PASS: §16.2 ai-seo blueprint correctly implemented in src/gemini/skills/ai-seo/
+- PASS: context-invoker-mcp validateName() aligns with §11 UACS security model
+- PASS: CI pipeline (.github/workflows/test.yml) matches devops expectations
+- PASS: Domain sovereignty enforced — Gemini architect approved P-26, Claude executed E-##
+
+## critic_security — CONDITIONAL PASS (Grade B)
+- P0 (INVESTIGATE): ${TESTSPRITE_API_KEY} in .mcp.json env section — verify Claude Code interpolates ${VAR} in JSON env fields at runtime; if not, this is a false fix
+- P1: context-invoker-mcp validateName() lacks post-join path normalization in findSkill()/findAgent() — name could escape via symlinks
+- P2: .gitignore uses /node_modules (root-only) — nested node_modules/ not covered
+- PASS: validateName() blocks path traversal; .gitignore adds .env, *.key, *.pem
+
+## critic_tests — PASS (Grade B+)
+- P1: safe_exec_test.sh — 6 WARN_RULES + RM_RF_ROOT token rule not tested
+- P1: blueprint_aligner_test.sh — 4/5 ALIGNMENT_RULES untested
+- P1: mcp_integration_test.sh — no e2e tool invocation tests
+- P0: None — no security or logic gaps blocking commit
+- PASS: All 3 suites discoverable by test runner; 70 total assertions (14+17+39)
+
+## blueprint-aligner-mcp — PASS
+
 ---

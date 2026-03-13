@@ -1,0 +1,2 @@
+description = "Audit content for AI Engine Optimization (AEO) and LLM Mention Optimization (LLMO). Ensures pages are discoverable and cited by AI engines like ChatGPT, Claude, Gemini, and Perplexity. Use when the user asks about AEO, LLM optimization, or AI search visibility."
+prompt = "Please activate the 'ai-seo' skill and perform an AI Engine Optimization audit."

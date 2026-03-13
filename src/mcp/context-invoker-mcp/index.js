@@ -50,6 +50,15 @@ if (existsSync(srcBase)) {
   );
 }
 
+const SAFE_NAME_RE = /^[a-z0-9_-]+$/i;
+
+function validateName(name) {
+  if (!name || typeof name !== "string") return "Name must be a non-empty string";
+  if (!SAFE_NAME_RE.test(name)) return `Invalid name '${name}' — only [a-z0-9_-] characters allowed`;
+  if (name.length > 64) return `Name too long (max 64 chars)`;
+  return null;
+}
+
 function findSkill(name) {
   for (const root of SKILL_ROOTS) {
     // Skills 2.0: <root>/<name>/SKILL.md
@@ -156,6 +165,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [{ type: "text", text: `Available skills:\n${skills.map(s => `  - ${s}`).join("\n")}` }],
         };
       }
+      const skillErr = validateName(args.skill_name);
+      if (skillErr) {
+        return { content: [{ type: "text", text: `✗ ${skillErr}` }], isError: true };
+      }
       const result = findSkill(args.skill_name);
       if (!result) {
         const skills = listAvailable(SKILL_ROOTS, ".md");
@@ -181,6 +194,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{ type: "text", text: `Available agents:\n${agents.map(a => `  - ${a}`).join("\n")}` }],
         };
+      }
+      const agentErr = validateName(args.agent_name);
+      if (agentErr) {
+        return { content: [{ type: "text", text: `✗ ${agentErr}` }], isError: true };
       }
       const result = findAgent(args.agent_name);
       if (!result) {

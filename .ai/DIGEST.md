@@ -1,41 +1,37 @@
-# DIGEST (Token Saver Cache)
+# DIGEST — AI-OS v2 (Updated: 2026-03-12)
 
 ## Product
 AI-OS: CLI framework scaffolding `.ai/` intelligence directories, configuring Claude/Gemini/TestSprite agents, and enforcing token-saving workflow hooks across any codebase.
 
 ## Stack
-Bash (zero-dependency core), Markdown (file-based memory), Node.js + JSON (MCP servers), Git Worktrees (ai-exec isolation), Playwright (vibe/chaos audits), Skills 2.0 (YAML frontmatter modular skills).
+Bash (zero-dependency core), Markdown (file-based memory), Node.js + JSON (MCP servers), Git Worktrees (ai-exec isolation), Playwright (vibe audits), Skills 2.0.
 
 ## Triad Health
-- Claude (Engineer): E-01–E-43 complete. E-44–E-51 queued from 2026-03-12 review.
-- Gemini (Architect): P-01–P-25 complete. Senior Architect Standards enforced in GEMINI.md.
-- TestSprite (Tester): 22/22 tests passing. 2 P0 gaps (safe-exec-mcp + blueprint-aligner-mcp untested).
+- Architect (Gemini): P-26 (ai-seo integration blueprint) complete.
+- Engineer (Claude): E-44–E-52 queued. E-01–E-43 complete.
+- Tester (TestSprite): 22/22 tests passing. 2 P0 test gaps remain (safe-exec, blueprint-aligner).
 
-## Current Focus (top 3 open tasks)
-- E-44: Add unit tests for safe-exec-mcp BLOCK_RULES (P0 — security gate unverified)
+## Current Focus
+- E-44: Add unit tests for safe-exec-mcp BLOCK_RULES (P0)
 - E-45: Add unit tests for blueprint-aligner-mcp secret detection regex (P0)
-- E-46: Fix .gitignore — add .env, .env.local, *.key, *.pem, /node_modules (P1)
+- E-52: Implement ai-seo skill integration based on P-26 blueprint
 
-## Known Risks (from 2026-03-12 CRITIC_STAMP)
+## Key Decisions
+- Third-party skills (like ai-seo) will be integrated directly into `src/gemini/skills/` and exposed via Gemini `.toml` commands for auto-dispatch (P-26).
+
+## Known Risks
 - P0: safe-exec-mcp BLOCK_RULES completely untested — security-critical gate has zero tests
 - P0: blueprint-aligner-mcp secret detection regex untested — credential gate unverified
 - P1: .mcp.json hardcoded "your-testsprite-api-key" — must use env var (E-47)
 - P1: .gitignore missing .env, *.key, *.pem, /node_modules entries (E-46)
 - P1: context-invoker-mcp skill/agent names not validated — path traversal possible (E-48)
-- P1: All 8 MCP tool handlers untested — ~5% total coverage (E-49)
-- P1: No CI pipeline — .github/workflows/ empty (E-50)
-- P1: src/gemini/commands/ missing — Gemini CLI slash commands non-functional (E-51)
 
-## Last Review
-2026-03-12 | [CRITIC_STAMP] | Parallel critics (arch + security + tests) | 0 P0 security | 2 P0 test gaps | 6 P1 total | Arch Grade: A
+## MCP Servers
+filesystem, memory, TestSprite, vibe-check-mcp, intent-refiner-mcp, task-synchronizer-mcp, safe-exec-mcp, blueprint-aligner-mcp, context-guardian-mcp, risk-analyzer-mcp, context-invoker-mcp
 
-## Recent Changes
-- 2026-03-12: E-44–E-51 recorded in TASKS.md from parallel critic review findings
-- 2026-03-12: [CRITIC_STAMP] written to REVIEWS.md — parallel 3-critic review complete
-- 2026-03-12: Auto-dispatch + Mid-Execution Orchestration + Parallel Agent Teams added to CLAUDE.md + GEMINI.md
-- 2026-03-12: 4 new agents created (decision_recorder, review_synthesizer, task_validator, memory_curator)
-- 2026-03-12: ai-update-lifecycle shared skill created
-- 2026-03-12: P-22–P-25 DONE — GEMINI.md Senior Architect Standards, prd_writer refinement, architect.md.template expanded
-- 2026-03-11: E-28–E-43 DONE — Skills 2.0, Gemini .toml commands, shared skills, UACS MCPs, context-invoker-mcp
-
-2026-03-12: DIGEST regenerated after parallel critic review (critic_arch + critic_security + critic_tests)
+## Recent Changes (last 10)
+- 2026-03-12: P-26 created / architect.md updated for ai-seo integration (Gemini)
+- 2026-03-12: E-52 added to TASKS.md for ai-seo implementation (Gemini)
+- 2026-03-12: E-44–E-51 recorded in TASKS.md from parallel critic review findings (Claude)
+- 2026-03-12: [CRITIC_STAMP] written to REVIEWS.md — parallel 3-critic review complete (Claude)
+- 2026-03-12: Auto-dispatch + Mid-Execution Orchestration + Parallel Agent Teams added (Claude)

@@ -1,1 +1,6 @@
 src/templates/.mcp.json
+.env
+.env.local
+*.key
+*.pem
+/node_modules

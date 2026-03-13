@@ -1,0 +1,2 @@
+description = "Investigate git history, past decisions, and why something was built a certain way. Traces changes through git log, .ai/LOG.md, and TASKS.md. Use when debugging regressions or understanding historical context."
+prompt = "Please activate the 'repo-oracle' skill and answer the following question about the repository history."

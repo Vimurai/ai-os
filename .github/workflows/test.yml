@@ -1,0 +1,38 @@
+name: AI-OS Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install MCP server dependencies
+        run: |
+          for dir in src/mcp/*/; do
+            if [ -f "$dir/package.json" ]; then
+              echo "Installing $dir"
+              npm install --prefix "$dir" --ignore-scripts 2>/dev/null || true
+            fi
+          done
+
+      - name: Run tests
+        run: bash tests/run.sh
+
+      - name: Check .gitignore covers secrets
+        run: |
+          git check-ignore -v .env 2>/dev/null || echo ".env not in .gitignore" && exit 1
+          git check-ignore -v node_modules 2>/dev/null || echo "node_modules not in .gitignore" && exit 1
+        continue-on-error: false

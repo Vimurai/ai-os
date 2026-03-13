@@ -8,10 +8,10 @@
 
 ## 🚨 The Core Philosophy
 
-AI-OS is not just a prompt library. It is an **autonomous operating system for AI agents** (Claude Code and Gemini CLI). By installing AI-OS, you transform standalone CLIs into a highly structured, self-regulating team of experts.
+AI-OS is not a prompt library. It is an **autonomous operating system for AI agents** (Claude Code and Gemini CLI). By installing AI-OS, you are transforming your standalone CLIs into a highly structured, self-regulating team of experts.
 
 **Key Innovations in v3.2:**
-1. **Dynamic Context Invocation:** Claude and Gemini automatically load specialized skills and agent personas (like `security_engineer` or `chaos_monkey`) into their context on the fly using the custom `context-invoker-mcp`.
+1. **Dynamic Context Invocation:** Claude and Gemini automatically load specialized skills and agent personas (like the Security Engineer or Chaos Monkey) into their context on the fly using the custom `context-invoker-mcp`.
 2. **Automated State Tracking:** Built-in shell hooks (`stop-hook.sh`, `post-tool-log.sh`) automatically record every action your agents take into `.ai/LOG.md` and stamp `.ai/SESSION.md` when they exit.
 3. **The `.ai/` Sovereignty:** The `.ai/` directory acts as the system's "Absolute Memory." If it's not in the `.ai/` blueprints or task lists, the agents are explicitly forbidden from building it.
 
@@ -84,7 +84,7 @@ ai init
 
 ## 🔄 The Zero-Friction Workflow
 
-You don't need to manually fill out forms or `UPDATE.md`. Because of the `context-invoker-mcp`, the LLMs know how to use their tools automatically.
+You don't need to manually fill out forms or copy-paste giant prompts. Because of the `context-invoker-mcp`, the LLMs know how to use their tools automatically.
 
 ### Step 1: Planning (The Architect)
 Open your terminal and launch the Gemini CLI. Tell the Architect what you want.
@@ -92,9 +92,10 @@ Open your terminal and launch the Gemini CLI. Tell the Architect what you want.
 > **You:** "Plan a new OAuth2 login flow using our existing user models."
 
 **What happens automatically:**
-1. Gemini dynamically loads its skills to research your codebase constraints.
-2. It drafts a technical blueprint in `.ai/architect.md`.
-3. It creates actionable `P-##` tickets in `.ai/TASKS.md`.
+1. Gemini dynamically loads the `ai-update` and `repo-oracle` skills into its context.
+2. It researches your codebase constraints.
+3. It drafts a technical blueprint in `.ai/architect.md`.
+4. It creates actionable `P-##` tickets in `.ai/TASKS.md`.
 
 ### Step 2: Execution (The Engineer)
 Exit Gemini and launch Claude Code. Tell the Engineer to get to work.
@@ -104,75 +105,18 @@ Exit Gemini and launch Claude Code. Tell the Engineer to get to work.
 **What happens automatically:**
 1. Claude reads the project `DIGEST.md` and the Architect's blueprint.
 2. Claude writes the source code and runs local dev servers to verify it.
-3. As Claude works, the `post-tool-log.sh` hook automatically records every shell command and file edit into `.ai/LOG.md`.
+3. **The Hooks Fire:** As Claude works, the `post-tool-log.sh` hook automatically records every shell command and file edit into `.ai/LOG.md`. When you stop the session, `stop-hook.sh` stamps `.ai/SESSION.md`.
 
-### Step 3: Quality Gates (Inline vs. Terminal)
+### Step 3: Automated Quality Gates
+Before you commit, the system enforces safety and architectural alignment. 
 
-Before committing code, you must pass Quality Gates (Testing, Blueprint alignment, Security). You have **two ways** to run these:
-
-#### Option A: Native CLI Skills (Recommended)
-You can trigger the testing and review gates *directly from inside* Claude or Gemini using slash commands or natural language, without leaving the chat interface:
-* **Inside Claude/Gemini:** `Run the ai-review skill to check my work.`
-* **Inside Claude/Gemini:** `Run the ai-test skill to verify this tier 3 feature.`
-
-#### Option B: Terminal Generator Prompts
-If you prefer, you can use the external `ai` terminal commands. 
-*Note: Commands like `ai review claude` **do not launch the AI directly**. They simply print a highly-optimized prompt to your terminal that you copy and paste into the CLI.*
+You can trigger these via terminal commands (which output the exact validation prompts for the agents to run):
 ```bash
-ai review claude  # Prints the blueprint-aligner review prompt for you to paste into Claude
-ai test           # Executes the local test suite (or TestSprite) directly in the shell
-ai test --vibe    # Prints the UX/Chaos audit prompts to paste into Gemini/Claude
+ai review claude  # Triggers Claude to run the blueprint-aligner-mcp on its own diff
+ai test           # Runs the test suite via TestSprite
+ai test --vibe    # Runs visual UX audits (Lighthouse/CLS) and Chaos Monkey stress tests
 ```
-
----
-
-## 🧰 The Agent & Skill Ecosystem
-
-AI-OS automatically provisions your Claude and Gemini CLI tools with specialized personas (Agents) and executable workflows (Skills). The `context-invoker-mcp` allows the LLMs to switch into these modes dynamically.
-
-### 🤖 Agents (Personas & Specialized Roles)
-Agents completely alter the LLM's system prompt to focus on a hyper-specific task. 
-
-**Claude Agents:**
-* `security_engineer`: Threat-models your changes, checks for secrets, and stamps `[SEC_CLEARED]`. Required for High-Risk (Tier 3) changes.
-* `chaos_monkey`: Tries to break your UI by injecting invalid inputs, simulating network latency, and rapid-clicking forms.
-* `identity_guardian`: Ensures role-based access controls and auth flows are strictly protected.
-* `vibe_sentinel`: Assesses structural integrity during complex merges.
-* `devops_engineer`: Sets up CI/CD pipelines, Docker, and deployment configurations.
-* `claude_tasks`: Specialized for parsing output and writing structured `E-##` sub-tasks into `TASKS.md`.
-* `digest_updater`: Reads `.ai/` history and compresses it into the 50-line `DIGEST.md` snapshot.
-
-**Gemini Agents:**
-* `ux_reviewer`: Performs Vibe audits on running dev servers (Performance, CLS, Contrast, Touch Targets).
-* `prd_writer`: Takes vague user intent and structures it into rigorous product requirement documents.
-* `knowledge_architect`: Scans large codebases to define macro-level domain blueprints.
-* `digest_updater`: (Gemini variant) Compresses project memory.
-* `gemini_tasks`: Formats the Architect's plans into `P-##` tickets in `TASKS.md`.
-
-### 🛠️ Skills (Executable Workflows)
-Skills are procedural guides that tell the LLM exactly *how* to perform a complex multi-step process. You can call them natively using `/skill <name>` or asking the LLM to use them.
-
-**Shared Skills (Available to both):**
-* `ai-preflight`: The mandatory session-start sequence (Reads DIGEST -> architect -> TASKS).
-* `ai-test`: The workflow for executing automated E2E tests or Vibe/Chaos audits.
-* `ai-review`: The Critic Gate workflow. Compares staged code against `architect.md`.
-* `ai-archive`: The cleanup sequence that rotates `LOG.md` and `REVIEWS.md` to save context tokens.
-* `ai-digest`: The workflow for regenerating the `DIGEST.md` state file.
-* `token-miser`: Aggressive context-pruning techniques for long sessions.
-
-**Claude-Specific Skills:**
-* `ai-update`: Runs the Intent Gate to start a session.
-* `ci_gate`: The required safety checklist before touching GitHub Actions or deployment files.
-* `dependency_gate`: The required safety checklist before adding new NPM/Pip packages.
-* `obs_baseline`: Injects standardized logging/observability into new features.
-* `scope_safety`: Enforces strict boundaries to prevent the LLM from deleting unrelated code.
-* `copilot`: Delegates terminal/gh-cli lookups to GitHub Copilot to save main-session tokens.
-
-**Gemini-Specific Skills:**
-* `ux_template`: Generates structured UX documentation for mobile/web views.
-* `seo_content_checklist`: Audits pages for Title tags, Canonical links, and H1/H2 compliance.
-* `repo-oracle`: Uses `git blame` and git history to understand *why* a decision was made in the past.
-* `architectural-aligner`: The strict workflow for auditing source code against `architect.md`.
+*If a high-risk (Tier 3) feature is built, Git will actively reject your commit until the Security Engineer agent stamps `[SEC_CLEARED]` in the logs.*
 
 ---
 
@@ -180,7 +124,7 @@ Skills are procedural guides that tell the LLM exactly *how* to perform a comple
 
 AI-OS operates autonomously because it is powered by a custom Model Context Protocol (MCP) suite. These aren't just instructions; they are executable tools the agents use on themselves:
 
-* **`context-invoker-mcp`**: The engine that allows Claude and Gemini to dynamically fetch the Agents and Skills listed above.
+* **`context-invoker-mcp`**: The core engine that allows Claude and Gemini to dynamically fetch specialized personas (`security_engineer`, `chaos_monkey`) and skills without manual prompting.
 * **`blueprint-aligner-mcp`**: A tool Claude uses to `git diff` its own work against Gemini's `architect.md` to ensure it didn't drift from the plan.
 * **`vibe-check-mcp`**: Allows agents to spin up Headless Playwright, capture screenshots, measure Cumulative Layout Shift (CLS), and audit contrast.
 * **`context-guardian-mcp`**: Scans the workspace for unresolved `TODO`s and open tasks, blocking releases until the codebase is clean.
@@ -189,10 +133,10 @@ AI-OS operates autonomously because it is powered by a custom Model Context Prot
 
 ## 🛠️ System Maintenance Utilities
 
-To keep token usage low and context windows razor-sharp, run these natively in the CLI or from the terminal:
+To keep token usage low and context windows razor-sharp, run these built-in utilities periodically:
 
-* **`ai digest`**: The Token Saver Cache. Compresses your entire project state into a concise summary. Run this if the digest is >3 days old.
-* **`ai archive`**: Rotates bloated log files into `.ai/archive/YYYY-MM/` and resets them.
+* **`ai digest`**: The Token Saver Cache. Compresses your entire project state into a concise 50-line summary in `DIGEST.md`. Run this if the digest is >3 days old.
+* **`ai archive`**: Rotates bloated `LOG.md` and `REVIEWS.md` files into `.ai/archive/YYYY-MM/` and resets the active files.
 * **`ai sync`**: When you pull updates from the AI-OS repo, run this to update your global agent skills without wiping your environment.
 
 ---

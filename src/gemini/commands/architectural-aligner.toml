@@ -1,0 +1,2 @@
+description = "Review code changes for blueprint compliance. Checks source against architect.md and flags domain sovereignty violations, orphaned code, and security issues. Use before Tier 2/3 commits. Equivalent to activate_skill('architectural-aligner')."
+prompt = "Please activate the 'architectural-aligner' skill and perform a blueprint alignment review."
