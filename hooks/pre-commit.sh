@@ -118,6 +118,25 @@ SYNC_BLOCK2
 REVIEWS_BLOCK
           exit 1
         fi
+
+        # Check 4 (E-113): Block if REVIEWS.md has manually-appended sections
+        # Generated REVIEWS.md uses only [STAMP] lines — any ## heading signals hand-editing
+        if grep -qE "^#{2,}" "$REVIEWS_FILE" 2>/dev/null; then
+          cat >&2 <<'APPEND_BLOCK'
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: SYNC GATE — COMMIT BLOCKED                              ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  REVIEWS.md has manually-appended sections (## headings detected).      ║
+║  D-001: REVIEWS.md is a generated view — direct edits are forbidden.   ║
+║                                                                          ║
+║  Fix: run `ai migrate-state --force` to regenerate REVIEWS.md from      ║
+║       state.json and remove hand-appended content. Then re-stage.       ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+APPEND_BLOCK
+          exit 1
+        fi
       fi
     fi
   fi

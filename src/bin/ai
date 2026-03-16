@@ -419,6 +419,41 @@ WRAPPER
   echo "  ✓ Installed TASK-SYNC post-commit hook → ${PC_DST}"
 }
 
+# E-114: Query global memory store for similar projects during ai init (§31 advisory hint)
+# Silent failure — project-local context always takes priority.
+_query_similar_signatures() {
+  local MEM_DIR="${AIOS}/memory"
+  local SIG_FILE="${MEM_DIR}/signatures.json"
+  if ! command -v python3 &>/dev/null; then return 0; fi
+  if [[ ! -f "$SIG_FILE" ]]; then return 0; fi
+  local PROJECT_TAG
+  PROJECT_TAG="$(basename "$(pwd)")"
+
+  python3 - "$SIG_FILE" "$PROJECT_TAG" <<'PY' 2>/dev/null || true
+import json, sys
+sig_file  = sys.argv[1]
+query_tag = sys.argv[2].lower()
+
+try:
+    sigs = json.load(open(sig_file))
+    if not isinstance(sigs, list) or not sigs:
+        sys.exit(0)
+    matched = [
+        s for s in sigs
+        if query_tag in str(s.get("project_name", "")).lower()
+        or query_tag in str(s.get("tag", "")).lower()
+        or any(query_tag in str(t).lower() for t in (s.get("tags") or []))
+    ]
+    if not matched:
+        sys.exit(0)
+    print("\nSimilar projects from memory palace (advisory):")
+    for s in matched[:3]:
+        print(f"  • {s.get('project_name','?')}: {str(s.get('summary',''))[:100]}")
+except Exception:
+    pass  # Silent failure per §31
+PY
+}
+
 do_init() {
   ensure_ai_templates
   migrate_legacy_ai_if_present
@@ -440,6 +475,9 @@ do_init() {
     echo "Seeding state.json from TASKS.md (Structured-First init)..."
     do_migrate_state --force 2>/dev/null || echo "  ⚠  State migration incomplete — run: ai migrate-state --force"
   fi
+
+  # E-114: Query global memory store for similar architectural patterns (§31 advisory)
+  _query_similar_signatures 2>/dev/null || true
 
   echo ""
   echo "Initialized .ai/ + .github/ (safe — no overwrites) with AI-OS v${VERSION}"
@@ -1868,6 +1906,7 @@ search_paths = [
     Path(aios) / "claude" / "skills",
     Path(aios) / "shared" / "skills",
     Path(aios) / "gemini" / "agents",
+    Path(aios) / "gemini" / "skills",  # E-116: Gemini skills included in compliance scan
 ]
 # Also scan project-local if we're in an AI-OS project
 if Path(".ai").exists():
@@ -1875,6 +1914,7 @@ if Path(".ai").exists():
         Path("src/claude/agents"),
         Path("src/claude/skills"),
         Path("src/shared/skills"),
+        Path("src/gemini/skills"),  # E-116: project-local Gemini skills
     ]
 
 violations = []

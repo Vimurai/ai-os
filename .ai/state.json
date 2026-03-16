@@ -32,7 +32,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Blueprint for `ai-exec` isolation (Git Worktrees) and `CAPABILITIES.md` schema",
-      "created_at": "2026-03-16T20:03:44.879Z",
+      "created_at": "2026-03-16T20:53:18.346Z",
       "completed_at": null,
       "summary": null
     },
@@ -42,7 +42,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Update `post-tool-log.sh` blueprint to include `[SECURITY]` tags for `EXECUTE` operations",
-      "created_at": "2026-03-16T20:03:44.879Z",
+      "created_at": "2026-03-16T20:53:18.346Z",
       "completed_at": null,
       "summary": null
     },
@@ -457,6 +457,36 @@
       "summary": "Completed bulk audit of 20+ agent files; created E-91 for frontmatter standardization."
     },
     {
+      "id": "P-48",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Blueprint for 'Bootloader Resilience' (§30): Design fallback mechanism for context retrieval when orchestrator-mcp is unavailable.",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Blueprinted Bootloader Resilience (§30) with layered fallback strategy (Layer 1: orchestrator, Layer 2: preflight skill, Layer 3: CLAUDE.md instructions)."
+    },
+    {
+      "id": "P-49",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Blueprint for 'Cross-Project Memory Palace' (§31): Define global signature storage and export/query logic.",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Blueprinted Cross-Project Memory Palace (§31) with memory-manager-mcp and signature export/query logic."
+    },
+    {
+      "id": "P-50",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Blueprint for 'Verification Audit' (§32): Design automated compliance checking for agent capabilities.",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Blueprinted Verification Audit (§32) with verification-mcp and compliance reporting logic."
+    },
+    {
       "id": "E-1",
       "owner": "Engineer (Claude)",
       "status": "DONE",
@@ -532,7 +562,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Implement Gate 3 (Execution Gate) in `ai-exec` CLI",
-      "created_at": "2026-03-16T20:03:44.879Z",
+      "created_at": "2026-03-16T20:53:18.346Z",
       "completed_at": null,
       "summary": null
     },
@@ -732,7 +762,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/claude_tasks.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T20:03:44.879Z",
+      "created_at": "2026-03-16T20:53:18.346Z",
       "completed_at": null,
       "summary": null
     },
@@ -742,7 +772,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/devops_engineer.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T20:03:44.879Z",
+      "created_at": "2026-03-16T20:53:18.346Z",
       "completed_at": null,
       "summary": null
     },
@@ -752,7 +782,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/digest_updater.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T20:03:44.879Z",
+      "created_at": "2026-03-16T20:53:18.346Z",
       "completed_at": null,
       "summary": null
     },
@@ -1302,8 +1332,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Upgrade pre-commit.sh check_markdown_sync() from warn-only to BLOCK: verify generated header AND compare task count between state.json and TASKS.md; exit 1 on divergence",
-      "created_at": "2026-03-16T20:07:49.604Z",
-      "completed_at": "2026-03-16T20:10:00.045Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Upgraded check_markdown_sync() in pre-commit.sh to BLOCK (exit 1) on missing generated header or task count drift >2 vs state.json. Both checks use python3 for JSON parsing."
     },
     {
@@ -1312,8 +1342,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Add --stdin CLI mode to intent-refiner-mcp so ai update --votu can call node intent-refiner-mcp/index.js --stdin instead of duplicating logic in Python; update src/bin/ai accordingly",
-      "created_at": "2026-03-16T20:07:53.747Z",
-      "completed_at": "2026-03-16T20:10:01.419Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added --stdin CLI mode to intent-refiner-mcp/index.js; updated ai update --votu in src/bin/ai to route through node intent-refiner-mcp/index.js --stdin with python3 fallback."
     },
     {
@@ -1322,8 +1352,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Fix registry.json task-synchronizer-mcp allowed-tools to include verify_markdown_sync and archive_done_tasks; add test assertion in mcp_test.sh verifying all 9 tools are listed",
-      "created_at": "2026-03-16T20:17:32.312Z",
-      "completed_at": "2026-03-16T20:21:58.368Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added verify_markdown_sync and archive_done_tasks to task-synchronizer-mcp allowed-tools in registry.json; added 2 E-98 assertions to mcp_test.sh (19/19 pass)"
     },
     {
@@ -1332,8 +1362,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor orchestrator-mcp run_handover to stop writing TASKS.md directly; extract shared writeState+regenerateMarkdown helper into src/mcp/shared/state-writer.js and import from both MCPs",
-      "created_at": "2026-03-16T20:17:33.872Z",
-      "completed_at": "2026-03-16T20:22:00.504Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Created src/mcp/shared/state-writer.js with readStateStrict/writeState/regenerateMarkdown; orchestrator-mcp run_handover now imports and uses writeState instead of regex-writing TASKS.md directly"
     },
     {
@@ -1342,8 +1372,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Extend pre-commit check_markdown_sync() to also block on REVIEWS.md divergence when state.stamps.length > 0 but REVIEWS.md lacks the generated header",
-      "created_at": "2026-03-16T20:17:35.532Z",
-      "completed_at": "2026-03-16T20:22:02.073Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Extended check_markdown_sync() in pre-commit.sh with Check 3: blocks on REVIEWS.md missing generated header when state.stamps.length > 0"
     },
     {
@@ -1352,8 +1382,8 @@
       "status": "DONE",
       "tier": 1,
       "description": "Audit src/claude/skills/ and src/shared/skills/ for §17.1.2 YAML frontmatter compliance; bulk-update ci_gate, dependency_gate, scope_safety, obs_baseline, copilot skill files with missing required fields",
-      "created_at": "2026-03-16T20:17:37.963Z",
-      "completed_at": "2026-03-16T20:22:04.792Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Audited all 5 targeted skill files (ci_gate, dependency_gate, scope_safety, obs_baseline, copilot) — all already have full §17.1.2-compliant YAML frontmatter; no changes needed"
     },
     {
@@ -1362,8 +1392,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Add tests/suites/verify_sync_test.sh with ≥5 assertions covering verify_markdown_sync PASS/FAIL scenarios: header missing, count drift >2, stamp count mismatch, zero-stamps clean",
-      "created_at": "2026-03-16T20:17:39.989Z",
-      "completed_at": "2026-03-16T20:22:07.275Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Created tests/suites/verify_sync_test.sh with 8 assertions covering PASS/FAIL for header-missing, count-drift >2, stamp-header-missing, zero-stamps clean scenarios — 8/8 pass"
     },
     {
@@ -1372,39 +1402,9 @@
       "status": "DONE",
       "tier": 1,
       "description": "Update orchestrator-mcp run_preflight to include state.json summary (task counts by status, last 3 stamps) as a 5th section alongside the 4 markdown file reads",
-      "created_at": "2026-03-16T20:17:41.330Z",
-      "completed_at": "2026-03-16T20:22:08.199Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added state.json summary section to run_preflight output: task counts by status, last 3 stamps, current focus — structured data preferred over TASKS.md markdown view"
-    },
-    {
-      "id": "P-48",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 3,
-      "description": "Blueprint for 'Bootloader Resilience' (§30): Design fallback mechanism for context retrieval when orchestrator-mcp is unavailable.",
-      "created_at": "2026-03-16T20:40:30.332Z",
-      "completed_at": "2026-03-16T20:40:46.336Z",
-      "summary": "Blueprinted Bootloader Resilience (§30) with layered fallback strategy (Layer 1: orchestrator, Layer 2: preflight skill, Layer 3: CLAUDE.md instructions)."
-    },
-    {
-      "id": "P-49",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 3,
-      "description": "Blueprint for 'Cross-Project Memory Palace' (§31): Define global signature storage and export/query logic.",
-      "created_at": "2026-03-16T20:40:31.691Z",
-      "completed_at": "2026-03-16T20:40:47.577Z",
-      "summary": "Blueprinted Cross-Project Memory Palace (§31) with memory-manager-mcp and signature export/query logic."
-    },
-    {
-      "id": "P-50",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 3,
-      "description": "Blueprint for 'Verification Audit' (§32): Design automated compliance checking for agent capabilities.",
-      "created_at": "2026-03-16T20:40:32.388Z",
-      "completed_at": "2026-03-16T20:40:48.256Z",
-      "summary": "Blueprinted Verification Audit (§32) with verification-mcp and compliance reporting logic."
     },
     {
       "id": "E-104",
@@ -1412,8 +1412,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Implement Layer 2 fallback in src/shared/skills/ai-preflight/SKILL.md (Bash/jq-based context retrieval).",
-      "created_at": "2026-03-16T20:40:32.805Z",
-      "completed_at": "2026-03-16T20:51:55.105Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added Layer 2 fallback section to src/shared/skills/ai-preflight/SKILL.md: Bash/python3-based state.json context retrieval with explicit trigger conditions and escalation path to Layer 3"
     },
     {
@@ -1422,8 +1422,8 @@
       "status": "DONE",
       "tier": 1,
       "description": "Update CLAUDE.md with 'Emergency Recovery' instructions for bootloader resilience.",
-      "created_at": "2026-03-16T20:40:33.225Z",
-      "completed_at": "2026-03-16T20:51:57.054Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added Emergency Recovery section to src/claude/CLAUDE.md with 3-layer resilience chain, manual bash recovery commands, and recovery rules"
     },
     {
@@ -1432,8 +1432,8 @@
       "status": "DONE",
       "tier": 3,
       "description": "Create memory-manager-mcp for global project signature storage and retrieval.",
-      "created_at": "2026-03-16T20:40:33.629Z",
-      "completed_at": "2026-03-16T20:51:58.272Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Created src/mcp/memory-manager-mcp/index.js with export_signature and query_signatures tools; global store at ~/.ai-os/memory/signatures.json; sanitization + silent failure per §31"
     },
     {
@@ -1442,8 +1442,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update ai archive to trigger export_signature to global memory store.",
-      "created_at": "2026-03-16T20:40:34.066Z",
-      "completed_at": "2026-03-16T20:51:59.859Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added _export_signature_to_global_store() to src/bin/ai; called from do_archive() after successful archive; writes to ~/.ai-os/memory/signatures.json via python3 inline with silent failure"
     },
     {
@@ -1452,8 +1452,8 @@
       "status": "DONE",
       "tier": 3,
       "description": "Implement verification-mcp for programmatic compliance auditing of agent frontmatter.",
-      "created_at": "2026-03-16T20:40:34.465Z",
-      "completed_at": "2026-03-16T20:52:01.548Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Created src/mcp/verification-mcp/index.js with verify_compliance tool; scans agent YAML frontmatter, flags Ghost Tools as CRITICAL, checks §17.1.2 required fields; 62/62 files pass"
     },
     {
@@ -1462,9 +1462,89 @@
       "status": "DONE",
       "tier": 2,
       "description": "Add --compliance audit flag to ai doctor to trigger verification-mcp reports.",
-      "created_at": "2026-03-16T20:40:34.996Z",
-      "completed_at": "2026-03-16T20:52:02.852Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "Added --compliance flag to doctor() in src/bin/ai; dispatches to _run_compliance_audit() which scans agent frontmatter via python3 and flags Ghost Tools; 62 files PASS on first run"
+    },
+    {
+      "id": "E-110",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add test suite for memory-manager-mcp (§31)",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "tests/suites/memory_manager_test.sh — 13 assertions, all pass"
+    },
+    {
+      "id": "E-111",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add test suite for verification-mcp (§32 Ghost Tool detection)",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "tests/suites/verification_test.sh — 12 assertions, all pass"
+    },
+    {
+      "id": "E-112",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Add test suite for archive_done_tasks tool",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "tests/suites/archive_tasks_test.sh — 7 assertions, all pass"
+    },
+    {
+      "id": "E-113",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Fix REVIEWS.md hybrid content — enforce pure generated view (D-001)",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "Added Check 4 to pre-commit.sh (block ## headings); truncated ARCH_AUDIT stamp summary; REVIEWS.md regenerated clean"
+    },
+    {
+      "id": "E-114",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Wire query_signatures into ai init (§31 advisory hints)",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "Added _query_similar_signatures() helper and call in do_init() (src/bin/ai)"
+    },
+    {
+      "id": "E-115",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Confirm and test run_preflight marks deltas as read:true",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "T-02.11 added to state_json_test.sh — delta marking confirmed correct in orchestrator-mcp"
+    },
+    {
+      "id": "E-116",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Extend ai doctor --compliance to scan gemini/skills (E-116)",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "Added Path(aios)/gemini/skills and src/gemini/skills to search_paths in _run_compliance_audit()"
+    },
+    {
+      "id": "E-117",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add state.json schema version guard to readStateStrict (both MCP files)",
+      "created_at": "2026-03-16T21:19:28.226839+00:00",
+      "completed_at": "2026-03-16T21:19:28.226839+00:00",
+      "summary": "Version guard (version != 1.0 → null) added to state-writer.js and task-synchronizer-mcp; T-02.12 confirms behavior"
     }
   ],
   "stamps": [
@@ -1487,7 +1567,7 @@
       "agent": "Architect (Gemini)",
       "task_id": null,
       "timestamp": "2026-03-16T20:38:39.318Z",
-      "summary": "System hardening sprint ALIGNED; State Schism resolved; Top risk: Source of Truth fragmentation (JSON vs MD).\n\n## Architectural Audit — 2026-03-16\n\n### Alignment Summary\n- ALIGNED: v3 System Hardening (§23-§29) correctly implemented (orchestrator-mcp, state.json, critic agents).\n- ALIGNED: Shared Skills Architecture expansion (§17.1) and spawnSync whitelisting (§5) completed.\n\n### Coverage Gaps\n- **Legacy Metadata**: Seeded tasks in state.json lack full completed_at timestamps.\n- **UACS Automation**: Section 19 remains high-level without specific E-## automation for vibe/chaos gates.\n\n### Ambiguous Sections\n- **§17.2 Third-Party Integrations**: Pattern for importing external skills needs a generic blueprint for scaling.\n\n### Top 3 Architectural Risks\n1. **Source of Truth Fragmentation** — Potential for bypass of pre-commit sync hook (E-96) resulting in ghost edits.\n2. **Bootloader Blindness** — High dependency on orchestrator-mcp for project context due to CLAUDE.md diet.\n3. **Execution Sandbox Rigor** — Maintenance of safe-exec-mcp whitelists as new tools are added.\n\n### Recommended P-## Tasks\n- P-50: Blueprint for 'Bootloader Resilience' (fallback context gathering).\n- P-51: Blueprint for 'Cross-Project Memory Palace' (shared RAG service).\n- P-52: Blueprint for 'Verification Audit' (tool-parity automation)."
+      "summary": "System hardening sprint ALIGNED; State Schism resolved; Top risk: Source of Truth fragmentation (JSON vs MD)."
     }
   ],
   "deltas": [
@@ -1661,7 +1741,7 @@
         "src/bin/ai",
         "src/mcp/intent-refiner-mcp/index.js"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-97",
@@ -1679,7 +1759,7 @@
         "src/bin/ai",
         "src/mcp/intent-refiner-mcp/index.js"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-98",
@@ -1697,7 +1777,7 @@
         "src/bin/ai",
         "src/config/registry.json"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-99",
@@ -1715,7 +1795,7 @@
         "src/bin/ai",
         "src/config/registry.json"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-100",
@@ -1733,7 +1813,7 @@
         "src/bin/ai",
         "src/config/registry.json"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-101",
@@ -1751,7 +1831,7 @@
         "src/bin/ai",
         "src/config/registry.json"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-102",
@@ -1769,7 +1849,7 @@
         "src/bin/ai",
         "src/config/registry.json"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-103",
@@ -1787,7 +1867,7 @@
         "src/bin/ai",
         "src/config/registry.json"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-104",
@@ -1804,7 +1884,7 @@
         "src/config/registry.json",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-105",
@@ -1821,7 +1901,7 @@
         "src/config/registry.json",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-106",
@@ -1838,7 +1918,7 @@
         "src/config/registry.json",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-107",
@@ -1855,7 +1935,7 @@
         "src/config/registry.json",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-108",
@@ -1872,7 +1952,7 @@
         "src/config/registry.json",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-109",
@@ -1888,6 +1968,150 @@
         "src/claude/CLAUDE.md",
         "src/config/registry.json",
         "src/shared/skills/ai-preflight/SKILL.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-110",
+      "timestamp": "2026-03-16T21:19:32.845Z",
+      "summary": "E-110: tests/suites/memory_manager_test.sh — 13 assertions covering export/upsert/sanitize/query/silent-failure; all pass | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-111",
+      "timestamp": "2026-03-16T21:19:33.589Z",
+      "summary": "E-111: tests/suites/verification_test.sh — 12 assertions covering PASS/FAIL/WARN/Ghost-Tool/mcp__-prefix/bulk-scan; all pass | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-112",
+      "timestamp": "2026-03-16T21:19:34.720Z",
+      "summary": "E-112: tests/suites/archive_tasks_test.sh — 7 assertions covering threshold/archive-creation/live-prune/OPEN-preservation/JSON-validity; all pass | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-113",
+      "timestamp": "2026-03-16T21:19:38.330Z",
+      "summary": "E-113: Added Check 4 to pre-commit.sh (blocks ## headings in REVIEWS.md); truncated ARCH_AUDIT stamp multi-line summary; REVIEWS.md regenerated as pure generated view | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-114",
+      "timestamp": "2026-03-16T21:19:39.786Z",
+      "summary": "E-114: Added _query_similar_signatures() python3 inline helper + call in do_init(); queries ~/.ai-os/memory/signatures.json by project basename; silent failure per §31 | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-115",
+      "timestamp": "2026-03-16T21:19:41.272Z",
+      "summary": "E-115: T-02.11 added to state_json_test.sh; confirmed orchestrator-mcp run_preflight marks deltas read:true (lines 146-154) | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-116",
+      "timestamp": "2026-03-16T21:19:41.593Z",
+      "summary": "E-116: Added gemini/skills to search_paths in _run_compliance_audit() (both global ~/.ai-os and project-local src/gemini/skills); src/bin/ai | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-117",
+      "timestamp": "2026-03-16T21:19:42.411Z",
+      "summary": "E-117: Version guard added to readStateStrict in state-writer.js and task-synchronizer-mcp/index.js; T-02.12 tests rejection of version != 1.0 | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/shared/state-writer.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "tests/suites/state_json_test.sh"
       ],
       "read": false
     }

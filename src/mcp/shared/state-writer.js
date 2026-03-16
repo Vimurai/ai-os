@@ -13,13 +13,21 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
 /**
- * Read state.json — returns null if missing or corrupt.
+ * Read state.json — returns null if missing, corrupt, or wrong schema version.
  * Used by write tools that must refuse to operate without state.json.
+ * E-117: version guard prevents silent acceptance of v0.x / future schemas.
  */
 export function readStateStrict(aiDir) {
   const p = resolve(aiDir, "state.json");
   if (!existsSync(p)) return null;
-  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+  try {
+    const state = JSON.parse(readFileSync(p, "utf8"));
+    if (state.version !== "1.0") {
+      process.stderr.write(`[WARN] state.json schema version '${state.version ?? "missing"}' != '1.0' — treating as corrupt\n`);
+      return null;
+    }
+    return state;
+  } catch { return null; }
 }
 
 /**

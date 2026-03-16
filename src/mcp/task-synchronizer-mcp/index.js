@@ -34,12 +34,21 @@ function readState(aiDir) {
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
 }
 
-// readStateStrict: used by write tools — returns null (error) if state.json is missing
-// P-44: prevents silent creation of empty state that bypasses migration
+// readStateStrict: used by write tools — returns null (error) if state.json is missing,
+// corrupt, or has wrong schema version.
+// P-44: prevents silent creation of empty state that bypasses migration.
+// E-117: version guard prevents silent acceptance of v0.x / future schemas.
 function readStateStrict(aiDir) {
   const p = resolve(aiDir, "state.json");
   if (!existsSync(p)) return null;
-  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+  try {
+    const state = JSON.parse(readFileSync(p, "utf8"));
+    if (state.version !== "1.0") {
+      process.stderr.write(`[WARN] state.json schema version '${state.version ?? "missing"}' != '1.0' — treating as corrupt\n`);
+      return null;
+    }
+    return state;
+  } catch { return null; }
 }
 
 const DONE_ARCHIVE_THRESHOLD = 50; // auto-archive when DONE tasks exceed this

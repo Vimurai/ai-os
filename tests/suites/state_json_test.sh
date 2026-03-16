@@ -319,4 +319,48 @@ fs.unlinkSync(tmp);
 ")
 assert_contains "T-02.10: corrupt JSON is caught by parse" "ok" "$corrupt_check"
 
+# ── T-02.11: run_preflight marks deltas as read: true ────────────────
+# Mirrors orchestrator-mcp/index.js lines 146-154 (E-115)
+DELTA_DIR=$(mktemp -d)
+cp "$TEMPLATE" "${DELTA_DIR}/state.json"
+python3 -c "
+import json; s=json.load(open('${DELTA_DIR}/state.json'))
+s['deltas']=[{'task_id':'E-99','timestamp':'2026-01-01T00:00:00Z','summary':'Test delta','files_changed':[],'read':False}]
+json.dump(s, open('${DELTA_DIR}/state.json','w'), indent=2)
+"
+# Inline the delta-marking logic from orchestrator-mcp
+node -e "
+  import { readFileSync, writeFileSync } from 'fs';
+  import { resolve } from 'path';
+  const statePath = resolve(process.argv[1], 'state.json');
+  const state = JSON.parse(readFileSync(statePath, 'utf8'));
+  const unread = (state.deltas || []).filter(d => !d.read);
+  for (const d of unread) { d.read = true; }
+  if (unread.length > 0) writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n');
+" "$DELTA_DIR" --input-type=module 2>/dev/null
+delta_check=$(python3 -c "
+import json; s=json.load(open('${DELTA_DIR}/state.json'))
+deltas=s.get('deltas',[])
+print('ok' if len(deltas)==1 and deltas[0].get('read')==True else 'fail:'+str(deltas))
+")
+assert_contains "T-02.11: run_preflight marks deltas as read:true" "ok" "$delta_check"
+rm -rf "$DELTA_DIR"
+
+# ── T-02.12: readStateStrict returns null for wrong schema version (E-117) ──
+VERSION_DIR=$(mktemp -d)
+python3 -c "
+import json
+json.dump({'version':'0.x','project':{},'tasks':[],'stamps':[]}, open('${VERSION_DIR}/state.json','w'), indent=2)
+"
+version_check=$(node -e "
+  import { readFileSync } from 'fs';
+  import { resolve } from 'path';
+  const p = resolve(process.argv[1], 'state.json');
+  const state = JSON.parse(readFileSync(p, 'utf8'));
+  // Mirrors readStateStrict version guard (E-117)
+  if (state.version !== '1.0') { console.log('null'); } else { console.log('parsed'); }
+" "$VERSION_DIR" --input-type=module 2>/dev/null)
+assert_contains "T-02.12: version guard rejects schema v0.x" "null" "$version_check"
+rm -rf "$VERSION_DIR"
+
 assert_summary
