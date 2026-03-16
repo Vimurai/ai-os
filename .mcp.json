@@ -86,6 +86,18 @@
       "args": [
         "/Users/emirkovacevic/.ai-os/mcp/orchestrator-mcp/index.js"
       ]
+    },
+    "memory-manager-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/memory-manager-mcp/index.js"
+      ]
+    },
+    "verification-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/verification-mcp/index.js"
+      ]
     }
   }
 }

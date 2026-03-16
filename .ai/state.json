@@ -32,7 +32,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Blueprint for `ai-exec` isolation (Git Worktrees) and `CAPABILITIES.md` schema",
-      "created_at": "2026-03-16T20:53:18.346Z",
+      "created_at": "2026-03-16T21:23:21.809Z",
       "completed_at": null,
       "summary": null
     },
@@ -42,7 +42,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Update `post-tool-log.sh` blueprint to include `[SECURITY]` tags for `EXECUTE` operations",
-      "created_at": "2026-03-16T20:53:18.346Z",
+      "created_at": "2026-03-16T21:23:21.809Z",
       "completed_at": null,
       "summary": null
     },
@@ -562,7 +562,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Implement Gate 3 (Execution Gate) in `ai-exec` CLI",
-      "created_at": "2026-03-16T20:53:18.346Z",
+      "created_at": "2026-03-16T21:23:21.809Z",
       "completed_at": null,
       "summary": null
     },
@@ -762,7 +762,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/claude_tasks.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T20:53:18.346Z",
+      "created_at": "2026-03-16T21:23:21.809Z",
       "completed_at": null,
       "summary": null
     },
@@ -772,7 +772,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/devops_engineer.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T20:53:18.346Z",
+      "created_at": "2026-03-16T21:23:21.809Z",
       "completed_at": null,
       "summary": null
     },
@@ -782,7 +782,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/digest_updater.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T20:53:18.346Z",
+      "created_at": "2026-03-16T21:23:21.809Z",
       "completed_at": null,
       "summary": null
     },
@@ -1469,82 +1469,12 @@
     {
       "id": "E-110",
       "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add test suite for memory-manager-mcp (§31)",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "tests/suites/memory_manager_test.sh — 13 assertions, all pass"
-    },
-    {
-      "id": "E-111",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add test suite for verification-mcp (§32 Ghost Tool detection)",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "tests/suites/verification_test.sh — 12 assertions, all pass"
-    },
-    {
-      "id": "E-112",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
+      "status": "OPEN",
       "tier": 1,
-      "description": "Add test suite for archive_done_tasks tool",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "tests/suites/archive_tasks_test.sh — 7 assertions, all pass"
-    },
-    {
-      "id": "E-113",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 3,
-      "description": "Fix REVIEWS.md hybrid content — enforce pure generated view (D-001)",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "Added Check 4 to pre-commit.sh (block ## headings); truncated ARCH_AUDIT stamp summary; REVIEWS.md regenerated clean"
-    },
-    {
-      "id": "E-114",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Wire query_signatures into ai init (§31 advisory hints)",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "Added _query_similar_signatures() helper and call in do_init() (src/bin/ai)"
-    },
-    {
-      "id": "E-115",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Confirm and test run_preflight marks deltas as read:true",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "T-02.11 added to state_json_test.sh — delta marking confirmed correct in orchestrator-mcp"
-    },
-    {
-      "id": "E-116",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Extend ai doctor --compliance to scan gemini/skills (E-116)",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "Added Path(aios)/gemini/skills and src/gemini/skills to search_paths in _run_compliance_audit()"
-    },
-    {
-      "id": "E-117",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add state.json schema version guard to readStateStrict (both MCP files)",
-      "created_at": "2026-03-16T21:19:28.226839+00:00",
-      "completed_at": "2026-03-16T21:19:28.226839+00:00",
-      "summary": "Version guard (version != 1.0 → null) added to state-writer.js and task-synchronizer-mcp; T-02.12 confirms behavior"
+      "description": "Update src/templates/CAPABILITIES.md and project CAPABILITIES.md to register memory-manager-mcp (export_signature, query_signatures) and verification-mcp (verify_compliance) tools with correct capability class (READ/WRITE) and path scope. Satisfies P1 from SEC_PASS stamp on E-117 batch.",
+      "created_at": "2026-03-16T21:40:08.375Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [
@@ -1568,6 +1498,76 @@
       "task_id": null,
       "timestamp": "2026-03-16T20:38:39.318Z",
       "summary": "System hardening sprint ALIGNED; State Schism resolved; Top risk: Source of Truth fragmentation (JSON vs MD)."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "CRITIC_SECURITY",
+      "task_id": "E-117",
+      "timestamp": "2026-03-16T21:28:22.404Z",
+      "summary": "No P0 vulnerabilities; memory-manager-mcp and verification-mcp use no shell exec, no hardcoded secrets, paths anchored to HOME/.ai-os and cwd; .mcp.json env refs are shell-var placeholders only; P1 noted: CAPABILITIES.md not updated for two new MCP registrations"
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "CRITIC_TESTS",
+      "task_id": "E-108",
+      "timestamp": "2026-03-16T21:28:37.021Z",
+      "summary": "2026-03-16 | All tests passing (224/224); memory_manager_test.sh=13 assertions (export/upsert/sanitize/query/silent-failure), verification_test.sh=12 assertions (PASS/FAIL/WARN/Ghost-Tool/mcp__-prefix/bulk-scan); no uncovered src/ logic in staged diff"
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "CRITIC_ARCH",
+      "task_id": "E-106,E-107,E-108,E-109",
+      "timestamp": "2026-03-16T21:28:44.359Z",
+      "summary": "No sovereignty violations; .ai/architect.md and .ai/RULES.md additions are Gemini-authored documentation (VOTU clarification, execSync deprecation, Triad Audit unification, domain isolation refinements) matching P-28/P-31/P-50 blueprint lineage — not Claude-authored code; .mcp.json memory-manager-mcp and verification-mcp registrations fully traced to §31 (E-106) and §32 (E-108); both servers present in src/mcp/ and registry.json; state.json diff is timestamp-only re-seed with no semantic change; no orphaned work; no file misplacement"
+    },
+    {
+      "type": "SEC_DEEP_PASS",
+      "agent": "security_engineer",
+      "task_id": "E-108",
+      "timestamp": "2026-03-16T21:32:20.056Z",
+      "summary": "memory-manager-mcp PASS (no shell, scoped I/O, sanitize present); verification-mcp CONDITIONAL PASS — M-001 directory traversal in caller-supplied paths (D-009 fix required); no P0 threats; TESTSPRITE_API_KEY correctly referenced not hardcoded"
+    },
+    {
+      "type": "SEC_DEEP_PASS",
+      "agent": "security_engineer",
+      "task_id": "E-108",
+      "timestamp": "2026-03-16T21:35:19.389Z",
+      "summary": "M-001 path traversal in verification-mcp paths param patched (D-009 allowlist); memory-manager-mcp clean; no secrets in .mcp.json; 224/224 tests pass post-fix"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "review_synthesizer",
+      "task_id": "E-117",
+      "timestamp": "2026-03-16T21:36:12.907Z",
+      "summary": "BLOCKED — [ALIGN_PASS] missing from current batch; [ARCH_PASS] [SEC_PASS] [TESTS_PASS] present and clean; [SEC_DEEP_PASS] x2 confirms M-001 patched and 224/224 pass; blueprint-aligner-mcp alignment stamp required before CRITIC_STAMP can clear"
+    },
+    {
+      "type": "UACS_VERIFIED",
+      "agent": "review_synthesizer",
+      "task_id": "E-117",
+      "timestamp": "2026-03-16T21:36:17.508Z",
+      "summary": "Tier 3 review aggregation complete — 3/4 distributed stamps passed ([ARCH_PASS] [SEC_PASS] [TESTS_PASS]); [ALIGN_PASS] absent; release gated pending alignment stamp"
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-108",
+      "timestamp": "2026-03-16T21:39:11.568Z",
+      "summary": "WARN only — no FAIL; architect.md unstaged (Gemini-sovereign); .mcp.json §31/§32 blueprinted; verification-mcp M-001 fix aligns with D-009"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "review_synthesizer",
+      "task_id": "E-117",
+      "timestamp": "2026-03-16T21:40:17.715Z",
+      "summary": "CLEAR — [TIER_3] All critics passed: [ARCH_PASS] [SEC_PASS] [TESTS_PASS] [ALIGN_PASS]; P0: 0; P1: 1 (CAPABILITIES.md MCP registration gap — tracked E-110); 224/224 tests passing; M-001 patched and verified by SEC_DEEP_PASS x2"
+    },
+    {
+      "type": "UACS_VERIFIED",
+      "agent": "review_synthesizer",
+      "task_id": "E-117",
+      "timestamp": "2026-03-16T21:40:21.525Z",
+      "summary": "Tier 3 review complete — all four distributed stamps passed; [CRITIC_STAMP] cleared; P1 tracked as E-110; release gates satisfied"
     }
   ],
   "deltas": [
@@ -1987,7 +1987,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-111",
@@ -2005,7 +2005,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-112",
@@ -2023,7 +2023,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-113",
@@ -2041,7 +2041,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-114",
@@ -2059,7 +2059,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-115",
@@ -2077,7 +2077,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-116",
@@ -2095,7 +2095,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-117",
@@ -2113,7 +2113,7 @@
         "src/mcp/task-synchronizer-mcp/index.js",
         "tests/suites/state_json_test.sh"
       ],
-      "read": false
+      "read": true
     }
   ]
 }

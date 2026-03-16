@@ -43,6 +43,7 @@
 - Custom servers (all at ~/.ai-os/mcp/): vibe-check-mcp, intent-refiner-mcp, task-synchronizer-mcp, safe-exec-mcp, blueprint-aligner-mcp, context-guardian-mcp, risk-analyzer-mcp, context-invoker-mcp, archive-manager-mcp, orchestrator-mcp, memory-manager-mcp, verification-mcp.
 
 ## Recent changes (last 10):
+- 2026-03-16: SECURITY.md created — deep security review of memory-manager-mcp (E-106) and verification-mcp (E-108); M-001 directory traversal in verification-mcp paths arg; no P0 threats; D-009/D-010 proposed.
 - 2026-03-16: Version guard added to readStateStrict — version != "1.0" returns null; T-02.12 added (src/mcp/shared/state-writer.js, src/mcp/task-synchronizer-mcp/index.js) [E-117].
 - 2026-03-16: gemini/skills added to search_paths in _run_compliance_audit() (src/bin/ai) [E-116].
 - 2026-03-16: T-02.11 + T-02.12 added to state_json_test.sh — delta-marking and version guard correctness [E-115].

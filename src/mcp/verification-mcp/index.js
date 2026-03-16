@@ -151,15 +151,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const registryPath = join(aios, "config", "registry.json");
   const registry = loadRegistry(registryPath);
 
-  // Determine scan directories
-  const scanDirs = args.paths?.map(p => resolve(cwd, p)) ?? [
-    resolve(cwd, "src", "claude", "agents"),
-    resolve(cwd, "src", "claude", "skills"),
-    resolve(cwd, "src", "shared", "skills"),
-    resolve(cwd, "src", "gemini", "agents"),
-    join(aios, "claude", "agents"),
-    join(aios, "gemini", "agents"),
-  ];
+  // Determine scan directories — D-009: validate caller-supplied paths against allowed prefixes
+  const allowedPrefixes = [cwd, aios];
+  const isAllowedPath = (p) => allowedPrefixes.some(prefix => p === prefix || p.startsWith(prefix + "/"));
+
+  const scanDirs = args.paths
+    ? args.paths.map(p => resolve(cwd, p)).filter(p => {
+        if (!isAllowedPath(p)) return false; // silently drop out-of-bounds paths
+        return true;
+      })
+    : [
+        resolve(cwd, "src", "claude", "agents"),
+        resolve(cwd, "src", "claude", "skills"),
+        resolve(cwd, "src", "shared", "skills"),
+        resolve(cwd, "src", "gemini", "agents"),
+        join(aios, "claude", "agents"),
+        join(aios, "gemini", "agents"),
+      ];
 
   // Collect all .md files
   const mdFiles = scanDirs.flatMap(d => scanAgentFiles(d));
