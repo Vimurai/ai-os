@@ -1375,9 +1375,121 @@
       "created_at": "2026-03-16T20:17:41.330Z",
       "completed_at": "2026-03-16T20:22:08.199Z",
       "summary": "Added state.json summary section to run_preflight output: task counts by status, last 3 stamps, current focus — structured data preferred over TASKS.md markdown view"
+    },
+    {
+      "id": "P-48",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Blueprint for 'Bootloader Resilience' (§30): Design fallback mechanism for context retrieval when orchestrator-mcp is unavailable.",
+      "created_at": "2026-03-16T20:40:30.332Z",
+      "completed_at": "2026-03-16T20:40:46.336Z",
+      "summary": "Blueprinted Bootloader Resilience (§30) with layered fallback strategy (Layer 1: orchestrator, Layer 2: preflight skill, Layer 3: CLAUDE.md instructions)."
+    },
+    {
+      "id": "P-49",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Blueprint for 'Cross-Project Memory Palace' (§31): Define global signature storage and export/query logic.",
+      "created_at": "2026-03-16T20:40:31.691Z",
+      "completed_at": "2026-03-16T20:40:47.577Z",
+      "summary": "Blueprinted Cross-Project Memory Palace (§31) with memory-manager-mcp and signature export/query logic."
+    },
+    {
+      "id": "P-50",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Blueprint for 'Verification Audit' (§32): Design automated compliance checking for agent capabilities.",
+      "created_at": "2026-03-16T20:40:32.388Z",
+      "completed_at": "2026-03-16T20:40:48.256Z",
+      "summary": "Blueprinted Verification Audit (§32) with verification-mcp and compliance reporting logic."
+    },
+    {
+      "id": "E-104",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement Layer 2 fallback in src/shared/skills/ai-preflight/SKILL.md (Bash/jq-based context retrieval).",
+      "created_at": "2026-03-16T20:40:32.805Z",
+      "completed_at": "2026-03-16T20:51:55.105Z",
+      "summary": "Added Layer 2 fallback section to src/shared/skills/ai-preflight/SKILL.md: Bash/python3-based state.json context retrieval with explicit trigger conditions and escalation path to Layer 3"
+    },
+    {
+      "id": "E-105",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update CLAUDE.md with 'Emergency Recovery' instructions for bootloader resilience.",
+      "created_at": "2026-03-16T20:40:33.225Z",
+      "completed_at": "2026-03-16T20:51:57.054Z",
+      "summary": "Added Emergency Recovery section to src/claude/CLAUDE.md with 3-layer resilience chain, manual bash recovery commands, and recovery rules"
+    },
+    {
+      "id": "E-106",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Create memory-manager-mcp for global project signature storage and retrieval.",
+      "created_at": "2026-03-16T20:40:33.629Z",
+      "completed_at": "2026-03-16T20:51:58.272Z",
+      "summary": "Created src/mcp/memory-manager-mcp/index.js with export_signature and query_signatures tools; global store at ~/.ai-os/memory/signatures.json; sanitization + silent failure per §31"
+    },
+    {
+      "id": "E-107",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update ai archive to trigger export_signature to global memory store.",
+      "created_at": "2026-03-16T20:40:34.066Z",
+      "completed_at": "2026-03-16T20:51:59.859Z",
+      "summary": "Added _export_signature_to_global_store() to src/bin/ai; called from do_archive() after successful archive; writes to ~/.ai-os/memory/signatures.json via python3 inline with silent failure"
+    },
+    {
+      "id": "E-108",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Implement verification-mcp for programmatic compliance auditing of agent frontmatter.",
+      "created_at": "2026-03-16T20:40:34.465Z",
+      "completed_at": "2026-03-16T20:52:01.548Z",
+      "summary": "Created src/mcp/verification-mcp/index.js with verify_compliance tool; scans agent YAML frontmatter, flags Ghost Tools as CRITICAL, checks §17.1.2 required fields; 62/62 files pass"
+    },
+    {
+      "id": "E-109",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add --compliance audit flag to ai doctor to trigger verification-mcp reports.",
+      "created_at": "2026-03-16T20:40:34.996Z",
+      "completed_at": "2026-03-16T20:52:02.852Z",
+      "summary": "Added --compliance flag to doctor() in src/bin/ai; dispatches to _run_compliance_audit() which scans agent frontmatter via python3 and flags Ghost Tools; 62 files PASS on first run"
     }
   ],
-  "stamps": [],
+  "stamps": [
+    {
+      "type": "ARCH_FAIL",
+      "agent": "critic_arch",
+      "task_id": "E-90",
+      "timestamp": "2026-03-16T20:26:12.978Z",
+      "summary": "P0: .ai/architect.md modified by engineer-owned task E-90 (Claude authored 478 lines directly into Gemini-sovereign file); §12 domain sovereignty violated — COMMIT BLOCKED"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "critic_arch+critic_security+critic_tests",
+      "task_id": "E-103",
+      "timestamp": "2026-03-16T20:31:21.714Z",
+      "summary": "ARCH_FAIL pre-existing E-90 (not staged); SEC_PASS no P0; TESTS_PASS P0 resolved with intent_refiner_test.sh 11/11; staged E-96-E-103 clear to commit"
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "Architect (Gemini)",
+      "task_id": null,
+      "timestamp": "2026-03-16T20:38:39.318Z",
+      "summary": "System hardening sprint ALIGNED; State Schism resolved; Top risk: Source of Truth fragmentation (JSON vs MD).\n\n## Architectural Audit — 2026-03-16\n\n### Alignment Summary\n- ALIGNED: v3 System Hardening (§23-§29) correctly implemented (orchestrator-mcp, state.json, critic agents).\n- ALIGNED: Shared Skills Architecture expansion (§17.1) and spawnSync whitelisting (§5) completed.\n\n### Coverage Gaps\n- **Legacy Metadata**: Seeded tasks in state.json lack full completed_at timestamps.\n- **UACS Automation**: Section 19 remains high-level without specific E-## automation for vibe/chaos gates.\n\n### Ambiguous Sections\n- **§17.2 Third-Party Integrations**: Pattern for importing external skills needs a generic blueprint for scaling.\n\n### Top 3 Architectural Risks\n1. **Source of Truth Fragmentation** — Potential for bypass of pre-commit sync hook (E-96) resulting in ghost edits.\n2. **Bootloader Blindness** — High dependency on orchestrator-mcp for project context due to CLAUDE.md diet.\n3. **Execution Sandbox Rigor** — Maintenance of safe-exec-mcp whitelists as new tools are added.\n\n### Recommended P-## Tasks\n- P-50: Blueprint for 'Bootloader Resilience' (fallback context gathering).\n- P-51: Blueprint for 'Cross-Project Memory Palace' (shared RAG service).\n- P-52: Blueprint for 'Verification Audit' (tool-parity automation)."
+    }
+  ],
   "deltas": [
     {
       "task_id": "E-89",
@@ -1674,6 +1786,108 @@
         "hooks/pre-commit.sh",
         "src/bin/ai",
         "src/config/registry.json"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-104",
+      "timestamp": "2026-03-16T20:52:09.591Z",
+      "summary": "E-104: Layer 2 fallback in ai-preflight/SKILL.md — Bash/python3 state.json retrieval with trigger conditions and escalation | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md",
+        "src/config/registry.json",
+        "src/shared/skills/ai-preflight/SKILL.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-105",
+      "timestamp": "2026-03-16T20:52:10.394Z",
+      "summary": "E-105: Emergency Recovery section in CLAUDE.md — 3-layer resilience chain with manual bash commands | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md",
+        "src/config/registry.json",
+        "src/shared/skills/ai-preflight/SKILL.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-106",
+      "timestamp": "2026-03-16T20:52:11.312Z",
+      "summary": "E-106: memory-manager-mcp created — export_signature + query_signatures, global signatures.json, sanitization, silent failure | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md",
+        "src/config/registry.json",
+        "src/shared/skills/ai-preflight/SKILL.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-107",
+      "timestamp": "2026-03-16T20:52:11.757Z",
+      "summary": "E-107: ai archive now calls _export_signature_to_global_store() via python3 inline with silent failure | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md",
+        "src/config/registry.json",
+        "src/shared/skills/ai-preflight/SKILL.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-108",
+      "timestamp": "2026-03-16T20:52:12.858Z",
+      "summary": "E-108: verification-mcp created — verify_compliance scans YAML frontmatter, flags Ghost Tools CRITICAL, 62/62 PASS | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md",
+        "src/config/registry.json",
+        "src/shared/skills/ai-preflight/SKILL.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-109",
+      "timestamp": "2026-03-16T20:52:13.574Z",
+      "summary": "E-109: ai doctor --compliance dispatches to _run_compliance_audit() — python3 Ghost Tool scanner, 62 files PASS | Files: .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md",
+        "src/config/registry.json",
+        "src/shared/skills/ai-preflight/SKILL.md"
       ],
       "read": false
     }

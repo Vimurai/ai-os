@@ -98,6 +98,22 @@
       "allowed-tools": ["run_preflight", "run_handover", "run_review"],
       "disable-model-invocation": false,
       "_note": "Deterministic workflow execution (P-38): replaces LLM-interpreted skills with programmatic orchestration"
+    },
+    "memory-manager-mcp": {
+      "path": "src/mcp/memory-manager-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["export_signature", "query_signatures"],
+      "disable-model-invocation": false,
+      "_note": "§31 Cross-Project Memory Palace: stores high-level project signatures in ~/.ai-os/memory/signatures.json"
+    },
+    "verification-mcp": {
+      "path": "src/mcp/verification-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["verify_compliance"],
+      "disable-model-invocation": false,
+      "_note": "§32 Verification Audit: checks agent YAML frontmatter allowed-tools against registry; flags Ghost Tools as CRITICAL"
     }
   }
 }

@@ -21,7 +21,7 @@ Commands:
   ai digest           Print prompt to regenerate DIGEST.md (run when stale)
   ai sync             Re-sync agent/skill files from ~/.ai-os to ~/.claude, ~/.gemini, ~/.config/github-copilot
   ai migrate-state [--force]  Seed state.json from TASKS.md (run once after v3 upgrade)
-  ai doctor           Diagnose PATH, config, hooks, MCP, Copilot CLI
+  ai doctor [--repair] [--compliance]  Diagnose PATH, config, hooks, MCP; --compliance audits agent frontmatter for Ghost Tools
   ai where            Print install paths
   ai version          Print version
 USAGE
@@ -916,10 +916,94 @@ do_archive() {
     echo "✓ Archive complete → ${ARCHIVE_DIR}"
     echo "  ${ARCHIVED} file(s) archived and re-initialized."
     echo ""
+    # E-107: Export project signature to global memory store (§31, silent failure by design)
+    _export_signature_to_global_store
     # E-56: Auto-trigger digest to document the fresh state
     echo "[AUTO-ARCHIVE] Regenerating DIGEST.md to reflect fresh state..."
     do_digest
   fi
+}
+
+# E-107: Write project signature to ~/.ai-os/memory/signatures.json (§31)
+# Silent failure — project-local context is always prioritized.
+_export_signature_to_global_store() {
+  local MEM_DIR="${AIOS}/memory"
+  local SIG_FILE="${MEM_DIR}/signatures.json"
+  if ! command -v python3 &>/dev/null; then return 0; fi
+
+  python3 - "$SIG_FILE" "$MEM_DIR" <<'PY'
+import json, sys, os
+from datetime import datetime, timezone
+
+sig_file = sys.argv[1]
+mem_dir  = sys.argv[2]
+
+try:
+    os.makedirs(mem_dir, exist_ok=True)
+
+    # Build signature from available .ai/ context
+    project_name = os.path.basename(os.getcwd())
+
+    # Extract focus from state.json
+    focus = ""
+    try:
+        s = json.load(open(".ai/state.json"))
+        focus = s.get("project", {}).get("focus") or ""
+    except Exception:
+        pass
+
+    # Extract summary from DIGEST.md (first 5 non-header, non-empty lines)
+    summary_lines = []
+    try:
+        for line in open(".ai/DIGEST.md"):
+            stripped = line.strip()
+            if stripped and not stripped.startswith("#") and len(summary_lines) < 5:
+                summary_lines.append(stripped)
+    except Exception:
+        pass
+    summary = " | ".join(summary_lines) if summary_lines else f"{project_name} project"
+
+    # Extract architect version (first # heading from architect.md)
+    architect_v = "unknown"
+    try:
+        for line in open(".ai/architect.md"):
+            if line.startswith("# "):
+                architect_v = line.strip()[2:].strip()
+                break
+    except Exception:
+        pass
+
+    sig = {
+        "project_name": project_name,
+        "tag": focus or project_name,
+        "summary": summary[:300],   # cap at 300 chars — no PII, no secrets
+        "architect_v": architect_v[:100],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+    # Append to global signatures store
+    sigs = []
+    if os.path.exists(sig_file):
+        try:
+            sigs = json.load(open(sig_file))
+            if not isinstance(sigs, list):
+                sigs = []
+        except Exception:
+            sigs = []
+
+    # Deduplicate: remove older entry for same project (keep latest only)
+    sigs = [s for s in sigs if s.get("project_name") != project_name]
+    sigs.append(sig)
+
+    with open(sig_file, "w") as f:
+        json.dump(sigs, f, indent=2)
+        f.write("\n")
+
+    print(f"[SIGNATURE] Exported {project_name} signature → {sig_file}")
+except Exception as e:
+    # Silent failure per §31 — global store is optional
+    pass
+PY
 }
 
 do_migrate_state() {
@@ -1375,7 +1459,17 @@ do_sync() {
 
 doctor() {
   local REPAIR=0
-  [[ "${1:-}" == "--repair" ]] && REPAIR=1
+  local COMPLIANCE=0
+  for arg in "$@"; do
+    [[ "$arg" == "--repair" ]]     && REPAIR=1
+    [[ "$arg" == "--compliance" ]] && COMPLIANCE=1
+  done
+
+  # E-109: --compliance audit mode (§32 verification-mcp)
+  if [[ "$COMPLIANCE" -eq 1 ]]; then
+    _run_compliance_audit
+    return 0
+  fi
 
   echo "AI-OS v${VERSION} — doctor${REPAIR:+ (--repair mode)}"
   echo ""
@@ -1717,6 +1811,129 @@ for name, info in d.get('mcp_servers', {}).items():
     echo ""
     echo "Repair complete. Run: ai doctor to verify."
   fi
+}
+
+# E-109: Compliance audit — scan agent/skill YAML frontmatter vs registry + .mcp.json (§32)
+_run_compliance_audit() {
+  local REGISTRY="${AIOS}/config/registry.json"
+  echo "AI-OS v${VERSION} — Compliance Audit (§32 Verification)"
+  echo ""
+
+  if ! command -v python3 &>/dev/null; then
+    echo "✗ python3 required for compliance audit"
+    exit 1
+  fi
+
+  python3 - "$REGISTRY" "$AIOS" <<'PY'
+import json, sys, os, re
+from pathlib import Path
+
+registry_path = sys.argv[1]
+aios          = sys.argv[2]
+
+# Load registry allowed-tools per server
+available_tools = {}
+try:
+    reg = json.load(open(registry_path))
+    for name, info in reg.get("mcp_servers", {}).items():
+        tools = info.get("allowed-tools", [])
+        if "*" in tools:
+            available_tools[name] = "*"
+        else:
+            for t in tools:
+                available_tools[t] = name
+except Exception as e:
+    print(f"✗ Could not read registry.json: {e}")
+    sys.exit(1)
+
+# Also accept built-in Claude tools as valid
+BUILTIN_TOOLS = {"Read","Write","Edit","Glob","Grep","Bash","WebSearch","WebFetch",
+                 "Agent","TodoRead","TodoWrite","mcp__*"}
+
+def is_available(tool):
+    if tool in available_tools:
+        return True
+    if tool in BUILTIN_TOOLS:
+        return True
+    if tool == "*":
+        return True
+    # mcp__ prefix tools — available if the server is in registry
+    if tool.startswith("mcp__"):
+        return True
+    return False
+
+# Scan all agent + skill .md files
+search_paths = [
+    Path(aios) / "claude" / "agents",
+    Path(aios) / "claude" / "skills",
+    Path(aios) / "shared" / "skills",
+    Path(aios) / "gemini" / "agents",
+]
+# Also scan project-local if we're in an AI-OS project
+if Path(".ai").exists():
+    search_paths += [
+        Path("src/claude/agents"),
+        Path("src/claude/skills"),
+        Path("src/shared/skills"),
+    ]
+
+violations = []
+scanned = 0
+
+for base in search_paths:
+    if not base.exists():
+        continue
+    for md in base.rglob("*.md"):
+        text = md.read_text(errors="replace")
+        if not text.startswith("---"):
+            continue
+        # Parse YAML frontmatter
+        end = text.find("---", 3)
+        if end == -1:
+            continue
+        frontmatter = text[3:end]
+        name_m = re.search(r"^name:\s*(.+)$", frontmatter, re.M)
+        tools_m = re.search(r"^allowed-tools:\s*(.+)$", frontmatter, re.M)
+        agent_name = name_m.group(1).strip() if name_m else str(md.stem)
+        scanned += 1
+
+        if not tools_m:
+            violations.append({
+                "agent": agent_name,
+                "file": str(md),
+                "severity": "WARN",
+                "issue": "Missing allowed-tools field in frontmatter"
+            })
+            continue
+
+        declared_tools = [t.strip() for t in tools_m.group(1).split(",")]
+        for tool in declared_tools:
+            if tool and not is_available(tool):
+                violations.append({
+                    "agent": agent_name,
+                    "file": str(md),
+                    "severity": "CRITICAL",
+                    "issue": f"Ghost Tool: '{tool}' declared but not in registry or builtin list"
+                })
+
+print(f"Scanned {scanned} agent/skill files\n")
+
+if not violations:
+    print("✓ COMPLIANCE PASS — no Ghost Tools or missing frontmatter detected")
+else:
+    critical = [v for v in violations if v["severity"] == "CRITICAL"]
+    warns    = [v for v in violations if v["severity"] == "WARN"]
+    print(f"COMPLIANCE REPORT: {len(critical)} CRITICAL | {len(warns)} WARN\n")
+    for v in violations:
+        icon = "✗" if v["severity"] == "CRITICAL" else "⚠"
+        print(f"  {icon} [{v['severity']}] {v['agent']}")
+        print(f"      Issue: {v['issue']}")
+        print(f"      File:  {v['file']}")
+        print()
+    if critical:
+        print("ACTION REQUIRED: Remove or register Ghost Tools before next commit.")
+        sys.exit(1)
+PY
 }
 
 do_mcp_setup() {

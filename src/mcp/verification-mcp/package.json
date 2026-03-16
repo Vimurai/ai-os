@@ -1,0 +1,11 @@
+{
+  "name": "verification-mcp",
+  "version": "1.0.0",
+  "description": "AI-OS §32: Programmatic compliance auditing — verifies agent YAML frontmatter against registry.json and MCP tool exports",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

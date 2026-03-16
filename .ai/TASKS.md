@@ -89,6 +89,12 @@
   Status: DONE 2026-03-16 — Blueprinted UACS implementation tasks (E-92, E-93, E-94) in §19.1.
 - [x] P-47: Audit all existing agents/skills for compliance with §17.1.2 YAML frontmatter standards. | Tier: 1
   Status: DONE 2026-03-16 — Completed bulk audit of 20+ agent files; created E-91 for frontmatter standardization.
+- [x] P-48: Blueprint for 'Bootloader Resilience' (§30): Design fallback mechanism for context retrieval when orchestrator-mcp is unavailable. | Tier: 3
+  Status: DONE 2026-03-16 — Blueprinted Bootloader Resilience (§30) with layered fallback strategy (Layer 1: orchestrator, Layer 2: preflight skill, Layer 3: CLAUDE.md instructions).
+- [x] P-49: Blueprint for 'Cross-Project Memory Palace' (§31): Define global signature storage and export/query logic. | Tier: 3
+  Status: DONE 2026-03-16 — Blueprinted Cross-Project Memory Palace (§31) with memory-manager-mcp and signature export/query logic.
+- [x] P-50: Blueprint for 'Verification Audit' (§32): Design automated compliance checking for agent capabilities. | Tier: 3
+  Status: DONE 2026-03-16 — Blueprinted Verification Audit (§32) with verification-mcp and compliance reporting logic.
 
 ## Engineer (Claude)
 - [x] E-1: Implement `ai-exec` CLI (Bash) based on P-01 blueprint
@@ -271,3 +277,15 @@
   Status: DONE 2026-03-16 — Created tests/suites/verify_sync_test.sh with 8 assertions covering PASS/FAIL for header-missing, count-drift >2, stamp-header-missing, zero-stamps clean scenarios — 8/8 pass
 - [x] E-103: Update orchestrator-mcp run_preflight to include state.json summary (task counts by status, last 3 stamps) as a 5th section alongside the 4 markdown file reads | Tier: 1
   Status: DONE 2026-03-16 — Added state.json summary section to run_preflight output: task counts by status, last 3 stamps, current focus — structured data preferred over TASKS.md markdown view
+- [x] E-104: Implement Layer 2 fallback in src/shared/skills/ai-preflight/SKILL.md (Bash/jq-based context retrieval). | Tier: 2
+  Status: DONE 2026-03-16 — Added Layer 2 fallback section to src/shared/skills/ai-preflight/SKILL.md: Bash/python3-based state.json context retrieval with explicit trigger conditions and escalation path to Layer 3
+- [x] E-105: Update CLAUDE.md with 'Emergency Recovery' instructions for bootloader resilience. | Tier: 1
+  Status: DONE 2026-03-16 — Added Emergency Recovery section to src/claude/CLAUDE.md with 3-layer resilience chain, manual bash recovery commands, and recovery rules
+- [x] E-106: Create memory-manager-mcp for global project signature storage and retrieval. | Tier: 3
+  Status: DONE 2026-03-16 — Created src/mcp/memory-manager-mcp/index.js with export_signature and query_signatures tools; global store at ~/.ai-os/memory/signatures.json; sanitization + silent failure per §31
+- [x] E-107: Update ai archive to trigger export_signature to global memory store. | Tier: 2
+  Status: DONE 2026-03-16 — Added _export_signature_to_global_store() to src/bin/ai; called from do_archive() after successful archive; writes to ~/.ai-os/memory/signatures.json via python3 inline with silent failure
+- [x] E-108: Implement verification-mcp for programmatic compliance auditing of agent frontmatter. | Tier: 3
+  Status: DONE 2026-03-16 — Created src/mcp/verification-mcp/index.js with verify_compliance tool; scans agent YAML frontmatter, flags Ghost Tools as CRITICAL, checks §17.1.2 required fields; 62/62 files pass
+- [x] E-109: Add --compliance audit flag to ai doctor to trigger verification-mcp reports. | Tier: 2
+  Status: DONE 2026-03-16 — Added --compliance flag to doctor() in src/bin/ai; dispatches to _run_compliance_audit() which scans agent frontmatter via python3 and flags Ghost Tools; 62 files PASS on first run

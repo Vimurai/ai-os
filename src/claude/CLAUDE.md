@@ -48,3 +48,32 @@ For multi-agent parallel work (critic teams, handover teams), read: `src/contrac
 ## Mid-Execution Triggers
 
 If you discover mid-task that you need a new dependency, are touching auth/secrets, or modifying CI config — **pause and load the relevant skill** (`dependency_gate`, `security_engineer`, `ci_gate`). Don't skip gates.
+
+## Emergency Recovery (§30 — Bootloader Resilience)
+
+If `orchestrator-mcp` is unavailable, degrade gracefully through these layers:
+
+**Layer 1** — `run_preflight()` via orchestrator-mcp ← preferred
+**Layer 2** — `activate_skill("ai-preflight")` ← Bash/jq fallback reads state.json directly
+**Layer 3** — Manual recovery (this section):
+
+```bash
+# Read open tasks
+grep "^- \[ \]" .ai/TASKS.md | head -10
+
+# Read last focus
+python3 -c "import json; s=json.load(open('.ai/state.json')); print(s['project'].get('focus','(none)'))"
+
+# Read last 5 log entries
+tail -5 .ai/LOG.md
+
+# Read current digest
+head -40 .ai/DIGEST.md
+```
+
+**Absolute last resort**: `cat .ai/TASKS.md` — always human-readable even without tooling.
+
+Rules during recovery:
+- Do NOT modify `state.json` manually — only via `task-synchronizer-mcp`
+- Do NOT commit until orchestrator-mcp is restored and Gate 2 passes
+- Log the outage in `LOG.md` once tooling is restored

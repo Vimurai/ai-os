@@ -65,6 +65,59 @@ After reading, append to `.ai/SESSION.md`:
 ---
 ```
 
+## Layer 2 Fallback — Bash/jq Context Retrieval (§30 Bootloader Resilience)
+
+Use this section when `orchestrator-mcp::run_preflight` is unavailable (MCP server down, node error, cold start). This is Layer 2 of the 3-layer resilience chain.
+
+### Trigger Condition
+`run_preflight()` returns an error OR `orchestrator-mcp` is not listed in active MCP servers.
+
+### Fallback Execution
+
+**Step 1 — Read DIGEST (primary context)**
+```bash
+cat .ai/DIGEST.md
+```
+
+**Step 2 — Extract structured state from state.json (Bash/jq)**
+```bash
+# Task counts
+python3 -c "
+import json
+s = json.load(open('.ai/state.json'))
+counts = {}
+for t in s['tasks']:
+    counts[t['status']] = counts.get(t['status'], 0) + 1
+print('Tasks:', counts)
+print('Focus:', s['project'].get('focus', '(none)'))
+" 2>/dev/null || grep "^- \[ \]" .ai/TASKS.md | head -10
+
+# Last 3 stamps
+python3 -c "
+import json
+s = json.load(open('.ai/state.json'))
+for st in s['stamps'][-3:]:
+    print(f\"[{st['type']}] {st['timestamp'][:10]} | {st.get('summary','')}\")
+" 2>/dev/null || tail -3 .ai/REVIEWS.md
+```
+
+**Step 3 — Read UPDATE.md and open tasks**
+```bash
+cat .ai/UPDATE.md
+grep "^- \[ \]" .ai/TASKS.md | head -10
+```
+
+**Step 4 — Stamp SESSION.md manually**
+```bash
+echo "---" >> .ai/SESSION.md
+echo "- Time: $(date -u +%Y-%m-%d\ %H:%M) UTC (Layer 2 fallback)" >> .ai/SESSION.md
+echo "- Actor: Claude (ai-preflight skill)" >> .ai/SESSION.md
+echo "---" >> .ai/SESSION.md
+```
+
+### Escalation
+If Layer 2 also fails (python3/bash unavailable), escalate to **Layer 3**: read the "Emergency Recovery" section in `CLAUDE.md`.
+
 ## Token Economics Hard Rules
 - Do NOT read files outside your domain unless the task explicitly requires it.
 - Do NOT read `src/**` unless your task involves a specific file.
