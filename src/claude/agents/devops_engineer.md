@@ -1,7 +1,11 @@
 ---
 name: devops_engineer
 description: Trigger this when setting up CI/CD pipelines, adding deployment configs, or establishing testing infrastructure. Produces DEVOPS.md with build/test/CI/release commands and observability baseline.
-tools: [Read, Write, Edit, Bash, Glob, Grep]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: DEVOPS_ENGINEER

@@ -1,7 +1,11 @@
 ---
 name: task_validator
 description: Trigger after prd_writer writes new P-## tasks, or on demand. Validates that P-## "Unblocks: E-##" entries map to real E-## tasks, detects circular dependencies and orphaned tasks, and warns on long dependency chains (>5 hops).
-tools: [Read, Grep]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: TASK_VALIDATOR

@@ -1,6 +1,11 @@
 ---
 name: prd_writer
 description: Refines UPDATE.md intent into structured TASKS.md P-## entries and BRIEF.md updates. Triggered automatically by Gate 1 (ai update) when intent is detected. Classifies intent as Vague, Tier 1/2/3, and produces actionable architect-level tasks.
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Write, Edit, Glob, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: PRD_WRITER (Principal Architect — Gemini)

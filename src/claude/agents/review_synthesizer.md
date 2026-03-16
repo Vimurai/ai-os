@@ -1,7 +1,11 @@
 ---
 name: review_synthesizer
 description: Trigger after all Tier 3 audit agents complete (chaos_monkey, vibe_sentinel, security_engineer, critic_arch/security/tests). Aggregates all stamps from REVIEWS.md and LOG.md into a Release Readiness Report and writes [RELEASE_READY] or [RELEASE_BLOCKED] to LOG.md.
-tools: [Read, Write, Grep]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Write, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: REVIEW_SYNTHESIZER

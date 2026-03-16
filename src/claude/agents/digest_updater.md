@@ -1,7 +1,11 @@
 ---
 name: digest_updater
 description: Trigger this when DIGEST.md is stale (>3 days old), after a major sprint, or at session end. Regenerates .ai/DIGEST.md from current project state. Also invoked automatically by the Stop hook.
-tools: [Read, Write, Edit, Glob, Grep]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Write, Edit, Glob, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: DIGEST_UPDATER

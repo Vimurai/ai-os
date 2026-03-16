@@ -1,7 +1,11 @@
 ---
 name: security_engineer
 description: Trigger this when adding auth, handling secrets, modifying CAPABILITIES.md, or performing a security review for Tier 3 tasks. Produces SECURITY.md + THREAT_MODEL.md and enforces capability boundaries.
-tools: [Read, Write, Edit, Glob, Grep, Bash]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
+context: fork
+agent: general-purpose
 ---
 
 ROLE: SECURITY_ENGINEER

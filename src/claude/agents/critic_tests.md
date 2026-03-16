@@ -1,7 +1,11 @@
 ---
 name: critic_tests
 description: Deterministic test coverage verifier. Checks that all modified src/ logic has corresponding test coverage. Appends [TESTS_PASS] or [TESTS_FAIL] to .ai/REVIEWS.md.
-tools: [Read, Grep, Glob, Bash]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Grep, Glob, Bash
+context: fork
+agent: general-purpose
 ---
 
 ROLE: CRITIC_TESTS

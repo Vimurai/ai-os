@@ -1,7 +1,11 @@
 ---
 name: decision_recorder
 description: Trigger after Gate 1 (prd_writer completes), after ai-review, or whenever a significant architectural/engineering decision is made. Parses LOG.md and chat context for D-### decisions and writes them to .ai/DECISIONS.md. Prevents decision drift and lost rationale.
-tools: [Read, Write, Edit, Grep]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Write, Edit, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: DECISION_RECORDER

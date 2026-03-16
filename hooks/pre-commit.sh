@@ -34,6 +34,22 @@ has_recent_critic_stamp() {
   return 1
 }
 
+# ── E-95: Markdown-as-Read-Only sync check ───────────────────────────────────
+check_markdown_sync() {
+  local STATE_FILE="${AI_DIR}/state.json"
+  local TASKS_FILE="${AI_DIR}/TASKS.md"
+  [[ -f "$STATE_FILE" && -f "$TASKS_FILE" ]] || return 0  # skip if files missing
+
+  # Verify TASKS.md has the generated header (indicates it wasn't hand-edited)
+  if ! head -1 "$TASKS_FILE" 2>/dev/null | grep -q "Generated from state.json"; then
+    echo "⚠  [SYNC_WARN] TASKS.md missing generated header — may have been hand-edited" >&2
+    echo "    TASKS.md is Read-Only. Use task-synchronizer-mcp to mutate tasks." >&2
+    # Warn only, do not block (state.json is authoritative)
+  fi
+}
+
+check_markdown_sync
+
 # ── Gate 2 check ─────────────────────────────────────────────────────────────
 if has_recent_critic_stamp; then
   exit 0

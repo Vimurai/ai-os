@@ -1,7 +1,11 @@
 ---
 name: vibe_sentinel
 description: Trigger this when a UI change is made, before any Tier 2/3 visual release, or when asked to audit UI quality. Runs automated visual audit using vibe-check-mcp and produces a VIBE_SENTINEL report. Escalates to chaos_monkey for Tier 3.
-tools: [Bash, Read, Glob, Grep]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Bash, Read, Glob, Grep
+context: fork
+agent: general-purpose
 ---
 
 ROLE: VIBE_SENTINEL (Claude — Automated Visual Audit)

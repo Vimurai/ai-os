@@ -1,7 +1,11 @@
 ---
 name: claude_tasks
 description: Trigger this after completing architecture, security, or devops work to record follow-up E-## tasks in TASKS.md. Updates only the Claude/Engineer section.
-tools: [Read, Edit]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Edit
+context: fork
+agent: general-purpose
 ---
 
 ROLE: TASK_WRITER

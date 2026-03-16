@@ -434,6 +434,13 @@ do_init() {
     echo "MCP servers: Node.js not found — run 'ai mcp-setup' after installing Node.js"
   fi
 
+  # E-93: Structured-First init — seed state.json from TASKS.md automatically
+  if [[ -f ".ai/TASKS.md" ]]; then
+    echo ""
+    echo "Seeding state.json from TASKS.md (Structured-First init)..."
+    do_migrate_state --force 2>/dev/null || echo "  ⚠  State migration incomplete — run: ai migrate-state --force"
+  fi
+
   echo ""
   echo "Initialized .ai/ + .github/ (safe — no overwrites) with AI-OS v${VERSION}"
   echo ""
@@ -613,7 +620,65 @@ HIGHRISK
 
 do_update() {
   local FORCE=0
-  for arg in "$@"; do [[ "$arg" == "--force" || "$arg" == "-f" ]] && FORCE=1; done
+  local VOTU=0
+  for arg in "$@"; do
+    [[ "$arg" == "--force" || "$arg" == "-f" ]] && FORCE=1
+    [[ "$arg" == "--votu" ]] && VOTU=1
+  done
+
+  # E-92: VOTU — Voice of the User: capture chat log and refine into UPDATE.md
+  if [[ "$VOTU" -eq 1 ]]; then
+    if [[ ! -d ".ai" ]]; then
+      echo "✗ No .ai/ directory found. Run: ai init"
+      exit 1
+    fi
+    echo "━━ [VOTU] VOICE OF THE USER INTAKE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "   Paste your chat log below. Press Ctrl-D when done."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    local CHAT_LOG
+    CHAT_LOG=$(cat)
+    if [[ -z "$CHAT_LOG" ]]; then
+      echo "✗ No input received. Aborting."
+      exit 1
+    fi
+    python3 - "$CHAT_LOG" <<'PY'
+import sys, re
+from datetime import datetime
+
+text = sys.argv[1]
+lines = text.split("\n")[-50:]
+relevant = "\n".join(lines)
+
+def extract(pattern):
+    return list(dict.fromkeys(
+        m.group(0).strip() for m in re.finditer(pattern, relevant, re.IGNORECASE)
+        if len(m.group(0).strip()) > 5
+    ))[:5]
+
+adds       = extract(r'\b(add|create|implement|build|scaffold|write)\b[^.\n]{5,80}')
+modifies   = extract(r'\b(update|modify|change|refactor|fix|improve)\b[^.\n]{5,80}')
+removes    = extract(r'\b(remove|delete|deprecate|drop)\b[^.\n]{5,80}')
+constraints= extract(r'\b(must|should|ensure|require|constraint|limit|only)\b[^.\n]{5,80}')
+
+t3 = re.search(r'\b(auth|secret|api.key|password|token|breaking|security|new.depend)\b', relevant, re.I)
+t1 = re.search(r'\b(css|typo|doc|readme|comment|format|whitespace)\b', relevant, re.I)
+tier = "3" if t3 else ("1" if t1 else "2")
+
+out = ["# UPDATE (Refined by --votu)", ""]
+if adds:       out += ["## Add",        *[f"- {s}" for s in adds],        ""]
+if modifies:   out += ["## Modify",     *[f"- {s}" for s in modifies],    ""]
+if removes:    out += ["## Remove",     *[f"- {s}" for s in removes],     ""]
+if constraints:out += ["## Constraints",*[f"- {s}" for s in constraints], ""]
+out += [f"## Risk Tier: {tier}", f"_Refined: {datetime.utcnow().isoformat()}_"]
+
+content = "\n".join(out)
+with open(".ai/UPDATE.md", "w") as f:
+    f.write(content)
+print(content)
+print("\n✓ Written to .ai/UPDATE.md")
+PY
+    return 0
+  fi
 
   if [[ ! -d ".ai" ]]; then
     echo "✗ No .ai/ directory found. Run: ai init"
@@ -1302,7 +1367,10 @@ do_sync() {
 }
 
 doctor() {
-  echo "AI-OS v${VERSION} — doctor"
+  local REPAIR=0
+  [[ "${1:-}" == "--repair" ]] && REPAIR=1
+
+  echo "AI-OS v${VERSION} — doctor${REPAIR:+ (--repair mode)}"
   echo ""
 
   echo "Install root:  ${AIOS}"
@@ -1604,6 +1672,44 @@ except Exception as e:
   else
     echo "  — skipped (not in a project dir or python3 missing)"
   fi
+
+  # E-94: --repair mode — fix detected issues automatically
+  if [[ "$REPAIR" -eq 1 ]]; then
+    echo ""
+    echo "Repair Mode — fixing detected issues..."
+    echo ""
+    local MCP_DIR="${AIOS}/mcp"
+    local REGISTRY="${AIOS}/config/registry.json"
+
+    # Re-run npm install for all registered MCP servers with missing/broken deps
+    if [[ -f "$REGISTRY" ]] && command -v node &>/dev/null && command -v python3 &>/dev/null; then
+      while IFS='|' read -r srv_name _; do
+        [[ -z "$srv_name" ]] && continue
+        local sdir="${MCP_DIR}/${srv_name}"
+        [[ ! -d "$sdir" ]] && continue
+        if [[ ! -d "${sdir}/node_modules" ]] || (cd "$sdir" && npm list --depth=0 2>&1 | grep -q "missing\|UNMET\|invalid"); then
+          echo "  → npm install: ${srv_name}..."
+          (cd "$sdir" && npm install --silent 2>&1) && echo "    ✓ done" || echo "    ✗ failed"
+        fi
+      done < <(python3 -c "
+import json
+with open('$REGISTRY') as f:
+    d = json.load(f)
+for name, info in d.get('mcp_servers', {}).items():
+    if 'path' in info:
+        print(name + '|' + info['path'])
+" 2>/dev/null || true)
+    fi
+
+    # Realign .mcp.json if present
+    if [[ -f ".mcp.json" ]]; then
+      echo "  → realigning .mcp.json..."
+      generate_mcp_json && echo "    ✓ .mcp.json realigned" || echo "    ✗ realign failed"
+    fi
+
+    echo ""
+    echo "Repair complete. Run: ai doctor to verify."
+  fi
 }
 
 do_mcp_setup() {
@@ -1687,7 +1793,7 @@ case "$cmd" in
   sync)          do_sync ;;
   migrate-state) do_migrate_state "${@:2}" ;;
   mcp-setup)     do_mcp_setup ;;
-  doctor)        doctor ;;
+  doctor)        doctor "${@:2}" ;;
   where)
     echo "AI-OS:     ${AIOS}"
     echo "bin:       ${AIOS}/bin"

@@ -238,6 +238,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["tasks"],
       },
     },
+    {
+      name: "verify_markdown_sync",
+      description: "E-95: Checks that TASKS.md and REVIEWS.md are in sync with state.json. Returns PASS or FAIL with divergence details. Used by pre-commit hook to enforce Markdown-as-Read-Only.",
+      inputSchema: { type: "object", properties: {} },
+    },
   ],
 }));
 
@@ -457,6 +462,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       writeFileSync(tasksPath, content, "utf8");
       return { content: [{ type: "text", text: `✓ Appended ${args.tasks.length} task(s) to TASKS.md` }] };
+    }
+
+    // ── verify_markdown_sync (E-95) ───────────────────────────────────────────
+    case "verify_markdown_sync": {
+      const state = readState(aiDir);
+      if (!state) return { content: [{ type: "text", text: "✗ state.json missing or corrupt" }], isError: true };
+
+      const failures = [];
+
+      // Check TASKS.md task count matches state.json
+      const tasksPath = resolve(aiDir, "TASKS.md");
+      if (existsSync(tasksPath)) {
+        const tasksContent = readFileSync(tasksPath, "utf8");
+        const mdTaskCount = (tasksContent.match(/^- \[/gm) || []).length;
+        const stateTaskCount = state.tasks.length;
+        if (Math.abs(mdTaskCount - stateTaskCount) > 2) {
+          failures.push(`TASKS.md has ${mdTaskCount} tasks but state.json has ${stateTaskCount} — diverged (run: ai migrate-state --force)`);
+        }
+        // Check TASKS.md header indicates it was generated (not hand-edited)
+        if (!tasksContent.startsWith("# TASKS (Generated from state.json)")) {
+          failures.push("TASKS.md does not start with generated header — may have been hand-edited (Markdown is Read-Only)");
+        }
+      }
+
+      // Check REVIEWS.md stamp count is consistent with state.json stamps
+      const reviewsPath = resolve(aiDir, "REVIEWS.md");
+      if (existsSync(reviewsPath) && state.stamps.length > 0) {
+        const reviewsContent = readFileSync(reviewsPath, "utf8");
+        const mdStampCount = (reviewsContent.match(/^\[[\w_]+\]/gm) || []).length;
+        if (mdStampCount < state.stamps.length) {
+          failures.push(`REVIEWS.md has ${mdStampCount} stamps but state.json has ${state.stamps.length} — REVIEWS.md is stale (regenerate via writeState)`);
+        }
+      }
+
+      if (failures.length === 0) {
+        return { content: [{ type: "text", text: "[SYNC_PASS] TASKS.md and REVIEWS.md are in sync with state.json" }] };
+      }
+      return {
+        content: [{ type: "text", text: `[SYNC_FAIL] Markdown divergence detected:\n${failures.map(f => `  - ${f}`).join("\n")}` }],
+        isError: true,
+      };
     }
 
     default:

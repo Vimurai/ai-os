@@ -1,7 +1,11 @@
 ---
 name: critic_security
 description: Deterministic security auditor. Scans git diff for OWASP Top 10 vulnerabilities, secrets leakage, and capability boundary violations against src/contracts/30_SECURITY.md. Appends [SEC_PASS] or [SEC_FAIL] to .ai/REVIEWS.md.
-tools: [Read, Grep, Glob, Bash]
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, Grep, Glob, Bash
+context: fork
+agent: general-purpose
 ---
 
 ROLE: CRITIC_SECURITY
