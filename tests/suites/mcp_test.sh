@@ -83,4 +83,15 @@ for name in $(echo "$registry_custom" | tr ',' ' '); do
   assert_contains ".mcp.json contains registry server: $name" "$name" "$mcp_keys"
 done
 
+# E-98: task-synchronizer-mcp must list verify_markdown_sync and archive_done_tasks
+tsync_tools=$(python3 -c "
+import json, sys
+reg = json.load(open(sys.argv[1]))
+tsync = reg.get('mcp_servers', {}).get('task-synchronizer-mcp', {})
+tools = tsync.get('allowed-tools', [])
+print(','.join(tools))
+" "$REGISTRY")
+assert_contains "E-98: registry lists verify_markdown_sync" "verify_markdown_sync" "$tsync_tools"
+assert_contains "E-98: registry lists archive_done_tasks" "archive_done_tasks" "$tsync_tools"
+
 assert_summary

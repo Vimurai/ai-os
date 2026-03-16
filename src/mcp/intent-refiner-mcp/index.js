@@ -135,5 +135,50 @@ function detectTier(text) {
   return "Tier 1 (Low Risk — Linter only)";
 }
 
+// ── E-97: --stdin CLI mode (bypasses MCP transport for `ai update --votu`) ──
+// Usage: node intent-refiner-mcp/index.js --stdin [--lines N]
+//   Reads chat log from stdin, writes refined intent to .ai/UPDATE.md, exits.
+if (process.argv.includes("--stdin")) {
+  const linesArg = process.argv.indexOf("--lines");
+  const maxLines = linesArg !== -1 ? parseInt(process.argv[linesArg + 1], 10) || 50 : 50;
+
+  let input = "";
+  process.stdin.setEncoding("utf8");
+  for await (const chunk of process.stdin) {
+    input += chunk;
+  }
+
+  if (!input.trim()) {
+    process.stderr.write("✗ No input received on stdin. Aborting.\n");
+    process.exit(1);
+  }
+
+  const rawLines = input.split("\n");
+  const relevant = rawLines.slice(-maxLines).join("\n");
+
+  const adds       = extractSignals(relevant, /\b(add|create|implement|build|scaffold|write)\b[^.\n]{5,80}/gi);
+  const modifies   = extractSignals(relevant, /\b(update|modify|change|refactor|fix|improve)\b[^.\n]{5,80}/gi);
+  const removes    = extractSignals(relevant, /\b(remove|delete|deprecate|drop)\b[^.\n]{5,80}/gi);
+  const constraints = extractSignals(relevant, /\b(must|should|ensure|require|constraint|limit|only)\b[^.\n]{5,80}/gi);
+  const tier = detectTier(relevant);
+
+  const lines = ["# UPDATE (Refined by intent-refiner-mcp)", ""];
+  if (adds.length)        lines.push("## Add",        ...adds.map(s => `- ${s}`),        "");
+  if (modifies.length)    lines.push("## Modify",     ...modifies.map(s => `- ${s}`),    "");
+  if (removes.length)     lines.push("## Remove",     ...removes.map(s => `- ${s}`),     "");
+  if (constraints.length) lines.push("## Constraints",...constraints.map(s => `- ${s}`), "");
+  lines.push(`## Risk Tier: ${tier}`, `_Refined: ${new Date().toISOString()}_`);
+  const content = lines.join("\n");
+
+  const updatePath = resolve(process.cwd(), ".ai/UPDATE.md");
+  if (!existsSync(resolve(process.cwd(), ".ai"))) {
+    process.stderr.write("✗ No .ai/ directory found. Run: ai init\n");
+    process.exit(1);
+  }
+  writeFileSync(updatePath, content, "utf8");
+  process.stdout.write(content + "\n\n✓ Written to .ai/UPDATE.md\n");
+  process.exit(0);
+}
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

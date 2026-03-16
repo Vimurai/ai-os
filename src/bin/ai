@@ -635,13 +635,19 @@ do_update() {
     echo "━━ [VOTU] VOICE OF THE USER INTAKE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "   Paste your chat log below. Press Ctrl-D when done."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    local CHAT_LOG
-    CHAT_LOG=$(cat)
-    if [[ -z "$CHAT_LOG" ]]; then
-      echo "✗ No input received. Aborting."
-      exit 1
-    fi
-    python3 - "$CHAT_LOG" <<'PY'
+    # E-97: Route through intent-refiner-mcp --stdin (single source of truth for intent parsing)
+    local MCP_REFINER="${AIOS}/mcp/intent-refiner-mcp/index.js"
+    if command -v node &>/dev/null && [[ -f "$MCP_REFINER" ]]; then
+      node "$MCP_REFINER" --stdin
+    else
+      # Fallback: python3 inline (if node or MCP server unavailable)
+      local CHAT_LOG
+      CHAT_LOG=$(cat)
+      if [[ -z "$CHAT_LOG" ]]; then
+        echo "✗ No input received. Aborting."
+        exit 1
+      fi
+      python3 - "$CHAT_LOG" <<'PY'
 import sys, re
 from datetime import datetime
 
@@ -677,6 +683,7 @@ with open(".ai/UPDATE.md", "w") as f:
 print(content)
 print("\n✓ Written to .ai/UPDATE.md")
 PY
+    fi
     return 0
   fi
 

@@ -34,17 +34,92 @@ has_recent_critic_stamp() {
   return 1
 }
 
-# ── E-95: Markdown-as-Read-Only sync check ───────────────────────────────────
+# ── E-96: Markdown-as-Read-Only sync check (BLOCKING) ────────────────────────
 check_markdown_sync() {
   local STATE_FILE="${AI_DIR}/state.json"
   local TASKS_FILE="${AI_DIR}/TASKS.md"
   [[ -f "$STATE_FILE" && -f "$TASKS_FILE" ]] || return 0  # skip if files missing
 
-  # Verify TASKS.md has the generated header (indicates it wasn't hand-edited)
+  # Check 1: Verify TASKS.md has the generated header (indicates it wasn't hand-edited)
   if ! head -1 "$TASKS_FILE" 2>/dev/null | grep -q "Generated from state.json"; then
-    echo "⚠  [SYNC_WARN] TASKS.md missing generated header — may have been hand-edited" >&2
-    echo "    TASKS.md is Read-Only. Use task-synchronizer-mcp to mutate tasks." >&2
-    # Warn only, do not block (state.json is authoritative)
+    cat >&2 <<'SYNC_BLOCK'
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: SYNC GATE — COMMIT BLOCKED                              ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  TASKS.md is missing the generated header.                              ║
+║  It may have been hand-edited, violating the Read-Only contract.        ║
+║                                                                          ║
+║  Fix: run `ai migrate-state --force` to regenerate TASKS.md from        ║
+║       state.json, then re-stage and commit.                              ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+SYNC_BLOCK
+    exit 1
+  fi
+
+  # Check 2: Compare task count in state.json vs TASKS.md checkbox lines
+  if command -v python3 &>/dev/null; then
+    local STATE_COUNT TASKS_COUNT STATE_STAMPS
+    STATE_COUNT=$(python3 -c "
+import json, sys
+try:
+    s = json.load(open('${STATE_FILE}'))
+    print(len(s.get('tasks', [])))
+except Exception as e:
+    print(0)
+" 2>/dev/null || echo 0)
+    STATE_STAMPS=$(python3 -c "
+import json, sys
+try:
+    s = json.load(open('${STATE_FILE}'))
+    print(len(s.get('stamps', [])))
+except Exception as e:
+    print(0)
+" 2>/dev/null || echo 0)
+    TASKS_COUNT=$(grep -c '^\- \[' "$TASKS_FILE" 2>/dev/null || echo 0)
+
+    local DRIFT=$(( STATE_COUNT - TASKS_COUNT ))
+    # Allow ±2 drift (in-flight regeneration window); block on larger divergence
+    if [[ $DRIFT -lt 0 ]]; then DRIFT=$(( -DRIFT )); fi
+    if [[ $DRIFT -gt 2 ]]; then
+      cat >&2 <<SYNC_BLOCK2
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: SYNC GATE — COMMIT BLOCKED                              ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  TASKS.md task count (${TASKS_COUNT}) diverges from state.json (${STATE_COUNT}).         ║
+║  Drift: ${DRIFT} tasks — exceeds allowed tolerance of ±2.                   ║
+║                                                                          ║
+║  Fix: run \`ai migrate-state --force\` to resync, then re-stage + commit. ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+SYNC_BLOCK2
+      exit 1
+    fi
+
+    # Check 3 (E-100): REVIEWS.md header check — only when state.json has stamps
+    if [[ "$STATE_STAMPS" -gt 0 ]]; then
+      local REVIEWS_FILE="${AI_DIR}/REVIEWS.md"
+      if [[ -f "$REVIEWS_FILE" ]]; then
+        if ! head -1 "$REVIEWS_FILE" 2>/dev/null | grep -q "Generated from state.json"; then
+          cat >&2 <<'REVIEWS_BLOCK'
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: SYNC GATE — COMMIT BLOCKED                              ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  REVIEWS.md is missing the generated header but state.json has stamps.  ║
+║  REVIEWS.md may have been hand-edited, violating the Read-Only contract.║
+║                                                                          ║
+║  Fix: regenerate REVIEWS.md via task-synchronizer-mcp::writeState, or   ║
+║       run `ai migrate-state --force` to resync, then re-stage + commit. ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+REVIEWS_BLOCK
+          exit 1
+        fi
+      fi
+    fi
   fi
 }
 

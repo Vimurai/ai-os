@@ -15,6 +15,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
+import { readStateStrict, writeState } from "../shared/state-writer.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readSafe(p) {
@@ -122,11 +123,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // Check for unread implementation deltas (P-42 §29)
+      // E-103: state.json summary — task counts + last 3 stamps (structured data preferred over MD view)
       const statePath = resolve(ai, "state.json");
       if (existsSync(statePath)) {
         try {
           const state = JSON.parse(readFileSync(statePath, "utf8"));
+
+          // Task count summary by status
+          const counts = { OPEN: 0, BLOCKED: 0, DONE: 0 };
+          for (const t of state.tasks || []) counts[t.status] = (counts[t.status] || 0) + 1;
+          const lastStamps = (state.stamps || []).slice(-3).map(s =>
+            `  [${s.type}] ${s.timestamp ? s.timestamp.split("T")[0] : "??"} | ${s.summary || s.agent || ""}`
+          );
+          const stateSummaryLines = [
+            `Tasks: ${counts.OPEN} OPEN | ${counts.BLOCKED} BLOCKED | ${counts.DONE} DONE (total: ${state.tasks.length})`,
+            lastStamps.length > 0 ? `Last stamps:\n${lastStamps.join("\n")}` : "Stamps: none",
+            state.project?.focus ? `Focus: ${state.project.focus}` : "",
+          ].filter(Boolean);
+          sections.push(`## state.json Summary\n${stateSummaryLines.join("\n")}`);
+
+          // Check for unread implementation deltas (P-42 §29)
           const unread = (state.deltas || []).filter(d => !d.read);
           if (unread.length > 0) {
             sections.push("## Unread Implementation Deltas");
@@ -165,29 +181,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
-      const tasksPath = resolve(ai, "TASKS.md");
       const logPath = resolve(ai, "LOG.md");
       const results = [];
 
-      // 1. Mark task DONE in TASKS.md
-      if (existsSync(tasksPath)) {
-        let content = readFileSync(tasksPath, "utf8");
-        const pattern = new RegExp(`^(- \\[ \\] ${taskId}\\b)`, "m");
-        if (pattern.test(content)) {
-          content = content.replace(pattern, `- [x] ${taskId}`);
-          // Append status line after the task line
-          const statusLine = `\n  Status: DONE ${today()} — ${summary}`;
-          content = content.replace(
-            new RegExp(`(- \\[x\\] ${taskId}[^\n]*)(\n(?!  )|\n$|$)`),
-            `$1${statusLine}$2`
-          );
-          writeFileSync(tasksPath, content);
-          results.push(`✓ ${taskId} marked DONE in TASKS.md`);
-        } else if (content.includes(`[x] ${taskId}`)) {
-          results.push(`⚠ ${taskId} already marked DONE`);
+      // 1. Mark task DONE in state.json → TASKS.md regenerated as view (E-99: D-001 compliance)
+      const state = readStateStrict(ai);
+      if (state) {
+        const task = (state.tasks || []).find(t => t.id === taskId);
+        if (task) {
+          if (task.status === "DONE") {
+            results.push(`⚠ ${taskId} already marked DONE`);
+          } else {
+            task.status = "DONE";
+            task.completed_at = new Date().toISOString();
+            task.summary = summary;
+            writeState(ai, state);  // writes state.json + regenerates TASKS.md + REVIEWS.md
+            results.push(`✓ ${taskId} marked DONE in state.json (TASKS.md regenerated)`);
+          }
         } else {
-          results.push(`⚠ ${taskId} not found in TASKS.md`);
+          results.push(`⚠ ${taskId} not found in state.json`);
         }
+      } else {
+        results.push(`⚠ state.json missing — run: ai migrate-state to enable task sync`);
       }
 
       // 2. Append LOG entry

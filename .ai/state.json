@@ -12,8 +12,8 @@
       "status": "DONE",
       "tier": null,
       "description": "Implement `ai-migrate-state` tool to programmatically seed state.json from current TASKS.md content.",
-      "created_at": "2026-03-16T14:25:37.513Z",
-      "completed_at": "2026-03-16T14:33:04.000Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "ai migrate-state --force seeded 121 tasks from TASKS.md into state.json"
     },
     {
@@ -22,8 +22,8 @@
       "status": "DONE",
       "tier": null,
       "description": "Hard-Mandate state.json as source-of-truth in all MCP servers, disabling legacy markdown parsing fallbacks.",
-      "created_at": "2026-03-16T14:25:37.513Z",
-      "completed_at": "2026-03-16T14:33:04.000Z",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
       "summary": "TIER3_NO_SECURITY_REVIEW gate now clears exclusively from stamps[]; LOG.md fallback demoted to advisory WARN"
     },
     {
@@ -32,7 +32,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Blueprint for `ai-exec` isolation (Git Worktrees) and `CAPABILITIES.md` schema",
-      "created_at": "2026-03-16T14:25:37.513Z",
+      "created_at": "2026-03-16T20:03:44.879Z",
       "completed_at": null,
       "summary": null
     },
@@ -42,7 +42,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Update `post-tool-log.sh` blueprint to include `[SECURITY]` tags for `EXECUTE` operations",
-      "created_at": "2026-03-16T14:25:37.513Z",
+      "created_at": "2026-03-16T20:03:44.879Z",
       "completed_at": null,
       "summary": null
     },
@@ -357,6 +357,106 @@
       "summary": "Blueprints expanded in architect.md §17.6-17.11."
     },
     {
+      "id": "P-36",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for CLAUDE.md Diet — reduce global + project CLAUDE.md from 488 lines to ~60 lines max.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §23. Unblocks E-66, E-67, E-68."
+    },
+    {
+      "id": "P-37",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Materialized Critic Agents — create real `critic_arch.md`, `critic_security.md`, `critic_tests.md` agent files.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §24. Unblocks E-69, E-70, E-71, E-72."
+    },
+    {
+      "id": "P-38",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for `orchestrator-mcp` — a deterministic workflow execution MCP server.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §25. Unblocks E-73, E-74, E-75, E-76, E-77."
+    },
+    {
+      "id": "P-39",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Structured State Layer — replace prose markdown state with machine-readable `state.json`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §26. Unblocks E-78, E-79, E-80, E-81."
+    },
+    {
+      "id": "P-40",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Atomic Stamp Writes — prevent parallel agent write races on REVIEWS.md.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §27. Option C + B selected. Unblocks E-82."
+    },
+    {
+      "id": "P-41",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Blueprint Schema Validation — enforce depth standards on Gemini's architect.md output.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §28. Unblocks E-83, E-84, E-85."
+    },
+    {
+      "id": "P-42",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Architect Feedback Loop — close the gap between blueprint intent and implementation reality.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §29. Unblocks E-86, E-87, E-88."
+    },
+    {
+      "id": "P-45",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint strict enforcement of \"Markdown as Read-Only\" (e.g., via pre-commit hooks that verify MD sync against JSON).",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Blueprinted strict enforcement of Markdown as Read-Only (§26.3) and created E-95."
+    },
+    {
+      "id": "P-46",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Blueprint specific E-## tasks for Section 19 (UACS Logic).",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Blueprinted UACS implementation tasks (E-92, E-93, E-94) in §19.1."
+    },
+    {
+      "id": "P-47",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Audit all existing agents/skills for compliance with §17.1.2 YAML frontmatter standards.",
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Completed bulk audit of 20+ agent files; created E-91 for frontmatter standardization."
+    },
+    {
       "id": "E-1",
       "owner": "Engineer (Claude)",
       "status": "DONE",
@@ -432,7 +532,7 @@
       "status": "DONE",
       "tier": null,
       "description": "Implement Gate 3 (Execution Gate) in `ai-exec` CLI",
-      "created_at": "2026-03-16T14:25:37.513Z",
+      "created_at": "2026-03-16T20:03:44.879Z",
       "completed_at": null,
       "summary": null
     },
@@ -632,7 +732,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/claude_tasks.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T14:25:37.513Z",
+      "created_at": "2026-03-16T20:03:44.879Z",
       "completed_at": null,
       "summary": null
     },
@@ -642,7 +742,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/devops_engineer.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T14:25:37.513Z",
+      "created_at": "2026-03-16T20:03:44.879Z",
       "completed_at": null,
       "summary": null
     },
@@ -652,7 +752,7 @@
       "status": "DONE",
       "tier": null,
       "description": "[TRACE]: `src/claude/agents/digest_updater.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
-      "created_at": "2026-03-16T14:25:37.513Z",
+      "created_at": "2026-03-16T20:03:44.879Z",
       "completed_at": null,
       "summary": null
     },
@@ -897,76 +997,6 @@
       "summary": "tests/suites/agent_logic_test.sh: 5 new cases (T-01.14.1–5) covering: no TASKS.md diff, Tier 1 closed, Tier 3 closed with no log evidence (VIOLATION), Tier 3 closed with [SEC_PASS] (pass), checkbox form with Tier 3 (VIOLATION). [TEST_PASSED] 124/124."
     },
     {
-      "id": "P-36",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for CLAUDE.md Diet — reduce global + project CLAUDE.md from 488 lines to ~60 lines max.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §23. Unblocks E-66, E-67, E-68."
-    },
-    {
-      "id": "P-37",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for Materialized Critic Agents — create real `critic_arch.md`, `critic_security.md`, `critic_tests.md` agent files.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §24. Unblocks E-69, E-70, E-71, E-72."
-    },
-    {
-      "id": "P-38",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for `orchestrator-mcp` — a deterministic workflow execution MCP server.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §25. Unblocks E-73, E-74, E-75, E-76, E-77."
-    },
-    {
-      "id": "P-39",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for Structured State Layer — replace prose markdown state with machine-readable `state.json`.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §26. Unblocks E-78, E-79, E-80, E-81."
-    },
-    {
-      "id": "P-40",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for Atomic Stamp Writes — prevent parallel agent write races on REVIEWS.md.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §27. Option C + B selected. Unblocks E-82."
-    },
-    {
-      "id": "P-41",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for Blueprint Schema Validation — enforce depth standards on Gemini's architect.md output.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §28. Unblocks E-83, E-84, E-85."
-    },
-    {
-      "id": "P-42",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": null,
-      "description": "Blueprint for Architect Feedback Loop — close the gap between blueprint intent and implementation reality.",
-      "created_at": "2026-03-15T00:00:00.000Z",
-      "completed_at": "2026-03-15T00:00:00.000Z",
-      "summary": "Blueprint added to architect.md §29. Unblocks E-86, E-87, E-88."
-    },
-    {
       "id": "E-66",
       "owner": "Engineer (Claude)",
       "status": "DONE",
@@ -1199,102 +1229,152 @@
     {
       "id": "E-89",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Replace execSync with spawnSync (whitelisted args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp. Satisfies §5 Execution Sandbox mandate.",
-      "created_at": "2026-03-16T14:45:30.599Z",
-      "completed_at": null,
-      "summary": null
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Replaced execSync with spawnSync (whitelisted array args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp."
     },
     {
       "id": "E-90",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Expand architect.md §17.1 Shared Skills Architecture with: directory structure, required YAML frontmatter fields, when to create shared vs agent-specific skills, install/sync pickup mechanism, and required Gemini .toml wrapper pattern.",
-      "created_at": "2026-03-16T14:45:34.278Z",
-      "completed_at": null,
-      "summary": null
-    },
-    {
-      "id": "P-45",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Blueprint strict enforcement of \"Markdown as Read-Only\" (e.g., via pre-commit hooks that verify MD sync against JSON).",
-      "created_at": "2026-03-16T16:35:56.405Z",
-      "completed_at": "2026-03-16T16:39:21.823Z",
-      "summary": "Blueprinted strict enforcement of Markdown as Read-Only (§26.3) and created E-95."
-    },
-    {
-      "id": "P-46",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Blueprint specific E-## tasks for Section 19 (UACS Logic).",
-      "created_at": "2026-03-16T16:35:58.099Z",
-      "completed_at": "2026-03-16T16:39:22.811Z",
-      "summary": "Blueprinted UACS implementation tasks (E-92, E-93, E-94) in §19.1."
-    },
-    {
-      "id": "P-47",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Audit all existing agents/skills for compliance with §17.1.2 YAML frontmatter standards.",
-      "created_at": "2026-03-16T16:35:58.878Z",
-      "completed_at": "2026-03-16T16:39:23.412Z",
-      "summary": "Completed bulk audit of 20+ agent files; created E-91 for frontmatter standardization."
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Expanded architect.md §17.1 with directory layout, YAML frontmatter fields, shared vs agent-specific decision table, install/sync pickup, and Gemini .toml wrapper pattern."
     },
     {
       "id": "E-91",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Bulk Update: Fix YAML frontmatter in all src/claude/agents/*.md and src/gemini/agents/*.md files to include mandatory §17.1.2 fields (disable-model-invocation, user-invocable, allowed-tools, context, agent). Use src/templates/SKILL.md as the reference schema.",
-      "created_at": "2026-03-16T16:38:41.935Z",
-      "completed_at": null,
-      "summary": null
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Bulk updated YAML frontmatter in all 19 agent files: renamed tools: → allowed-tools:, added disable-model-invocation, user-invocable, context, agent fields."
     },
     {
       "id": "E-92",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement `ai update --votu` (Voice of the User) in `src/bin/ai`. Capture terminal buffer or prompt for chat log, then pass to `intent-refiner-mcp::refine_intent` and write result to `UPDATE.md`.",
-      "created_at": "2026-03-16T16:38:47.396Z",
-      "completed_at": null,
-      "summary": null
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Implemented ai update --votu: reads chat log from stdin, extracts structured intent via python3, writes UPDATE.md with Add/Modify/Remove/Constraints sections."
     },
     {
       "id": "E-93",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Update `ai init` in `src/bin/ai` to be \"Structured-First\": automatically call `ai mcp-setup` and `ai migrate-state --force` after scaffolding.",
-      "created_at": "2026-03-16T16:38:48.101Z",
-      "completed_at": null,
-      "summary": null
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "ai init now auto-calls do_migrate_state --force after mcp-setup when .ai/TASKS.md exists. Structured-First onboarding fully automated."
     },
     {
       "id": "E-94",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Add `--repair` flag to `ai doctor`: trigger fresh `npm install` and `.mcp.json` realignment for registered servers that fail health checks (§20.1).",
-      "created_at": "2026-03-16T16:38:48.641Z",
-      "completed_at": null,
-      "summary": null
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Added --repair flag to ai doctor: triggers npm install for broken MCP servers and realigns .mcp.json. Dispatch updated to pass args through."
     },
     {
       "id": "E-95",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Enforce \"Markdown as Read-Only\": Implement `verify_markdown_sync()` in `task-synchronizer-mcp` and update `hooks/pre-commit.sh` to block commits if `TASKS.md` or `REVIEWS.md` diverge from `state.json`.",
-      "created_at": "2026-03-16T16:38:53.051Z",
-      "completed_at": null,
-      "summary": null
+      "created_at": "2026-03-16T00:00:00.000Z",
+      "completed_at": "2026-03-16T00:00:00.000Z",
+      "summary": "Added verify_markdown_sync tool to task-synchronizer-mcp; updated pre-commit hook with sync check warning gate for Markdown-as-Read-Only enforcement."
+    },
+    {
+      "id": "E-96",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Upgrade pre-commit.sh check_markdown_sync() from warn-only to BLOCK: verify generated header AND compare task count between state.json and TASKS.md; exit 1 on divergence",
+      "created_at": "2026-03-16T20:07:49.604Z",
+      "completed_at": "2026-03-16T20:10:00.045Z",
+      "summary": "Upgraded check_markdown_sync() in pre-commit.sh to BLOCK (exit 1) on missing generated header or task count drift >2 vs state.json. Both checks use python3 for JSON parsing."
+    },
+    {
+      "id": "E-97",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add --stdin CLI mode to intent-refiner-mcp so ai update --votu can call node intent-refiner-mcp/index.js --stdin instead of duplicating logic in Python; update src/bin/ai accordingly",
+      "created_at": "2026-03-16T20:07:53.747Z",
+      "completed_at": "2026-03-16T20:10:01.419Z",
+      "summary": "Added --stdin CLI mode to intent-refiner-mcp/index.js; updated ai update --votu in src/bin/ai to route through node intent-refiner-mcp/index.js --stdin with python3 fallback."
+    },
+    {
+      "id": "E-98",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Fix registry.json task-synchronizer-mcp allowed-tools to include verify_markdown_sync and archive_done_tasks; add test assertion in mcp_test.sh verifying all 9 tools are listed",
+      "created_at": "2026-03-16T20:17:32.312Z",
+      "completed_at": "2026-03-16T20:21:58.368Z",
+      "summary": "Added verify_markdown_sync and archive_done_tasks to task-synchronizer-mcp allowed-tools in registry.json; added 2 E-98 assertions to mcp_test.sh (19/19 pass)"
+    },
+    {
+      "id": "E-99",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor orchestrator-mcp run_handover to stop writing TASKS.md directly; extract shared writeState+regenerateMarkdown helper into src/mcp/shared/state-writer.js and import from both MCPs",
+      "created_at": "2026-03-16T20:17:33.872Z",
+      "completed_at": "2026-03-16T20:22:00.504Z",
+      "summary": "Created src/mcp/shared/state-writer.js with readStateStrict/writeState/regenerateMarkdown; orchestrator-mcp run_handover now imports and uses writeState instead of regex-writing TASKS.md directly"
+    },
+    {
+      "id": "E-100",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Extend pre-commit check_markdown_sync() to also block on REVIEWS.md divergence when state.stamps.length > 0 but REVIEWS.md lacks the generated header",
+      "created_at": "2026-03-16T20:17:35.532Z",
+      "completed_at": "2026-03-16T20:22:02.073Z",
+      "summary": "Extended check_markdown_sync() in pre-commit.sh with Check 3: blocks on REVIEWS.md missing generated header when state.stamps.length > 0"
+    },
+    {
+      "id": "E-101",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Audit src/claude/skills/ and src/shared/skills/ for §17.1.2 YAML frontmatter compliance; bulk-update ci_gate, dependency_gate, scope_safety, obs_baseline, copilot skill files with missing required fields",
+      "created_at": "2026-03-16T20:17:37.963Z",
+      "completed_at": "2026-03-16T20:22:04.792Z",
+      "summary": "Audited all 5 targeted skill files (ci_gate, dependency_gate, scope_safety, obs_baseline, copilot) — all already have full §17.1.2-compliant YAML frontmatter; no changes needed"
+    },
+    {
+      "id": "E-102",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add tests/suites/verify_sync_test.sh with ≥5 assertions covering verify_markdown_sync PASS/FAIL scenarios: header missing, count drift >2, stamp count mismatch, zero-stamps clean",
+      "created_at": "2026-03-16T20:17:39.989Z",
+      "completed_at": "2026-03-16T20:22:07.275Z",
+      "summary": "Created tests/suites/verify_sync_test.sh with 8 assertions covering PASS/FAIL for header-missing, count-drift >2, stamp-header-missing, zero-stamps clean scenarios — 8/8 pass"
+    },
+    {
+      "id": "E-103",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update orchestrator-mcp run_preflight to include state.json summary (task counts by status, last 3 stamps) as a 5th section alongside the 4 markdown file reads",
+      "created_at": "2026-03-16T20:17:41.330Z",
+      "completed_at": "2026-03-16T20:22:08.199Z",
+      "summary": "Added state.json summary section to run_preflight output: task counts by status, last 3 stamps, current focus — structured data preferred over TASKS.md markdown view"
     }
   ],
   "stamps": [],
@@ -1315,7 +1395,7 @@
         "src/bin/ai",
         "src/claude/CLAUDE.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-90",
@@ -1332,6 +1412,268 @@
         "hooks/post-tool-log.sh",
         "src/bin/ai",
         "src/claude/CLAUDE.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-89",
+      "timestamp": "2026-03-16T19:50:47.566Z",
+      "summary": "E-89: Replaced execSync with spawnSync (whitelisted array args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp. No execSync remains in src/mcp/**. | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-90",
+      "timestamp": "2026-03-16T19:50:49.285Z",
+      "summary": "E-90: Expanded architect.md §17.1 with directory layout (17.1.1), required YAML frontmatter fields (17.1.2), shared vs agent-specific decision table (17.1.3), install/sync pickup mechanism (17.1.4), and required Gemini .toml wrapper pattern (17.1.5). | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-91",
+      "timestamp": "2026-03-16T20:00:13.702Z",
+      "summary": "E-91: Bulk updated YAML frontmatter in all 19 agent files (13 Claude + 6 Gemini): renamed tools: → allowed-tools:, added disable-model-invocation, user-invocable, context, agent fields per §17.1.2. | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/claude/agents/chaos_monkey.md",
+        "src/claude/agents/claude_tasks.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-93",
+      "timestamp": "2026-03-16T20:00:17.933Z",
+      "summary": "E-93: Updated ai init (do_init) to auto-call do_migrate_state --force after mcp-setup when .ai/TASKS.md exists. Structured-First onboarding now fully automated. | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/claude/agents/chaos_monkey.md",
+        "src/claude/agents/claude_tasks.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-94",
+      "timestamp": "2026-03-16T20:00:25.392Z",
+      "summary": "E-94: Added --repair flag to ai doctor: triggers npm install for broken MCP servers and realigns .mcp.json. Dispatch updated to pass args through. | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/claude/agents/chaos_monkey.md",
+        "src/claude/agents/claude_tasks.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-92",
+      "timestamp": "2026-03-16T20:00:32.501Z",
+      "summary": "E-92: Implemented ai update --votu in do_update(): prompts for chat log via stdin, runs intent-refiner regex logic via python3, writes structured UPDATE.md with Add/Modify/Remove/Constraints sections and tier detection. | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/claude/agents/chaos_monkey.md",
+        "src/claude/agents/claude_tasks.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-95",
+      "timestamp": "2026-03-16T20:00:34.572Z",
+      "summary": "E-95: Added verify_markdown_sync tool to task-synchronizer-mcp (checks TASKS.md header + task count vs state.json). Updated pre-commit hook with check_markdown_sync() warning gate for Read-Only markdown enforcement. | Files: .ai/DIGEST.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/claude/agents/chaos_monkey.md",
+        "src/claude/agents/claude_tasks.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-96",
+      "timestamp": "2026-03-16T20:10:07.504Z",
+      "summary": "E-96: Upgraded pre-commit check_markdown_sync() to BLOCK on missing generated header or task count drift >2 vs state.json | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/intent-refiner-mcp/index.js"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-97",
+      "timestamp": "2026-03-16T20:10:08.077Z",
+      "summary": "E-97: Added --stdin CLI mode to intent-refiner-mcp; wired ai update --votu to call node MCP server directly instead of duplicating Python logic | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/mcp/intent-refiner-mcp/index.js"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-98",
+      "timestamp": "2026-03-16T20:22:44.935Z",
+      "summary": "E-98: Added verify_markdown_sync and archive_done_tasks to registry.json allowed-tools; 2 new assertions in mcp_test.sh (19/19 pass) | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/config/registry.json"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-99",
+      "timestamp": "2026-03-16T20:22:45.708Z",
+      "summary": "E-99: Created src/mcp/shared/state-writer.js; orchestrator-mcp run_handover now writes state.json via shared helper instead of regex-mutating TASKS.md directly | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/config/registry.json"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-100",
+      "timestamp": "2026-03-16T20:22:46.452Z",
+      "summary": "E-100: Extended pre-commit check_markdown_sync with Check 3: blocks on REVIEWS.md missing generated header when stamps exist in state.json | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/config/registry.json"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-101",
+      "timestamp": "2026-03-16T20:22:47.571Z",
+      "summary": "E-101: Audited ci_gate, dependency_gate, scope_safety, obs_baseline, copilot skills — all §17.1.2-compliant, no changes needed | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/config/registry.json"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-102",
+      "timestamp": "2026-03-16T20:22:48.395Z",
+      "summary": "E-102: Created tests/suites/verify_sync_test.sh with 8 assertions covering all verify_markdown_sync PASS/FAIL branches — 8/8 pass | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/config/registry.json"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-103",
+      "timestamp": "2026-03-16T20:22:48.873Z",
+      "summary": "E-103: Added state.json summary section to run_preflight: task counts by status, last 3 stamps, focus field | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "hooks/pre-commit.sh",
+        "src/bin/ai",
+        "src/config/registry.json"
       ],
       "read": false
     }

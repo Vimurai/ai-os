@@ -40,7 +40,7 @@
       "path": "src/mcp/task-synchronizer-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "sync_tasks", "append_tasks"],
+      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "sync_tasks", "append_tasks", "verify_markdown_sync", "archive_done_tasks"],
       "disable-model-invocation": false,
       "_note": "Exclusive State Mutator (P-39): manages .ai/state.json, regenerates TASKS.md and REVIEWS.md as views",
       "_mandate": "v3.1 (P-44): state.json is the exclusive write target. TASKS.md and REVIEWS.md are generated views only. Write tools reject calls when state.json is absent — run: ai migrate-state to seed it."

@@ -242,16 +242,32 @@
 - [x] E-88: Update `ai-preflight` to extract and display unread deltas from `state.json`.
   Status: DONE 2026-03-15 — ai-preflight SKILL.md step 5 + run_preflight reads/marks deltas. Architect sees divergences on next session.
 - [x] E-89: Replace execSync with spawnSync (whitelisted args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp. Satisfies §5 Execution Sandbox mandate. | Tier: 2
-  Status: DONE 2026-03-16 — Replaced execSync with spawnSync (whitelisted array args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp. No execSync remains in src/mcp/**.
+  Status: DONE 2026-03-16 — Replaced execSync with spawnSync (whitelisted array args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp.
 - [x] E-90: Expand architect.md §17.1 Shared Skills Architecture with: directory structure, required YAML frontmatter fields, when to create shared vs agent-specific skills, install/sync pickup mechanism, and required Gemini .toml wrapper pattern. | Tier: 1
-  Status: DONE 2026-03-16 — Expanded architect.md §17.1 with directory layout (17.1.1), required YAML frontmatter fields (17.1.2), shared vs agent-specific decision table (17.1.3), install/sync pickup mechanism (17.1.4), and required Gemini .toml wrapper pattern (17.1.5).
+  Status: DONE 2026-03-16 — Expanded architect.md §17.1 with directory layout, YAML frontmatter fields, shared vs agent-specific decision table, install/sync pickup, and Gemini .toml wrapper pattern.
 - [x] E-91: Bulk Update: Fix YAML frontmatter in all src/claude/agents/*.md and src/gemini/agents/*.md files to include mandatory §17.1.2 fields (disable-model-invocation, user-invocable, allowed-tools, context, agent). Use src/templates/SKILL.md as the reference schema. | Tier: 1
-  Status: DONE 2026-03-16 — Bulk updated YAML frontmatter in all 19 agent files (13 Claude + 6 Gemini): renamed tools: → allowed-tools:, added disable-model-invocation, user-invocable, context, agent fields per §17.1.2.
+  Status: DONE 2026-03-16 — Bulk updated YAML frontmatter in all 19 agent files: renamed tools: → allowed-tools:, added disable-model-invocation, user-invocable, context, agent fields.
 - [x] E-92: Implement `ai update --votu` (Voice of the User) in `src/bin/ai`. Capture terminal buffer or prompt for chat log, then pass to `intent-refiner-mcp::refine_intent` and write result to `UPDATE.md`. | Tier: 2
-  Status: DONE 2026-03-16 — Implemented ai update --votu in do_update(): prompts for chat log via stdin, runs intent-refiner regex logic via python3, writes structured UPDATE.md with Add/Modify/Remove/Constraints sections and tier detection.
+  Status: DONE 2026-03-16 — Implemented ai update --votu: reads chat log from stdin, extracts structured intent via python3, writes UPDATE.md with Add/Modify/Remove/Constraints sections.
 - [x] E-93: Update `ai init` in `src/bin/ai` to be "Structured-First": automatically call `ai mcp-setup` and `ai migrate-state --force` after scaffolding. | Tier: 1
-  Status: DONE 2026-03-16 — Updated ai init (do_init) to auto-call do_migrate_state --force after mcp-setup when .ai/TASKS.md exists. Structured-First onboarding now fully automated.
+  Status: DONE 2026-03-16 — ai init now auto-calls do_migrate_state --force after mcp-setup when .ai/TASKS.md exists. Structured-First onboarding fully automated.
 - [x] E-94: Add `--repair` flag to `ai doctor`: trigger fresh `npm install` and `.mcp.json` realignment for registered servers that fail health checks (§20.1). | Tier: 1
   Status: DONE 2026-03-16 — Added --repair flag to ai doctor: triggers npm install for broken MCP servers and realigns .mcp.json. Dispatch updated to pass args through.
 - [x] E-95: Enforce "Markdown as Read-Only": Implement `verify_markdown_sync()` in `task-synchronizer-mcp` and update `hooks/pre-commit.sh` to block commits if `TASKS.md` or `REVIEWS.md` diverge from `state.json`. | Tier: 2
-  Status: DONE 2026-03-16 — Added verify_markdown_sync tool to task-synchronizer-mcp (checks TASKS.md header + task count vs state.json). Updated pre-commit hook with check_markdown_sync() warning gate for Read-Only markdown enforcement.
+  Status: DONE 2026-03-16 — Added verify_markdown_sync tool to task-synchronizer-mcp; updated pre-commit hook with sync check warning gate for Markdown-as-Read-Only enforcement.
+- [x] E-96: Upgrade pre-commit.sh check_markdown_sync() from warn-only to BLOCK: verify generated header AND compare task count between state.json and TASKS.md; exit 1 on divergence | Tier: 2
+  Status: DONE 2026-03-16 — Upgraded check_markdown_sync() in pre-commit.sh to BLOCK (exit 1) on missing generated header or task count drift >2 vs state.json. Both checks use python3 for JSON parsing.
+- [x] E-97: Add --stdin CLI mode to intent-refiner-mcp so ai update --votu can call node intent-refiner-mcp/index.js --stdin instead of duplicating logic in Python; update src/bin/ai accordingly | Tier: 2
+  Status: DONE 2026-03-16 — Added --stdin CLI mode to intent-refiner-mcp/index.js; updated ai update --votu in src/bin/ai to route through node intent-refiner-mcp/index.js --stdin with python3 fallback.
+- [x] E-98: Fix registry.json task-synchronizer-mcp allowed-tools to include verify_markdown_sync and archive_done_tasks; add test assertion in mcp_test.sh verifying all 9 tools are listed | Tier: 2
+  Status: DONE 2026-03-16 — Added verify_markdown_sync and archive_done_tasks to task-synchronizer-mcp allowed-tools in registry.json; added 2 E-98 assertions to mcp_test.sh (19/19 pass)
+- [x] E-99: Refactor orchestrator-mcp run_handover to stop writing TASKS.md directly; extract shared writeState+regenerateMarkdown helper into src/mcp/shared/state-writer.js and import from both MCPs | Tier: 2
+  Status: DONE 2026-03-16 — Created src/mcp/shared/state-writer.js with readStateStrict/writeState/regenerateMarkdown; orchestrator-mcp run_handover now imports and uses writeState instead of regex-writing TASKS.md directly
+- [x] E-100: Extend pre-commit check_markdown_sync() to also block on REVIEWS.md divergence when state.stamps.length > 0 but REVIEWS.md lacks the generated header | Tier: 2
+  Status: DONE 2026-03-16 — Extended check_markdown_sync() in pre-commit.sh with Check 3: blocks on REVIEWS.md missing generated header when state.stamps.length > 0
+- [x] E-101: Audit src/claude/skills/ and src/shared/skills/ for §17.1.2 YAML frontmatter compliance; bulk-update ci_gate, dependency_gate, scope_safety, obs_baseline, copilot skill files with missing required fields | Tier: 1
+  Status: DONE 2026-03-16 — Audited all 5 targeted skill files (ci_gate, dependency_gate, scope_safety, obs_baseline, copilot) — all already have full §17.1.2-compliant YAML frontmatter; no changes needed
+- [x] E-102: Add tests/suites/verify_sync_test.sh with ≥5 assertions covering verify_markdown_sync PASS/FAIL scenarios: header missing, count drift >2, stamp count mismatch, zero-stamps clean | Tier: 2
+  Status: DONE 2026-03-16 — Created tests/suites/verify_sync_test.sh with 8 assertions covering PASS/FAIL for header-missing, count-drift >2, stamp-header-missing, zero-stamps clean scenarios — 8/8 pass
+- [x] E-103: Update orchestrator-mcp run_preflight to include state.json summary (task counts by status, last 3 stamps) as a 5th section alongside the 4 markdown file reads | Tier: 1
+  Status: DONE 2026-03-16 — Added state.json summary section to run_preflight output: task counts by status, last 3 stamps, current focus — structured data preferred over TASKS.md markdown view
