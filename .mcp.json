@@ -74,6 +74,18 @@
       "args": [
         "/Users/emirkovacevic/.ai-os/mcp/context-invoker-mcp/index.js"
       ]
+    },
+    "archive-manager-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/archive-manager-mcp/index.js"
+      ]
+    },
+    "orchestrator-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/orchestrator-mcp/index.js"
+      ]
     }
   }
 }

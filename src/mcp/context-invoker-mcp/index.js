@@ -14,7 +14,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, existsSync, readdirSync } from "fs";
-import { resolve, join } from "path";
+import { resolve, join, sep } from "path";
 import { homedir } from "os";
 
 const HOME = homedir();
@@ -59,13 +59,19 @@ function validateName(name) {
   return null;
 }
 
+function withinRoot(root, filePath) {
+  return resolve(filePath).startsWith(resolve(root) + sep);
+}
+
 function findSkill(name) {
   for (const root of SKILL_ROOTS) {
     // Skills 2.0: <root>/<name>/SKILL.md
     const modular = join(root, name, "SKILL.md");
+    if (!withinRoot(root, modular)) continue;
     if (existsSync(modular)) return { path: modular, content: readFileSync(modular, "utf8") };
     // Flat legacy: <root>/<name>.md
     const flat = join(root, `${name}.md`);
+    if (!withinRoot(root, flat)) continue;
     if (existsSync(flat)) return { path: flat, content: readFileSync(flat, "utf8") };
   }
   return null;
@@ -76,28 +82,56 @@ function findAgent(name) {
   const base = name.replace(/\.md$/, "");
   for (const root of AGENT_ROOTS) {
     const p = join(root, `${base}.md`);
+    if (!withinRoot(root, p)) continue;
     if (existsSync(p)) return { path: p, content: readFileSync(p, "utf8") };
   }
   return null;
 }
 
+function parseFrontmatter(content) {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const fm = {};
+  for (const line of match[1].split("\n")) {
+    const colon = line.indexOf(":");
+    if (colon === -1) continue;
+    const key = line.slice(0, colon).trim();
+    const val = line.slice(colon + 1).trim();
+    fm[key] = val;
+  }
+  return fm;
+}
+
 function listAvailable(roots, ext) {
-  const found = new Set();
+  const found = new Map(); // name → description
   for (const root of roots) {
     if (!existsSync(root)) continue;
     try {
       for (const entry of readdirSync(root, { withFileTypes: true })) {
+        let name, filePath;
         if (entry.isDirectory()) {
-          // Skills 2.0 folder
           const skill = join(root, entry.name, "SKILL.md");
-          if (existsSync(skill)) found.add(entry.name);
+          if (!existsSync(skill)) continue;
+          name = entry.name;
+          filePath = skill;
         } else if (entry.name.endsWith(ext)) {
-          found.add(entry.name.replace(ext, ""));
+          name = entry.name.replace(ext, "");
+          filePath = join(root, entry.name);
+        } else {
+          continue;
+        }
+        if (found.has(name)) continue; // first-found wins (priority order)
+        try {
+          const content = readFileSync(filePath, "utf8");
+          const fm = parseFrontmatter(content);
+          found.set(name, fm.description || "");
+        } catch {
+          found.set(name, "");
         }
       }
     } catch (_) { /* skip unreadable dirs */ }
   }
-  return [...found].sort();
+  return [...found.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 const server = new Server(
@@ -161,8 +195,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "activate_skill": {
       if (args.list_skills) {
         const skills = listAvailable(SKILL_ROOTS, ".md");
+        const lines = skills.map(([name, desc]) => desc ? `  - ${name}: ${desc}` : `  - ${name}`);
         return {
-          content: [{ type: "text", text: `Available skills:\n${skills.map(s => `  - ${s}`).join("\n")}` }],
+          content: [{ type: "text", text: `Available skills:\n${lines.join("\n")}` }],
         };
       }
       const skillErr = validateName(args.skill_name);
@@ -172,10 +207,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = findSkill(args.skill_name);
       if (!result) {
         const skills = listAvailable(SKILL_ROOTS, ".md");
+        const lines = skills.map(([name, desc]) => desc ? `  - ${name}: ${desc}` : `  - ${name}`);
         return {
           content: [{
             type: "text",
-            text: `✗ Skill '${args.skill_name}' not found.\n\nAvailable skills:\n${skills.map(s => `  - ${s}`).join("\n")}`,
+            text: `✗ Skill '${args.skill_name}' not found.\n\nAvailable skills:\n${lines.join("\n")}`,
           }],
           isError: true,
         };
@@ -191,8 +227,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "activate_agent": {
       if (args.list_agents) {
         const agents = listAvailable(AGENT_ROOTS, ".md");
+        const lines = agents.map(([name, desc]) => desc ? `  - ${name}: ${desc}` : `  - ${name}`);
         return {
-          content: [{ type: "text", text: `Available agents:\n${agents.map(a => `  - ${a}`).join("\n")}` }],
+          content: [{ type: "text", text: `Available agents:\n${lines.join("\n")}` }],
         };
       }
       const agentErr = validateName(args.agent_name);
@@ -202,10 +239,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = findAgent(args.agent_name);
       if (!result) {
         const agents = listAvailable(AGENT_ROOTS, ".md");
+        const lines = agents.map(([name, desc]) => desc ? `  - ${name}: ${desc}` : `  - ${name}`);
         return {
           content: [{
             type: "text",
-            text: `✗ Agent '${args.agent_name}' not found.\n\nAvailable agents:\n${agents.map(a => `  - ${a}`).join("\n")}`,
+            text: `✗ Agent '${args.agent_name}' not found.\n\nAvailable agents:\n${lines.join("\n")}`,
           }],
           isError: true,
         };

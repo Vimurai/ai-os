@@ -1,0 +1,1339 @@
+{
+  "version": "1.0",
+  "project": {
+    "current_tier": null,
+    "release_verdict": null,
+    "focus": null
+  },
+  "tasks": [
+    {
+      "id": "P-43",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai-migrate-state` tool to programmatically seed state.json from current TASKS.md content.",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": "2026-03-16T14:33:04.000Z",
+      "summary": "ai migrate-state --force seeded 121 tasks from TASKS.md into state.json"
+    },
+    {
+      "id": "P-44",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Hard-Mandate state.json as source-of-truth in all MCP servers, disabling legacy markdown parsing fallbacks.",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": "2026-03-16T14:33:04.000Z",
+      "summary": "TIER3_NO_SECURITY_REVIEW gate now clears exclusively from stamps[]; LOG.md fallback demoted to advisory WARN"
+    },
+    {
+      "id": "P-1",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for `ai-exec` isolation (Git Worktrees) and `CAPABILITIES.md` schema",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-2",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `post-tool-log.sh` blueprint to include `[SECURITY]` tags for `EXECUTE` operations",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-6",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for \"Vision & Memory\" Skillsets (`ux_reviewer.md`, `knowledge_architect.md`)",
+      "created_at": "2026-03-10T00:00:00.000Z",
+      "completed_at": "2026-03-10T00:00:00.000Z",
+      "summary": "Section 17.2, 17.3 in architect.md"
+    },
+    {
+      "id": "P-7",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Skills 2.0 Modular Migration",
+      "created_at": "2026-03-10T00:00:00.000Z",
+      "completed_at": "2026-03-10T00:00:00.000Z",
+      "summary": "Section 16 in architect.md"
+    },
+    {
+      "id": "P-8",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for `prd_writer` and `chaos_monkey` agents",
+      "created_at": "2026-03-10T00:00:00.000Z",
+      "completed_at": "2026-03-10T00:00:00.000Z",
+      "summary": "Section 17.1, 17.4 in architect.md"
+    },
+    {
+      "id": "P-9",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for AI-OS Slash Command Integration (Skills 2.0)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 11.1 in architect.md"
+    },
+    {
+      "id": "P-10",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Gemini CLI Custom Commands (.toml) Configuration",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 11.2 in architect.md"
+    },
+    {
+      "id": "P-11",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Shared Skills Architecture",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 16.1 in architect.md"
+    },
+    {
+      "id": "P-12",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Contextual Auto-Calling and Agent Configurations",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 17.5 in architect.md"
+    },
+    {
+      "id": "P-13",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for MCP Automation & Lifecycle (mcp-setup + init/install integration)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 19 in architect.md"
+    },
+    {
+      "id": "P-14",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Sovereign Planning & Execution Protocol (Mandate .ai/ over CLI-native temp files)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 20 in architect.md"
+    },
+    {
+      "id": "P-15",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for E-40 Minimal Bash Test Harness",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Section 22 in architect.md"
+    },
+    {
+      "id": "P-16",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `context-invoker-mcp` server to give Claude dynamic access to skills and agents. Create the MCP server with `activate_skill` and `activate_agent` tools, register it in `src/config/registry.json`, update `src/claude/CLAUDE.md` with invocation instructions and directory listings, and test via `ai mcp-setup` and `ai install`.",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "E-42"
+    },
+    {
+      "id": "P-17",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `Repo-Oracle` skill for Gemini (historical awareness).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "E-43"
+    },
+    {
+      "id": "P-18",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `Vibe-Sentinel` agent for Claude (automated visual audit).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "E-43"
+    },
+    {
+      "id": "P-19",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `Token-Miser` shared skill (cost/context optimization).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "E-43"
+    },
+    {
+      "id": "P-20",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `Identity-Guardian` agent for Claude (PII and secrets specialist).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "E-43"
+    },
+    {
+      "id": "P-21",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `Architectural-Aligner` skill for Gemini (blueprint vs code consistency).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "E-43"
+    },
+    {
+      "id": "E-41",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Verify all new agents and skills are synced and invocable (run `ai install` and test activation).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "install-ai-os.sh synced; ai mcp-setup 8/8; [TEST_PASSED] 22/22"
+    },
+    {
+      "id": "P-22",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Upgrade Gemini Architect standards (Anti-Laziness & Questioning mandate) in src/gemini/GEMINI.md",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "Added Senior Architect Standards section."
+    },
+    {
+      "id": "P-23",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Refine `prd_writer` (src/gemini/agents/prd_writer.md) with rigorous intent classification and mandatory questioning.",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "Updated Vague classification and added mandatory clarification prompts."
+    },
+    {
+      "id": "P-24",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Expand `architect.md.template` with Backend/Data/API/Error-handling sections.",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "Added Sections 5 & 6 to the template."
+    },
+    {
+      "id": "P-25",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Sync active `.ai/architect.md` roles with new Gemini mandate.",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "Updated Agent Roles in Section 2."
+    },
+    {
+      "id": "P-26",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Integrate `ai-seo` third-party skill for AI Search Optimization.",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §16.2."
+    },
+    {
+      "id": "P-27",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Auto-Pilot Archive & Context Automation.",
+      "created_at": "2026-03-13T00:00:00.000Z",
+      "completed_at": "2026-03-13T00:00:00.000Z",
+      "summary": "architect.md §23 detailed logic."
+    },
+    {
+      "id": "P-28",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for VOTU (Voice of the User) Intake Protocol (bypass manual UPDATE.md).",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Refactored src/bin/ai intent_gate."
+    },
+    {
+      "id": "P-29",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Formalize mandates for all Ghost Agents in `architect.md` §17.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Added §§17.6-17.11 to architect.md."
+    },
+    {
+      "id": "P-30",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Agent logic validation (T-01 suite).",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Created tests/suites/agent_logic_test.sh."
+    },
+    {
+      "id": "P-31",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Consolidate `ai-review` and `review_synthesizer` into a unified Triad Audit protocol.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §4."
+    },
+    {
+      "id": "P-32",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Formalize Stamp Governance protocol to fix missing [CRITIC_STAMP] issue.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §17."
+    },
+    {
+      "id": "P-33",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Cross-Agent State Synchronization (The `ai-sync-state` Protocol).",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §20."
+    },
+    {
+      "id": "P-34",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Claude Mid-Execution Trigger Enforcement.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Checkpoint Protocol (§21) added to architect.md and CLAUDE.md."
+    },
+    {
+      "id": "P-35",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Expand architectural blueprints for agents §17.6–17.11 (Decision Recorder, DevOps, Identity Guardian, Review Synthesizer, Task Validator, Vibe Sentinel) to include senior-level instruction depth.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprints expanded in architect.md §17.6-17.11."
+    },
+    {
+      "id": "E-1",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai-exec` CLI (Bash) based on P-01 blueprint",
+      "created_at": "2026-03-07T00:00:00.000Z",
+      "completed_at": "2026-03-07T00:00:00.000Z",
+      "summary": "src/bin/ai-exec (worktree isolation, Gate 3, [SECURITY] logging)"
+    },
+    {
+      "id": "E-2",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `post-tool-log.sh` logic based on P-02 blueprint",
+      "created_at": "2026-03-07T00:00:00.000Z",
+      "completed_at": "2026-03-07T00:00:00.000Z",
+      "summary": "hooks/post-tool-log.sh ([SECURITY] tags for EXECUTE tools)"
+    },
+    {
+      "id": "E-3",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Create `src/templates/CAPABILITIES.md` template based on P-01 schema",
+      "created_at": "2026-03-07T00:00:00.000Z",
+      "completed_at": "2026-03-07T00:00:00.000Z",
+      "summary": "src/templates/CAPABILITIES.md (READ/WRITE/EXECUTE/network schema)"
+    },
+    {
+      "id": "E-4",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai archive` CLI command based on blueprint",
+      "created_at": "2026-03-07T00:00:00.000Z",
+      "completed_at": "2026-03-07T00:00:00.000Z",
+      "summary": "src/bin/ai (do_archive: moves to .ai/archive/YYYY-MM/ with timestamp)"
+    },
+    {
+      "id": "E-5",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai review` CLI command based on blueprint",
+      "created_at": "2026-03-07T00:00:00.000Z",
+      "completed_at": "2026-03-07T00:00:00.000Z",
+      "summary": "src/bin/ai (do_review claude|gemini: parallel critic + arch audit prompts)"
+    },
+    {
+      "id": "E-12",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Gate 1 (Intent Gate) in `ai update` logic",
+      "created_at": "2026-03-10T00:00:00.000Z",
+      "completed_at": "2026-03-10T00:00:00.000Z",
+      "summary": "src/bin/ai (intent_gate(): hash change detection, vagueness hard-block <8 words/no verb, Tier 3 soft-block, --force bypass, .ai/.update.hash)"
+    },
+    {
+      "id": "E-13",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Gate 2 (Quality Gate) in Git `pre-commit` hook",
+      "created_at": "2026-03-10T00:00:00.000Z",
+      "completed_at": "2026-03-10T00:00:00.000Z",
+      "summary": "hooks/pre-commit.sh ([CRITIC_STAMP] check, ≤7 days, blocks commit + prints ai review claude prompt); do_init installs to .git/hooks/pre-commit (chains existing hooks); doctor checks gate install status"
+    },
+    {
+      "id": "E-14",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Gate 3 (Execution Gate) in `ai-exec` CLI",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-15",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai test --vibe` (Chaos & UX Stress) logic",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "src/bin/ai (do_vibe_test: Phase 1 ux_reviewer prompt + Playwright check, Phase 2 chaos_monkey prompt; required stamps listed)"
+    },
+    {
+      "id": "E-16",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `vibe-check-mcp` (Node.js + Playwright) for autonomous auditing",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "src/mcp/vibe-check-mcp/ (run_vibe_audit: CLS+contrast+focus; run_chaos_test: rapid-click+form+nav; get_performance_metrics: CDP LCP/CLS/TTFB)"
+    },
+    {
+      "id": "E-17",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Universal Autonomous Command Suite (UACS) MCP suite",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "src/mcp/ (5 servers: intent-refiner, task-synchronizer, safe-exec, blueprint-aligner, context-guardian); .mcp.json updated; registry.json v2.0; ai mcp-setup command"
+    },
+    {
+      "id": "E-21",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Token-Saving Risk Tiers (TSRT) logic in `ai update` and `ai review`",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "risk-analyzer-mcp (classify_risk + get_tier_actions, multi-signal: content keywords + file patterns + diff); detect_tier() bash helper; ai update emits [TIER_1/2/3] session prompts; ai review claude auto-detects tier (Tier1: skip, Tier2: blueprint_aligner only, Tier3: full Triad + [UACS_VERIFIED]); --tier override flag"
+    },
+    {
+      "id": "E-22",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Migrate existing Claude skills to Skills 2.0 modular structure (src/claude/skills/)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "5 skills migrated to skill-name/SKILL.md with YAML frontmatter; flat files removed; install/sync updated with sync_skills_20()"
+    },
+    {
+      "id": "E-23",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Migrate existing Gemini skills to Skills 2.0 modular structure (src/gemini/skills/)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "2 skills migrated to skill-name/SKILL.md with YAML frontmatter; flat files removed"
+    },
+    {
+      "id": "E-24",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `prd_writer` agent (src/gemini/agents/prd_writer.md)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Intent classification (Vague/Tier1/2/3), P-## task generation, BRIEF.md conditional update"
+    },
+    {
+      "id": "E-25",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ux_reviewer` agent (src/gemini/agents/ux_reviewer.md)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Playwright visual audit, Lighthouse scores, Rapid-Click stress, [VIBE_REPORT] output"
+    },
+    {
+      "id": "E-26",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `knowledge_architect` agent (src/gemini/agents/knowledge_architect.md)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Cross-project .ai/ discovery, pattern extraction, relevance scoring, SEED.md Knowledge Transfer"
+    },
+    {
+      "id": "E-27",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `chaos_monkey` agent (src/claude/agents/chaos_monkey.md)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "Invalid input injection, network latency sim, rapid-click, concurrent sessions, [CHAOS_CLEARED/BLOCKED] gate"
+    },
+    {
+      "id": "E-28",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Slash Commands for `ai` operations (`update`, `test`, `review`, `archive`, `digest`, `preflight`) as Skills 2.0 modules under `src/claude/skills/` and `src/gemini/skills/` based on P-09 blueprint.",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "6 Claude skills (ai-update, ai-test, ai-review, ai-archive[disable-model-invocation:true], ai-digest[context:fork], ai-preflight) + 2 Gemini skills (ai-update, ai-review); all with YAML frontmatter + dynamic context injection; P-09 inferred from §11+§16"
+    },
+    {
+      "id": "E-29",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Gemini CLI Custom Commands (.toml) and update install/sync scripts based on P-10 blueprint",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "src/gemini/commands/ (8 .toml files: ai-update, ai-review, ai-archive, ai-digest, ai-preflight, ai-test, seo_content_checklist, ux_template); install_global + do_sync copy to ~/.gemini/commands/; install-ai-os.sh syncs src/gemini/"
+    },
+    {
+      "id": "E-30",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Refactor skill folders into src/shared/skills/ and update sync/install logic in src/bin/ai based on P-11 blueprint",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "src/shared/skills/ (ai-archive, ai-digest, ai-preflight, ai-test); removed from src/claude/skills/; install_global + do_sync sync shared/ to both ~/.claude/skills/ and ~/.gemini/skills/ before agent-specific; install-ai-os.sh syncs src/shared/"
+    },
+    {
+      "id": "E-31",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update agent/skill frontmatter with `tools` arrays and trigger-based descriptions for Contextual Auto-Calling based on P-12 blueprint",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "5 Claude agents updated with tools arrays + imperative trigger descriptions; 4 gemini/skills + 4 shared/skills updated with \"Use activate_skill with this name when...\" trigger conditions"
+    },
+    {
+      "id": "E-32",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `do_mcp_setup` in `src/bin/ai` (Dependency install + dynamic .mcp.json generation) based on P-13 blueprint.",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "generate_mcp_json() reads registry.json + writes .mcp.json with absolute paths to ~/.ai-os/mcp/; do_mcp_setup iterates registry custom servers (not hardcoded), calls generate_mcp_json after install"
+    },
+    {
+      "id": "E-33",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Integrate `mcp-setup` into `do_init` and `install_global` for zero-config onboarding.",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "do_init calls do_mcp_setup (if node available); install_global calls do_mcp_setup; install-ai-os.sh syncs src/mcp/ + src/config/ to ~/.ai-os/"
+    },
+    {
+      "id": "E-34",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `ai doctor` to audit MCP server health and path integrity.",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "doctor iterates registry custom servers; checks source dir, package.json, node_modules, index.js; verifies .mcp.json absolute paths"
+    },
+    {
+      "id": "E-35",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Verify MCP servers are automatically enabled in `.claude/settings.local.json`.",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "enable_claude_agent_teams reads registry.json, adds mcp__<server>__<tool> to permissions.allow in ~/.claude/settings.json for all custom server tools"
+    },
+    {
+      "id": "E-36",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `CLAUDE.md`, `GEMINI.md`, and agent/skill instructions to enforce the Sovereign Planning Protocol (P-14).",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "CLAUDE.md + GEMINI.md updated with \"Sovereign Planning Protocol\" section; .ai/ memory primacy enforced; plan-mode output must be committed to architect.md + TASKS.md"
+    },
+    {
+      "id": "E-37",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "[TRACE]: `src/claude/agents/claude_tasks.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-38",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "[TRACE]: `src/claude/agents/devops_engineer.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-39",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "[TRACE]: `src/claude/agents/digest_updater.md` — trigger-based auto-calling frontmatter update (E-31 scope extension)",
+      "created_at": "2026-03-16T14:25:37.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-40",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Wire test harness so `ai test` can satisfy the 100% Quality Gate",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "tests/run.sh (master runner, bash 3 compatible, SUITE_RESULT parsing); tests/lib/assert.sh (assert_status/contains/exists/match/not_contains + assert_summary); tests/suites/cli_test.sh (7 assertions: version, usage, where, unknown cmd); tests/suites/mcp_test.sh (14 assertions: registry JSON, custom servers, .mcp.json generation + trailing newline); do_test() in src/bin/ai now executes tests/run.sh when present (TestSprite fallback preserved); [TEST_PASSED] 21/21"
+    },
+    {
+      "id": "E-42",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `context-invoker-mcp` server (P-16)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "src/mcp/context-invoker-mcp/ (activate_skill: multi-root Skills 2.0 + flat resolution from ~/.claude/skills/, ~/.gemini/skills/, ~/.ai-os/, src/ fallback; activate_agent: same pattern for ~/.claude/agents/; list_skills/list_agents discovery mode; not-found returns suggestions); registry.json updated (capability: READ); src/claude/CLAUDE.md updated with invocation section + skill/agent directory tables; [TEST_PASSED] 22/22"
+    },
+    {
+      "id": "E-43",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement 5 new skills/agents + verify sync (P-17 to P-21 + E-41)",
+      "created_at": "2026-03-11T00:00:00.000Z",
+      "completed_at": "2026-03-11T00:00:00.000Z",
+      "summary": "repo-oracle (src/gemini/skills/repo-oracle/SKILL.md); vibe_sentinel (src/claude/agents/vibe_sentinel.md); token-miser (src/shared/skills/token-miser/SKILL.md); identity_guardian (src/claude/agents/identity_guardian.md); architectural-aligner (src/gemini/skills/architectural-aligner/SKILL.md); install-ai-os.sh synced all to ~/.ai-os/; ai mcp-setup 8/8; [TEST_PASSED] 22/22"
+    },
+    {
+      "id": "E-44",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Add unit tests for safe-exec-mcp BLOCK_RULES",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "tests/suites/safe_exec_test.sh (14 assertions: curl|bash, wget|bash, DROP TABLE, fork bomb, secret=); [TEST_PASSED] 92/92"
+    },
+    {
+      "id": "E-45",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Add unit tests for blueprint-aligner-mcp secret detection regex",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "tests/suites/blueprint_aligner_test.sh (17 assertions: HARDCODED_SECRET + CAPABILITIES_BYPASS patterns); [TEST_PASSED] 92/92"
+    },
+    {
+      "id": "E-46",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Fix .gitignore — add .env, .env.local, *.key, *.pem, /node_modules",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": ".gitignore updated with .env, .env.local, *.key, *.pem, /node_modules"
+    },
+    {
+      "id": "E-47",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Refactor TestSprite API_KEY in .mcp.json to use environment variable",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "both .mcp.json and src/templates/.mcp.json updated to ${TESTSPRITE_API_KEY}"
+    },
+    {
+      "id": "E-48",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Add input validation in context-invoker-mcp for skill/agent names",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "validateName() added; rejects non-[a-z0-9_-] names and path traversal; tested in mcp_integration_test.sh"
+    },
+    {
+      "id": "E-49",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Add integration tests for all 8 MCP tool handlers",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "tests/suites/mcp_integration_test.sh (39 assertions: file exists + syntax + tool registration + registry + validation); [TEST_PASSED] 92/92"
+    },
+    {
+      "id": "E-50",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Set up CI pipeline (.github/workflows/test.yml)",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": ".github/workflows/test.yml (Node 20, npm install for all MCP dirs, bash tests/run.sh, .gitignore secret check)"
+    },
+    {
+      "id": "E-51",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Create src/gemini/commands/ .toml files for all Gemini skills",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "architectural-aligner.toml + repo-oracle.toml created (8 existing + 2 new = 10 total)"
+    },
+    {
+      "id": "E-52",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai-seo` skill integration based on P-26 blueprint",
+      "created_at": "2026-03-12T00:00:00.000Z",
+      "completed_at": "2026-03-12T00:00:00.000Z",
+      "summary": "src/gemini/skills/ai-seo/SKILL.md (AEO/LLMO audit: structured data, answer-optimization, entity clarity, robots.txt AI bot check, llms.txt); src/gemini/commands/ai-seo.toml"
+    },
+    {
+      "id": "E-53",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `archive-manager-mcp` (Node.js) with hybrid thresholds.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "src/mcp/archive-manager-mcp/ (check_context_health: line+token heuristic, AUTO_ARCHIVE_LINES=200/AUTO_ARCHIVE_TOKENS=10000; execute_archive: spawns `ai archive` via host CLI); registry.json updated; [TEST_PASSED] 93/93"
+    },
+    {
+      "id": "E-54",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `post-tool-log.sh` with Semi-Verbose \"Warn & Wait\" logic.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "hooks/post-tool-log.sh: after every LOG write, checks LOG.md line count; CLEAN workspace → auto-runs `ai archive`; DIRTY workspace (open tasks) → emits [WARNING] to stderr"
+    },
+    {
+      "id": "E-55",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `post-commit.sh` for `TASKS.md` auto-sync.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "hooks/post-commit.sh: parses commit message for (Fixes|Closes|Implemented) (E|P|T)-##, marks matching tasks [x] in .ai/TASKS.md; install_git_hooks() installs it to .git/hooks/post-commit (with chain-backup for existing hooks)"
+    },
+    {
+      "id": "E-56",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Chain `ai-digest` to the core `ai archive` command in `src/bin/ai`.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "do_archive() now calls do_digest() immediately after successful archive, printing [AUTO-ARCHIVE] notice"
+    },
+    {
+      "id": "E-57",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement VOTU Protocol in `src/bin/ai`.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Refactored intent_gate() to allow empty UPDATE.md and bypass for long Architect content."
+    },
+    {
+      "id": "E-58",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement T-01 Agent Logic Suite.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "Created tests/suites/agent_logic_test.sh; 6/6 tests passing."
+    },
+    {
+      "id": "E-59",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Audit and Re-implement VOTU and T-01 suite (Gemini cleanup).",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "(1) Fixed VOTU bypass bug: gate now requires HAS_ACTION=1 even for long content (>20 words). (2) Re-implemented agent_logic_test.sh with 12 real intent_gate() behaviour tests (exit code verification for all 3 gate outcomes). (3) Added retroactive LOG.md attribution for E-57 and E-58. (4) Restored execute permission on src/bin/ai. [TEST_PASSED] 105/105."
+    },
+    {
+      "id": "E-60",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement Distributed Stamping for `ai-review` and `review_synthesizer`.",
+      "created_at": "2026-03-14T00:00:00.000Z",
+      "completed_at": "2026-03-14T00:00:00.000Z",
+      "summary": "ai-review/SKILL.md: each critic writes [ARCH/SEC/TESTS/ALIGN]_PASS/FAIL; Tier 3 no longer writes [CRITIC_STAMP] manually, delegates to review_synthesizer. review_synthesizer.md: Phase 1 reads distributed stamps + writes [CRITIC_STAMP]; Phase 2/3 severity aggregation + RELEASE verdict. CLAUDE.md: trigger table + critic team spawn example updated with distributed stamp names. [TEST_PASSED] 119/119."
+    },
+    {
+      "id": "E-61",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement `ai-sync-state` shared skill.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "src/shared/skills/ai-sync-state/SKILL.md (hard re-read protocol: TASKS.md + architect.md + DIGEST.md, [SYNC-STATE] report format, read-only, cache-bypass mandate); src/gemini/commands/ai-sync-state.toml; ai-sync-state added to CLAUDE.md skill table + auto-trigger (\"sync state\", \"handoff\", \"re-read tasks\"). [TEST_PASSED] 119/119."
+    },
+    {
+      "id": "E-62",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Refine `context-guardian-mcp` regex to exclude internal documentation/regex strings from \"Dirty\" workspace detection.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "architect.md scan now tracks code fences and strips inline backtick spans before testing for TBD/TODO/FIXME markers; src/ strict scan skips lines where the marker appears inside a regex literal (e.g. /\\b(TODO|FIXME)\\b/). [TEST_PASSED] 119/119."
+    },
+    {
+      "id": "E-63",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement deep-audit `ai doctor` logic (registry sync, dependency health, connectivity probe) as defined in architect.md §19.1.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "doctor() extended with \"MCP Deep Audit (§19.1)\" section: (1) npm list --depth=0 per server → flags missing/UNMET deps; (2) node -c syntax probe per index.js → CRITICAL_FAILURE on error; (3) registry ↔ .mcp.json path consistency check via Python; (4) TESTSPRITE_API_KEY literal placeholder detection with actionable fix hint. [TEST_PASSED] 119/119."
+    },
+    {
+      "id": "E-65",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Add T-01.14 test coverage for TIER3_NO_SECURITY_REVIEW rule in blueprint-aligner-mcp (P0-TESTS-01 fix).",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "tests/suites/agent_logic_test.sh: 5 new cases (T-01.14.1–5) covering: no TASKS.md diff, Tier 1 closed, Tier 3 closed with no log evidence (VIOLATION), Tier 3 closed with [SEC_PASS] (pass), checkbox form with Tier 3 (VIOLATION). [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "P-36",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for CLAUDE.md Diet — reduce global + project CLAUDE.md from 488 lines to ~60 lines max.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §23. Unblocks E-66, E-67, E-68."
+    },
+    {
+      "id": "P-37",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Materialized Critic Agents — create real `critic_arch.md`, `critic_security.md`, `critic_tests.md` agent files.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §24. Unblocks E-69, E-70, E-71, E-72."
+    },
+    {
+      "id": "P-38",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for `orchestrator-mcp` — a deterministic workflow execution MCP server.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §25. Unblocks E-73, E-74, E-75, E-76, E-77."
+    },
+    {
+      "id": "P-39",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Structured State Layer — replace prose markdown state with machine-readable `state.json`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §26. Unblocks E-78, E-79, E-80, E-81."
+    },
+    {
+      "id": "P-40",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Atomic Stamp Writes — prevent parallel agent write races on REVIEWS.md.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §27. Option C + B selected. Unblocks E-82."
+    },
+    {
+      "id": "P-41",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Blueprint Schema Validation — enforce depth standards on Gemini's architect.md output.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §28. Unblocks E-83, E-84, E-85."
+    },
+    {
+      "id": "P-42",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Blueprint for Architect Feedback Loop — close the gap between blueprint intent and implementation reality.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Blueprint added to architect.md §29. Unblocks E-86, E-87, E-88."
+    },
+    {
+      "id": "E-66",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `src/mcp/context-invoker-mcp/index.js` to ensure `list_skills` and `list_agents` return formatted trigger conditions parsed from YAML frontmatter.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "listAvailable() now returns [name, description] tuples; parseFrontmatter() extracts description from YAML; list output shows `name: trigger description`. [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "E-67",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Rewrite `src/claude/CLAUDE.md` to implement the Bootloader Strategy, bringing it under 60 lines.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Reduced from 251 lines to 42 lines. Removed: auto-dispatch tables, checkpoint protocol details, parallel spawn rules, skill/agent directory tables. Retained: identity, 5 core rules, dynamic discovery via activate_skill/activate_agent, key skill pointers, mid-execution trigger reminder. [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "E-68",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Move parallel agent team instructions from `CLAUDE.md` into `src/contracts/06_AGENT_TEAMS.md`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Consolidated spawn tables, chaining examples, two invocation modes, and rules into contracts file. CLAUDE.md now points to `src/contracts/06_AGENT_TEAMS.md` for parallel work."
+    },
+    {
+      "id": "E-69",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Create `src/claude/agents/critic_arch.md` for deterministic architecture review.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Deterministic checklist: domain sovereignty, blueprint coverage, system philosophy alignment, file organization. P0/P1/P2 severity classification. Strict stamp format. [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "E-70",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Create `src/claude/agents/critic_security.md` for deterministic security auditing against `30_SECURITY.md`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "5-point checklist: hardcoded secrets, shell injection, path traversal, capability boundary, env var leakage. Pre-flight reads 30_SECURITY.md + CAPABILITIES.md. [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "E-71",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Create `src/claude/agents/critic_tests.md` for deterministic test coverage verification.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "4-point checklist: modified src/ must have tests, suite must pass, new test quality, coverage gaps (advisory). Runs actual test suite. [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "E-72",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `ai-review/SKILL.md` and `06_AGENT_TEAMS.md` to invoke materialized agents instead of ad-hoc prompts.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Tier 3 section now spawns agents by name (\"Run the critic_arch agent...\") instead of inline prompts. 06_AGENT_TEAMS.md notes agents are materialized files. [TEST_PASSED] 124/124."
+    },
+    {
+      "id": "E-73",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Scaffold `src/mcp/orchestrator-mcp/` and register it in `registry.json`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "package.json + index.js scaffolded; registry.json updated (capability: WRITE, 3 tools); npm install OK; node -c syntax OK. [TEST_PASSED] 125/125."
+    },
+    {
+      "id": "E-74",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement the `run_preflight` tool inside the orchestrator.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Reads DIGEST, architect.md, UPDATE, TASKS in order; truncates large files to 80 lines; stamps SESSION.md; returns concatenated preflight context."
+    },
+    {
+      "id": "E-75",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement the `run_handover` tool inside the orchestrator.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Validates task ID format; marks [ ] → [x] in TASKS.md with Status line; appends LOG entry; returns digest prompt."
+    },
+    {
+      "id": "E-76",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement the complex `run_review` tool, migrating logic from `ai-review/SKILL.md`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "T1: skip verdict. T2: 5 deterministic checks (secrets, traversal, sovereignty, deps, log update) + aligner dispatch. T3: all T2 checks + coverage gap detection + parallel critic agent dispatch instructions + synthesizer invocation."
+    },
+    {
+      "id": "E-77",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `CLAUDE.md` and related skills to instruct the use of the new orchestrator tools.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Added \"Orchestrator\" section to CLAUDE.md (run_preflight, run_handover, run_review); replaced manual skill references with orchestrator-first approach. CLAUDE.md at 50 lines."
+    },
+    {
+      "id": "E-78",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Define the Zod/JSON schema for `.ai/state.json` and initialize it on `ai init`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Created src/templates/state.json (version, project, tasks[], stamps[]); added ensure_file_if_missing to ensure_ai_templates() in src/bin/ai. [TEST_PASSED] 125/125."
+    },
+    {
+      "id": "E-79",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Refactor `task-synchronizer-mcp` to expose JSON CRUD tools and atomic writes.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Full rewrite to v2.0.0: 5 new tools (get_state, add_task, update_task_status, add_stamp, set_project_focus) + 2 legacy tools preserved. Single-writer pattern via readState/writeState. [TEST_PASSED] 125/125."
+    },
+    {
+      "id": "E-80",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Implement \"Markdown View Generator\" inside `task-synchronizer-mcp`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "regenerateMarkdown() rebuilds TASKS.md (grouped by owner) and REVIEWS.md (from stamps[]) after every state mutation. Guards against clobbering during migration."
+    },
+    {
+      "id": "E-81",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `blueprint-aligner-mcp` and `hooks/post-commit.sh` to read/write JSON state instead of regex parsing.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "TIER3_NO_SECURITY_REVIEW reads state.json first (structured query for tier===3 DONE tasks + SEC_PASS stamps), falls back to legacy TASKS.md regex. post-commit.sh updates state.json via inline Node.js after TASKS.md sed."
+    },
+    {
+      "id": "E-82",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Add explicit stress tests to `mcp_test.sh` for concurrent atomic JSON writes.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "tests/suites/state_json_test.sh: 19 tests (T-02.01–T-02.10) covering schema validation, nextId logic, concurrent write stress test (proves race condition: ~7/10 tasks land), serialized write correctness, stamp integrity, regenerateMarkdown output, corrupt JSON recovery. [TEST_PASSED] 144/144."
+    },
+    {
+      "id": "E-83",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Expose `validate_blueprint_section` in `blueprint-aligner-mcp` to enforce schema depth.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "6-component schema check (concept, data model, API, flow, errors, security). VALID if ≥4/6 present. 7 new tests (T-03.01–T-03.05c). [TEST_PASSED] 151/151."
+    },
+    {
+      "id": "E-84",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `architectural-aligner/SKILL.md` to mandate `validate_blueprint_section` on new writes.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Added \"Blueprint Depth Validation (P-41 §28)\" section with mandatory validation gate."
+    },
+    {
+      "id": "E-85",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `prd_writer` to hard-block E-## task generation until blueprint passes validation.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "Added \"Blueprint Validation Gate\" with HARD BLOCK: no E-## tasks until VALID."
+    },
+    {
+      "id": "E-86",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `blueprint-aligner-mcp` to expose `generate_implementation_delta`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "generate_implementation_delta tool: compares diff vs blueprint, extracts files/functions/tools, detects divergences."
+    },
+    {
+      "id": "E-87",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `orchestrator-mcp`'s `run_handover` to save implementation deltas to `state.json`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "run_handover generates delta from git diff, saves to state.json deltas[] with read:false."
+    },
+    {
+      "id": "E-88",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Update `ai-preflight` to extract and display unread deltas from `state.json`.",
+      "created_at": "2026-03-15T00:00:00.000Z",
+      "completed_at": "2026-03-15T00:00:00.000Z",
+      "summary": "ai-preflight SKILL.md step 5 + run_preflight reads/marks deltas. Architect sees divergences on next session."
+    },
+    {
+      "id": "E-89",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Replace execSync with spawnSync (whitelisted args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp. Satisfies §5 Execution Sandbox mandate.",
+      "created_at": "2026-03-16T14:45:30.599Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-90",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Expand architect.md §17.1 Shared Skills Architecture with: directory structure, required YAML frontmatter fields, when to create shared vs agent-specific skills, install/sync pickup mechanism, and required Gemini .toml wrapper pattern.",
+      "created_at": "2026-03-16T14:45:34.278Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-45",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint strict enforcement of \"Markdown as Read-Only\" (e.g., via pre-commit hooks that verify MD sync against JSON).",
+      "created_at": "2026-03-16T16:35:56.405Z",
+      "completed_at": "2026-03-16T16:39:21.823Z",
+      "summary": "Blueprinted strict enforcement of Markdown as Read-Only (§26.3) and created E-95."
+    },
+    {
+      "id": "P-46",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Blueprint specific E-## tasks for Section 19 (UACS Logic).",
+      "created_at": "2026-03-16T16:35:58.099Z",
+      "completed_at": "2026-03-16T16:39:22.811Z",
+      "summary": "Blueprinted UACS implementation tasks (E-92, E-93, E-94) in §19.1."
+    },
+    {
+      "id": "P-47",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Audit all existing agents/skills for compliance with §17.1.2 YAML frontmatter standards.",
+      "created_at": "2026-03-16T16:35:58.878Z",
+      "completed_at": "2026-03-16T16:39:23.412Z",
+      "summary": "Completed bulk audit of 20+ agent files; created E-91 for frontmatter standardization."
+    },
+    {
+      "id": "E-91",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Bulk Update: Fix YAML frontmatter in all src/claude/agents/*.md and src/gemini/agents/*.md files to include mandatory §17.1.2 fields (disable-model-invocation, user-invocable, allowed-tools, context, agent). Use src/templates/SKILL.md as the reference schema.",
+      "created_at": "2026-03-16T16:38:41.935Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-92",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement `ai update --votu` (Voice of the User) in `src/bin/ai`. Capture terminal buffer or prompt for chat log, then pass to `intent-refiner-mcp::refine_intent` and write result to `UPDATE.md`.",
+      "created_at": "2026-03-16T16:38:47.396Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-93",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Update `ai init` in `src/bin/ai` to be \"Structured-First\": automatically call `ai mcp-setup` and `ai migrate-state --force` after scaffolding.",
+      "created_at": "2026-03-16T16:38:48.101Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-94",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Add `--repair` flag to `ai doctor`: trigger fresh `npm install` and `.mcp.json` realignment for registered servers that fail health checks (§20.1).",
+      "created_at": "2026-03-16T16:38:48.641Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-95",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Enforce \"Markdown as Read-Only\": Implement `verify_markdown_sync()` in `task-synchronizer-mcp` and update `hooks/pre-commit.sh` to block commits if `TASKS.md` or `REVIEWS.md` diverge from `state.json`.",
+      "created_at": "2026-03-16T16:38:53.051Z",
+      "completed_at": null,
+      "summary": null
+    }
+  ],
+  "stamps": [],
+  "deltas": [
+    {
+      "task_id": "E-89",
+      "timestamp": "2026-03-16T16:00:55.279Z",
+      "summary": "E-89: Replaced execSync with spawnSync (whitelisted array args) in blueprint-aligner-mcp, orchestrator-mcp, and risk-analyzer-mcp. No execSync remains in src/mcp/**. | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".mcp.json",
+        "hooks/post-tool-log.sh",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-90",
+      "timestamp": "2026-03-16T16:01:00.486Z",
+      "summary": "E-90: Expanded architect.md §17.1 with directory layout (17.1.1), required YAML frontmatter fields (17.1.2), shared vs agent-specific decision table (17.1.3), install/sync pickup mechanism (17.1.4), and required Gemini .toml wrapper pattern (17.1.5). | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/UPDATE.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".mcp.json",
+        "hooks/post-tool-log.sh",
+        "src/bin/ai",
+        "src/claude/CLAUDE.md"
+      ],
+      "read": false
+    }
+  ]
+}

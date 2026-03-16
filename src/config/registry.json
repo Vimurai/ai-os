@@ -40,8 +40,10 @@
       "path": "src/mcp/task-synchronizer-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["sync_tasks", "append_tasks"],
-      "disable-model-invocation": false
+      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "sync_tasks", "append_tasks"],
+      "disable-model-invocation": false,
+      "_note": "Exclusive State Mutator (P-39): manages .ai/state.json, regenerates TASKS.md and REVIEWS.md as views",
+      "_mandate": "v3.1 (P-44): state.json is the exclusive write target. TASKS.md and REVIEWS.md are generated views only. Write tools reject calls when state.json is absent — run: ai migrate-state to seed it."
     },
     "safe-exec-mcp": {
       "path": "src/mcp/safe-exec-mcp/index.js",
@@ -55,7 +57,7 @@
       "path": "src/mcp/blueprint-aligner-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["align_diff"],
+      "allowed-tools": ["align_diff", "validate_blueprint_section", "generate_implementation_delta"],
       "disable-model-invocation": false
     },
     "context-guardian-mcp": {
@@ -80,6 +82,22 @@
       "allowed-tools": ["activate_skill", "activate_agent"],
       "disable-model-invocation": false,
       "_note": "Dynamic skill/agent loader — call activate_skill or activate_agent by name to inject instructions into context"
+    },
+    "archive-manager-mcp": {
+      "path": "src/mcp/archive-manager-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["check_context_health", "execute_archive"],
+      "disable-model-invocation": false,
+      "_note": "Auto-Pilot Archive (P-27): monitors .ai/ context health and triggers archive when thresholds are exceeded"
+    },
+    "orchestrator-mcp": {
+      "path": "src/mcp/orchestrator-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["run_preflight", "run_handover", "run_review"],
+      "disable-model-invocation": false,
+      "_note": "Deterministic workflow execution (P-38): replaces LLM-interpreted skills with programmatic orchestration"
     }
   }
 }

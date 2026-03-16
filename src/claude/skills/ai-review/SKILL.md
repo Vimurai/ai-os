@@ -13,6 +13,7 @@ agent: Plan
 ## Dynamic Context Injection
 Current tier signals: !git diff --staged --name-only 2>/dev/null | head -10 || echo "(no staged changes)"
 Recent CRITIC_STAMP: !grep -m1 "\[CRITIC_STAMP\]" .ai/REVIEWS.md 2>/dev/null || echo "(none — review required)"
+Recent distributed stamps: !grep -E "\[(ARCH|SEC|TESTS|ALIGN)_(PASS|FAIL)\]" .ai/REVIEWS.md 2>/dev/null | tail -4 || echo "(none)"
 Recent UACS_VERIFIED: !grep -m1 "\[UACS_VERIFIED\]" .ai/LOG.md 2>/dev/null || echo "(none)"
 
 ## Step 1 — Detect Tier
@@ -52,45 +53,49 @@ align_diff()   ← compares staged diff vs architect.md
 
 If PASS: append to `.ai/REVIEWS.md`:
 ```
+[ALIGN_PASS] YYYY-MM-DD | [TIER_2] Blueprint aligned — no deviations
 [CRITIC_STAMP] YYYY-MM-DD | [TIER_2] Blueprint aligned — no deviations
 ```
 
-Commit: `git commit -m "[TIER_2] <description>"`
+If FAIL: append to `.ai/REVIEWS.md`:
+```
+[ALIGN_FAIL] YYYY-MM-DD | [TIER_2] <deviation summary> — COMMIT BLOCKED
+```
+
+Commit (only after PASS): `git commit -m "[TIER_2] <description>"`
 
 ---
 
-## Tier 3 — Full Parallel Critics
+## Tier 3 — Full Parallel Critics (Distributed Stamping)
 
-Execute all in parallel (use sub-agents / Agent tool):
+Spawn all critics in parallel using the `Agent` tool. Each critic is a **materialized agent file** — load its instructions via `activate_agent` and follow them exactly.
 
-**critic_arch**
-- Read `src/` against `.ai/architect.md`
-- Flag: domain sovereignty violations, orphaned code, System Philosophy contradictions
-
-**critic_security**
-- Read `src/` and `hooks/` for OWASP Top 10
-- Check: shell injection, env variable leakage, path traversal, CAPABILITIES.md compliance
-
-**critic_tests**
-- Review test coverage for all modified files
-- Flag: untested paths, missing edge cases, quality gate gaps
-
-**security_engineer agent** (parallel)
-- Threat model the specific changes
-- Append `[SEC_CLEARED] YYYY-MM-DD` to `.ai/LOG.md` if clear
-
-**blueprint-aligner-mcp** (parallel)
 ```
-align_diff()
+Agent("Run the critic_arch agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
+Agent("Run the critic_security agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
+Agent("Run the critic_tests agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
+Agent("Run blueprint-aligner-mcp align_diff(). Append [ALIGN_PASS] or [ALIGN_FAIL] to .ai/REVIEWS.md")
+Agent("Run the security_engineer agent. Append [SEC_CLEARED] to .ai/LOG.md if clear")
 ```
 
-### After All Critics Complete
-Synthesize findings. Append to `.ai/REVIEWS.md`:
+Expected stamps after all complete:
+- `[ARCH_PASS/FAIL]` — from `critic_arch.md`
+- `[SEC_PASS/FAIL]` — from `critic_security.md`
+- `[TESTS_PASS/FAIL]` — from `critic_tests.md`
+- `[ALIGN_PASS/FAIL]` — from `blueprint-aligner-mcp`
+- `[SEC_CLEARED]` — from `security_engineer.md`
+
+### After All Critics Complete → Trigger review_synthesizer
+
+Do NOT write `[CRITIC_STAMP]` manually. Instead, invoke `review_synthesizer`:
 ```
-[CRITIC_STAMP] YYYY-MM-DD | [TIER_3] <summary of critical findings or "No P0 issues">
+activate_agent("review_synthesizer")
 ```
 
-If all gates clear, append to `.ai/LOG.md`:
+`review_synthesizer` reads all distributed stamps (`[ARCH_PASS]`, `[SEC_PASS]`, `[TESTS_PASS]`,
+`[ALIGN_PASS]`), aggregates findings, and writes the final `[CRITIC_STAMP]` + release verdict.
+
+If all gates clear, `review_synthesizer` also appends to `.ai/LOG.md`:
 ```
 [UACS_VERIFIED] YYYY-MM-DD | Tier 3 review complete — all gates passed
 ```

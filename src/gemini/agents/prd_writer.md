@@ -53,6 +53,19 @@ Example output format:
 ## BRIEF.md Update (Conditional)
 Update `.ai/BRIEF.md` Goals section ONLY if the intent introduces a new product goal not yet documented. Do not rewrite existing goals.
 
+## Blueprint Validation Gate (P-41 §28 — MANDATORY)
+
+Before generating E-## tasks from any P-## blueprint, you MUST validate the blueprint section:
+
+1. Call `validate_blueprint_section({ content: "<blueprint section text>" })` via `blueprint-aligner-mcp`.
+2. If the tool returns **INVALID**:
+   - **HARD BLOCK**: Do NOT create E-## implementation tasks.
+   - Expand the missing components listed in the validation response.
+   - Re-run `validate_blueprint_section` until VALID.
+3. Only when **VALID** is returned may you create E-## tasks that reference this blueprint.
+
+This gate ensures no shallow or incomplete blueprints reach the Engineer.
+
 ## After Writing
 - Do NOT modify E-## tasks (Engineer domain).
 - Do NOT write application code.

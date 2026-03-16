@@ -98,10 +98,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const archPath = resolve(aiDir, "architect.md");
   if (existsSync(archPath)) {
     const content = readFileSync(archPath, "utf8");
-    const tbdLines = content
-      .split("\n")
-      .filter((l) => /\b(TBD|TODO|FIXME|PLACEHOLDER|MISSING|UNRESOLVED)\b/i.test(l))
-      .map((l, i) => `L${i + 1}: ${l.trim()}`);
+    const rawLines = content.split("\n");
+
+    // Skip lines inside fenced code blocks and inline code to avoid false
+    // positives from regex patterns / documentation examples (E-62).
+    let inCodeFence = false;
+    const tbdLines = [];
+    rawLines.forEach((l, i) => {
+      if (/^\s*```/.test(l)) { inCodeFence = !inCodeFence; return; }
+      if (inCodeFence) return;
+      // Strip inline code spans before testing so `TODO` inside backticks is ignored
+      const stripped = l.replace(/`[^`]*`/g, "``");
+      if (/\b(TBD|TODO|FIXME|PLACEHOLDER|MISSING|UNRESOLVED)\b/i.test(stripped)) {
+        tbdLines.push(`L${i + 1}: ${l.trim()}`);
+      }
+    });
 
     if (tbdLines.length > 0) {
       issues.push({
@@ -113,11 +124,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       });
     }
 
-    // Check for open architectural questions
-    const questionLines = content
-      .split("\n")
-      .filter((l) => /\?\s*$/.test(l.trim()) && l.trim().length > 10)
-      .map((l) => l.trim());
+    // Check for open architectural questions (outside code fences)
+    inCodeFence = false;
+    const questionLines = [];
+    rawLines.forEach((l) => {
+      if (/^\s*```/.test(l)) { inCodeFence = !inCodeFence; return; }
+      if (inCodeFence) return;
+      if (/\?\s*$/.test(l.trim()) && l.trim().length > 10) questionLines.push(l.trim());
+    });
 
     if (questionLines.length > 0) {
       issues.push({
@@ -138,7 +152,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       scanDir(srcDir, [".js", ".ts", ".sh", ".py", ".go"], (filePath, content) => {
         const lines = content.split("\n");
         lines.forEach((line, i) => {
-          if (/\b(TODO|FIXME|HACK|XXX)\b/.test(line)) {
+          // Skip lines where the marker appears inside a regex literal (e.g. /\b(TODO|FIXME)\b/)
+          // to avoid false positives from pattern definitions in source files (E-62).
+          const isRegexLiteral = /\/[^/]*\b(TODO|FIXME|HACK|XXX)\b[^/]*\//.test(line);
+          if (!isRegexLiteral && /\b(TODO|FIXME|HACK|XXX)\b/.test(line)) {
             srcIssues.push(`${filePath.replace(cwd, "")}:${i + 1}: ${line.trim().slice(0, 80)}`);
           }
         });

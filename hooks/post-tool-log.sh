@@ -92,4 +92,56 @@ else
   printf "- %s | Claude | %s | %s\n" "$TIMESTAMP" "$TOOL" "$DETAIL" >> "$LOG_FILE"
 fi
 
+# ── E-54: Semi-Verbose Warn & Wait (P-27 §23) ────────────────────────────────
+# After every LOG write, check if LOG.md has grown past the archive threshold.
+# CLEAN workspace → auto-archive; DIRTY workspace → warn only.
+#
+# DIRTY detection implements the equivalent of context-guardian-mcp check_workspace:
+#   DIRTY  = open [ ] tasks in TASKS.md  (maps to context-guardian DIRTY severity)
+#   WARN   = uncommitted non-.ai/ changes (in-progress code work)
+#   CLEAN  = no open tasks AND no active code changes
+# MCP servers cannot be invoked from bash hooks; direct filesystem checks are used
+# to replicate context-guardian's DIRTY determination (TASKS.md open task count).
+LOG_LINE_COUNT=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+ARCHIVE_THRESHOLD=200
+
+if (( LOG_LINE_COUNT >= ARCHIVE_THRESHOLD )); then
+  TASKS_FILE="${AI_DIR}/TASKS.md"
+  OPEN_TASKS=0
+  if [[ -f "$TASKS_FILE" ]]; then
+    OPEN_TASKS=$(grep -c "^- \[ \]" "$TASKS_FILE" 2>/dev/null || echo 0)
+    OPEN_TASKS="${OPEN_TASKS:-0}"
+  fi
+
+  # Secondary DIRTY signal: uncommitted non-.ai/ changes mean work is in progress
+  GIT_DIRTY=0
+  if git -C "$(pwd)" rev-parse --git-dir >/dev/null 2>&1; then
+    _dirty_count=$(git -C "$(pwd)" status --porcelain 2>/dev/null \
+      | grep -v "^.. \.ai/" | wc -l | tr -d ' ')
+    [[ "${_dirty_count:-0}" -gt 0 ]] && GIT_DIRTY=1
+  fi
+
+  if (( OPEN_TASKS == 0 && GIT_DIRTY == 0 )); then
+    # Workspace CLEAN — trigger archive automatically
+    printf "[AUTO-ARCHIVE] LOG.md reached %d lines — archiving .ai/ logs...\n" "$LOG_LINE_COUNT" >&2
+    AI_BIN=""
+    for _p in "/usr/local/bin/ai" "${HOME}/.ai-os/bin/ai"; do
+      [[ -x "$_p" ]] && AI_BIN="$_p" && break
+    done
+    if [[ -n "$AI_BIN" ]]; then
+      bash "$AI_BIN" archive >/dev/null 2>&1 || printf "[AUTO-ARCHIVE] Archive command failed — run: ai archive\n" >&2
+    else
+      printf "[AUTO-ARCHIVE] 'ai' binary not found — run: ai archive manually\n" >&2
+    fi
+  elif (( OPEN_TASKS > 0 )); then
+    # Workspace DIRTY — open tasks remain
+    printf "[WARNING] .ai/ logs are bloated (%d lines) but workspace is DIRTY (%d open task(s)). Archiving postponed.\n" \
+      "$LOG_LINE_COUNT" "$OPEN_TASKS" >&2
+  else
+    # Workspace DIRTY — uncommitted code changes in progress
+    printf "[WARNING] .ai/ logs are bloated (%d lines) but workspace has uncommitted changes. Archiving postponed.\n" \
+      "$LOG_LINE_COUNT" >&2
+  fi
+fi
+
 exit 0

@@ -33,6 +33,20 @@ Human intent for this session. Always read.
 ### 4. Read `.ai/TASKS.md` ← YOUR ASSIGNMENTS
 Assigned tasks (E-## for Claude, P-## for Gemini). Always read.
 
+### 5. Check Implementation Deltas ← FEEDBACK LOOP (P-42 §29)
+If `.ai/state.json` exists, check for unread implementation deltas:
+```
+Read .ai/state.json → look for entries in "deltas" array where "read" is false
+```
+If unread deltas exist, display them prominently:
+```
+## Unread Implementation Deltas
+- E-78: Created state.json schema | Files: src/templates/state.json, src/bin/ai
+- E-79: task-synchronizer-mcp v2.0 | Files: src/mcp/task-synchronizer-mcp/index.js
+```
+After reading, mark them as read (set `"read": true`) so they don't repeat.
+**Architect**: If a delta shows divergence from your blueprint, update `architect.md` to reflect reality.
+
 ### Open Only When Task Touches That Domain
 - `.ai/BRIEF.md` — Project rules & lore (read if onboarding or task touches product goals)
 - `.ai/RULES.md` — Token economics & Triad contract

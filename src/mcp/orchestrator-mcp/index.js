@@ -1,0 +1,431 @@
+#!/usr/bin/env node
+/**
+ * orchestrator-mcp — AI-OS Deterministic Workflow Execution
+ * Replaces LLM-interpreted multi-step workflows with programmatic execution.
+ *
+ * Tools:
+ *   run_preflight()               → reads .ai/ files in mandated order, returns context
+ *   run_handover({ task_id })     → marks task DONE, appends LOG, triggers digest prompt
+ *   run_review({ tier })          → tier-aware review: T1 skip, T2 aligner, T3 deterministic checks + agent dispatch
+ */
+
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs";
+import { resolve } from "path";
+import { spawnSync } from "child_process";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function readSafe(p) {
+  try { return existsSync(p) ? readFileSync(p, "utf8") : ""; } catch { return ""; }
+}
+
+function today() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function gitRead(args, cwd) {
+  const r = spawnSync("git", args, { cwd, encoding: "utf8", timeout: 10000 });
+  return r.error ? "" : (r.stdout || "");
+}
+
+function getDiff(cwd) {
+  let d = gitRead(["diff", "--staged"], cwd);
+  if (!d.trim()) d = gitRead(["diff", "HEAD"], cwd);
+  return d;
+}
+
+// ── Server ────────────────────────────────────────────────────────────────────
+const server = new Server(
+  { name: "orchestrator-mcp", version: "1.0.0" },
+  { capabilities: { tools: {} } }
+);
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  tools: [
+    {
+      name: "run_preflight",
+      description:
+        "Reads .ai/ files in the mandated DIGEST-first order and returns a token-optimized " +
+        "preflight context string. Stamps SESSION.md. Call this at the start of every session.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "run_handover",
+      description:
+        "Marks an E-## task as DONE in TASKS.md, appends a LOG entry, and returns a digest " +
+        "regeneration prompt. Call this after completing an implementation task.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          task_id: {
+            type: "string",
+            description: "The task ID to mark complete (e.g. 'E-65')",
+          },
+          summary: {
+            type: "string",
+            description: "One-line summary of what was implemented",
+          },
+        },
+        required: ["task_id"],
+      },
+    },
+    {
+      name: "run_review",
+      description:
+        "Executes a tier-aware code review. Tier 1: skips. Tier 2: runs blueprint-aligner " +
+        "checks. Tier 3: runs deterministic security/test/architecture checks and returns " +
+        "which critic agents need to be spawned for LLM-level review.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          tier: {
+            type: "number",
+            description: "Risk tier (1, 2, or 3)",
+            enum: [1, 2, 3],
+          },
+        },
+        required: ["tier"],
+      },
+    },
+  ],
+}));
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+  const cwd = process.cwd();
+  const ai = resolve(cwd, ".ai");
+
+  switch (name) {
+    // ── run_preflight ─────────────────────────────────────────────────────────
+    case "run_preflight": {
+      const files = [
+        { name: "DIGEST.md", path: resolve(ai, "DIGEST.md") },
+        { name: "architect.md", path: resolve(ai, "architect.md") },
+        { name: "UPDATE.md", path: resolve(ai, "UPDATE.md") },
+        { name: "TASKS.md", path: resolve(ai, "TASKS.md") },
+      ];
+
+      const sections = [];
+      for (const f of files) {
+        const content = readSafe(f.path);
+        if (content.trim()) {
+          // For large files, truncate to keep context manageable
+          const lines = content.split("\n");
+          const truncated = lines.length > 80
+            ? lines.slice(0, 80).join("\n") + `\n... (${lines.length - 80} more lines)`
+            : content;
+          sections.push(`## ${f.name}\n${truncated}`);
+        } else {
+          sections.push(`## ${f.name}\n(empty)`);
+        }
+      }
+
+      // Check for unread implementation deltas (P-42 §29)
+      const statePath = resolve(ai, "state.json");
+      if (existsSync(statePath)) {
+        try {
+          const state = JSON.parse(readFileSync(statePath, "utf8"));
+          const unread = (state.deltas || []).filter(d => !d.read);
+          if (unread.length > 0) {
+            sections.push("## Unread Implementation Deltas");
+            for (const d of unread) {
+              sections.push(`- ${d.task_id}: ${d.summary}`);
+              d.read = true;
+            }
+            sections.push("\n**Architect**: Review these deltas. If any diverge from your blueprint, update architect.md.");
+            writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n");
+          }
+        } catch { /* ignore state.json parse errors */ }
+      }
+
+      // Stamp SESSION.md
+      const sessionPath = resolve(ai, "SESSION.md");
+      const stamp = `${today()} | orchestrator-mcp | run_preflight | Files read: ${files.map(f => f.name).join(", ")}\n`;
+      try { appendFileSync(sessionPath, stamp); } catch { /* ignore if can't write */ }
+
+      return {
+        content: [{
+          type: "text",
+          text: `# Preflight Context (${today()})\n\n${sections.join("\n\n")}`,
+        }],
+      };
+    }
+
+    // ── run_handover ──────────────────────────────────────────────────────────
+    case "run_handover": {
+      const taskId = (args.task_id || "").trim().toUpperCase();
+      const summary = args.summary || "Implementation complete";
+
+      if (!/^[EPT]-\d+$/.test(taskId)) {
+        return {
+          content: [{ type: "text", text: `✗ Invalid task ID: '${taskId}'. Expected format: E-##, P-##, or T-##` }],
+          isError: true,
+        };
+      }
+
+      const tasksPath = resolve(ai, "TASKS.md");
+      const logPath = resolve(ai, "LOG.md");
+      const results = [];
+
+      // 1. Mark task DONE in TASKS.md
+      if (existsSync(tasksPath)) {
+        let content = readFileSync(tasksPath, "utf8");
+        const pattern = new RegExp(`^(- \\[ \\] ${taskId}\\b)`, "m");
+        if (pattern.test(content)) {
+          content = content.replace(pattern, `- [x] ${taskId}`);
+          // Append status line after the task line
+          const statusLine = `\n  Status: DONE ${today()} — ${summary}`;
+          content = content.replace(
+            new RegExp(`(- \\[x\\] ${taskId}[^\n]*)(\n(?!  )|\n$|$)`),
+            `$1${statusLine}$2`
+          );
+          writeFileSync(tasksPath, content);
+          results.push(`✓ ${taskId} marked DONE in TASKS.md`);
+        } else if (content.includes(`[x] ${taskId}`)) {
+          results.push(`⚠ ${taskId} already marked DONE`);
+        } else {
+          results.push(`⚠ ${taskId} not found in TASKS.md`);
+        }
+      }
+
+      // 2. Append LOG entry
+      if (existsSync(logPath)) {
+        const logEntry = `${today()} | Claude | ${taskId} | ${summary}\n`;
+        appendFileSync(logPath, logEntry);
+        results.push(`✓ LOG.md updated`);
+      }
+
+      // 3. Generate implementation delta and save to state.json (P-42 §29)
+      const diff = getDiff(cwd);
+      if (diff.trim()) {
+        // Read blueprint section for comparison
+        const archPath = resolve(ai, "architect.md");
+        let bpSection = "";
+        if (existsSync(archPath)) {
+          const arch = readFileSync(archPath, "utf8");
+          const idx = arch.indexOf(taskId);
+          if (idx !== -1) {
+            const before = arch.lastIndexOf("\n## ", idx);
+            const after = arch.indexOf("\n## ", idx + 1);
+            bpSection = arch.slice(
+              before !== -1 ? before : Math.max(0, idx - 500),
+              after !== -1 ? after : Math.min(arch.length, idx + 2000)
+            );
+          }
+        }
+
+        // Generate delta summary
+        const changedFiles = [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m => m[1]);
+        const deltaText = `${taskId}: ${summary} | Files: ${changedFiles.slice(0, 5).join(", ")}`;
+
+        // Save delta to state.json if it exists
+        const statePath = resolve(ai, "state.json");
+        if (existsSync(statePath)) {
+          try {
+            const state = JSON.parse(readFileSync(statePath, "utf8"));
+            if (!state.deltas) state.deltas = [];
+            state.deltas.push({
+              task_id: taskId,
+              timestamp: new Date().toISOString(),
+              summary: deltaText,
+              files_changed: changedFiles.slice(0, 10),
+              read: false,
+            });
+            writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n");
+            results.push(`✓ Implementation delta saved to state.json`);
+          } catch {
+            results.push(`⚠ Could not save delta to state.json`);
+          }
+        }
+      }
+
+      // 4. Return digest prompt
+      results.push("");
+      results.push("Next: Run digest_updater agent to regenerate DIGEST.md, or call activate_agent('digest_updater').");
+
+      return { content: [{ type: "text", text: results.join("\n") }] };
+    }
+
+    // ── run_review ────────────────────────────────────────────────────────────
+    case "run_review": {
+      const tier = args.tier;
+
+      if (![1, 2, 3].includes(tier)) {
+        return {
+          content: [{ type: "text", text: "✗ Invalid tier. Must be 1, 2, or 3." }],
+          isError: true,
+        };
+      }
+
+      const diff = getDiff(cwd);
+      const date = today();
+
+      // ── Tier 1: Skip ────────────────────────────────────────────────────
+      if (tier === 1) {
+        return {
+          content: [{
+            type: "text",
+            text: `## Review — Tier 1 (${date})\n\n` +
+              `Verdict: SKIP\n` +
+              `CSS/docs/typos only. No critic agents needed.\n` +
+              `Commit with: \`git commit -m "[TIER_1] <description>"\``,
+          }],
+        };
+      }
+
+      // ── Shared deterministic checks ──────────────────────────────────────
+      const checks = [];
+
+      // Check 1: Hardcoded secrets in diff
+      const secretPattern = /^\+[^+].*\b(password|passwd|api.?key|secret|token|private.?key)\s*=\s*["'][^"']{4,}/gim;
+      const secretMatches = [...diff.matchAll(secretPattern)].map(m => m[0].trim().slice(0, 60));
+      if (secretMatches.length > 0) {
+        checks.push({ id: "HARDCODED_SECRET", severity: "P0", status: "FAIL", detail: secretMatches[0] });
+      }
+
+      // Check 2: Path traversal
+      const traversalPattern = /^\+[^+].*(\.\.\/|\/etc\/|\/root\/)/gm;
+      const traversalMatches = [...diff.matchAll(traversalPattern)].map(m => m[0].trim().slice(0, 80));
+      if (traversalMatches.length > 0) {
+        checks.push({ id: "PATH_TRAVERSAL", severity: "P0", status: "FAIL", detail: traversalMatches[0] });
+      }
+
+      // Check 3: Blueprint alignment — architect-owned files modified
+      const geminiFiles = [".ai/architect.md", ".ai/BRIEF.md"];
+      const sovereigntyViolations = geminiFiles.filter(f => diff.includes(`a/${f}`) || diff.includes(`b/${f}`));
+      if (sovereigntyViolations.length > 0) {
+        checks.push({ id: "SOVEREIGNTY_VIOLATION", severity: "P0", status: "FAIL", detail: sovereigntyViolations.join(", ") });
+      }
+
+      // Check 4: New deps without DECISIONS.md
+      const pkgPattern = /^\+\s+"[a-z@][a-z0-9\-@/.]+"\s*:/gm;
+      const newDeps = [...diff.matchAll(pkgPattern)].map(m => m[0].trim());
+      if (newDeps.length > 0 && !diff.includes("DECISIONS.md")) {
+        checks.push({ id: "UNAPPROVED_DEP", severity: "P1", status: "WARN", detail: newDeps.slice(0, 3).join(", ") });
+      }
+
+      // Check 5: LOG.md update check
+      const hasSrcChanges = diff.includes("a/src/") || diff.includes("b/src/");
+      const hasLogUpdate = diff.includes(".ai/LOG.md");
+      if (hasSrcChanges && !hasLogUpdate) {
+        checks.push({ id: "NO_LOG_UPDATE", severity: "P1", status: "WARN", detail: "src/ changed but LOG.md not updated" });
+      }
+
+      // Check 6: Test file existence for modified src/ files
+      const changedSrcFiles = [...diff.matchAll(/^\+\+\+ b\/(src\/[^\n]+)$/gm)].map(m => m[1]);
+      const missingTests = [];
+      for (const f of changedSrcFiles) {
+        if (f.endsWith(".md")) continue; // Skip markdown
+        if (f.includes("/agents/") || f.includes("/skills/")) continue; // Skip agent/skill docs
+        // Check if a test suite likely covers this
+        const testsDir = resolve(cwd, "tests/suites");
+        if (existsSync(testsDir)) {
+          const base = f.split("/").pop().replace(/\.[^.]+$/, "").replace(/-/g, "_");
+          const hasTest = existsSync(resolve(testsDir, `${base}_test.sh`));
+          // Also check by parent dir name
+          const parentDir = f.split("/").slice(-2, -1)[0];
+          const hasParentTest = existsSync(resolve(testsDir, `${parentDir}_test.sh`))
+            || existsSync(resolve(testsDir, `${parentDir}_integration_test.sh`));
+          if (!hasTest && !hasParentTest) {
+            missingTests.push(f);
+          }
+        }
+      }
+
+      const p0Failures = checks.filter(c => c.severity === "P0");
+      const hasP0 = p0Failures.length > 0;
+
+      // ── Tier 2: Deterministic checks + aligner ──────────────────────────
+      if (tier === 2) {
+        const lines = [
+          `## Review — Tier 2 (${date})`,
+          ``,
+          `### Deterministic Checks`,
+        ];
+
+        if (checks.length === 0) {
+          lines.push("✓ All automated checks passed.");
+        } else {
+          for (const c of checks) {
+            lines.push(`- [${c.id}] ${c.severity} ${c.status}: ${c.detail}`);
+          }
+        }
+
+        lines.push("");
+        lines.push("### Blueprint Alignment");
+        lines.push("Run `align_diff()` via blueprint-aligner-mcp to complete Tier 2 review.");
+        lines.push("");
+
+        if (hasP0) {
+          lines.push(`Verdict: **BLOCKED** — ${p0Failures.length} P0 failure(s) found.`);
+        } else {
+          lines.push("Verdict: Automated checks passed. Awaiting blueprint-aligner result.");
+          lines.push("After aligner passes, append to .ai/REVIEWS.md:");
+          lines.push("```");
+          lines.push(`[ALIGN_PASS] ${date} | [TIER_2] Blueprint aligned`);
+          lines.push(`[CRITIC_STAMP] ${date} | [TIER_2] Blueprint aligned`);
+          lines.push("```");
+        }
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      }
+
+      // ── Tier 3: Full analysis + agent dispatch instructions ─────────────
+      const lines = [
+        `## Review — Tier 3 (${date})`,
+        ``,
+        `### Phase 1: Deterministic Checks (automated)`,
+      ];
+
+      if (checks.length === 0 && missingTests.length === 0) {
+        lines.push("✓ All automated security/architecture/dependency checks passed.");
+      } else {
+        for (const c of checks) {
+          lines.push(`- [${c.id}] ${c.severity} ${c.status}: ${c.detail}`);
+        }
+        if (missingTests.length > 0) {
+          lines.push(`- [COVERAGE_GAP] P1 WARN: ${missingTests.length} modified src/ file(s) with no matching test suite: ${missingTests.slice(0, 3).join(", ")}`);
+        }
+      }
+
+      lines.push("");
+      lines.push("### Phase 2: Agent Dispatch (spawn these in parallel)");
+      lines.push("");
+
+      if (hasP0) {
+        lines.push(`⚠ **${p0Failures.length} P0 failure(s) detected in automated checks.**`);
+        lines.push("Fix these BEFORE spawning critic agents.");
+        lines.push("");
+        for (const f of p0Failures) {
+          lines.push(`- **${f.id}**: ${f.detail}`);
+        }
+      } else {
+        lines.push("All automated checks passed. Now spawn the critic team:");
+        lines.push("");
+        lines.push("```");
+        lines.push('Agent("Run the critic_arch agent to audit the codebase and append its stamp to .ai/REVIEWS.md")');
+        lines.push('Agent("Run the critic_security agent to audit the codebase and append its stamp to .ai/REVIEWS.md")');
+        lines.push('Agent("Run the critic_tests agent to audit the codebase and append its stamp to .ai/REVIEWS.md")');
+        lines.push('Agent("Run blueprint-aligner-mcp align_diff(). Append [ALIGN_PASS] or [ALIGN_FAIL] to .ai/REVIEWS.md")');
+        lines.push('Agent("Run the security_engineer agent. Append [SEC_CLEARED] to .ai/LOG.md if clear")');
+        lines.push("```");
+        lines.push("");
+        lines.push("### Phase 3: After all agents complete");
+        lines.push("Invoke `activate_agent('review_synthesizer')` to aggregate stamps and write [CRITIC_STAMP].");
+      }
+
+      lines.push("");
+      lines.push(`Files in diff: ${changedSrcFiles.length} src/ files, ${[...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].length} total`);
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    default:
+      return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
+  }
+});
+
+const transport = new StdioServerTransport();
+await server.connect(transport);

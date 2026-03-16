@@ -16,7 +16,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
@@ -233,9 +233,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Get diff and extract changed files
       let diff = args.diff;
       if (!diff) {
-        try { diff = execSync("git diff --staged", { cwd: process.cwd(), encoding: "utf8" }); } catch { diff = ""; }
+        const spawnOpts = { cwd: process.cwd(), encoding: "utf8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 };
+        const rs = spawnSync("git", ["diff", "--staged"], spawnOpts);
+        diff = rs.error ? "" : (rs.stdout || "");
         if (!diff.trim()) {
-          try { diff = execSync("git diff HEAD", { cwd: process.cwd(), encoding: "utf8", timeout: 5000 }); } catch { diff = ""; }
+          const rh = spawnSync("git", ["diff", "HEAD"], spawnOpts);
+          diff = rh.error ? "" : (rh.stdout || "");
         }
       }
 

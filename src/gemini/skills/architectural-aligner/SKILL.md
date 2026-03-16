@@ -83,7 +83,20 @@ If PASS, write:
 [CRITIC_STAMP] YYYY-MM-DD | [ALIGNER_PASS] All blueprint constraints satisfied
 ```
 
+## Blueprint Depth Validation (P-41 §28)
+
+When writing a **new section** to `architect.md`, you MUST immediately validate it:
+
+1. Call `validate_blueprint_section({ content: "<the new section text>" })` via `blueprint-aligner-mcp`.
+2. If the tool returns **INVALID**: you are **blocked** from generating E-## tasks from this section.
+   - Expand the missing components listed in the response.
+   - Re-validate until you get **VALID**.
+3. Only when **VALID** is returned may you proceed with task generation or handover to the Engineer.
+
+This gate prevents shallow "TBD" blueprints from reaching implementation.
+
 ## Rules
 - READ ONLY. Do not modify source files — report violations only.
 - Always reference the specific `architect.md §<section>` for each violation.
 - If architect.md is ambiguous, flag it as a P1 and suggest the Architect clarify.
+- Never generate E-## tasks from a blueprint section that has not passed `validate_blueprint_section`.

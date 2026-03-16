@@ -20,6 +20,7 @@ Commands:
   ai archive          Move old LOG/COMM/REVIEWS entries to .ai/archive/YYYY-MM/
   ai digest           Print prompt to regenerate DIGEST.md (run when stale)
   ai sync             Re-sync agent/skill files from ~/.ai-os to ~/.claude, ~/.gemini, ~/.config/github-copilot
+  ai migrate-state [--force]  Seed state.json from TASKS.md (run once after v3 upgrade)
   ai doctor           Diagnose PATH, config, hooks, MCP, Copilot CLI
   ai where            Print install paths
   ai version          Print version
@@ -110,6 +111,7 @@ ensure_ai_templates() {
   ensure_file_if_missing "$T/UPDATE.md"        ".ai/UPDATE.md"
   ensure_file_if_missing "$T/LOG.md"           ".ai/LOG.md"
   ensure_file_if_missing "$T/architect.md.template" ".ai/architect.md"
+  ensure_file_if_missing "$T/state.json"          ".ai/state.json"
 
   # .gitignore for sensitive .ai/ files
   if [[ ! -f ".ai/.gitignore" ]]; then
@@ -383,6 +385,38 @@ WRAPPER
 
   chmod +x "$HOOK_DST"
   echo "  ✓ Installed Gate 2 (Quality Gate) pre-commit hook → ${HOOK_DST}"
+
+  # E-55: Install post-commit hook (TASKS.md auto-sync)
+  local PC_SRC="${AIOS}/hooks/post-commit.sh"
+  local PC_DST="${GIT_HOOKS_DIR}/post-commit"
+
+  if [[ ! -f "$PC_SRC" ]]; then
+    echo "  ⚠  post-commit.sh not found at ${PC_SRC} — run: ai install"
+    return
+  fi
+
+  if [[ -f "$PC_DST" ]]; then
+    if grep -q "AI-OS.*TASK-SYNC\|TASKS.md Auto-Sync" "$PC_DST" 2>/dev/null; then
+      echo "  ✓ post-commit hook already installed (TASK-SYNC)"
+      return
+    else
+      # Chain with existing hook
+      local PC_BACKUP="${PC_DST}.pre-aios"
+      mv "$PC_DST" "$PC_BACKUP"
+      echo "  ✓ Backed up existing post-commit hook → post-commit.pre-aios"
+      cat > "$PC_DST" <<WRAPPER
+#!/usr/bin/env bash
+# AI-OS post-commit wrapper — calls original hook then AI-OS TASK-SYNC
+bash "\$(dirname "\$0")/post-commit.pre-aios" || true
+bash "${PC_SRC}" || true
+WRAPPER
+    fi
+  else
+    cp "$PC_SRC" "$PC_DST"
+  fi
+
+  chmod +x "$PC_DST"
+  echo "  ✓ Installed TASK-SYNC post-commit hook → ${PC_DST}"
 }
 
 do_init() {
@@ -514,6 +548,12 @@ intent_gate() {
     '\b(add|implement|fix|create|update|refactor|remove|delete|migrate|deploy|build|write|change|replace|integrate|scaffold|install|configure|test|debug|review|audit)\b' \
     && HAS_ACTION=1
 
+  # VOTU OVERRIDE: Long, structured Architect-led content (>20 words + action verb) passes the
+  # vagueness gate. A verbose-but-vague input still requires an action verb to proceed.
+  if [[ $WORD_COUNT -gt 20 && $HAS_ACTION -eq 1 ]]; then
+    return 0
+  fi
+
   # Hard-block: < 8 words OR no action verb at all
   if [[ $WORD_COUNT -lt 8 || $HAS_ACTION -eq 0 ]]; then
     cat >&2 <<VAGUE
@@ -591,9 +631,11 @@ do_update() {
       | grep -v '^Constraints:' || true)
 
     if [[ -z "$RAW_CONTENT" ]]; then
-      echo "⚠  .ai/UPDATE.md appears empty — fill it in before starting a session."
-      echo "   Describe what you want researched/planned (Architect) or executed (Engineer)."
-      echo "   Tip: Use 'ai update --force' to skip the Intent Gate if needed."
+      # VOTU: If Architect is present, we don't need manual content
+      echo "━━ [VOTU] VOICE OF THE USER INTAKE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "   Manual UPDATE.md is empty. Architect (Gemini) will now"
+      echo "   summarize chat intent and update TASKS.md automatically."
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       echo ""
     else
       GATE_RESULT=0
@@ -801,7 +843,174 @@ do_archive() {
     echo ""
     echo "✓ Archive complete → ${ARCHIVE_DIR}"
     echo "  ${ARCHIVED} file(s) archived and re-initialized."
+    echo ""
+    # E-56: Auto-trigger digest to document the fresh state
+    echo "[AUTO-ARCHIVE] Regenerating DIGEST.md to reflect fresh state..."
+    do_digest
   fi
+}
+
+do_migrate_state() {
+  local FORCE="${1:-}"
+
+  if [[ ! -d ".ai" ]]; then
+    echo "✗ No .ai/ directory found. Run: ai init"
+    exit 1
+  fi
+
+  local STATE_FILE=".ai/state.json"
+  local TASKS_FILE=".ai/TASKS.md"
+
+  if [[ ! -f "$TASKS_FILE" ]]; then
+    echo "✗ .ai/TASKS.md not found — nothing to migrate."
+    exit 1
+  fi
+
+  if ! command -v python3 &>/dev/null; then
+    echo "✗ python3 required for migration"
+    exit 1
+  fi
+
+  if ! command -v node &>/dev/null; then
+    echo "✗ node required for migration"
+    exit 1
+  fi
+
+  # Guard: if state.json already has tasks, require --force
+  if [[ -f "$STATE_FILE" ]]; then
+    local task_count
+    task_count=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('${STATE_FILE}'))
+    print(len(d.get('tasks', [])))
+except:
+    print(0)
+" 2>/dev/null || echo "0")
+    if [[ "$task_count" -gt 0 && "$FORCE" != "--force" ]]; then
+      echo "[MIGRATE-STATE] state.json already has ${task_count} tasks. Use --force to re-migrate."
+      exit 1
+    fi
+  fi
+
+  echo "[MIGRATE-STATE] Parsing .ai/TASKS.md..."
+
+  local PARSED_TMPFILE
+  PARSED_TMPFILE=$(mktemp /tmp/ai_migrate_XXXXXX.json)
+
+  python3 - "$TASKS_FILE" "$PARSED_TMPFILE" <<'PY'
+import json, re, sys
+
+tasks_file = sys.argv[1]
+out_file   = sys.argv[2]
+
+tasks = []
+
+SECTION_RE = re.compile(r'^#{1,3}\s+(.+)$')
+TASK_RE    = re.compile(r'^- \[([ x])\] (E|P|T)-(\d+):?\s+(.+?)(?:\s*\|\s*Tier:\s*(\d))?$')
+STATUS_RE  = re.compile(r'^\s{2}Status:\s+DONE\s+(\d{4}-\d{2}-\d{2})\s+[—–-]\s+(.+)$')
+
+OWNER_PATTERNS = [
+    (re.compile(r'\bArchitect\b|\(Gemini\)',     re.IGNORECASE), 'Architect (Gemini)'),
+    (re.compile(r'\bEngineer\b|\(Claude\)',      re.IGNORECASE), 'Engineer (Claude)'),
+    (re.compile(r'\bTester\b|\(TestSprite\)',    re.IGNORECASE), 'Tester (TestSprite)'),
+]
+
+current_owner = None
+last_task     = None
+
+with open(tasks_file, encoding='utf-8') as f:
+    lines = f.readlines()
+
+for line in lines:
+    line_s = line.rstrip('\n')
+
+    # Section header — update owner if recognisable
+    m = SECTION_RE.match(line_s)
+    if m:
+        header = m.group(1).strip()
+        for pattern, owner in OWNER_PATTERNS:
+            if pattern.search(header):
+                current_owner = owner
+                break
+        last_task = None
+        continue
+
+    # Task line
+    m = TASK_RE.match(line_s)
+    if m:
+        status_char, prefix, num, desc, tier = m.groups()
+        task = {
+            'id':           f'{prefix}-{int(num)}',
+            'owner':        current_owner or 'Unassigned',
+            'status':       'DONE' if status_char == 'x' else 'OPEN',
+            'tier':         int(tier) if tier else None,
+            'description':  desc.strip(),
+            'created_at':   None,
+            'completed_at': None,
+            'summary':      None,
+        }
+        tasks.append(task)
+        last_task = task
+        continue
+
+    # Status line (must immediately follow a task line)
+    if last_task:
+        m = STATUS_RE.match(line_s)
+        if m:
+            date_str, summary = m.groups()
+            last_task['completed_at'] = date_str + 'T00:00:00.000Z'
+            last_task['summary']      = summary.strip()
+        elif line_s.strip() and not line_s.startswith(' '):
+            last_task = None
+
+with open(out_file, 'w', encoding='utf-8') as f:
+    json.dump(tasks, f, indent=2)
+
+print(f'[MIGRATE-STATE] Parsed {len(tasks)} tasks from TASKS.md.')
+PY
+
+  local TASK_COUNT
+  TASK_COUNT=$(python3 -c "import json; print(len(json.load(open('${PARSED_TMPFILE}'))))" 2>/dev/null || echo "0")
+
+  if [[ "$TASK_COUNT" -eq 0 ]]; then
+    echo "[MIGRATE-STATE] Warning: 0 tasks parsed. Check TASKS.md format."
+    rm -f "$PARSED_TMPFILE"
+    exit 0
+  fi
+
+  echo "[MIGRATE-STATE] Writing ${TASK_COUNT} tasks to ${STATE_FILE}..."
+
+  node -e "
+    const fs = require('fs');
+    const statePath  = process.argv[1];
+    const parsedPath = process.argv[2];
+    const parsedTasks = JSON.parse(fs.readFileSync(parsedPath, 'utf8'));
+
+    let state;
+    try {
+      state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    } catch {
+      state = { version: '1.0', project: { current_tier: null, release_verdict: null, focus: null }, tasks: [], stamps: [] };
+    }
+
+    const now = new Date().toISOString();
+    for (const t of parsedTasks) {
+      if (!t.created_at) t.created_at = t.completed_at || now;
+    }
+
+    state.tasks = parsedTasks;
+    fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
+    console.log('[MIGRATE-STATE] state.json updated: ' + parsedTasks.length + ' tasks written.');
+  " "$STATE_FILE" "$PARSED_TMPFILE"
+
+  rm -f "$PARSED_TMPFILE"
+
+  echo ""
+  echo "[MIGRATE-STATE] Migration complete."
+  printf "  Tasks seeded: %s\n" "$TASK_COUNT"
+  echo "  state.json version: 1.0"
+  echo "  Run: ai test to verify"
 }
 
 do_review() {
@@ -1083,7 +1292,7 @@ do_sync() {
 
   cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
   chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
-  echo "  Hooks synced (stop-hook, post-tool-log, pre-commit)"
+  echo "  Hooks synced (stop-hook, post-tool-log, pre-commit, post-commit)"
 
   mkdir -p "${HOME}/.config/github-copilot"
   cp -f "${AIOS}/copilot/COPILOT.md" "${HOME}/.config/github-copilot/COPILOT.md" 2>/dev/null || true
@@ -1271,6 +1480,80 @@ PY
   fi
   echo ""
 
+  # ── E-63: Deep Audit — Dependency Health + Connectivity Probe ──────────────
+  echo "MCP Deep Audit (§19.1):"
+  if [[ -f "$REGISTRY" ]] && command -v python3 &>/dev/null && command -v node &>/dev/null; then
+    local deep_fail=0
+    while IFS='|' read -r srv_name _; do
+      [[ -z "$srv_name" ]] && continue
+      local sdir="${MCP_DIR}/${srv_name}"
+      [[ ! -d "$sdir" ]] && continue  # already reported above
+
+      # Dependency health: npm list --depth=0 (exit code 0 = all satisfied)
+      local npm_out
+      npm_out=$(cd "$sdir" && npm list --depth=0 2>&1)
+      if echo "$npm_out" | grep -q "missing\|UNMET\|invalid"; then
+        echo "  ✗ ${srv_name}: dependency issues — run: ai mcp-setup"
+        echo "      $(echo "$npm_out" | grep -E 'missing|UNMET|invalid' | head -3 | sed 's/^/      /')"
+        deep_fail=1
+      fi
+
+      # Connectivity probe: node -c syntax check
+      if [[ -f "${sdir}/index.js" ]]; then
+        if ! node -c "${sdir}/index.js" &>/dev/null; then
+          echo "  ✗ ${srv_name}: index.js syntax error (CRITICAL_FAILURE)"
+          deep_fail=1
+        fi
+      fi
+
+    done < <(python3 -c "
+import json
+with open('$REGISTRY') as f:
+    d = json.load(f)
+for name, info in d.get('mcp_servers', {}).items():
+    if 'path' in info:
+        print(name + '|' + info['path'])
+" 2>/dev/null || true)
+
+    # Registry ↔ .mcp.json path consistency check
+    if [[ -f ".mcp.json" ]]; then
+      python3 - <<'PY' 2>/dev/null || true
+import json, os
+AIOS = os.path.expanduser("~/.ai-os")
+with open(os.path.join(AIOS, "config/registry.json")) as f:
+    reg = json.load(f)
+with open(".mcp.json") as f:
+    mcp = json.load(f)
+mcp_servers = mcp.get("mcpServers", {})
+for name in reg.get("mcp_servers", {}):
+    if name not in mcp_servers:
+        print(f"  ✗ {name}: in registry but missing from .mcp.json — run: ai mcp-setup")
+    else:
+        args = mcp_servers[name].get("args", [])
+        expected = os.path.join(AIOS, "mcp", name, "index.js")
+        if args and args[0] != expected:
+            print(f"  ✗ {name}: .mcp.json path mismatch")
+            print(f"      expected: {expected}")
+            print(f"      actual:   {args[0]}")
+PY
+    fi
+
+    # Check TESTSPRITE_API_KEY is not a literal placeholder
+    if [[ -f ".mcp.json" ]] && grep -q '${TESTSPRITE_API_KEY}' .mcp.json 2>/dev/null; then
+      if [[ -z "${TESTSPRITE_API_KEY:-}" ]]; then
+        echo "  ✗ TESTSPRITE_API_KEY: env var not set — TestSprite MCP will receive literal '\${TESTSPRITE_API_KEY}'"
+        echo "      Fix: export TESTSPRITE_API_KEY=<your-key> in ~/.zshrc or ~/.bashrc"
+      else
+        echo "  ✓ TESTSPRITE_API_KEY: set ($(echo "${TESTSPRITE_API_KEY}" | cut -c1-4)****)"
+      fi
+    fi
+
+    [[ "$deep_fail" -eq 0 ]] && echo "  ✓ all MCP servers: dependencies OK, syntax OK, paths consistent"
+  else
+    echo "  — skipped (requires node + python3)"
+  fi
+  echo ""
+
   echo "Copilot repo instructions (.github/copilot-instructions.md in current dir):"
   if [[ -f ".github/copilot-instructions.md" ]]; then
     echo "  ✓ present (read automatically by GitHub Copilot Chat)"
@@ -1286,6 +1569,41 @@ PY
     fi
   done
   echo "  (if nothing listed above, contracts are clean ✓)"
+  echo ""
+
+  echo "State Health (.ai/state.json):"
+  if [[ -d ".ai" ]] && command -v python3 &>/dev/null; then
+    local state_file=".ai/state.json"
+    local tasks_file=".ai/TASKS.md"
+    if [[ -f "$state_file" ]]; then
+      python3 -c "
+import json, re, os, sys
+state_file = '${state_file}'
+tasks_file = '${tasks_file}'
+try:
+    d = json.load(open(state_file))
+    tasks  = d.get('tasks', [])
+    stamps = d.get('stamps', [])
+    print('  state.json: tasks=' + str(len(tasks)) + ', stamps=' + str(len(stamps)))
+    if len(tasks) == 0 and os.path.exists(tasks_file):
+        with open(tasks_file) as f:
+            content = f.read()
+        task_count = len(re.findall(r'^- \[', content, re.MULTILINE))
+        if task_count > 0:
+            print('  WARN: state.json has 0 tasks but TASKS.md has ' + str(task_count) + ' entries — run: ai migrate-state')
+        else:
+            print('  state.json and TASKS.md both empty (clean slate)')
+    elif len(tasks) > 0:
+        print('  state.json v' + str(d.get('version', '?')) + ' — OK')
+except Exception as e:
+    print('  state.json error: ' + str(e))
+" 2>/dev/null || echo "  ✗ could not parse state.json"
+    else
+      echo "  ✗ state.json missing — run: ai init or ai migrate-state"
+    fi
+  else
+    echo "  — skipped (not in a project dir or python3 missing)"
+  fi
 }
 
 do_mcp_setup() {
@@ -1366,9 +1684,10 @@ case "$cmd" in
   archive)   do_archive ;;
   review)    do_review "${@:2}" ;;
   test)      do_test "${@:2}" ;;
-  sync)      do_sync ;;
-  mcp-setup) do_mcp_setup ;;
-  doctor)    doctor ;;
+  sync)          do_sync ;;
+  migrate-state) do_migrate_state "${@:2}" ;;
+  mcp-setup)     do_mcp_setup ;;
+  doctor)        doctor ;;
   where)
     echo "AI-OS:     ${AIOS}"
     echo "bin:       ${AIOS}/bin"

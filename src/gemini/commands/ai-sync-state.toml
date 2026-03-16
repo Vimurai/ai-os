@@ -1,0 +1,2 @@
+description = "Synchronize cross-agent state by force re-reading .ai/TASKS.md, architect.md, and DIGEST.md from the filesystem. Use before any planning or implementation decision after a Claude handoff. Equivalent to the shared ai-sync-state skill."
+prompt = "Please activate the 'ai-sync-state' skill and proceed with the state synchronization."

@@ -1,0 +1,6 @@
+# trigger-audit — Mid-Execution Trigger Enforcement (§21)
+# Invoke after PLAN phase and before first WRITE on any task.
+# Scans diff + task context for mandatory agent/skill dispatches.
+
+description = "Run mid-execution trigger audit — scans current diff and task for mandatory dispatches (security_engineer, dependency_gate, ci_gate, obs_baseline). Returns CLEAR or BLOCKED checklist."
+prompt = "Please activate the 'trigger-audit' skill and proceed with the mid-execution trigger audit."
