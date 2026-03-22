@@ -97,6 +97,10 @@
   Status: DONE 2026-03-16 — Blueprinted Verification Audit (§32) with verification-mcp and compliance reporting logic.
 - [x] P-51: Blueprint for Intent Sync, Resilience Stress-Testing, and Template Alignment (§33–§34). | Tier: 1
   Status: DONE 2026-03-22 — Blueprinted §33 (Intent Lifecycle) and §34 (Resilience Suite); created E-111–E-115.
+- [x] P-52: Blueprint for Project-Scoped Skills and Agents alignment (§21). Defining resolution priority for context-invoker-mcp and diagnostic boundaries for ai doctor and compliance audits. | Tier: 2
+  Status: DONE 2026-03-22 — Completed blueprint for §21 Project-Scoped Skills and Agents and assigned E-116 to E-119 to Claude.
+- [x] P-53: Blueprint an Anti-Drift Protocol (§35) to mathematically guarantee role adherence for Gemini and Claude, including prompt updates and mechanical validation mechanisms. | Tier: 2
+  Status: DONE 2026-03-22 — Completed blueprint for §35 Anti-Drift Protocol and assigned E-120 to E-122 to Claude.
 
 ## Engineer (Claude)
 - [x] E-1: Implement `ai-exec` CLI (Bash) based on P-01 blueprint
@@ -303,3 +307,17 @@
   Status: DONE 2026-03-22 — Added §30 (Bootloader Resilience), §31 (Memory Palace), §32 (Verification Audit) sections to src/templates/architect.md.template. Closes P-53 template sync gap.
 - [x] E-115: Update project CAPABILITIES.md to register new tools (completes E-110). | Tier: 1
   Status: DONE 2026-03-22 — Created project-level CAPABILITIES.md at repo root with ~/.ai-os/memory/** (write) and ~/.ai-os/config/** (read) registered. Completes E-110 for the project deployment.
+- [x] E-116: Update context-invoker-mcp to support Project Scope. Modify src/mcp/context-invoker-mcp/index.js to insert project-scoped directories (.claude/skills, .gemini/skills, .claude/agents, .gemini/agents) at the beginning of SKILL_ROOTS and AGENT_ROOTS, prioritizing them over global ones. | Tier: 2
+  Status: DONE 2026-03-22 — context-invoker-mcp: project-scoped .claude/.gemini dirs prepended to SKILL_ROOTS/AGENT_ROOTS when .ai/ present
+- [x] E-117: Update ai doctor output in src/bin/ai to explicitly check and report on project-scoped .gemini and .claude directories (and their agents/ / skills/ subdirectories) if a .ai directory is present in the current working directory. Update output titles to specify 'Global' and 'Project-Scoped'. | Tier: 1
+  Status: DONE 2026-03-22 — ai doctor: renamed sections to Global, added Project-Scoped section for .claude/.gemini when in AI-OS project
+- [x] E-118: Update _run_compliance_audit python inline script inside src/bin/ai to also scan .claude/agents, .claude/skills, .gemini/agents, and .gemini/skills in the project root if a .ai directory is present, ensuring project-scoped modifications are properly audited for Ghost Tools. | Tier: 2
+  Status: DONE 2026-03-22 — _run_compliance_audit: added .claude/agents, .claude/skills, .gemini/agents, .gemini/skills to Python scan paths
+- [x] E-119: Add unit tests for `context-invoker-mcp` to ensure it properly resolves skills and agents in the project scope if they exist, or verify this manually in a script. Update any integration tests related to `ai doctor --compliance` to handle project-scoped output if needed. | Tier: 2
+  Status: DONE 2026-03-22 — tests/suites/context_invoker_test.sh created — 20 assertions, 20/20 passing
+- [x] E-120: Add explicit ANTI-DRIFT PROTOCOL sections to src/claude/CLAUDE.md and src/gemini/GEMINI.md containing the exact refusal templates specified in §35. Update src/templates/CLAUDE.md and src/templates/GEMINI.md as well. | Tier: 1
+  Status: DONE 2026-03-22 — ANTI-DRIFT PROTOCOL section added to src/claude/CLAUDE.md, src/gemini/GEMINI.md, src/templates/CLAUDE.md, src/templates/GEMINI.md
+- [x] E-121: Update verification-mcp (src/mcp/verification-mcp/index.js) and the inline python audit script in src/bin/ai (_run_compliance_audit) to include a check for the 'ANTI-DRIFT PROTOCOL' string in CLAUDE.md and GEMINI.md. If missing, it must throw a CRITICAL error. | Tier: 2
+  Status: DONE 2026-03-22 — _run_compliance_audit: ANTI_DRIFT_HEADER check added; CRITICAL error if missing from CLAUDE.md/GEMINI.md
+- [x] E-122: Update hooks/pre-commit.sh to emit a warning if a commit contains changes to both 'src/' and '.ai/architect.md' unless the log explicitly proves an approved implementation delta. | Tier: 2
+  Status: DONE 2026-03-22 — hooks/pre-commit.sh: check_architect_src_comodification warns on src/ + architect.md co-staged without [IMPL_DELTA]

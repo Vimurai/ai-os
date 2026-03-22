@@ -125,6 +125,33 @@ ensure_ai_templates() {
     echo "Created .mcp.json (MCP servers: filesystem + memory + AI-OS custom servers)"
   fi
 
+  # CLAUDE.md in project root — mandates preflight + skill auto-invocation
+  if [[ ! -f "CLAUDE.md" ]]; then
+    cp "$T/CLAUDE.md" "CLAUDE.md"
+    echo "Created CLAUDE.md (project bootloader)"
+  fi
+
+  # GEMINI.md in project root — mandates preflight for Gemini sessions
+  if [[ ! -f "GEMINI.md" ]]; then
+    cp "$T/GEMINI.md" "GEMINI.md"
+    echo "Created GEMINI.md (project bootloader)"
+  fi
+
+  # .claude/ — project-scoped Claude agents, skills, and settings
+  mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
+  cp -rf "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
+  sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
+  _configure_project_claude_settings ".claude"
+  echo "Created .claude/ (project-scoped agents + skills + settings.json)"
+
+  # .gemini/ — project-scoped Gemini agents and skills
+  mkdir -p ".gemini/agents" ".gemini/skills"
+  cp -rf "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
+  sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
+  echo "Created .gemini/ (project-scoped agents + skills)"
+
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
   local C="${AIOS}/copilot"
   if [[ -f "${C}/copilot-instructions.md" && ! -f ".github/copilot-instructions.md" ]]; then
@@ -233,6 +260,54 @@ data["ai_os"] = {"installed_by": "ai-os", "version": "3.2"}
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 print("settings.json updated ✓")
+PY
+}
+
+# Writes .claude/settings.json in a project directory with project-scoped Stop + PostToolUse hooks.
+# $1: target dir (e.g. ".claude")
+_configure_project_claude_settings() {
+  local TARGET_DIR="${1:-.claude}"
+  mkdir -p "$TARGET_DIR"
+  python3 - "$TARGET_DIR" <<'PY'
+import json, os, sys
+
+target_dir = sys.argv[1]
+path = os.path.join(target_dir, "settings.json")
+
+data = {}
+if os.path.exists(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f) or {}
+    except Exception:
+        pass
+
+hooks = data.setdefault("hooks", {})
+
+stop_cmd = "bash $HOME/.ai-os/hooks/stop-hook.sh"
+stop_hooks = hooks.setdefault("Stop", [])
+already = any(
+    h.get("command") == stop_cmd
+    for entry in stop_hooks
+    for h in entry.get("hooks", [])
+)
+if not already:
+    stop_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": stop_cmd}]})
+
+post_cmd = "bash $HOME/.ai-os/hooks/post-tool-log.sh"
+post_hooks = hooks.setdefault("PostToolUse", [])
+already = any(
+    h.get("command") == post_cmd
+    for entry in post_hooks
+    for h in entry.get("hooks", [])
+)
+if not already:
+    post_hooks.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": post_cmd}]})
+
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+print(f"{path} updated ✓")
 PY
 }
 
@@ -1469,30 +1544,35 @@ sync_skills_20() {
 do_sync() {
   echo "Syncing agent/skill files from ${AIOS} → ~/.claude and ~/.gemini ..."
 
-  cp -f "${AIOS}/claude/CLAUDE.md"   "${HOME}/.claude/CLAUDE.md"
-  cp -f "${AIOS}/claude/agents/"*.md "${HOME}/.claude/agents/" 2>/dev/null || true
-  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.claude/skills"
-  sync_skills_20 "${AIOS}/claude/skills" "${HOME}/.claude/skills"
-  echo "  Claude agents + shared skills synced"
+  # Always sync global principal instructions
+  cp -f "${AIOS}/claude/CLAUDE.md" "${HOME}/.claude/CLAUDE.md" 2>/dev/null || true
+  cp -f "${AIOS}/gemini/GEMINI.md" "${HOME}/.gemini/GEMINI.md" 2>/dev/null || true
+  echo "  Global instructions synced (CLAUDE.md, GEMINI.md)"
 
-  mkdir -p "${HOME}/.gemini/commands"
-  cp -f "${AIOS}/gemini/GEMINI.md"   "${HOME}/.gemini/GEMINI.md"
-  cp -f "${AIOS}/gemini/agents/"*.md "${HOME}/.gemini/agents/" 2>/dev/null || true
-  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.gemini/skills"
-  sync_skills_20 "${AIOS}/gemini/skills" "${HOME}/.gemini/skills"
-  cp -f "${AIOS}/gemini/commands/"*.toml "${HOME}/.gemini/commands/" 2>/dev/null || true
-  configure_gemini_mcp
-  echo "  Gemini agents + shared skills + commands synced"
+  # If inside an AI-OS project, sync project-scoped dirs
+  if [[ -d ".ai" ]]; then
+    echo "Syncing project-scoped .claude/ and .gemini/ ..."
+    mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
+    cp -f "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
+    sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
+    sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
+    _configure_project_claude_settings ".claude"
+    echo "  .claude/ synced (agents + skills + settings.json)"
+
+    mkdir -p ".gemini/agents" ".gemini/skills"
+    cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
+    sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
+    sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
+    echo "  .gemini/ synced (agents + skills)"
+  else
+    echo "  (not in AI-OS project — skipping project-scoped sync)"
+  fi
 
   cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
   chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
-  echo "  Hooks synced (stop-hook, post-tool-log, pre-commit, post-commit)"
+  echo "  Hooks synced"
 
-  mkdir -p "${HOME}/.config/github-copilot"
-  cp -f "${AIOS}/copilot/COPILOT.md" "${HOME}/.config/github-copilot/COPILOT.md" 2>/dev/null || true
-  echo "  Copilot config synced"
-
-  echo "Done. No settings.json changes — run: ai install to update hooks/permissions."
+  echo "Done. Run: ai install to update global settings.json hooks/permissions."
 }
 
 doctor() {
@@ -1524,7 +1604,7 @@ doctor() {
   fi
   echo ""
 
-  echo "Gemini:"
+  echo "Gemini (Global):"
   [[ -d "${HOME}/.gemini" ]] && echo "  ✓ ~/.gemini exists" || echo "  ✗ ~/.gemini missing"
   if [[ -f "${HOME}/.gemini/GEMINI.md" ]]; then
     if diff -q "${AIOS}/gemini/GEMINI.md" "${HOME}/.gemini/GEMINI.md" &>/dev/null; then
@@ -1538,7 +1618,7 @@ doctor() {
   [[ -d "${HOME}/.gemini/agents" ]] && echo "  ✓ agents dir: $(ls "${HOME}/.gemini/agents" | wc -l | tr -d ' ') files" || echo "  ✗ agents dir missing"
   echo ""
 
-  echo "Claude:"
+  echo "Claude (Global):"
   [[ -d "${HOME}/.claude" ]] && echo "  ✓ ~/.claude exists" || echo "  ✗ ~/.claude missing"
   if [[ -f "${HOME}/.claude/CLAUDE.md" ]]; then
     if diff -q "${AIOS}/claude/CLAUDE.md" "${HOME}/.claude/CLAUDE.md" &>/dev/null; then
@@ -1551,6 +1631,24 @@ doctor() {
   fi
   [[ -d "${HOME}/.claude/agents" ]] && echo "  ✓ agents dir: $(ls "${HOME}/.claude/agents" | wc -l | tr -d ' ') files" || echo "  ✗ agents dir missing"
   echo ""
+
+  if [[ -d ".ai" ]]; then
+    echo "Project-Scoped (.claude/ / .gemini/):"
+    for agent_dir in ".claude" ".gemini"; do
+      local scope_label="${agent_dir}"
+      if [[ -d "${agent_dir}/agents" ]]; then
+        echo "  ✓ ${scope_label}/agents: $(ls "${agent_dir}/agents" | wc -l | tr -d ' ') files"
+      else
+        echo "  ✗ ${scope_label}/agents: missing — run: ai init"
+      fi
+      if [[ -d "${agent_dir}/skills" ]]; then
+        echo "  ✓ ${scope_label}/skills: $(ls "${agent_dir}/skills" | wc -l | tr -d ' ') entries"
+      else
+        echo "  ✗ ${scope_label}/skills: missing — run: ai init"
+      fi
+    done
+    echo ""
+  fi
 
   echo "Hooks:"
   if [[ -f "${HOME}/.ai-os/hooks/stop-hook.sh" ]]; then
@@ -1914,7 +2012,12 @@ if Path(".ai").exists():
         Path("src/claude/agents"),
         Path("src/claude/skills"),
         Path("src/shared/skills"),
-        Path("src/gemini/skills"),  # E-116: project-local Gemini skills
+        Path("src/gemini/skills"),
+        # E-118: project-scoped dirs (populated by ai init / ai sync)
+        Path(".claude/agents"),
+        Path(".claude/skills"),
+        Path(".gemini/agents"),
+        Path(".gemini/skills"),
     ]
 
 violations = []
@@ -1956,10 +2059,32 @@ for base in search_paths:
                     "issue": f"Ghost Tool: '{tool}' declared but not in registry or builtin list"
                 })
 
+# E-121: ANTI-DRIFT PROTOCOL check — CLAUDE.md and GEMINI.md must contain the header
+ANTI_DRIFT_HEADER = "ANTI-DRIFT PROTOCOL"
+anti_drift_targets = []
+if Path(".ai").exists():
+    anti_drift_targets += [Path(".claude/CLAUDE.md"), Path(".gemini/GEMINI.md"),
+                           Path("CLAUDE.md"), Path("GEMINI.md")]
+anti_drift_targets += [Path(aios) / "claude" / "CLAUDE.md",
+                       Path(aios) / "gemini" / "GEMINI.md"]
+seen_targets = set()
+for t in anti_drift_targets:
+    if t in seen_targets or not t.exists():
+        continue
+    seen_targets.add(t)
+    content = t.read_text(errors="replace")
+    if ANTI_DRIFT_HEADER not in content:
+        violations.append({
+            "agent": t.name,
+            "file": str(t),
+            "severity": "CRITICAL",
+            "issue": f"Missing ANTI-DRIFT PROTOCOL section (§35) — run: ai sync to update"
+        })
+
 print(f"Scanned {scanned} agent/skill files\n")
 
 if not violations:
-    print("✓ COMPLIANCE PASS — no Ghost Tools or missing frontmatter detected")
+    print("✓ COMPLIANCE PASS — no Ghost Tools, missing frontmatter, or ANTI-DRIFT violations detected")
 else:
     critical = [v for v in violations if v["severity"] == "CRITICAL"]
     warns    = [v for v in violations if v["severity"] == "WARN"]

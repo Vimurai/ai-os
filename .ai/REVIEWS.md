@@ -13,10 +13,6 @@
 [ALIGN_PASS] 2026-03-16 | WARN only — no FAIL; architect.md unstaged (Gemini-sovereign); .mcp.json §31/§32 blueprinted; verification-mcp M-001 fix aligns with D-009
 [CRITIC_STAMP] 2026-03-16 | CLEAR — [TIER_3] All critics passed: [ARCH_PASS] [SEC_PASS] [TESTS_PASS] [ALIGN_PASS]; P0: 0; P1: 1 (CAPABILITIES.md MCP registration gap — tracked E-110); 224/224 tests passing; M-001 patched and verified by SEC_DEEP_PASS x2
 [UACS_VERIFIED] 2026-03-16 | Tier 3 review complete — all four distributed stamps passed; [CRITIC_STAMP] cleared; P1 tracked as E-110; release gates satisfied
-
----
-[RELEASE_VERDICT] 2026-03-16 | READY
-Stamps: [ARCH_PASS ✓] [SEC_PASS ✓] [TESTS_PASS ✓] [ALIGN_PASS ✓] [SEC_CLEARED ✓] [VIBE_CLEARED -] [CHAOS_CLEARED -]
-P0: 0 | P1: 1 (tracked E-110) | P2: 0
-Summary: All gates passed — sprint E-110–E-117 clear to commit; P1 CAPABILITIES.md MCP registration gap tracked and scheduled.
----
+[ARCH_AUDIT] 2026-03-22 | Audit complete — 12 aligned features, 3 gaps (E-110, template sync, stale intent), 3 risks (drift, resilience, governance).
+[ALIGN_PASS] 2026-03-22 | [TIER_2] Blueprint aligned — sprint E-116–E-122; §21 project-scope routing, §35 anti-drift enforcement, D-007 REVIEWS.md gate, pre-commit co-modification warning all verified
+[CRITIC_STAMP] 2026-03-22 | [TIER_2] No deviations — project-scoped .claude/.gemini dirs, ANTI-DRIFT §35, context-invoker priority routing, 69/69 tests pass

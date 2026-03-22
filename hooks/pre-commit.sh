@@ -144,6 +144,40 @@ APPEND_BLOCK
 
 check_markdown_sync
 
+# ── E-122: architect.md + src/ co-modification warning (§35) ─────────────────
+check_architect_src_comodification() {
+  local staged_files
+  staged_files=$(git diff --cached --name-only 2>/dev/null)
+
+  local has_src=0 has_architect=0
+  while IFS= read -r f; do
+    [[ "$f" == src/* ]] && has_src=1
+    [[ "$f" == .ai/architect.md ]] && has_architect=1
+  done <<< "$staged_files"
+
+  if [[ "$has_src" -eq 1 && "$has_architect" -eq 1 ]]; then
+    # Allow if LOG.md staged change contains an implementation delta marker
+    local log_staged
+    log_staged=$(git diff --cached -- .ai/LOG.md 2>/dev/null)
+    if echo "$log_staged" | grep -qiE "\[IMPL_DELTA\]|\[APPROVED\]|implementation delta"; then
+      return 0
+    fi
+    cat >&2 <<'ARCH_WARN'
+
+⚠  AI-OS GATE 2: ARCHITECT CO-MODIFICATION WARNING
+   Both src/ and .ai/architect.md are staged in the same commit.
+   This may indicate the Engineer rewrote the blueprint to match flawed logic (§35).
+
+   If intentional, add an [IMPL_DELTA] marker to .ai/LOG.md explaining the
+   approved blueprint update, then re-stage LOG.md before committing.
+
+ARCH_WARN
+    # Warning only — does not block (exit 0 continues to Gate 2 check)
+  fi
+}
+
+check_architect_src_comodification
+
 # ── Gate 2 check ─────────────────────────────────────────────────────────────
 if has_recent_critic_stamp; then
   exit 0

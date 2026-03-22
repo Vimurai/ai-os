@@ -54,3 +54,4 @@
 - 2026-03-16: tests/suites/memory_manager_test.sh — 13 assertions for memory-manager-mcp [E-110].
 - 2026-03-16: verification-mcp created — verify_compliance scans YAML frontmatter, flags Ghost Tools CRITICAL (src/mcp/verification-mcp) [E-108].
 - 2026-03-16: memory-manager-mcp created — export_signature + query_signatures, global signatures.json at ~/.ai-os/memory/ (src/mcp/memory-manager-mcp) [E-106].
+- 2026-03-23: auto-stamped by Stop hook

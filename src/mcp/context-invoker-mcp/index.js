@@ -18,9 +18,25 @@ import { resolve, join, sep } from "path";
 import { homedir } from "os";
 
 const HOME = homedir();
+const cwd = process.cwd();
 
-// Search roots — ordered by priority (installed global first, then source dev)
+// Project-scoped roots — highest priority (present only inside an AI-OS project)
+const projectSkillRoots = [];
+const projectAgentRoots = [];
+if (existsSync(join(cwd, ".ai"))) {
+  projectSkillRoots.push(
+    join(cwd, ".claude", "skills"),
+    join(cwd, ".gemini", "skills")
+  );
+  projectAgentRoots.push(
+    join(cwd, ".claude", "agents"),
+    join(cwd, ".gemini", "agents")
+  );
+}
+
+// Search roots — ordered by priority: project-scoped → global → source dev
 const SKILL_ROOTS = [
+  ...projectSkillRoots,
   join(HOME, ".claude", "skills"),
   join(HOME, ".gemini", "skills"),
   join(HOME, ".ai-os", "shared", "skills"),
@@ -28,6 +44,7 @@ const SKILL_ROOTS = [
 ];
 
 const AGENT_ROOTS = [
+  ...projectAgentRoots,
   join(HOME, ".claude", "agents"),
   join(HOME, ".ai-os", "shared", "agents"),
   join(HOME, ".ai-os", "claude", "agents"),
@@ -35,7 +52,6 @@ const AGENT_ROOTS = [
 ];
 
 // Also scan source repo if CWD contains src/
-const cwd = process.cwd();
 const srcBase = resolve(cwd, "src");
 if (existsSync(srcBase)) {
   SKILL_ROOTS.push(

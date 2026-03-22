@@ -4,3 +4,5 @@ src/templates/.mcp.json
 *.key
 *.pem
 /node_modules
+# Project-scoped Gemini settings contain machine-specific absolute paths
+.gemini/settings.json

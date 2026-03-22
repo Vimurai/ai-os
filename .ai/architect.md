@@ -344,3 +344,21 @@
   - **The Engineer's Mandate**: Claude (Engineer) MUST prioritize `.ai/architect.md` and `.ai/TASKS.md` above any other implementation guides. If a conflict exists between a CLI-generated plan and the `.ai/` memory, the `.ai/` memory prevails.
   - **Session Integration**: Every `ai update` (Gate 1) must ensure that the current task context is correctly reflected in `.ai/TASKS.md`.
 - **Enforcement**: Update `CLAUDE.md` and `GEMINI.md` to formally reflect this protocol.
+
+## 21. Project-Scoped Skills and Agents
+- **Concept**: AI-OS allows overriding or extending global skills and agents by placing them in a project-specific `.claude/` or `.gemini/` folder. This enables domain-specific workflows without polluting the global environment.
+- **Mechanism**:
+  - `ai sync` automatically copies shared instructions to `.claude/` and `.gemini/` in the project root if `.ai/` is present.
+  - `context-invoker-mcp` MUST prioritize these project-local paths (e.g., `process.cwd()/.claude/skills`) over global `~/.ai-os/` or `~/.claude/` paths when resolving an `activate_skill` or `activate_agent` call.
+  - Diagnostic tools (`ai doctor`, `ai doctor --compliance`) MUST explicitly scan and report on these project-scoped directories when run from within an AI-OS project root, ensuring "Ghost Tools" or missing dependencies are caught locally.
+
+## 35. Anti-Drift Enforcement
+- **Concept**: A multi-layered system to ensure Gemini and Claude NEVER drift from their respective roles (Architect vs. Engineer).
+- **Prompt-Level (Identity Files)**:
+  - Both `CLAUDE.md` and `GEMINI.md` MUST contain an explicit **ANTI-DRIFT PROTOCOL** section.
+  - Claude MUST refuse requests to design architecture or new features: *"I am the Engineer. Designing architecture is the Principal Architect's (Gemini) role. Please switch to Gemini to plan this feature."*
+  - Gemini MUST refuse requests to write source code or debug logic: *"I am the Principal Architect. My role is strictly limited to architectural blueprints and planning. For coding, debugging, or implementation, please direct your request to Claude (the Engineer)."*
+- **Mechanical Validation**:
+  - `verification-mcp` (via `ai doctor --compliance`) MUST static-analyze `CLAUDE.md` and `GEMINI.md` to guarantee the "ANTI-DRIFT PROTOCOL" header is present, throwing a `CRITICAL` error if missing.
+- **Commit Gate**:
+  - `hooks/pre-commit.sh` MUST emit a warning if `architect.md` and `src/` are modified in the same commit without explicit proof of an implementation delta, preventing the Engineer from silently rewriting the blueprint to match flawed logic.
