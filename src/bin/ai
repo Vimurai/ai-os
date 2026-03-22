@@ -145,12 +145,13 @@ ensure_ai_templates() {
   _configure_project_claude_settings ".claude"
   echo "Created .claude/ (project-scoped agents + skills + settings.json)"
 
-  # .gemini/ — project-scoped Gemini agents and skills
+  # .gemini/ — project-scoped Gemini agents, skills, and settings
   mkdir -p ".gemini/agents" ".gemini/skills"
   cp -rf "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
   sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
   sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
-  echo "Created .gemini/ (project-scoped agents + skills)"
+  _configure_project_gemini_settings ".gemini"
+  echo "Created .gemini/ (project-scoped agents + skills + settings.json)"
 
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
   local C="${AIOS}/copilot"
@@ -176,102 +177,19 @@ migrate_legacy_ai_if_present() {
   fi
 }
 
-enable_claude_agent_teams() {
-  mkdir -p "${HOME}/.claude"
-  python3 - <<'PY'
-import json, os, sys
-path = os.path.expanduser("~/.claude/settings.json")
-data = {}
-if os.path.exists(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f) or {}
-    except Exception as e:
-        print(f"WARN: ~/.claude/settings.json is not valid JSON ({e}). Fix it, then re-run: ai install")
-        sys.exit(0)
 
-# Enable agent teams
-env = data.setdefault("env", {})
-env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
-
-# Tighten Gemini permission: replace broad Bash(gemini *) with scoped Bash(gemini -p *)
-perms = data.setdefault("permissions", {})
-allow = perms.get("allow", [])
-# Replace any "Bash(gemini *)" with scoped version
-new_allow = []
-for entry in allow:
-    if entry == "Bash(gemini *)":
-        new_allow.append("Bash(gemini -p *)")
-        print("Tightened: Bash(gemini *) → Bash(gemini -p *)")
-    else:
-        new_allow.append(entry)
-# Add scoped gemini permission if not present at all
-if "Bash(gemini -p *)" not in new_allow and "Bash(gemini *)" not in new_allow:
-    new_allow.append("Bash(gemini -p *)")
-    print("Added: Bash(gemini -p *)")
-perms["allow"] = new_allow
-
-# E-35: Auto-enable AI-OS MCP tool permissions (registry-driven)
-_reg_path = os.path.expanduser("~/.ai-os/config/registry.json")
-if os.path.exists(_reg_path):
-    with open(_reg_path) as _rf:
-        _reg = json.load(_rf)
-    for _srv, _info in _reg.get("mcp_servers", {}).items():
-        if "path" not in _info:
-            continue
-        for _tool in _info.get("allowed-tools", []):
-            if _tool == "*":
-                continue
-            _perm = f"mcp__{_srv}__{_tool}"
-            if _perm not in new_allow:
-                new_allow.append(_perm)
-                print(f"Added MCP permission: {_perm}")
-
-# Add hooks
-hooks = data.setdefault("hooks", {})
-
-# Stop hook — auto SESSION stamp + DIGEST update trigger
-stop_cmd = "bash $HOME/.ai-os/hooks/stop-hook.sh"
-stop_hooks = hooks.setdefault("Stop", [])
-already = any(
-    h.get("command") == stop_cmd
-    for entry in stop_hooks
-    for h in entry.get("hooks", [])
-)
-if not already:
-    stop_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": stop_cmd}]})
-    print("Added Stop hook: auto SESSION stamp")
-
-# PostToolUse — auto LOG append
-post_cmd = "bash $HOME/.ai-os/hooks/post-tool-log.sh"
-post_hooks = hooks.setdefault("PostToolUse", [])
-already = any(
-    h.get("command") == post_cmd
-    for entry in post_hooks
-    for h in entry.get("hooks", [])
-)
-if not already:
-    post_hooks.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": post_cmd}]})
-    print("Added PostToolUse hook: auto LOG append")
-
-# Metadata
-data["ai_os"] = {"installed_by": "ai-os", "version": "3.2"}
-
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2, ensure_ascii=False)
-print("settings.json updated ✓")
-PY
-}
-
-# Writes .claude/settings.json in a project directory with project-scoped Stop + PostToolUse hooks.
+# Writes .claude/settings.json in a project directory with project-scoped hooks,
+# agent teams env var, Gemini permission, and registry-driven MCP tool permissions.
 # $1: target dir (e.g. ".claude")
 _configure_project_claude_settings() {
   local TARGET_DIR="${1:-.claude}"
+  local REGISTRY="${AIOS}/config/registry.json"
   mkdir -p "$TARGET_DIR"
-  python3 - "$TARGET_DIR" <<'PY'
+  python3 - "$TARGET_DIR" "$REGISTRY" <<'PY'
 import json, os, sys
 
 target_dir = sys.argv[1]
+registry_path = sys.argv[2]
 path = os.path.join(target_dir, "settings.json")
 
 data = {}
@@ -282,6 +200,39 @@ if os.path.exists(path):
     except Exception:
         pass
 
+# Enable agent teams
+env = data.setdefault("env", {})
+env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+
+# Permissions: scoped Gemini CLI + registry-driven MCP tools
+perms = data.setdefault("permissions", {})
+allow = perms.get("allow", [])
+new_allow = []
+for entry in allow:
+    if entry == "Bash(gemini *)":
+        new_allow.append("Bash(gemini -p *)")
+        print("Tightened: Bash(gemini *) → Bash(gemini -p *)")
+    else:
+        new_allow.append(entry)
+if "Bash(gemini -p *)" not in new_allow and "Bash(gemini *)" not in new_allow:
+    new_allow.append("Bash(gemini -p *)")
+    print("Added: Bash(gemini -p *)")
+if os.path.exists(registry_path):
+    with open(registry_path) as rf:
+        reg = json.load(rf)
+    for srv, info in reg.get("mcp_servers", {}).items():
+        if "path" not in info:
+            continue
+        for tool in info.get("allowed-tools", []):
+            if tool == "*":
+                continue
+            perm = f"mcp__{srv}__{tool}"
+            if perm not in new_allow:
+                new_allow.append(perm)
+                print(f"Added MCP permission: {perm}")
+perms["allow"] = new_allow
+
+# Hooks
 hooks = data.setdefault("hooks", {})
 
 stop_cmd = "bash $HOME/.ai-os/hooks/stop-hook.sh"
@@ -311,14 +262,17 @@ print(f"{path} updated ✓")
 PY
 }
 
-configure_gemini_mcp() {
+# Writes .gemini/settings.json in a project directory with project-scoped MCP server config.
+# $1: target dir (e.g. ".gemini")
+_configure_project_gemini_settings() {
+  local TARGET_DIR="${1:-.gemini}"
   local REGISTRY="${AIOS}/config/registry.json"
-  mkdir -p "${HOME}/.gemini"
-  python3 - "$REGISTRY" "$HOME" "$AIOS" <<'PY'
+  mkdir -p "$TARGET_DIR"
+  python3 - "$TARGET_DIR" "$REGISTRY" "$AIOS" <<'PY'
 import json, os, sys
 
-registry_path, home, aios = sys.argv[1], sys.argv[2], sys.argv[3]
-path = os.path.join(home, ".gemini", "settings.json")
+target_dir, registry_path, aios = sys.argv[1], sys.argv[2], sys.argv[3]
+path = os.path.join(target_dir, "settings.json")
 
 # Base npm-managed servers (not path-based, shared between Claude and Gemini)
 servers = {
@@ -354,36 +308,12 @@ data["mcpServers"] = servers
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write("\n")
-print("~/.gemini/settings.json MCP config updated ✓")
+print(f"{path} MCP config updated ✓")
 PY
 }
 
 install_global() {
-  echo "Preparing fresh AI-OS v2 installation..."
-  
-  # Destructive fresh install: remove old config to ensure v2 alignment
-  rm -rf "${HOME}/.gemini"
-  rm -rf "${HOME}/.claude"
-  rm -rf "${HOME}/.config/github-copilot"
-  echo "✓ Old configurations cleared"
-
-  # Gemini (Principal Architect)
-  mkdir -p "${HOME}/.gemini/agents" "${HOME}/.gemini/skills" "${HOME}/.gemini/commands"
-  cp -f "${AIOS}/gemini/GEMINI.md"      "${HOME}/.gemini/GEMINI.md"
-  cp -f "${AIOS}/gemini/agents/"*.md    "${HOME}/.gemini/agents/" 2>/dev/null || true
-  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.gemini/skills"
-  sync_skills_20 "${AIOS}/gemini/skills" "${HOME}/.gemini/skills"
-  cp -f "${AIOS}/gemini/commands/"*.toml "${HOME}/.gemini/commands/" 2>/dev/null || true
-  configure_gemini_mcp
-  echo "✓ Installed Gemini (Principal Architect) config → ~/.gemini"
-
-  # Claude (Principal Software Engineer)
-  mkdir -p "${HOME}/.claude/agents" "${HOME}/.claude/skills"
-  cp -f "${AIOS}/claude/CLAUDE.md"      "${HOME}/.claude/CLAUDE.md"
-  cp -f "${AIOS}/claude/agents/"*.md    "${HOME}/.claude/agents/" 2>/dev/null || true
-  sync_skills_20 "${AIOS}/shared/skills" "${HOME}/.claude/skills"
-  sync_skills_20 "${AIOS}/claude/skills" "${HOME}/.claude/skills"
-  echo "✓ Installed Claude (Principal Software Engineer) config → ~/.claude"
+  echo "Preparing AI-OS v2 installation..."
 
   # Copilot CLI
   mkdir -p "${HOME}/.config/github-copilot"
@@ -391,7 +321,7 @@ install_global() {
     cp -f "${AIOS}/copilot/COPILOT.md" "${HOME}/.config/github-copilot/COPILOT.md"
   fi
   echo "✓ Installed Copilot config → ~/.config/github-copilot"
-  
+
   if command -v gh &>/dev/null && gh extension list 2>/dev/null | grep -q "github/gh-copilot"; then
     gh copilot config set telemetry false 2>/dev/null || true
     echo "  gh copilot: configured ✓ (telemetry off)"
@@ -403,7 +333,7 @@ install_global() {
   chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
   echo "✓ Hooks ready → ${AIOS}/hooks"
 
-  # Copy MCP servers to ~/.ai-os/mcp/ (source already at AIOS since we ARE the install)
+  # MCP servers
   if [[ -d "${AIOS}/mcp" ]]; then
     echo "✓ MCP servers available → ${AIOS}/mcp"
   fi
@@ -416,8 +346,9 @@ install_global() {
     echo "  ⚠  Node.js not found — MCP setup skipped. Install Node.js then run: ai mcp-setup"
   fi
 
-  # Enable agent teams + fix permissions + add v2 hooks
-  enable_claude_agent_teams
+  echo ""
+  echo "✓ AI-OS global installation complete → ${AIOS}"
+  echo "  Run 'ai init' inside any project to scaffold .ai/, .claude/, and .gemini/."
 }
 
 install_git_hooks() {
@@ -1542,16 +1473,10 @@ sync_skills_20() {
 }
 
 do_sync() {
-  echo "Syncing agent/skill files from ${AIOS} → ~/.claude and ~/.gemini ..."
-
-  # Always sync global principal instructions
-  cp -f "${AIOS}/claude/CLAUDE.md" "${HOME}/.claude/CLAUDE.md" 2>/dev/null || true
-  cp -f "${AIOS}/gemini/GEMINI.md" "${HOME}/.gemini/GEMINI.md" 2>/dev/null || true
-  echo "  Global instructions synced (CLAUDE.md, GEMINI.md)"
-
-  # If inside an AI-OS project, sync project-scoped dirs
+  # Sync project-scoped dirs only — global ~/.claude and ~/.gemini are user-owned (§21)
   if [[ -d ".ai" ]]; then
-    echo "Syncing project-scoped .claude/ and .gemini/ ..."
+    echo "Syncing project-scoped .claude/ and .gemini/ from ${AIOS} ..."
+
     mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
     cp -f "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
     sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
@@ -1563,16 +1488,19 @@ do_sync() {
     cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
     sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
     sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
-    echo "  .gemini/ synced (agents + skills)"
+    _configure_project_gemini_settings ".gemini"
+    echo "  .gemini/ synced (agents + skills + settings.json)"
   else
-    echo "  (not in AI-OS project — skipping project-scoped sync)"
+    echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
+    echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."
+    exit 0
   fi
 
   cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
   chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
   echo "  Hooks synced"
 
-  echo "Done. Run: ai install to update global settings.json hooks/permissions."
+  echo "Done."
 }
 
 doctor() {
@@ -1604,32 +1532,12 @@ doctor() {
   fi
   echo ""
 
-  echo "Gemini (Global):"
-  [[ -d "${HOME}/.gemini" ]] && echo "  ✓ ~/.gemini exists" || echo "  ✗ ~/.gemini missing"
-  if [[ -f "${HOME}/.gemini/GEMINI.md" ]]; then
-    if diff -q "${AIOS}/gemini/GEMINI.md" "${HOME}/.gemini/GEMINI.md" &>/dev/null; then
-      echo "  ✓ GEMINI.md installed (integrity OK)"
-    else
-      echo "  ✗ GEMINI.md MISMATCH (drift detected) — run: ai sync"
-    fi
-  else
-    echo "  ✗ GEMINI.md missing — run: ai install"
-  fi
-  [[ -d "${HOME}/.gemini/agents" ]] && echo "  ✓ agents dir: $(ls "${HOME}/.gemini/agents" | wc -l | tr -d ' ') files" || echo "  ✗ agents dir missing"
+  echo "Gemini (Global — user-owned, not managed by AI-OS):"
+  [[ -d "${HOME}/.gemini" ]] && echo "  ✓ ~/.gemini exists" || echo "  ✗ ~/.gemini missing (create with: mkdir -p ~/.gemini)"
   echo ""
 
-  echo "Claude (Global):"
+  echo "Claude (Global — user-owned, not managed by AI-OS):"
   [[ -d "${HOME}/.claude" ]] && echo "  ✓ ~/.claude exists" || echo "  ✗ ~/.claude missing"
-  if [[ -f "${HOME}/.claude/CLAUDE.md" ]]; then
-    if diff -q "${AIOS}/claude/CLAUDE.md" "${HOME}/.claude/CLAUDE.md" &>/dev/null; then
-      echo "  ✓ CLAUDE.md installed (integrity OK)"
-    else
-      echo "  ✗ CLAUDE.md MISMATCH (drift detected) — run: ai sync"
-    fi
-  else
-    echo "  ✗ CLAUDE.md missing — run: ai install"
-  fi
-  [[ -d "${HOME}/.claude/agents" ]] && echo "  ✓ agents dir: $(ls "${HOME}/.claude/agents" | wc -l | tr -d ' ') files" || echo "  ✗ agents dir missing"
   echo ""
 
   if [[ -d ".ai" ]]; then
