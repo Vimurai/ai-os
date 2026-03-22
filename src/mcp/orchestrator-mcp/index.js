@@ -12,7 +12,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
 import { readStateStrict, writeState } from "../shared/state-writer.js";
@@ -71,6 +71,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
         required: ["task_id"],
       },
+    },
+    {
+      name: "run_intent_cleanup",
+      description:
+        "Archives UPDATE.md to .ai/archive/COMM/ and resets it to the template header. " +
+        "Call after prd_writer finishes task generation or after run_handover closes a session's primary intent. " +
+        "Implements §33 Intent Lifecycle Management to prevent Intent Drift.",
+      inputSchema: { type: "object", properties: {} },
     },
     {
       name: "run_review",
@@ -435,6 +443,59 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       lines.push(`Files in diff: ${changedSrcFiles.length} src/ files, ${[...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].length} total`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    // ── run_intent_cleanup ────────────────────────────────────────────────
+    case "run_intent_cleanup": {
+      const updatePath = resolve(ai, "UPDATE.md");
+      const commArchiveDir = resolve(ai, "archive", "COMM");
+      const results = [];
+
+      const updateContent = readSafe(updatePath);
+
+      // Check if UPDATE.md has meaningful content (not just template placeholder)
+      const templateHeader = "# UPDATE (Human input — current request)";
+      const lines = updateContent.split("\n").map(l => l.trim()).filter(Boolean);
+      const isTemplate = lines.every(l =>
+        l.startsWith("#") || l.startsWith("-") || l.startsWith("Then run") ||
+        l.startsWith("Clear this") || l === ""
+      );
+
+      if (!updateContent.trim() || isTemplate) {
+        results.push("⚠ UPDATE.md is already empty or contains only the template — no cleanup needed.");
+        return { content: [{ type: "text", text: results.join("\n") }] };
+      }
+
+      // 1. Back up UPDATE.md to .ai/archive/COMM/
+      try {
+        mkdirSync(commArchiveDir, { recursive: true });
+        const ts = new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 13);
+        const archivePath = resolve(commArchiveDir, `${ts}.intent.md`);
+        writeFileSync(archivePath, updateContent);
+        results.push(`✓ UPDATE.md archived to ${archivePath.replace(cwd + "/", "")}`);
+      } catch (e) {
+        results.push(`⚠ Archive failed: ${e.message} — aborting reset`);
+        return { content: [{ type: "text", text: results.join("\n") }], isError: true };
+      }
+
+      // 2. Reset UPDATE.md to template header
+      const resetContent = `# UPDATE (Human input — current request)\n\nWrite a small delta only:\n- Add: ...\n- Modify: ...\n- Remove: ...\nConstraints: ...\n\nThen run Claude (arch/security/core/devops) or use /gemini for UX/SEO/frontend input.\nClear this file after Claude completes the run.\n`;
+      try {
+        writeFileSync(updatePath, resetContent);
+        results.push("✓ UPDATE.md reset to template header");
+      } catch (e) {
+        results.push(`✗ Reset failed: ${e.message}`);
+        return { content: [{ type: "text", text: results.join("\n") }], isError: true };
+      }
+
+      // 3. Log it
+      const logPath = resolve(ai, "LOG.md");
+      if (existsSync(logPath)) {
+        appendFileSync(logPath, `${today()} | orchestrator-mcp | run_intent_cleanup | UPDATE.md archived and reset (§33)\n`);
+        results.push("✓ LOG.md updated");
+      }
+
+      return { content: [{ type: "text", text: results.join("\n") }] };
     }
 
     default:

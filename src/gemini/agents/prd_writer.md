@@ -72,7 +72,28 @@ Before generating E-## tasks from any P-## blueprint, you MUST validate the blue
 This gate ensures no shallow or incomplete blueprints reach the Engineer.
 
 ## After Writing
+
+### 1. Intent Lifecycle Cleanup (§33 — MANDATORY)
+After successfully writing P-## tasks to TASKS.md:
+
+1. **Backup** `UPDATE.md` to `.ai/archive/COMM/YYYY-MM-DD_HHMM.intent.md` (create dir if needed).
+2. **Reset** `UPDATE.md` to the template header:
+   ```
+   # UPDATE (Human input — current request)
+
+   Write a small delta only:
+   - Add: ...
+   - Modify: ...
+   - Remove: ...
+   Constraints: ...
+
+   Then run Claude (arch/security/core/devops) or use /gemini for UX/SEO/frontend input.
+   Clear this file after Claude completes the run.
+   ```
+3. This prevents Intent Drift — every new `ai update` session starts from a clean slate.
+
+### 2. Post-Write Rules
 - Do NOT modify E-## tasks (Engineer domain).
 - Do NOT write application code.
 - Append a one-liner to `.ai/LOG.md`:
-  `YYYY-MM-DD | Gemini (prd_writer) | Wrote P-## tasks from UPDATE.md intent`
+  `YYYY-MM-DD | Gemini (prd_writer) | Wrote P-## tasks from UPDATE.md intent; UPDATE.md cleared`

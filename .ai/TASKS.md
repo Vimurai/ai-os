@@ -95,6 +95,8 @@
   Status: DONE 2026-03-16 — Blueprinted Cross-Project Memory Palace (§31) with memory-manager-mcp and signature export/query logic.
 - [x] P-50: Blueprint for 'Verification Audit' (§32): Design automated compliance checking for agent capabilities. | Tier: 3
   Status: DONE 2026-03-16 — Blueprinted Verification Audit (§32) with verification-mcp and compliance reporting logic.
+- [x] P-51: Blueprint for Intent Sync, Resilience Stress-Testing, and Template Alignment (§33–§34). | Tier: 1
+  Status: DONE 2026-03-22 — Blueprinted §33 (Intent Lifecycle) and §34 (Resilience Suite); created E-111–E-115.
 
 ## Engineer (Claude)
 - [x] E-1: Implement `ai-exec` CLI (Bash) based on P-01 blueprint
@@ -289,3 +291,15 @@
   Status: DONE 2026-03-16 — Created src/mcp/verification-mcp/index.js with verify_compliance tool; scans agent YAML frontmatter, flags Ghost Tools as CRITICAL, checks §17.1.2 required fields; 62/62 files pass
 - [x] E-109: Add --compliance audit flag to ai doctor to trigger verification-mcp reports. | Tier: 2
   Status: DONE 2026-03-16 — Added --compliance flag to doctor() in src/bin/ai; dispatches to _run_compliance_audit() which scans agent frontmatter via python3 and flags Ghost Tools; 62 files PASS on first run
+- [x] E-110: Update src/templates/CAPABILITIES.md and project CAPABILITIES.md to register memory-manager-mcp (export_signature, query_signatures) and verification-mcp (verify_compliance) tools with correct capability class (READ/WRITE) and path scope. Satisfies P1 from SEC_PASS stamp on E-117 batch. | Tier: 1
+  Status: DONE 2026-03-22 — Updated src/templates/CAPABILITIES.md: added ~/.ai-os/config/** and ~/.ai-os/memory/** to filesystem.read, ~/.ai-os/memory/** to filesystem.write, and two notes entries for memory-manager-mcp (§31) and verification-mcp (§32). Closes P1 SEC_PASS finding from E-117 batch.
+- [x] E-111: Implement UPDATE.md clearing logic in prd_writer.md (P-51 §33). | Tier: 2
+  Status: DONE 2026-03-22 — Added §33 Intent Lifecycle Cleanup section to src/gemini/agents/prd_writer.md: backup UPDATE.md to .ai/archive/COMM/, reset to template header after writing P-## tasks.
+- [x] E-112: Implement run_intent_cleanup tool in orchestrator-mcp (P-51 §33). | Tier: 2
+  Status: DONE 2026-03-22 — Added run_intent_cleanup tool to orchestrator-mcp: archives UPDATE.md to .ai/archive/COMM/YYYY-MM-DD_HHMM.intent.md and resets to template header. Implements §33 Intent Lifecycle Management.
+- [x] E-113: Create tests/suites/resilience_test.sh with the 3 scenarios defined in P-52 §34. | Tier: 3
+  Status: DONE 2026-03-22 — Created tests/suites/resilience_test.sh with 14 tests covering Scenario A (Layer 1/2 fallback), Scenario B (Layer 3 manual recovery), Scenario C (state corruption). 14/14 passing.
+- [x] E-114: Update src/templates/architect.md.template and src/templates/CAPABILITIES.md (P-53). | Tier: 1
+  Status: DONE 2026-03-22 — Added §30 (Bootloader Resilience), §31 (Memory Palace), §32 (Verification Audit) sections to src/templates/architect.md.template. Closes P-53 template sync gap.
+- [x] E-115: Update project CAPABILITIES.md to register new tools (completes E-110). | Tier: 1
+  Status: DONE 2026-03-22 — Created project-level CAPABILITIES.md at repo root with ~/.ai-os/memory/** (write) and ~/.ai-os/config/** (read) registered. Completes E-110 for the project deployment.

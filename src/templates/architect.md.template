@@ -37,3 +37,26 @@
 1. **Plan**: Architects the vision in `architect.md` (Gemini). Mandatory: Ask questions to clarify ambiguities before finalizing the plan. Do not be lazy.
 2. **Build**: Implements the technical logic (Claude).
 3. **Test**: Verifies quality and performance (TestSprite).
+
+## 30. Bootloader Resilience
+- **Concept**: Ensure the Triad maintains operational context even if the primary `orchestrator-mcp` is unavailable.
+- **Execution Flow**:
+  1. Agent attempts `orchestrator-mcp::run_preflight`.
+  2. If error: Agent invokes `ai-preflight` shared skill.
+  3. If skill fails: Agent reads the "Emergency Recovery" section in `CLAUDE.md`.
+- **Error Handling**: Graceful degradation to manual `cat .ai/TASKS.md` if all tools fail.
+- **Security**: Fallback tools must adhere to the same path-traversal restrictions as the primary orchestrator.
+
+## 31. Cross-Project Memory Palace
+- **Concept**: A centralized RAG service (`memory-manager-mcp`) that allows multiple projects to share high-level architectural signatures.
+- **Data Model**: `Signature: { project_name, tag, summary, architect_v, timestamp }`. Storage: `~/.ai-os/memory/signatures.json`.
+- **API Contract**:
+  - `export_signature(summary, tags)`: Called during `ai archive`.
+  - `query_signatures(tags)`: Called during `ai init` to suggest patterns.
+- **Security**: Signatures must NOT contain secrets, PII, or internal logic. Only high-level "Lore" and "Patterns".
+
+## 32. Verification Audit
+- **Concept**: Automated system to verify that declared agent capabilities in YAML frontmatter match actual system configurations.
+- **API Contract**: `verify_compliance(agent_name?)`: Checks frontmatter against `registry.json` and MCP tool exports.
+- **Execution Flow**: `ai doctor --compliance` scans all agents in `src/**/agents/`, flags "Ghost Tools" as CRITICAL violations.
+- **Security**: Prevents agents from claiming tools they are not authorized to use via `registry.json`.
