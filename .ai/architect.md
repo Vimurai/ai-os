@@ -49,6 +49,7 @@
   - **Mechanism**: Use `git worktree` to create a temporary, isolated directory for each high-risk task.
   - **Flow**: `ai update` -> (Check risk) -> `ai-exec` -> `git worktree add <path> <branch>` -> (Execute Task) -> `git worktree remove <path>`.
   - **Capability Isolation**: `ai-exec` enforces restricted shell environments where only `READ` is default, and `WRITE`/`EXECUTE` require explicit capability flags.
+  - **Worktree Resilience**: `ai-exec` MUST include a `trap` for `EXIT ERR SIGINT SIGTERM` to ensure teardown. On start, it must run `git worktree prune` and explicitly wipe any orphaned `.ai-worktree-*` directories to prevent state locks from aborted runs.
 - **Audit Logs (`post-tool-log.sh`)**:
   - **Logic Update**:
     - If `tool_name` is `run_shell_command` or any tool that modifies the system state (e.g., `execute_python`).
@@ -172,6 +173,7 @@
   - **Owned Files**: `src/**`, `LOG.md`, `TASKS.md` (E-## prefix), `SECURITY.md`, `DEVOPS.md`.
   - **Mandate**: Claude is the only agent authorized to implement logic, debug, and manage environment state.
   - **Restriction**: Forbidden from creating new features or modifying `architect.md` without an Architect-approved blueprint.
+  - **Git Identity**: Claude MUST NEVER override the host's git identity. Never use `--author` flags or `Co-authored-by` trailers for AI agents. All commits must be attributed solely to the host user's configured git identity.
 - **The Handover Protocol**:
   - Claude will automatically reject any request for "New Features" and redirect the user to Gemini.
   - Gemini will automatically reject any request for "Coding/Debugging" and redirect the user to Claude.
@@ -179,9 +181,10 @@
 ## 13. Automatic Quality Gate (AQG)
 - **Concept**: Shift from "Human-triggered" testing to "Hook-triggered" autonomous verification.
 - **Immediate Logic (PostToolUse Hook)**:
-  - **Unit Testing**: Automatically run Vitest/Jest for any modified `src/**` file.
-  - **Linting**: Automatically run ESLint/Prettier to enforce "Premium" styling standards.
-  - **Action**: If a test fails, the agent is **LOCKED** until the fix is applied.
+  - **Implementation**: Managed via a post-tool hook (e.g., `hooks/post-tool-use.sh`).
+  - **Unit Testing**: Automatically run project-specific unit tests (e.g., `tests/run.sh` or `npm test`) for any modified `src/**` file after execution of modification tools.
+  - **Linting**: Automatically run syntax validation/linting to enforce standards.
+  - **Action**: If a test fails, the agent is **LOCKED**. Technically, the hook must exit with code `1` and inject a `[LOCKED - AQG FAILED]` prefix into the tool output. The executor is forced to read the stdout failure and submit a fix before proceeding.
 - **Final Logic (Final Commit Hook)**:
   - **TestSprite**: Automatically run full E2E journeys before any `git commit`.
   - **Vibe Audit**: Automatically run Playwright for visual regression and animation checks.
@@ -312,6 +315,37 @@
   - Gemini CLI does not natively auto-spin agents in the background. Instead, it relies on the `activate_skill` tool.
   - To simulate auto-calling, `SKILL.md` descriptions in `src/gemini/skills/` and `src/shared/skills/` must be written with imperative trigger conditions (e.g., "Use activate_skill with this name when the user requests an architectural review").
   - Explicit slash commands (`.toml`) in `src/gemini/commands/` serve as the fallback manual triggers.
+
+### 17.6 commit-crafter (Claude Skill)
+- **Role**: Automates the friction of strict AI-OS commit hooks.
+- **Trigger**: Explicit invocation or when ready to commit.
+- **Instruction Highlights**:
+  - Stages changes, formats Conventional Commits, and injects required UACS stamps (e.g., `[CRITIC_STAMP]`) and `E-##` task IDs.
+  - **CRITICAL**: Must rely entirely on the system's default git config. Never append AI co-authors or override the author flag. Commits belong strictly to the human user.
+
+### 17.7 aqg-resolver (Claude Sub-Agent)
+- **Role**: Low-context autonomous fixer for failed Automatic Quality Gates (tests/lints).
+- **Trigger**: Automatic invocation upon `[LOCKED - AQG FAILED]` detection.
+- **Instruction Highlights**:
+  - Reads linter/test stderr, applies exact file fixes without altering business logic, and re-runs the gate until green.
+
+### 17.8 bug-reproducer (Claude Skill)
+- **Role**: Enforces empirical validation before any fix is applied.
+- **Trigger**: Tier 2/Tier 3 bug fixes.
+- **Instruction Highlights**:
+  - Forces the creation of an isolated `repro.sh` or failing test case that empirically proves the bug exists *before* modifying source code.
+
+### 17.9 release-manager (Shared Skill)
+- **Role**: Sprint lifecycle and versioning.
+- **Trigger**: `ai release` or slash command `/release`.
+- **Instruction Highlights**:
+  - Bumps `package.json`, aggregates `DONE` tasks from `state.json` into `CHANGELOG.md`, tags the commit, and triggers `ai archive`.
+
+### 17.10 docs-architect (Gemini Sub-Agent)
+- **Role**: Synchronizes public documentation with internal AI-OS blueprints.
+- **Trigger**: End of sprint or manual `/docs` command.
+- **Instruction Highlights**:
+  - Audits `README.md` and `CONTRIBUTING.md` against `architect.md` and `.mcp.json` to prevent public documentation drift.
 
 ## 18. Autonomous Command Suite (UACS) Logic
 - **Concept**: Skills that run without human intervention between steps.
