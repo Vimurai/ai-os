@@ -165,6 +165,76 @@
       "created_at": "2026-03-23T00:00:00.000Z",
       "completed_at": "2026-03-23T00:00:00.000Z",
       "summary": "Updated ai-review skills (Claude + Gemini) to use mcp__task-synchronizer-mcp__add_stamp instead of direct REVIEWS.md appends. Synced to all 4 Claude locations and .gemini/skills."
+    },
+    {
+      "id": "E-129",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update src/bin/ai-exec with Worktree Resilience. Implement a `trap` for `EXIT ERR SIGINT SIGTERM` to ensure `git worktree remove --force <path>` is reliably called on teardown. On start, `ai-exec` must run `git worktree prune` and explicitly wipe any orphaned `.ai-worktree-*` directories to prevent state locks from aborted runs.",
+      "created_at": "2026-03-23T08:14:02.591Z",
+      "completed_at": "2026-03-23T08:21:14.619Z",
+      "summary": "src/bin/ai-exec: trap now covers EXIT ERR SIGINT SIGTERM and is registered before create_worktree; git worktree prune + orphaned /tmp/ai-exec-* and .ai-worktree-* dirs wiped on startup."
+    },
+    {
+      "id": "E-130",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the PostToolUse Hook for the Automatic Quality Gate (AQG). Create or update a hook (e.g., `hooks/post-tool-use.sh`) to intercept file modification tools. It must automatically execute local tests (e.g., `tests/run.sh`) for any modified `src/**` files. If tests fail, it must exit with code `1` and inject a `[LOCKED - AQG FAILED]` prefix into the tool output, forcing the agent to resolve the test failure before proceeding.",
+      "created_at": "2026-03-23T08:14:02.619Z",
+      "completed_at": "2026-03-23T08:21:17.807Z",
+      "summary": "Created hooks/post-tool-use.sh (AQG): intercepts Write/Edit on src/** files, runs tests/run.sh, exits 1 with [LOCKED - AQG FAILED] on failure. Registered in _configure_project_claude_settings() in src/bin/ai, .claude/settings.json, and added ai doctor check."
+    },
+    {
+      "id": "E-131",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Create the `commit-crafter` Claude Skill in `src/claude/skills/commit-crafter/SKILL.md`. It must automate the strict AI-OS commit hook requirements by staging changes, formatting Conventional Commits, and injecting required UACS stamps and E-## task IDs. Ensure it explicitly forbids Claude from using `--author` flags or appending `Co-authored-by` trailers, adhering to the new Git Identity mandate in `architect.md`.",
+      "created_at": "2026-03-23T08:17:55.076Z",
+      "completed_at": "2026-03-23T08:26:13.936Z",
+      "summary": "Created src/claude/skills/commit-crafter/SKILL.md — automates Conventional Commits with E-## IDs and UACS stamps; enforces Git Identity mandate (no --author, no Co-authored-by)."
+    },
+    {
+      "id": "E-132",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Create the `aqg-resolver` Claude Sub-Agent in `src/claude/agents/aqg-resolver.md`. It should be a low-context autonomous fixer triggered when the Executor is `[LOCKED - AQG FAILED]`. Its role is to read linter/test stderr, apply exact file fixes without altering business logic, and re-run the gate.",
+      "created_at": "2026-03-23T08:17:55.099Z",
+      "completed_at": "2026-03-23T08:26:16.249Z",
+      "summary": "Created src/claude/agents/aqg-resolver.md — low-context autonomous fixer for [LOCKED - AQG FAILED]; reads test stderr, applies minimal fix, re-runs gate; reports [AQG_RESOLVER_BLOCKED] after 2 failed attempts."
+    },
+    {
+      "id": "E-133",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Create the `bug-reproducer` Claude Skill in `src/claude/skills/bug-reproducer/SKILL.md`. This skill enforces empirical validation for Tier 2/3 bug fixes by forcing the Executor to create an isolated `repro.sh` or failing test case that proves the bug exists before modifying source code.",
+      "created_at": "2026-03-23T08:17:55.133Z",
+      "completed_at": "2026-03-23T08:26:17.934Z",
+      "summary": "Created src/claude/skills/bug-reproducer/SKILL.md — mandates repro.sh or failing test before any src/ edit for Tier 2/3 bugs; confirms reproduction before proceeding."
+    },
+    {
+      "id": "E-134",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Create the `release-manager` Shared Skill in `src/shared/skills/release-manager/SKILL.md`. This skill handles the sprint lifecycle by bumping `package.json`, aggregating `DONE` tasks into `CHANGELOG.md`, tagging the commit, and optionally triggering an `ai archive`.",
+      "created_at": "2026-03-23T08:17:55.163Z",
+      "completed_at": "2026-03-23T08:26:19.145Z",
+      "summary": "Created src/shared/skills/release-manager/SKILL.md — bumps package.json, aggregates DONE tasks into CHANGELOG.md, tags commit, optionally triggers ai archive."
+    },
+    {
+      "id": "E-135",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Create the `docs-architect` Gemini Sub-Agent in `src/gemini/agents/docs-architect.md`. It must periodically audit public documentation (`README.md`, `CONTRIBUTING.md`) against `.ai/architect.md` and `.mcp.json` to prevent drift.",
+      "created_at": "2026-03-23T08:17:55.191Z",
+      "completed_at": "2026-03-23T08:26:20.381Z",
+      "summary": "Created src/gemini/agents/docs-architect.md — audits README.md/CONTRIBUTING.md vs architect.md and .mcp.json for drift; produces gap report and recommends P-## tasks."
     }
   ],
   "stamps": [
@@ -293,6 +363,13 @@
       "task_id": null,
       "timestamp": "2026-03-23T07:48:54.475Z",
       "summary": "Audit complete — 12 aligned features, 3 gaps (Architectural Intelligence dirs missing), 2 orphaned MCPs (orchestrator, risk-analyzer)."
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": null,
+      "timestamp": "2026-03-23T08:12:44.157Z",
+      "summary": "Sprint E-110–E-117 completed; blueprints ALIGNED. Minor gap identified in PostToolUse hook implementation."
     }
   ],
   "deltas": [
@@ -1036,6 +1113,104 @@
         "src/gemini/skills/ai-review/SKILL.md"
       ],
       "read": true
+    },
+    {
+      "task_id": "E-129",
+      "timestamp": "2026-03-23T08:21:23.575Z",
+      "summary": "E-129: ai-exec worktree resilience: trap EXIT ERR SIGINT SIGTERM registered before create_worktree; git worktree prune + orphan wipe on startup | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-130",
+      "timestamp": "2026-03-23T08:21:24.996Z",
+      "summary": "E-130: AQG PostToolUse hook (hooks/post-tool-use.sh): intercepts Write/Edit on src/**, runs tests/run.sh, exits 1 with [LOCKED - AQG FAILED] on failure; registered in src/bin/ai and .claude/settings.json | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-131",
+      "timestamp": "2026-03-23T08:26:24.753Z",
+      "summary": "E-131: commit-crafter skill created — Conventional Commits automation with E-## IDs, UACS stamps, Git Identity mandate enforced | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-132",
+      "timestamp": "2026-03-23T08:26:25.409Z",
+      "summary": "E-132: aqg-resolver agent created — autonomous fixer for [LOCKED - AQG FAILED], minimal fix scope, [AQG_RESOLVER_BLOCKED] escalation after 2 attempts | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-133",
+      "timestamp": "2026-03-23T08:26:26.334Z",
+      "summary": "E-133: bug-reproducer skill created — mandates repro.sh or failing test before src/ edits for Tier 2/3 bugs | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-134",
+      "timestamp": "2026-03-23T08:26:27.191Z",
+      "summary": "E-134: release-manager shared skill created — version bump, CHANGELOG aggregation, git tag, optional ai archive | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-135",
+      "timestamp": "2026-03-23T08:26:27.595Z",
+      "summary": "E-135: docs-architect Gemini agent created — audits README/CONTRIBUTING vs architect.md and .mcp.json, produces gap report and P-## recommendations | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, src/bin/ai",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/bin/ai",
+        "src/bin/ai-exec"
+      ],
+      "read": false
     }
   ]
 }

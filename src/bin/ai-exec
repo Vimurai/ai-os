@@ -179,6 +179,14 @@ if [[ -z "$BASE_BRANCH" ]]; then
   BASE_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "HEAD")
 fi
 
+# ── Startup: prune stale worktree refs and wipe orphaned temp dirs ────────────
+if git rev-parse --git-dir &>/dev/null 2>&1; then
+  git worktree prune 2>/dev/null || true
+fi
+for _orphan in /tmp/ai-exec-* .ai-worktree-*; do
+  [[ -d "$_orphan" ]] && rm -rf "$_orphan" 2>/dev/null || true
+done
+
 echo ""
 echo -e "${CYAN}━━ AI-OS Execution Gate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo "   Task:     ${TASK_NAME}"
@@ -225,14 +233,14 @@ WORKTREE_PATH=""
 ORIGINAL_DIR="$(pwd)"
 
 if [[ $NO_WORKTREE -eq 0 ]]; then
+  # Register teardown trap early — fires on EXIT, errors, and signals
+  trap 'remove_worktree "$WORKTREE_PATH"' EXIT ERR SIGINT SIGTERM
+
   echo -e "${CYAN}  Isolating in git worktree...${RESET}"
   WORKTREE_INFO=$(create_worktree "$TASK_NAME" "$BASE_BRANCH")
   WORKTREE_PATH="${WORKTREE_INFO%%|*}"
   WORKTREE_BRANCH="${WORKTREE_INFO##*|}"
   echo ""
-
-  # Ensure cleanup on exit
-  trap 'remove_worktree "$WORKTREE_PATH"' EXIT
 
   cd "$WORKTREE_PATH"
   echo -e "${GREEN}  Working in: ${WORKTREE_PATH}${RESET}"

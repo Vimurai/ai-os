@@ -18,3 +18,4 @@
 [CRITIC_STAMP] 2026-03-22 | [TIER_2] No deviations — project-scoped .claude/.gemini dirs, ANTI-DRIFT §35, context-invoker priority routing, 69/69 tests pass
 [CRITIC_STAMP] 2026-03-22 | [TIER_2] No deviations — E-123–E-127: strict §21 project-scoping enforced; global ~/.claude/~/.gemini side-effects removed from install/sync; 69/69 tests pass
 [ARCH_AUDIT] 2026-03-23 | Audit complete — 12 aligned features, 3 gaps (Architectural Intelligence dirs missing), 2 orphaned MCPs (orchestrator, risk-analyzer).
+[ARCH_AUDIT] 2026-03-23 | Sprint E-110–E-117 completed; blueprints ALIGNED. Minor gap identified in PostToolUse hook implementation.

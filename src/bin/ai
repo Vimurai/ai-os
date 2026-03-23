@@ -255,6 +255,15 @@ already = any(
 if not already:
     post_hooks.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": post_cmd}]})
 
+agq_cmd = "bash $HOME/.ai-os/hooks/post-tool-use.sh"
+already_agq = any(
+    h.get("command") == agq_cmd
+    for entry in post_hooks
+    for h in entry.get("hooks", [])
+)
+if not already_agq:
+    post_hooks.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": agq_cmd}]})
+
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write("\n")
@@ -1568,6 +1577,11 @@ doctor() {
     echo "  ✓ post-tool-log.sh present (auto LOG append)"
   else
     echo "  ✗ post-tool-log.sh missing — run: ai install"
+  fi
+  if [[ -f "${HOME}/.ai-os/hooks/post-tool-use.sh" ]]; then
+    echo "  ✓ post-tool-use.sh present (AQG: auto test gate)"
+  else
+    echo "  ✗ post-tool-use.sh missing — run: ai install"
   fi
   if [[ -f "${HOME}/.ai-os/hooks/pre-commit.sh" ]]; then
     echo "  ✓ pre-commit.sh present (Gate 2: Quality Gate)"
