@@ -112,8 +112,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update `install_global()` in `src/bin/ai` to remove all modifications to `~/.gemini` and `~/.claude`. `ai install` must strictly target `~/.ai-os` or `.config/github-copilot`. Remove calls to `configure_gemini_mcp` and `enable_claude_agent_teams` from this global installation function.",
-      "created_at": "2026-03-22T23:53:09.639Z",
-      "completed_at": "2026-03-22T23:56:41.521Z",
+      "created_at": "2026-03-22T00:00:00.000Z",
+      "completed_at": "2026-03-22T00:00:00.000Z",
       "summary": "install_global() rewritten — targets ~/ .ai-os and ~/.config/github-copilot only; removed rm -rf ~/.gemini/~/.claude, global agent/skill installs, configure_gemini_mcp and enable_claude_agent_teams calls"
     },
     {
@@ -122,8 +122,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor `configure_gemini_mcp()` in `src/bin/ai` to `_configure_project_gemini_settings(TARGET_DIR)`. It must operate exclusively on the project-scoped `.gemini/settings.json`, following the strict project-scoping policy defined in §21.",
-      "created_at": "2026-03-22T23:53:13.048Z",
-      "completed_at": "2026-03-22T23:56:44.249Z",
+      "created_at": "2026-03-22T00:00:00.000Z",
+      "completed_at": "2026-03-22T00:00:00.000Z",
       "summary": "configure_gemini_mcp() renamed to _configure_project_gemini_settings(TARGET_DIR); now writes TARGET_DIR/settings.json instead of ~/.gemini/settings.json; signature changed to accept target_dir as first arg"
     },
     {
@@ -132,8 +132,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor `enable_claude_agent_teams()` in `src/bin/ai` to merge its logic (enabling agent teams, auto-enabling registry MCP tool permissions) into the existing `_configure_project_claude_settings(TARGET_DIR)` function. It must operate exclusively on the project-scoped `.claude/settings.json`.",
-      "created_at": "2026-03-22T23:53:13.075Z",
-      "completed_at": "2026-03-22T23:56:48.577Z",
+      "created_at": "2026-03-22T00:00:00.000Z",
+      "completed_at": "2026-03-22T00:00:00.000Z",
       "summary": "enable_claude_agent_teams() merged into _configure_project_claude_settings(TARGET_DIR) — agent teams env var, Bash(gemini -p *) permission, and registry-driven MCP permissions now written to project-scoped .claude/settings.json; old global function removed"
     },
     {
@@ -142,8 +142,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update `do_init()` in `src/bin/ai` to execute the project-scoped configuration functions (`_configure_project_claude_settings \".claude\"` and `_configure_project_gemini_settings \".gemini\"`) upon scaffolding a new AI-OS project.",
-      "created_at": "2026-03-22T23:53:13.112Z",
-      "completed_at": "2026-03-22T23:56:53.385Z",
+      "created_at": "2026-03-22T00:00:00.000Z",
+      "completed_at": "2026-03-22T00:00:00.000Z",
       "summary": "ensure_ai_templates() now calls _configure_project_gemini_settings \".gemini\" after populating .gemini/ dir; both .claude/ and .gemini/ settings.json written on ai init"
     },
     {
@@ -152,9 +152,19 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update `do_sync()` in `src/bin/ai` to entirely remove the fallback global `~/.claude` and `~/.gemini` syncing logic. Synchronization of agents, skills, and CLAUDE.md/GEMINI.md files must only occur within the local project directory if `.ai/` is present. Update `ai doctor` checks to align with the deprecation of global scoping.",
-      "created_at": "2026-03-22T23:53:13.137Z",
-      "completed_at": "2026-03-22T23:56:55.704Z",
+      "created_at": "2026-03-22T00:00:00.000Z",
+      "completed_at": "2026-03-22T00:00:00.000Z",
       "summary": "do_sync() removes global ~/.claude/~/.gemini fallback — project-only sync when .ai/ present; exits early with guidance if not in AI-OS project; _configure_project_gemini_settings added to sync block; ai doctor global section updated to reflect user-owned global dirs"
+    },
+    {
+      "id": "E-128",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update the `ai-review` skill (`src/gemini/skills/ai-review/SKILL.md` and `src/claude/skills/ai-review/SKILL.md` if applicable) to instruct the Architect to use `mcp_task-synchronizer-mcp_add_stamp` (with `ARCH_AUDIT` type) instead of appending multi-line text directly to `.ai/REVIEWS.md`. This ensures compliance with Check 4 and D-007.",
+      "created_at": "2026-03-23T00:00:00.000Z",
+      "completed_at": "2026-03-23T00:00:00.000Z",
+      "summary": "Updated ai-review skills (Claude + Gemini) to use mcp__task-synchronizer-mcp__add_stamp instead of direct REVIEWS.md appends. Synced to all 4 Claude locations and .gemini/skills."
     }
   ],
   "stamps": [
@@ -276,6 +286,13 @@
       "task_id": "E-127",
       "timestamp": "2026-03-22T23:57:05.774Z",
       "summary": "[TIER_2] No deviations — E-123–E-127: strict §21 project-scoping enforced; global ~/.claude/~/.gemini side-effects removed from install/sync; 69/69 tests pass"
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "Gemini",
+      "task_id": null,
+      "timestamp": "2026-03-23T07:48:54.475Z",
+      "summary": "Audit complete — 12 aligned features, 3 gaps (Architectural Intelligence dirs missing), 2 orphaned MCPs (orchestrator, risk-analyzer)."
     }
   ],
   "deltas": [
@@ -955,7 +972,7 @@
         ".ai/state.json",
         "src/bin/ai"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-124",
@@ -967,7 +984,7 @@
         ".ai/state.json",
         "src/bin/ai"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-125",
@@ -979,7 +996,7 @@
         ".ai/state.json",
         "src/bin/ai"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-126",
@@ -991,7 +1008,7 @@
         ".ai/state.json",
         "src/bin/ai"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-127",
@@ -1003,7 +1020,22 @@
         ".ai/state.json",
         "src/bin/ai"
       ],
-      "read": false
+      "read": true
+    },
+    {
+      "task_id": "E-128",
+      "timestamp": "2026-03-23T08:09:31.611Z",
+      "summary": "E-128: Updated ai-review skills (Claude + Gemini) to use mcp__task-synchronizer-mcp__add_stamp instead of direct REVIEWS.md appends. Synced to all 4 Claude locations and .gemini/skills. | Files: .ai/REVIEWS.md, .ai/TASKS.md, .ai/UPDATE.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/UPDATE.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        "src/claude/skills/ai-review/SKILL.md",
+        "src/gemini/skills/ai-review/SKILL.md"
+      ],
+      "read": true
     }
   ]
 }

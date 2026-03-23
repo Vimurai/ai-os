@@ -5,7 +5,7 @@ disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash
 context: fork
-agent: Plan
+agent: default
 ---
 
 # AI-OS Review (Tier-Aware Parallel Critics)
@@ -51,15 +51,27 @@ Run `blueprint-aligner-mcp`:
 align_diff()   ← compares staged diff vs architect.md
 ```
 
-If PASS: append to `.ai/REVIEWS.md`:
+If PASS: record via MCP — do NOT write directly to `.ai/REVIEWS.md`:
 ```
-[ALIGN_PASS] YYYY-MM-DD | [TIER_2] Blueprint aligned — no deviations
-[CRITIC_STAMP] YYYY-MM-DD | [TIER_2] Blueprint aligned — no deviations
+mcp__task-synchronizer-mcp__add_stamp({
+  type: "ALIGN_PASS",
+  agent: "blueprint-aligner-mcp",
+  summary: "[TIER_2] Blueprint aligned — no deviations"
+})
+mcp__task-synchronizer-mcp__add_stamp({
+  type: "CRITIC_STAMP",
+  agent: "blueprint-aligner-mcp",
+  summary: "[TIER_2] Blueprint aligned — no deviations"
+})
 ```
 
-If FAIL: append to `.ai/REVIEWS.md`:
+If FAIL: record via MCP:
 ```
-[ALIGN_FAIL] YYYY-MM-DD | [TIER_2] <deviation summary> — COMMIT BLOCKED
+mcp__task-synchronizer-mcp__add_stamp({
+  type: "ALIGN_FAIL",
+  agent: "blueprint-aligner-mcp",
+  summary: "[TIER_2] <deviation summary> — COMMIT BLOCKED"
+})
 ```
 
 Commit (only after PASS): `git commit -m "[TIER_2] <description>"`
@@ -71,11 +83,11 @@ Commit (only after PASS): `git commit -m "[TIER_2] <description>"`
 Spawn all critics in parallel using the `Agent` tool. Each critic is a **materialized agent file** — load its instructions via `activate_agent` and follow them exactly.
 
 ```
-Agent("Run the critic_arch agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
-Agent("Run the critic_security agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
-Agent("Run the critic_tests agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
-Agent("Run blueprint-aligner-mcp align_diff(). Append [ALIGN_PASS] or [ALIGN_FAIL] to .ai/REVIEWS.md")
-Agent("Run the security_engineer agent. Append [SEC_CLEARED] to .ai/LOG.md if clear")
+Agent("Run the critic_arch agent. Use mcp__task-synchronizer-mcp__add_stamp with type ARCH_PASS or ARCH_FAIL to record the result.")
+Agent("Run the critic_security agent. Use mcp__task-synchronizer-mcp__add_stamp with type SEC_PASS or SEC_FAIL to record the result.")
+Agent("Run the critic_tests agent. Use mcp__task-synchronizer-mcp__add_stamp with type TESTS_PASS or TESTS_FAIL to record the result.")
+Agent("Run blueprint-aligner-mcp align_diff(). Use mcp__task-synchronizer-mcp__add_stamp with type ALIGN_PASS or ALIGN_FAIL to record the result.")
+Agent("Run the security_engineer agent. Use mcp__task-synchronizer-mcp__add_stamp with type SEC_CLEARED to record the result.")
 ```
 
 Expected stamps after all complete:

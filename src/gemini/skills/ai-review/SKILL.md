@@ -47,10 +47,9 @@ Identify the highest-impact risks based on current state.
 
 ## Audit Output
 
-Append to `.ai/REVIEWS.md`:
-```markdown
-[ARCH_AUDIT] YYYY-MM-DD | <one-line summary>
+Output the full audit to the conversation in this format:
 
+```markdown
 ## Architectural Audit — YYYY-MM-DD
 
 ### Alignment Summary
@@ -73,4 +72,14 @@ Append to `.ai/REVIEWS.md`:
 - P-##: <what the Architect should blueprint next>
 ```
 
-⚠️ **Domain Rule**: Do NOT write or modify `src/**`. Findings go to `REVIEWS.md` only.
+Then record the stamp via MCP — **do NOT write directly to `.ai/REVIEWS.md`** (it is a generated view, auto-overwritten by `writeState`):
+
+```
+mcp__task-synchronizer-mcp__add_stamp({
+  type: "ARCH_AUDIT",
+  agent: "gemini-architect",
+  summary: "<one-line summary of overall finding>"
+})
+```
+
+⚠️ **Domain Rule**: Do NOT write or modify `src/**`. Do NOT append directly to `.ai/REVIEWS.md`.

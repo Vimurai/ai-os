@@ -22,9 +22,9 @@
 ## 4. Technical Strategy
 - **Framework**: Bash (Zero-dependency besides Node.js for MCP).
 - **Architectural Intelligence**:
-  - `src/gemini/research/`: Integrated with `Firecrawl` and `deep-research` for landscape analysis.
-  - `src/gemini/design/`: `artifacts-builder` for prototyping; `GitMCP` for source-grounded documentation.
-  - `src/gemini/review/`: `review-implementing` and `Playwright` for Engineering Audit.
+  - Driven entirely by composable Node.js MCP servers registered in `~/.ai-os/registry.json` and localized agent/skill files.
+  - Vibe and UX validation powered by `vibe-check-mcp` (Playwright).
+  - Codebase alignment and strict governance enforced via `blueprint-aligner-mcp` and `context-guardian-mcp`.
 - **Tool Registry & Governance**:
   - `~/.ai-os/registry.json`: Signed list of authorized MCP servers.
   - `src/bin/ai-exec`: Enforces Capability Isolation (Read/Write/Execute) based on registry signatures.
@@ -118,6 +118,21 @@
   - **`context-guardian-mcp`**: 
     - **Logic**: Checks `TASKS.md` and `architect.md` for unresolved markers (`TODO`, `FIXME`, `Pending`).
     - **Action**: Blocks `ai archive` or `git commit` if the workspace state is "Dirty" or "Unfinished".
+  - **`orchestrator-mcp`**: 
+    - **Logic**: Handles session start/handover logic programmatically instead of relying on LLMs.
+    - **Action**: Generates structured run_preflight, run_handover, and run_review flows.
+  - **`archive-manager-mcp`**: 
+    - **Logic**: Monitors `.ai/` directory health against token thresholds.
+    - **Action**: Triggers archiving when context limit risk is detected.
+  - **`risk-analyzer-mcp`**: 
+    - **Logic**: Implements TSRT logic directly via multi-signal diff and UPDATE.md analysis.
+    - **Action**: Classifies task intent as Tier 1, 2, or 3.
+  - **`verification-mcp`**:
+    - **Logic**: Audits agent/skill YAML frontmatter for compliance against allowed-tools registry.
+    - **Action**: Flags Ghost Tools as CRITICAL.
+  - **`memory-manager-mcp`**:
+    - **Logic**: Manages cross-project patterns in global `signatures.json`.
+    - **Action**: Exports and queries architectural signatures to maintain Memory Palace state.
 
 ### 11.1 AI-OS Slash Command Integration (Skills 2.0)
 - **Concept**: Exposing core `ai` CLI tools as native slash commands (e.g., `/update`, `/test`) in Claude Code and Gemini to streamline Triad workflows without leaving the chat interface.
@@ -345,12 +360,14 @@
   - **Session Integration**: Every `ai update` (Gate 1) must ensure that the current task context is correctly reflected in `.ai/TASKS.md`.
 - **Enforcement**: Update `CLAUDE.md` and `GEMINI.md` to formally reflect this protocol.
 
-## 21. Project-Scoped Skills and Agents
-- **Concept**: AI-OS allows overriding or extending global skills and agents by placing them in a project-specific `.claude/` or `.gemini/` folder. This enables domain-specific workflows without polluting the global environment.
+## 21. Strictly Project-Scoped Environments
+- **Concept**: AI-OS enforces strict project-scoping for all agent and skill configurations. Global pollution of `~/.claude/` or `~/.gemini/` is strictly prohibited. All environment modifications, custom prompts, and hooks must exist exclusively within a project's local `.claude/` and `.gemini/` directories.
 - **Mechanism**:
-  - `ai sync` automatically copies shared instructions to `.claude/` and `.gemini/` in the project root if `.ai/` is present.
-  - `context-invoker-mcp` MUST prioritize these project-local paths (e.g., `process.cwd()/.claude/skills`) over global `~/.ai-os/` or `~/.claude/` paths when resolving an `activate_skill` or `activate_agent` call.
-  - Diagnostic tools (`ai doctor`, `ai doctor --compliance`) MUST explicitly scan and report on these project-scoped directories when run from within an AI-OS project root, ensuring "Ghost Tools" or missing dependencies are caught locally.
+  - `ai install`: Must NEVER create, modify, or interact with `~/.claude` or `~/.gemini`. Its sole responsibility is placing files in `~/.ai-os` and making the `ai` binary available.
+  - `ai init`: Responsible for creating project-scoped `.claude/settings.json` and `.gemini/settings.json` configuring MCPs, agent teams, and hooks solely for the current repository.
+  - `ai sync`: Synchronizes skills, agents, and instructions exclusively to `.claude/` and `.gemini/` in the current project root. It must NOT sync files to the user's global home directories.
+  - `context-invoker-mcp`: MUST prioritize project-local paths (e.g., `process.cwd()/.claude/skills`) when resolving an `activate_skill` or `activate_agent` call.
+  - Diagnostic tools (`ai doctor`, `ai doctor --compliance`): MUST explicitly scan and report on project-scoped directories when run from within an AI-OS project root, ensuring "Ghost Tools" or missing dependencies are caught locally.
 
 ## 35. Anti-Drift Enforcement
 - **Concept**: A multi-layered system to ensure Gemini and Claude NEVER drift from their respective roles (Architect vs. Engineer).
