@@ -47,3 +47,6 @@
   Status: DONE 2026-03-23 — Created src/shared/skills/release-manager/SKILL.md — bumps package.json, aggregates DONE tasks into CHANGELOG.md, tags commit, optionally triggers ai archive.
 - [x] E-135: Create the `docs-architect` Gemini Sub-Agent in `src/gemini/agents/docs-architect.md`. It must periodically audit public documentation (`README.md`, `CONTRIBUTING.md`) against `.ai/architect.md` and `.mcp.json` to prevent drift. | Tier: 1
   Status: DONE 2026-03-23 — Created src/gemini/agents/docs-architect.md — audits README.md/CONTRIBUTING.md vs architect.md and .mcp.json for drift; produces gap report and recommends P-## tasks.
+
+## Tester (TestSprite)
+- [ ] T-1: Add idempotency tests for `ai init` and `ai sync`: assert that CLAUDE.md, GEMINI.md, and .mcp.json are always overwritten by ensure_ai_templates() and do_sync(); verify second run produces identical output (content matches template); covers P1 gap flagged in [TESTS_WARN] 2026-03-23 | Tier: 1

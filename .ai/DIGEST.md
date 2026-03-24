@@ -54,4 +54,7 @@
 - 2026-03-16: tests/suites/memory_manager_test.sh — 13 assertions for memory-manager-mcp [E-110].
 - 2026-03-16: verification-mcp created — verify_compliance scans YAML frontmatter, flags Ghost Tools CRITICAL (src/mcp/verification-mcp) [E-108].
 - 2026-03-16: memory-manager-mcp created — export_signature + query_signatures, global signatures.json at ~/.ai-os/memory/ (src/mcp/memory-manager-mcp) [E-106].
+- 2026-03-23: SECURITY.md updated — E-129–E-135 review; 2 new MEDIUM findings (M-002 orphan race, TB-06 boundary); no P0 threats; D-011 proposed
+- 2026-03-23: THREAT_MODEL.md updated — TB-06 added (AQG hook); TH-006 added (ai-exec orphan cleanup race); D-011 registered
 - 2026-03-23: auto-stamped by Stop hook
+- 2026-03-24: auto-stamped by Stop hook

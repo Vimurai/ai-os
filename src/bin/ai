@@ -119,23 +119,17 @@ ensure_ai_templates() {
     echo "Created .ai/.gitignore (review it — sensitive files excluded from git)"
   fi
 
-  # .mcp.json in project root — generated with absolute paths to ~/.ai-os/mcp/
-  if [[ ! -f ".mcp.json" ]]; then
-    generate_mcp_json "."
-    echo "Created .mcp.json (MCP servers: filesystem + memory + AI-OS custom servers)"
-  fi
+  # .mcp.json — always regenerate to pick up new servers (preserves user env values)
+  generate_mcp_json "."
+  echo "Updated .mcp.json (MCP servers: filesystem + memory + AI-OS custom servers)"
 
-  # CLAUDE.md in project root — mandates preflight + skill auto-invocation
-  if [[ ! -f "CLAUDE.md" ]]; then
-    cp "$T/CLAUDE.md" "CLAUDE.md"
-    echo "Created CLAUDE.md (project bootloader)"
-  fi
+  # CLAUDE.md — always update bootloader so skill invocation stays current
+  cp -f "$T/CLAUDE.md" "CLAUDE.md"
+  echo "Updated CLAUDE.md (project bootloader)"
 
-  # GEMINI.md in project root — mandates preflight for Gemini sessions
-  if [[ ! -f "GEMINI.md" ]]; then
-    cp "$T/GEMINI.md" "GEMINI.md"
-    echo "Created GEMINI.md (project bootloader)"
-  fi
+  # GEMINI.md — always update bootloader
+  cp -f "$T/GEMINI.md" "GEMINI.md"
+  echo "Updated GEMINI.md (project bootloader)"
 
   # .claude/ — project-scoped Claude agents, skills, and settings
   mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
@@ -1485,6 +1479,14 @@ do_sync() {
   # Sync project-scoped dirs only — global ~/.claude and ~/.gemini are user-owned (§21)
   if [[ -d ".ai" ]]; then
     echo "Syncing project-scoped .claude/ and .gemini/ from ${AIOS} ..."
+
+    # Always update bootloaders so skill invocation stays current
+    local T="${AIOS}/templates"
+    cp -f "$T/CLAUDE.md" "CLAUDE.md" && echo "  CLAUDE.md updated (bootloader)"
+    cp -f "$T/GEMINI.md" "GEMINI.md" && echo "  GEMINI.md updated (bootloader)"
+
+    # Always regenerate .mcp.json to pick up new servers (preserves user env values)
+    generate_mcp_json "." && echo "  .mcp.json updated (MCP server registry)"
 
     mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
     cp -f "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true

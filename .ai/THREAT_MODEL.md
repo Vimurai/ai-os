@@ -12,6 +12,7 @@
 | TB-03       | MCP server        | Project filesystem (cwd)    | Node.js fs| OS file permissions    |
 | TB-04       | verification-mcp  | Caller-supplied paths        | Node.js fs| NONE — see TH-003      |
 | TB-05       | TestSprite server | External TestSprite API     | HTTPS     | TESTSPRITE_API_KEY     |
+| TB-06       | Claude runtime    | PostToolUse hook (AQG)      | stdin/env | OS process isolation   |
 
 ---
 
@@ -59,6 +60,17 @@
 - **Mitigation**: Add `package-lock.json` (GAP-2). Run `npm audit` in CI.
 - **Residual risk**: LOW once lockfile is committed.
 
+### TH-006 — Concurrent ai-exec Orphan Cleanup Race (M-002)
+- **Script**: ai-exec startup (E-129)
+- **Attack**: Two concurrent ai-exec invocations run on the same machine. Process A creates
+  a worktree at `/tmp/ai-exec-task-A-<timestamp>`. Process B starts up, runs the orphan
+  cleanup glob `/tmp/ai-exec-*`, and deletes Process A's worktree. Process A's subsequent
+  operations fail with unexpected "worktree not found" errors.
+- **Likelihood**: LOW — AI-OS is designed for single-user developer machines.
+- **Impact**: LOW — availability only; no confidentiality or integrity impact.
+- **Mitigation**: `|| true` prevents abort; `[[ -d ]]` guard prevents empty-glob errors.
+- **Residual risk**: LOW. D-011 proposes time-threshold scoping for CI environments.
+
 ### TH-005 — Credential Leak via Environment Variable Logging
 - **Server**: TestSprite (existing)
 - **Attack**: TESTSPRITE_API_KEY leaks into a log, REVIEWS.md, or git commit.
@@ -67,6 +79,18 @@
 - **Mitigation**: Key stored in OS env, not hardcoded. `.mcp.json` uses reference syntax.
   All `.ai/` files must be audited before each commit.
 - **Residual risk**: LOW. Ongoing vigilance required.
+
+---
+
+## New Integrations Added (E-129–E-135)
+
+### AQG PostToolUse hook (E-130)
+- New trust boundary: TB-06 (Claude runtime injects tool call JSON into hook via stdin/env)
+- Threats introduced: none P0/P1; L-004, L-005 (cosmetic, accepted)
+
+### ai-exec orphan cleanup (E-129)
+- Modified existing boundary: TB-03 (now also deletes /tmp/ai-exec-* at startup)
+- Threats introduced: TH-006 (availability race, LOW)
 
 ---
 
@@ -90,3 +114,4 @@
 | D-009 | TH-003 | Claude| OPEN    | Add path allowlist validation to verification-mcp paths  |
 | D-010 | All    | Claude| OPEN    | Create CAPABILITIES.md and keep THREAT_MODEL.md current  |
 | GAP-2 | TH-004 | Claude| OPEN    | Add package-lock.json to memory-manager-mcp and verification-mcp |
+| D-011 | TH-006 | Claude| OPEN    | Scope ai-exec orphan cleanup to entries older than 60 minutes     |
