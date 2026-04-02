@@ -227,16 +227,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     // Legacy tools (backwards compatibility)
     {
-      name: "sync_tasks",
-      description: "Legacy: Reads UPDATE.md and proposes P-## tasks. Use add_task for state.json.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          update_content: { type: "string", description: "Override UPDATE.md content (optional)" },
-        },
-      },
-    },
-    {
       name: "append_tasks",
       description: "Legacy: Appends P-## task strings to TASKS.md directly. Use add_task for state.json.",
       inputSchema: {

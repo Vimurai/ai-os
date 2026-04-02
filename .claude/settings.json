@@ -68,7 +68,28 @@
       "mcp__orchestrator-mcp__run_review",
       "mcp__memory-manager-mcp__export_signature",
       "mcp__memory-manager-mcp__query_signatures",
-      "mcp__verification-mcp__verify_compliance"
+      "mcp__verification-mcp__verify_compliance",
+      "mcp__lsp-mcp__get_definitions",
+      "mcp__lsp-mcp__get_references",
+      "mcp__lsp-mcp__get_diagnostics",
+      "mcp__patch-mcp__patch_file",
+      "mcp__patch-mcp__get_file_md5",
+      "mcp__token-budget-mcp__report_cost",
+      "mcp__token-budget-mcp__get_token_budget",
+      "mcp__token-budget-mcp__get_usage_report",
+      "mcp__token-budget-mcp__set_budget",
+      "mcp__token-budget-mcp__reset_session",
+      "mcp__propose-patch-mcp__propose_patch",
+      "mcp__propose-patch-mcp__confirm_patch",
+      "mcp__propose-patch-mcp__reject_patch",
+      "mcp__propose-patch-mcp__list_pending_patches",
+      "mcp__propose-patch-mcp__preview_patch",
+      "mcp__github-bridge-mcp__check_gh_auth",
+      "mcp__github-bridge-mcp__fetch_assigned_issues",
+      "mcp__github-bridge-mcp__get_issue",
+      "mcp__github-bridge-mcp__create_update_from_issues",
+      "mcp__github-bridge-mcp__get_pr_status",
+      "mcp__github-bridge-mcp__create_tasks_from_issues"
     ]
   }
 }

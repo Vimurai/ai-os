@@ -3,7 +3,6 @@
 HARD RULES:
 1) Every Claude run begins with PREFLIGHT (token-saver mode):
    - Read .ai/DIGEST.md first — if current, it replaces most other reads.
-   - Read .ai/UPDATE.md (current human request).
    - Read .ai/TASKS.md (your section only).
    - Read .ai/QUESTIONS.md (open questions only).
    - Open role-specific docs (ARCH/SECURITY/DEVOPS or UX/SEO/FRONTEND) ONLY if editing them.

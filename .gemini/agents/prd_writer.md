@@ -41,19 +41,12 @@ Intent lacks sufficient architectural depth. Please clarify:
 **Mandatory: You must proactively ask these questions if the intent is not 100% unambiguous. Do NOT guess or provide shallow tasks.**
 
 ## For Clear Intent — Produce P-## Tasks
-Each task must include:
-- `P-##`: Sequential from current highest + 1.
-- **What**: One-sentence outcome (measurable, not vague).
-- **Blueprint section**: Which `architect.md` section governs this.
-- **Tier**: 1 / 2 / 3 (determines Engineer gate requirements).
-- **Unblocks**: List E-## tasks this P-## will unblock (if known).
-
-Example output format:
-```
-- [ ] P-09: Blueprint for <feature>
-  Tier: 2 | Blueprint: architect.md §X | Unblocks: E-28
-  What: Define the data model and API contract for <feature> in architect.md.
-```
+Each task must be added to the system using the `add_task` tool from `task-synchronizer-mcp` (DO NOT manually edit `TASKS.md` as it is a generated view).
+When calling `add_task`:
+- `prefix`: "P" (Architect task)
+- `owner`: "Architect (Gemini)"
+- `tier`: 1, 2, or 3
+- `description`: The task format must be: `P-##: What: One-sentence outcome | Blueprint: architect.md §X | Unblocks: E-##`
 
 ## BRIEF.md Update (Conditional)
 Update `.ai/BRIEF.md` Goals section ONLY if the intent introduces a new product goal not yet documented. Do not rewrite existing goals.
@@ -74,26 +67,13 @@ This gate ensures no shallow or incomplete blueprints reach the Engineer.
 ## After Writing
 
 ### 1. Intent Lifecycle Cleanup (§33 — MANDATORY)
-After successfully writing P-## tasks to TASKS.md:
+After successfully adding P-## tasks via `add_task`:
 
-1. **Backup** `UPDATE.md` to `.ai/archive/COMM/YYYY-MM-DD_HHMM.intent.md` (create dir if needed).
-2. **Reset** `UPDATE.md` to the template header:
-   ```
-   # UPDATE (Human input — current request)
-
-   Write a small delta only:
-   - Add: ...
-   - Modify: ...
-   - Remove: ...
-   Constraints: ...
-
-   Then run Claude (arch/security/core/devops) or use /gemini for UX/SEO/frontend input.
-   Clear this file after Claude completes the run.
-   ```
-3. This prevents Intent Drift — every new `ai update` session starts from a clean slate.
+Call the `run_intent_cleanup` tool from `orchestrator-mcp`. 
+This tool automatically archives `UPDATE.md` and resets it to the clean template, preventing Intent Drift. DO NOT execute manual bash commands to move the file.
 
 ### 2. Post-Write Rules
 - Do NOT modify E-## tasks (Engineer domain).
 - Do NOT write application code.
 - Append a one-liner to `.ai/LOG.md`:
-  `YYYY-MM-DD | Gemini (prd_writer) | Wrote P-## tasks from UPDATE.md intent; UPDATE.md cleared`
+  `YYYY-MM-DD | Gemini (prd_writer) | Added P-## tasks to state.json from UPDATE.md intent; run_intent_cleanup executed`

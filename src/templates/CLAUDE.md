@@ -32,13 +32,45 @@ skill: "skill-name"
 Discover available skills: `skill: "ai-preflight"` then check the system-reminder for the full list.
 When a request matches a skill trigger — load and follow it. Never skip gates.
 
+**CRITICAL: The Ephemeral Skill Pattern (Token Saver)**
+Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `skill: "ai-compact"` or executing `/compact` to distill your session history.
+
 ## Mid-Task Triggers
 If you touch auth/secrets → load `security_engineer`
 If you add a dependency → load `dependency_gate`
 If you modify CI/CD → load `ci_gate`
 
-## Global Rules
-Full Principal Engineer rules are in `~/.claude/CLAUDE.md`.
+## Emergency Recovery (§30 — Bootloader Resilience)
+
+If `orchestrator-mcp` is unavailable, degrade gracefully through these layers:
+
+**Layer 1** — `run_preflight()` via orchestrator-mcp ← preferred
+**Layer 2** — `activate_skill("ai-preflight")` ← Bash/jq fallback reads state.json directly
+**Layer 3** — Manual recovery (this section):
+
+```bash
+# Read open tasks
+grep "^- \[ \]" .ai/TASKS.md | head -10
+
+# Read last focus
+python3 -c "import json; s=json.load(open('.ai/state.json')); print(s['project'].get('focus','(none)'))"
+
+# Read last 5 log entries
+tail -5 .ai/LOG.md
+
+# Read current digest
+head -40 .ai/DIGEST.md
+```
+
+**Absolute last resort**: `cat .ai/TASKS.md` — always human-readable even without tooling.
+
+Rules during recovery:
+- Do NOT modify `state.json` manually — only via `task-synchronizer-mcp`
+- Do NOT commit until orchestrator-mcp is restored and Gate 2 passes
+- Log the outage in `LOG.md` once tooling is restored
+
+## Project-Scoped Rules
+Full Principal Engineer rules are managed in `CLAUDE.md` within this project.
 
 ## ANTI-DRIFT PROTOCOL (§35 — Mandatory)
 I am the **Principal Software Engineer**. My role is strictly limited to implementation.

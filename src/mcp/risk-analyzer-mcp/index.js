@@ -177,17 +177,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "classify_risk",
       description:
-        "Classifies intent/changes as Tier 1, 2, or 3 using multi-signal analysis of UPDATE.md content and git diff. Returns tier, confidence, signals, and required actions.",
+        "Classifies intent/changes as Tier 1, 2, or 3 using multi-signal analysis of intent content and git diff. Returns tier, confidence, signals, and required actions.",
       inputSchema: {
         type: "object",
         properties: {
           content: {
             type: "string",
-            description: "UPDATE.md content to analyze (optional — reads .ai/UPDATE.md if omitted)",
+            description: "Intent content to analyze (mandatory)",
           },
           diff: {
             type: "string",
-            description: "Git diff to analyze (optional — reads `git diff --staged` if omitted)",
+            description: "Git diff text to analyze (optional — reads `git diff --staged` if omitted)",
           },
           files: {
             type: "array",
@@ -195,6 +195,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: "List of changed file paths (optional — extracted from diff if omitted)",
           },
         },
+        required: ["content"],
       },
     },
     {
@@ -221,13 +222,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   switch (name) {
     case "classify_risk": {
-      // Get UPDATE.md content
-      let content = args.content;
+      const content = args.content;
       if (!content) {
-        const updatePath = resolve(process.cwd(), ".ai/UPDATE.md");
-        if (existsSync(updatePath)) {
-          content = readFileSync(updatePath, "utf8");
-        }
+        return { content: [{ type: "text", text: "✗ 'content' argument is mandatory for classify_risk." }], isError: true };
       }
 
       // Get diff and extract changed files

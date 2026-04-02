@@ -40,7 +40,7 @@ AI-OS divides cognitive labor into a **Triad**, ensuring small context windows, 
 ### 1. Global Installation
 
 > ⚠️ **CAUTION: OVERWRITES EXISTING CONFIGURATIONS**
-> Running `ai install` configures `~/.claude/settings.json` and `~/.gemini/settings.json` to enforce strict AI-OS rules, injects MCP servers, and installs auto-logging hooks. **If you have custom CLI setups, use a sandbox first!**
+> Running `ai init` configures project-scoped `.claude/settings.json` and `.gemini/settings.json` to enforce strict AI-OS rules, injects MCP servers, and installs auto-logging hooks.
 
 ```bash
 git clone <repository-url> ai-os-v2

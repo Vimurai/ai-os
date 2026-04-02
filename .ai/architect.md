@@ -248,7 +248,7 @@
     3. Create `src/gemini/commands/ai-seo.toml` to explicitly expose the `/ai-seo` slash command.
   - **Outcome**: When a user mentions "AEO", "LLM optimization", or asks "how do I show up in AI answers", Gemini can autonomously trigger `activate_skill` for `ai-seo` and guide the user through the audit.
 
-## 17. Missing Agent Blueprints
+## 17. Agent Blueprints
 ### 17.1 prd_writer (Gemini)
 - **Role**: Refines `UPDATE.md` into structured `TASKS.md` and `BRIEF.md` updates.
 - **Trigger**: `ai update` (Gate 1).
@@ -403,12 +403,63 @@
   - `context-invoker-mcp`: MUST prioritize project-local paths (e.g., `process.cwd()/.claude/skills`) when resolving an `activate_skill` or `activate_agent` call.
   - Diagnostic tools (`ai doctor`, `ai doctor --compliance`): MUST explicitly scan and report on project-scoped directories when run from within an AI-OS project root, ensuring "Ghost Tools" or missing dependencies are caught locally.
 
+## 23. Code Intelligence Layer (LSP-MCP)
+- **Concept**: Provide true symbol/type awareness to agents without expensive file reads.
+- **Implementation**: An MCP server that wraps language servers (e.g., `typescript-language-server`, `pyright`, `gopls`).
+- **Capabilities**:
+    - `get_definitions(path, line, col)`: Jumps to symbol implementation.
+    - `get_references(path, line, col)`: Finds all usages of a symbol.
+    - `get_diagnostics(path)`: Returns real-time lint/type errors.
+- **Usage**: Mandatory for Tier 3 refactors to ensure type safety across boundary changes.
+
+## 24. Reactive Memory & Context Compaction
+- **Reactive Memory**: A post-task hook that triggers Gemini to update `DIGEST.md` automatically after any `E-##` task is marked `DONE`.
+- **Context Compaction (`ai compact`)**:
+    - **Logic**: When `SESSION.md` exceeds 2,000 tokens, Gemini distills the conversation into "Active Context" and archives the raw log.
+    - **Trigger**: Automatic (background) or manual via `/compact`.
+
+## 25. Staleness-Aware File Patching
+- **Concept**: Prevent race conditions where a linter or human edits a file while the agent is "thinking."
+- **Tool**: `patch_file(path, old_content, new_content, expected_md5)`.
+- **Logic**: Replaces `replace`. Verification of `expected_md5` (or a timestamp) blocks writes if the file has drifted since the last `read_file`.
+
+## 26. Principal Architect ANTI-DRIFT PROTOCOL (§35)
+- **Concept**: Multi-layered enforcement to ensure Gemini and Claude never cross their Architect vs. Engineer trust boundaries.
+- **Mechanism**:
+  - **Identities**: Mandatory "ANTI-DRIFT" headers in `CLAUDE.md` and `GEMINI.md`.
+  - **Gate**: `verification-mcp` flags missing protocol headers as `CRITICAL`.
+  - **Hook**: `pre-commit` hook warns if `architect.md` and `src/` are co-modified without proof of an approved [IMPL_DELTA].
+
+## 27. Token Budget & Cost Governance
+- **Concept**: Monitor and control LLM spend in real-time.
+- **Tool**: `get_token_budget()` / `report_cost(task_id, tokens, usd)`.
+- **Logic**: Gemini plans with "Token-Density" in mind. Claude warns when output (e.g., verbose logs) exceeds a configurable threshold (e.g., 50k tokens).
+- **Persistence**: Usage tracked in `~/.ai-os/usage.sqlite`.
+
+## 28. GitHub Bridge (Autonomous Issues)
+- **Concept**: Listen to GitHub events to pre-emptively start the Architect cycle.
+- **Mechanism**: Integration with `gh` CLI. 
+- **Workflow**: `ai sync --github` fetches assigned issues -> Gemini updates `UPDATE.md` and generates blueprints autonomously.
+
+## 29. Just-in-Time (JIT) Skill Loading
+- **Concept**: Minimize context pollution by only loading necessary skill instructions.
+- **Implementation**: `context-invoker-mcp` updated to Level 2 (metadata-only) vs Level 3 (full-load). 
+- **Activation**: Full skill content is only injected into the prompt when the user or Architect explicitly triggers `/activate <skill>`.
+
+## 30. Human-in-the-Loop Safe Diff Flow
+- **Concept**: Mandatory visual confirmation for logic-heavy edits.
+- **Tool**: `propose_patch(path, diff_content)`.
+- **Logic**: Instead of direct writes, Claude presents a formatted diff (using `glow` or `delta`) and pauses for a `[Y/N]` terminal confirmation.
+
 ## 35. Anti-Drift Enforcement
 - **Concept**: A multi-layered system to ensure Gemini and Claude NEVER drift from their respective roles (Architect vs. Engineer).
 - **Prompt-Level (Identity Files)**:
   - Both `CLAUDE.md` and `GEMINI.md` MUST contain an explicit **ANTI-DRIFT PROTOCOL** section.
   - Claude MUST refuse requests to design architecture or new features: *"I am the Engineer. Designing architecture is the Principal Architect's (Gemini) role. Please switch to Gemini to plan this feature."*
   - Gemini MUST refuse requests to write source code or debug logic: *"I am the Principal Architect. My role is strictly limited to architectural blueprints and planning. For coding, debugging, or implementation, please direct your request to Claude (the Engineer)."*
+- **Hard-Tool Enforcement (RBAC)**:
+  - **Interception**: Filesystem MCPs (e.g., `patch-mcp` and direct write tools) MUST verify the caller's role via an injected header (e.g., `X-AI-OS-Role`). If the `Architect` attempts to mutate files outside the `.ai/` or `plans/` whitelist, the MCP must throw an `[ANTI_DRIFT_VIOLATION]` error and block the action.
+  - **Tool Pruning**: The `.mcp.json` structure must separate Gemini and Claude permissions, physically depriving the Architect of execution-heavy tools (like destructive `safe-exec-mcp` commands or `npm` access).
 - **Mechanical Validation**:
   - `verification-mcp` (via `ai doctor --compliance`) MUST static-analyze `CLAUDE.md` and `GEMINI.md` to guarantee the "ANTI-DRIFT PROTOCOL" header is present, throwing a `CRITICAL` error if missing.
 - **Commit Gate**:

@@ -34,32 +34,13 @@ Action: Review UPDATE.md, extract distinct intents, run ai-update for each.
 
 ## Step 3 — Archive Processed UPDATE.md
 
-```bash
-ARCHIVE_DIR=".ai/archive/$(date +%Y-%m)"
-mkdir -p "$ARCHIVE_DIR"
-STAMP=$(date +%Y%m%d_%H%M)
-cp .ai/UPDATE.md "$ARCHIVE_DIR/UPDATE.${STAMP}.md"
-```
+Execute the `run_intent_cleanup` tool from the `orchestrator-mcp` server.
+This tool will automatically:
+1. Backup `UPDATE.md` to the `.ai/archive/COMM/` directory with a timestamp.
+2. Reinitialize `UPDATE.md` with the standard empty template.
+3. Append an entry to `LOG.md`.
 
-Verify the copy succeeded before proceeding.
-
-## Step 4 — Reinitialize Fresh Template
-
-Overwrite `.ai/UPDATE.md` with the standard empty template:
-```
-# UPDATE.md — Session Intent
-
-<!-- Write your intent below. Be specific: target component, outcome, constraints. -->
-<!-- Minimum 8 words with an action verb. Example: "Add rate limiting to /api/auth endpoints using Redis." -->
-
-```
-
-## Step 5 — Log
-
-Append to `.ai/LOG.md`:
-```
-YYYY-MM-DD | <actor> | UPDATE.md archived to .ai/archive/YYYY-MM/UPDATE.YYYYMMDD_HHMM.md — template reinitialized
-```
+Do NOT use manual bash commands (`cp`, `mkdir`, etc.) to perform this action.
 
 ## Rules
 - Never archive if prd_writer has not processed the current UPDATE.md.

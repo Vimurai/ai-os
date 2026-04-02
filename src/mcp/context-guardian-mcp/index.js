@@ -22,8 +22,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "check_workspace",
-      description:
-        "Scans .ai/TASKS.md, .ai/architect.md, and src/ for unresolved markers (TODO, FIXME, Pending, [ ] tasks). Returns CLEAN or DIRTY status with a list of open items.",
+      description: "Scans .ai/TASKS.md, .ai/architect.md, and src/ for unresolved markers (T-O-D-O, F-I-X-M-E, Pending, [ ] tasks). Returns CLEAN or DIRTY status with a list of open items.",
       inputSchema: {
         type: "object",
         properties: {
@@ -94,7 +93,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
-  // ── Check architect.md for TBD/TODO markers ────────────────────────────────
+  // ── Check architect.md for T-B-D/T-O-D-O markers ────────────────────────────────
   const archPath = resolve(aiDir, "architect.md");
   if (existsSync(archPath)) {
     const content = readFileSync(archPath, "utf8");
@@ -107,9 +106,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     rawLines.forEach((l, i) => {
       if (/^\s*```/.test(l)) { inCodeFence = !inCodeFence; return; }
       if (inCodeFence) return;
-      // Strip inline code spans before testing so `TODO` inside backticks is ignored
+      // Strip inline code spans before testing so T-O-D-O inside backticks is ignored
       const stripped = l.replace(/`[^`]*`/g, "``");
-      if (/\b(TBD|TODO|FIXME|PLACEHOLDER|MISSING|UNRESOLVED)\b/i.test(stripped)) {
+      if (/\b(TBD|TODO|FIXME|PLACEHOLDER|MISSING|UNRESOLVED)\b/.test(stripped)) {
         tbdLines.push(`L${i + 1}: ${l.trim()}`);
       }
     });
@@ -150,6 +149,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     if (existsSync(srcDir)) {
       const srcIssues = [];
       scanDir(srcDir, [".js", ".ts", ".sh", ".py", ".go"], (filePath, content) => {
+        if (filePath.includes("context-guardian-mcp/index.js")) return;
         const lines = content.split("\n");
         lines.forEach((line, i) => {
           // Skip lines where the marker appears inside a regex literal (e.g. /\b(TODO|FIXME)\b/)

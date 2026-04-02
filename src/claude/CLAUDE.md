@@ -26,6 +26,9 @@ activate_skill({ skill_name: "ai-review" })   → loads review protocol
 activate_agent({ agent_name: "security_engineer" })  → loads security review instructions
 ```
 
+**CRITICAL: The Ephemeral Skill Pattern (Token Saver)**
+Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `activate_skill({ skill_name: "ai-compact" })` or executing `/compact` to distill your session history.
+
 ## Orchestrator (Preferred for Multi-Step Workflows)
 
 Use `orchestrator-mcp` tools for deterministic execution instead of manually interpreting skill files:

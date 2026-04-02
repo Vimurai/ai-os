@@ -7,12 +7,11 @@ Purpose: Absolute memory synchronization via `.ai/`.
 ALWAYS read (in order) before starting work:
 1) .ai/DIGEST.md         ← current context & snapshot
 2) .ai/architect.md      ← latest blueprint from the Principal Architect (Gemini)
-3) .ai/UPDATE.md         ← human intent/request
-4) .ai/TASKS.md          ← grep for your role (## Architect or ## Engineer)
-5) .ai/QUESTIONS.md      ← grep for "## Open" only
+3) .ai/TASKS.md          ← grep for your role (## Architect or ## Engineer)
+4) .ai/QUESTIONS.md      ← grep for "## Open" only
 
 ## Token Economics (MANDATORY RULE)
-- **Do NOT read any other files** unless explicitly instructed by the `architect.md` or `UPDATE.md`.
+- **Do NOT read any other files** unless explicitly instructed by the `architect.md`.
 - Context windows must remain extremely small to save tokens.
 - Trust the `DIGEST.md`.
 

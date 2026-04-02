@@ -31,6 +31,6 @@ Both APPEND:
 Templates (human fills in):
 - .ai/REPO.md, .ai/ENV.md, .ai/QUALITY.md, .ai/INTERFACES.md,
   .ai/CAPABILITIES.md, .ai/PROMPTS.md, .ai/SEED.md, .ai/READMAP.md,
-  .ai/CRITICS.md, .ai/BRIEF.md, .ai/RULES.md, .ai/UPDATE.md
+  .ai/CRITICS.md, .ai/BRIEF.md, .ai/RULES.md
 
 No one rewrites files they don't own. No "rewrite whole document" behavior.
