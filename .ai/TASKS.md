@@ -61,7 +61,8 @@
   Status: DONE 2026-04-01 — propose-patch-mcp created — propose_patch/confirm_patch/reject_patch/list_pending_patches/preview_patch, delta/diff fallback formatter, in-memory patch store, path traversal blocked
 - [x] E-142: E-142: Implement the `github-bridge-mcp` using GitHub CLI (gh) integration. | Tier: 2
   Status: DONE 2026-04-01 — github-bridge-mcp created — check_gh_auth/fetch_assigned_issues/get_issue/create_update_from_issues/get_pr_status via gh CLI whitelist; ai sync --github wired into src/bin/ai
-- [ ] E-143: E-144: Implement Role-Aware interceptors in filesystem MCPs to throw `[ANTI_DRIFT_VIOLATION]` when Gemini targets `src/`. | Tier: 2
+- [x] E-143: E-144: Implement Role-Aware interceptors in filesystem MCPs to throw `[ANTI_DRIFT_VIOLATION]` when Gemini targets `src/`. | Tier: 2
+  Status: DONE 2026-04-02 — Role-Aware RBAC interceptors implemented. roleGuard() added to patch-mcp (patch_file) and propose-patch-mcp (propose_patch + confirm_patch defense-in-depth). check_role_access pre-flight tool added to context-guardian-mcp. Architect blocked from src/ writes with [ANTI_DRIFT_VIOLATION]; .ai/ and plans/ whitelisted. 25 new tests in e143_test.sh, all passing.
 
 ## Tester (TestSprite)
 - [x] T-1: Add idempotency tests for `ai init` and `ai sync`: assert that CLAUDE.md, GEMINI.md, and .mcp.json are always overwritten by ensure_ai_templates() and do_sync(); verify second run produces identical output (content matches template); covers P1 gap flagged in [TESTS_WARN] 2026-03-23 | Tier: 1

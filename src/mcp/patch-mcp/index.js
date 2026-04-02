@@ -8,13 +8,15 @@
  * drifted since the last read_file call.
  *
  * Tools:
- *   patch_file(path, old_content, new_content, expected_md5?)
+ *   patch_file(path, old_content, new_content, expected_md5?, caller_role?)
  *     → Replaces old_content with new_content only if file matches expected_md5.
  *       If expected_md5 is omitted, falls back to old_content exact-match check.
+ *       If caller_role is "architect", writes outside .ai/ and plans/ are blocked.
  *
  * Security:
  *   - Path must be within cwd (no traversal outside project root).
  *   - expected_md5 acts as an optimistic lock — stale writes are rejected.
+ *   - Role-aware RBAC: Architect writes blocked outside .ai/ and plans/ (E-143, §35).
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -39,6 +41,34 @@ function safePath(filePath, cwd) {
   const rel = relative(cwd, abs);
   if (rel.startsWith("..") || resolve(rel) === abs && rel.startsWith("/")) return null;
   return abs;
+}
+
+/**
+ * Role-Aware RBAC guard (E-143, §35 ANTI-DRIFT).
+ * Architect (Gemini) may only write to .ai/ or plans/ — never src/.
+ * Returns an error result object if blocked, null if allowed.
+ */
+function roleGuard(callerRole, absPath, cwd) {
+  if (!callerRole || callerRole.toLowerCase() !== "architect") return null;
+  const rel = relative(cwd, absPath).replace(/\\/g, "/");
+  const allowed = rel === ".ai" || rel.startsWith(".ai/") ||
+                  rel === "plans" || rel.startsWith("plans/");
+  if (!allowed) {
+    return {
+      content: [{
+        type: "text",
+        text:
+          `[ANTI_DRIFT_VIOLATION] Architect attempted to write outside allowed scope.\n` +
+          `  path:    ${absPath}\n` +
+          `  role:    ${callerRole}\n` +
+          `  allowed: .ai/, plans/\n\n` +
+          `The Architect (Gemini) may only modify .ai/ and plans/.\n` +
+          `To modify src/, switch to the Engineer (Claude).`,
+      }],
+      isError: true,
+    };
+  }
+  return null;
 }
 
 // ── Server ────────────────────────────────────────────────────────────────────
@@ -81,6 +111,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
               "Obtain via the `md5` field returned by a previous patch_file call, " +
               "or compute manually: md5(file_content).",
           },
+          caller_role: {
+            type: "string",
+            enum: ["engineer", "architect"],
+            description:
+              "Role of the calling agent. If 'architect', writes outside .ai/ and plans/ " +
+              "are blocked with [ANTI_DRIFT_VIOLATION]. Omit or set to 'engineer' for Claude.",
+          },
         },
         required: ["path", "old_content", "new_content"],
       },
@@ -118,6 +155,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true,
         };
       }
+
+      const roleBlock = roleGuard(args.caller_role, abs, cwd);
+      if (roleBlock) return roleBlock;
 
       if (!existsSync(abs)) {
         return {

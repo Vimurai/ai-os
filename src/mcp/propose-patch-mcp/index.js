@@ -24,6 +24,7 @@
  *   - Path traversal blocked (must resolve within cwd).
  *   - Patches stored in-memory only (no disk persistence of diffs).
  *   - confirm_patch is disable-model-invocation safe — requires explicit call.
+ *   - Role-aware RBAC: Architect writes blocked outside .ai/ and plans/ (E-143, §35).
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -47,6 +48,34 @@ function safePath(filePath, cwd) {
   const rel = relative(cwd, abs);
   if (rel.startsWith("..")) return null;
   return abs;
+}
+
+/**
+ * Role-Aware RBAC guard (E-143, §35 ANTI-DRIFT).
+ * Architect (Gemini) may only write to .ai/ or plans/ — never src/.
+ * Returns an error result object if blocked, null if allowed.
+ */
+function roleGuard(callerRole, absPath, cwd) {
+  if (!callerRole || callerRole.toLowerCase() !== "architect") return null;
+  const rel = relative(cwd, absPath).replace(/\\/g, "/");
+  const allowed = rel === ".ai" || rel.startsWith(".ai/") ||
+                  rel === "plans" || rel.startsWith("plans/");
+  if (!allowed) {
+    return {
+      content: [{
+        type: "text",
+        text:
+          `[ANTI_DRIFT_VIOLATION] Architect attempted to write outside allowed scope.\n` +
+          `  path:    ${absPath}\n` +
+          `  role:    ${callerRole}\n` +
+          `  allowed: .ai/, plans/\n\n` +
+          `The Architect (Gemini) may only modify .ai/ and plans/.\n` +
+          `To modify src/, switch to the Engineer (Claude).`,
+      }],
+      isError: true,
+    };
+  }
+  return null;
 }
 
 /**
@@ -128,6 +157,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           path:         { type: "string", description: "Relative or absolute file path to patch." },
           diff_content: { type: "string", description: "Unified diff content (output of: diff -u old new) OR the full new file content." },
           description:  { type: "string", description: "One-line description of what this patch does." },
+          caller_role:  {
+            type: "string",
+            enum: ["engineer", "architect"],
+            description: "Role of the calling agent. If 'architect', writes outside .ai/ and plans/ are blocked with [ANTI_DRIFT_VIOLATION].",
+          },
         },
         required: ["path", "diff_content"],
       },
@@ -197,12 +231,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      const roleBlock = roleGuard(args.caller_role, abs, cwd);
+      if (roleBlock) return roleBlock;
+
       const id = newPatchId();
       const patchData = {
         id,
         path: abs,
         diff_content: args.diff_content,
         description: args.description || "",
+        caller_role: args.caller_role || null,
         created_at: new Date().toISOString(),
         status: "pending",
       };
@@ -229,6 +267,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true,
         };
       }
+
+      // Defense-in-depth: re-check role at apply time
+      const roleBlock = roleGuard(patch.caller_role, patch.path, cwd);
+      if (roleBlock) return roleBlock;
 
       // Apply the patch — determine if diff_content is a unified diff or full file
       const isDiff = patch.diff_content.startsWith("---") || patch.diff_content.startsWith("@@");

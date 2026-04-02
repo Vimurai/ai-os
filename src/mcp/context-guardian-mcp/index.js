@@ -21,6 +21,29 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
+      name: "check_role_access",
+      description:
+        "Pre-flight RBAC check (E-143, §35 ANTI-DRIFT). " +
+        "Validates whether a given role is allowed to write to the specified path. " +
+        "Architect (Gemini) may only write to .ai/ and plans/. " +
+        "Returns ALLOWED or [ANTI_DRIFT_VIOLATION] without performing any write.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: "Relative or absolute path the agent intends to write.",
+          },
+          caller_role: {
+            type: "string",
+            enum: ["engineer", "architect"],
+            description: "Role of the calling agent.",
+          },
+        },
+        required: ["path", "caller_role"],
+      },
+    },
+    {
       name: "check_workspace",
       description: "Scans .ai/TASKS.md, .ai/architect.md, and src/ for unresolved markers (T-O-D-O, F-I-X-M-E, Pending, [ ] tasks). Returns CLEAN or DIRTY status with a list of open items.",
       inputSchema: {
@@ -39,6 +62,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  if (name === "check_role_access") {
+    const cwd = process.cwd();
+    const abs = resolve(cwd, args.path);
+    const rel = relative(cwd, abs).replace(/\\/g, "/");
+
+    if (rel.startsWith("..")) {
+      return {
+        content: [{ type: "text", text: `✗ Path traversal blocked: '${args.path}' is outside project root.` }],
+        isError: true,
+      };
+    }
+
+    if (args.caller_role?.toLowerCase() === "architect") {
+      const allowed = rel === ".ai" || rel.startsWith(".ai/") ||
+                      rel === "plans" || rel.startsWith("plans/");
+      if (!allowed) {
+        return {
+          content: [{
+            type: "text",
+            text:
+              `[ANTI_DRIFT_VIOLATION] BLOCKED — Architect may not write to this path.\n` +
+              `  path:    ${abs}\n` +
+              `  role:    ${args.caller_role}\n` +
+              `  allowed: .ai/, plans/\n\n` +
+              `The Architect (Gemini) may only modify .ai/ and plans/.\n` +
+              `To modify src/, switch to the Engineer (Claude).`,
+          }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: "text", text: `ALLOWED — architect write to '${rel}' is within scope (.ai/ or plans/).` }],
+      };
+    }
+
+    return {
+      content: [{ type: "text", text: `ALLOWED — engineer has unrestricted write access within project root.` }],
+    };
+  }
 
   if (name !== "check_workspace") {
     return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
