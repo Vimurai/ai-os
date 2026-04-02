@@ -33,6 +33,14 @@
 - git status
 - git diff
 - ai test
+- npx tsc --noEmit
+- delta
+- diff -u
+- patch
+- gh issue list
+- gh issue view
+- gh pr view
+- gh auth status
 
 ## network.outbound
 # Allowed external domains for network operations.

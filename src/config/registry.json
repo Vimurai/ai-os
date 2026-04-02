@@ -29,18 +29,11 @@
       "requires_playwright": true,
       "disable-model-invocation": false
     },
-    "intent-refiner-mcp": {
-      "path": "src/mcp/intent-refiner-mcp/index.js",
-      "capability": "WRITE",
-      "status": "approved",
-      "allowed-tools": ["refine_intent", "write_update_md"],
-      "disable-model-invocation": false
-    },
     "task-synchronizer-mcp": {
       "path": "src/mcp/task-synchronizer-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "sync_tasks", "append_tasks", "verify_markdown_sync", "archive_done_tasks"],
+      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "verify_markdown_sync", "archive_done_tasks"],
       "disable-model-invocation": false,
       "_note": "Exclusive State Mutator (P-39): manages .ai/state.json, regenerates TASKS.md and REVIEWS.md as views",
       "_mandate": "v3.1 (P-44): state.json is the exclusive write target. TASKS.md and REVIEWS.md are generated views only. Write tools reject calls when state.json is absent — run: ai migrate-state to seed it."
@@ -114,6 +107,46 @@
       "allowed-tools": ["verify_compliance"],
       "disable-model-invocation": false,
       "_note": "§32 Verification Audit: checks agent YAML frontmatter allowed-tools against registry; flags Ghost Tools as CRITICAL"
+    },
+    "lsp-mcp": {
+      "path": "src/mcp/lsp-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["get_definitions", "get_references", "get_diagnostics"],
+      "disable-model-invocation": false,
+      "_note": "§23 Code Intelligence Layer: TypeScript compiler API — symbol/type awareness for Tier 3 refactors"
+    },
+    "patch-mcp": {
+      "path": "src/mcp/patch-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["patch_file", "get_file_md5"],
+      "disable-model-invocation": false,
+      "_note": "§25 Staleness-Aware Patching: MD5-verified atomic writes — prevents race-condition overwrites"
+    },
+    "token-budget-mcp": {
+      "path": "src/mcp/token-budget-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["report_cost", "get_token_budget", "get_usage_report", "set_budget", "reset_session"],
+      "disable-model-invocation": false,
+      "_note": "§27 Token Budget & Cost Governance: real-time LLM spend tracking persisted in ~/.ai-os/usage.sqlite"
+    },
+    "propose-patch-mcp": {
+      "path": "src/mcp/propose-patch-mcp/index.js",
+      "capability": "WRITE",
+      "status": "approved",
+      "allowed-tools": ["propose_patch", "confirm_patch", "reject_patch", "list_pending_patches", "preview_patch"],
+      "disable-model-invocation": false,
+      "_note": "§30 Human-in-the-Loop Safe Diff Flow: propose_patch requires explicit confirm_patch before writing to disk"
+    },
+    "github-bridge-mcp": {
+      "path": "src/mcp/github-bridge-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["check_gh_auth", "fetch_assigned_issues", "get_issue", "create_tasks_from_issues", "get_pr_status"],
+      "disable-model-invocation": false,
+      "_note": "§28 GitHub Bridge: fetches assigned issues via gh CLI and seeds state.json for autonomous Architect cycles"
     }
   }
 }

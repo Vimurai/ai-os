@@ -1,0 +1,11 @@
+{
+  "name": "patch-mcp",
+  "version": "1.0.0",
+  "description": "AI-OS Staleness-Aware File Patching (§25) — MD5-verified atomic file updates.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,60 +1,50 @@
-# DIGEST (Token Saver Cache)
-<!-- Generated: 2026-03-16 | Sprint E-110–E-117: CLOSED -->
+# DIGEST — AI-OS v2 (Updated: 2026-03-31)
 
-- Product: AI-OS CLI framework for structured, role-separated AI agent collaboration (The Triad: Gemini=Architect, Claude=Engineer, TestSprite=Tester).
-- Stack: Bash CLI core (`src/bin/ai`), Node.js MCP servers (13 active), state.json source-of-truth, Markdown as read-only views. Tests: 224/224 across 13 suites.
+## Product
+- CLI framework embedding a Triad AI loop (Architect/Engineer/Tester) into any codebase via `.ai/` memory scaffolding and MCP servers.
 
-## Key decisions:
-- D-001: state.json is sole source of truth; TASKS.md and REVIEWS.md are generated read-only views (ENFORCED — Check 4 added E-113).
-- D-002: execSync strictly forbidden in all MCP servers; use whitelisted spawnSync (ENFORCED E-89).
-- D-003: §17.1.2 mandatory YAML frontmatter required for all agents/skills (ENFORCED E-91).
-- D-004: pre-commit.sh blocks commit (exit 1) on missing generated header or task count drift >2 vs state.json (ENFORCED E-96).
-- D-005: [CRITIC_STAMP] required within 7 days before any Tier 3 commit (ENFORCED).
-- D-006: orchestrator-mcp is preferred over manual skill invocation for multi-step workflows (ACTIVE).
-- D-007: REVIEWS.md narrative text must be encoded as one-line stamps in state.json — multi-line summaries are forbidden (Check 4 enforces this, E-113).
-- D-008: readStateStrict must include a version guard — version mismatches (version != "1.0") treated as corrupt state and return null (ENFORCED E-117).
+## Stack
+- Bash (zero-dependency CLI core), Node.js (MCP servers), Playwright (vibe-check-mcp), SQLite (planned token-budget-mcp), file-based markdown memory.
 
-## Current focus (sprint CLOSED — no open tasks):
-- All E-110 through E-117 tasks completed 2026-03-16.
-- Total test count: 224/224 passing across 13 suites.
-- Next sprint tasks to be blueprinted by Gemini Architect.
-- Run `run_preflight()` at next session start.
+## Triad Health
+- Architect (Gemini): Active — last audit 2026-03-23; P-54–P-59 open (lsp-mcp, patch_file, ai-compact, token-budget-mcp, github-bridge-mcp, JIT skill loading)
+- Engineer (Claude): Active — last completed E-139 (ai-compact skill, 2026-03-31); E-140–E-142 open
+- Tester (TestSprite): Active — T-1 DONE 2026-03-31 (idempotency_test.sh, 16/16 passing)
 
-## Known risks (P0):
-- None active. Previous "Source of Truth Fragmentation" risk mitigated by Check 4 in pre-commit.sh (E-113).
-- spawnSync argument whitelists in MCP servers require ongoing audit as new tools are added.
-- Bootloader blindness: orchestrator-mcp context dependency; if unavailable, fall back to activate_skill (§30 resilience layers in CLAUDE.md).
+## Current Focus
+- E-140: Implement `token-budget-mcp` with SQLite persistence [OPEN]
+- E-141: Implement `propose_patch` tool with interactive TUI diff previews [OPEN]
+- E-142: Implement `github-bridge-mcp` using GitHub CLI (gh) integration [OPEN]
 
-## Important constraints:
-- TASKS.md and REVIEWS.md are Read-Only (regenerated from state.json by task-synchronizer-mcp).
-- REVIEWS.md stamps must be one-line only — no multi-line prose; Check 4 blocks ## headings in REVIEWS.md at commit.
-- Gemini (Architect) must NOT write source code in src/**.
-- All Tier 3 commits require [UACS_VERIFIED] stamp in LOG.md.
-- ai update --votu routes through node intent-refiner-mcp/index.js --stdin (python3 fallback).
-- ai init auto-calls mcp-setup and migrate-state --force (Structured-First onboarding).
-- ai doctor --repair triggers npm install + .mcp.json realignment for broken servers.
-- ai doctor --compliance triggers Ghost Tool compliance scan via verification-mcp (gemini/skills included).
-- readStateStrict returns null on version != "1.0" (state-writer.js and task-synchronizer-mcp).
+## Key Decisions
+- D-007: REVIEWS.md writes must use `mcp__task-synchronizer-mcp__add_stamp` (not direct appends)
+- D-009: verification-mcp path traversal (M-001) patched via allowlist
+- D-011: M-002 ai-exec orphan race accepted as LOW (MEDIUM severity, mitigated by trap/prune)
+- §21: Strict project-scoping — install/sync only targets project `.claude`/`.gemini`, never global dirs
+- §35: ANTI-DRIFT PROTOCOL — Claude is Engineer only; architecture decisions deferred to Gemini
 
-## MCP servers active (from .mcp.json):
-- filesystem: project-root-scoped filesystem access (path: `.`).
-- memory: knowledge-graph memory store at default scope.
-- TestSprite: AI test generation (env: TESTSPRITE_API_KEY).
-- Custom servers (all at ~/.ai-os/mcp/): vibe-check-mcp, intent-refiner-mcp, task-synchronizer-mcp, safe-exec-mcp, blueprint-aligner-mcp, context-guardian-mcp, risk-analyzer-mcp, context-invoker-mcp, archive-manager-mcp, orchestrator-mcp, memory-manager-mcp, verification-mcp.
+## Known Risks
+- P0 (pending ratification): [ARCH_FAIL] 2026-03-23 — Co-Authored-By trailer in d351dc9 violated §12 Git Identity mandate; Gemini ratification required before next release
+- P1: [ARCH_AUDIT] 2026-03-23 — Architectural Intelligence dirs missing; 2 orphaned MCPs (orchestrator, risk-analyzer) not in registry
+- P1: Source of Truth fragmentation (JSON state.json vs MD TASKS.md) — ongoing
+- M-002 (MEDIUM/accepted): ai-exec orphan worktree race condition in concurrent runs
 
-## Recent changes (last 10):
-- 2026-03-16: SECURITY.md created — deep security review of memory-manager-mcp (E-106) and verification-mcp (E-108); M-001 directory traversal in verification-mcp paths arg; no P0 threats; D-009/D-010 proposed.
-- 2026-03-16: Version guard added to readStateStrict — version != "1.0" returns null; T-02.12 added (src/mcp/shared/state-writer.js, src/mcp/task-synchronizer-mcp/index.js) [E-117].
-- 2026-03-16: gemini/skills added to search_paths in _run_compliance_audit() (src/bin/ai) [E-116].
-- 2026-03-16: T-02.11 + T-02.12 added to state_json_test.sh — delta-marking and version guard correctness [E-115].
-- 2026-03-16: _query_similar_signatures() wired into do_init() for advisory hints at ai init (src/bin/ai) [E-114].
-- 2026-03-16: Check 4 added to pre-commit.sh (blocks ## headings in REVIEWS.md); ARCH_AUDIT stamp truncated; REVIEWS.md regenerated (hooks/pre-commit.sh) [E-113].
-- 2026-03-16: tests/suites/archive_tasks_test.sh — 7 assertions for archive_done_tasks threshold/prune logic [E-112].
-- 2026-03-16: tests/suites/verification_test.sh — 12 assertions for verification-mcp Ghost Tool detection [E-111].
-- 2026-03-16: tests/suites/memory_manager_test.sh — 13 assertions for memory-manager-mcp [E-110].
-- 2026-03-16: verification-mcp created — verify_compliance scans YAML frontmatter, flags Ghost Tools CRITICAL (src/mcp/verification-mcp) [E-108].
-- 2026-03-16: memory-manager-mcp created — export_signature + query_signatures, global signatures.json at ~/.ai-os/memory/ (src/mcp/memory-manager-mcp) [E-106].
-- 2026-03-23: SECURITY.md updated — E-129–E-135 review; 2 new MEDIUM findings (M-002 orphan race, TB-06 boundary); no P0 threats; D-011 proposed
-- 2026-03-23: THREAT_MODEL.md updated — TB-06 added (AQG hook); TH-006 added (ai-exec orphan cleanup race); D-011 registered
-- 2026-03-23: auto-stamped by Stop hook
-- 2026-03-24: auto-stamped by Stop hook
+## MCP Servers
+- filesystem, memory, TestSprite, vibe-check-mcp, intent-refiner-mcp, task-synchronizer-mcp
+- safe-exec-mcp, blueprint-aligner-mcp, context-guardian-mcp, risk-analyzer-mcp, context-invoker-mcp
+- archive-manager-mcp, orchestrator-mcp, memory-manager-mcp, verification-mcp
+- lsp-mcp (NEW — §23 TypeScript symbol/type awareness via TypeScript compiler API)
+- patch-mcp (NEW — §25 MD5-verified atomic file writes, prevents race-condition overwrites)
+
+## Recent Changes (last 10)
+- 2026-03-31: T-1 idempotency_test.sh — 16/16 passing (tests/suites/idempotency_test.sh)
+- 2026-03-31: E-139 ai-compact skill — distills SESSION.md to Active Context, user-invocable /compact (src/claude/skills/ai-compact/)
+- 2026-03-31: E-138 Reactive Memory hook — run_handover sets digest_stale in state.json; preflight surfaces warning (hooks/stop-hook.sh)
+- 2026-03-31: E-137 patch-mcp — patch_file + get_file_md5 with MD5 optimistic-lock (src/mcp/patch-mcp/index.js)
+- 2026-03-31: E-136 lsp-mcp — get_definitions, get_references, get_diagnostics (src/mcp/lsp-mcp/index.js)
+- 2026-03-24: Bootloader auto-overwrite — CLAUDE.md/GEMINI.md/.mcp.json always overwritten on ai init/sync (src/bin/ai)
+- 2026-03-23: E-135 docs-architect Gemini agent (src/gemini/agents/docs-architect.md)
+- 2026-03-23: E-134 release-manager shared skill (src/shared/skills/release-manager/SKILL.md)
+- 2026-03-23: E-132 aqg-resolver agent — autonomous [LOCKED - AQG FAILED] fixer (src/claude/agents/aqg-resolver.md)
+- 2026-03-23: E-130 AQG PostToolUse hook — intercepts Write/Edit on src/**, exits 1 on test failure (hooks/post-tool-use.sh)
+- 2026-04-01: auto-stamped by Stop hook

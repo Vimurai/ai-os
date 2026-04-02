@@ -111,8 +111,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "run_preflight": {
       const files = [
         { name: "DIGEST.md", path: resolve(ai, "DIGEST.md") },
-        { name: "architect.md", path: resolve(ai, "architect.md") },
-        { name: "UPDATE.md", path: resolve(ai, "UPDATE.md") },
         { name: "TASKS.md", path: resolve(ai, "TASKS.md") },
       ];
 
@@ -130,6 +128,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           sections.push(`## ${f.name}\n(empty)`);
         }
       }
+
+      // Add pointers for removed files to prevent double-read trap
+      sections.push(`## architect.md\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/architect.md\` ONLY if you need architectural details for your specific task.)`);
+      sections.push(`## UPDATE.md\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/UPDATE.md\` ONLY if you are the Architect taking new instructions.)`);
 
       // E-103: state.json summary — task counts + last 3 stamps (structured data preferred over MD view)
       const statePath = resolve(ai, "state.json");
@@ -149,6 +151,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             state.project?.focus ? `Focus: ${state.project.focus}` : "",
           ].filter(Boolean);
           sections.push(`## state.json Summary\n${stateSummaryLines.join("\n")}`);
+
+          // Reactive Memory (E-138, §24): surface stale DIGEST warning at preflight
+          if (state.digest_stale) {
+            sections.push(
+              `## ⚠ DIGEST.md IS STALE (Reactive Memory §24)\n` +
+              `Reason: ${state.digest_stale_reason || "task completed"}\n\n` +
+              `**Action**: Regenerate DIGEST.md before proceeding:\n` +
+              `  skill: "ai-digest"  OR  activate_agent('digest_updater')\n\n` +
+              `_Clear the flag after regeneration: set state.digest_stale = false_`
+            );
+          }
 
           // Check for unread implementation deltas (P-42 §29)
           const unread = (state.deltas || []).filter(d => !d.read);
@@ -264,9 +277,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // 4. Return digest prompt
+      // 4. Reactive Memory (E-138, §24): mark digest_stale in state.json so
+      //    stop-hook.sh and the next preflight can detect and trigger DIGEST update.
+      const statePath2 = resolve(ai, "state.json");
+      if (existsSync(statePath2)) {
+        try {
+          const st2 = JSON.parse(readFileSync(statePath2, "utf8"));
+          st2.digest_stale = true;
+          st2.digest_stale_reason = `${taskId} marked DONE — ${summary}`;
+          writeFileSync(statePath2, JSON.stringify(st2, null, 2) + "\n");
+          results.push(`✓ digest_stale=true set in state.json (Reactive Memory §24)`);
+        } catch {
+          results.push(`⚠ Could not set digest_stale flag`);
+        }
+      }
+
+      // 5. Return digest prompt
       results.push("");
-      results.push("Next: Run digest_updater agent to regenerate DIGEST.md, or call activate_agent('digest_updater').");
+      results.push(
+        "## Reactive Memory — DIGEST Update Required\n" +
+        `Task ${taskId} is complete. DIGEST.md is now stale.\n\n` +
+        "**Action required**: Run the digest_updater agent to refresh DIGEST.md:\n" +
+        "  activate_agent('digest_updater')\n\n" +
+        "Or use the skill: `skill: \"ai-digest\"`"
+      );
 
       return { content: [{ type: "text", text: results.join("\n") }] };
     }
@@ -443,59 +477,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       lines.push(`Files in diff: ${changedSrcFiles.length} src/ files, ${[...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].length} total`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
-    }
-
-    // ── run_intent_cleanup ────────────────────────────────────────────────
-    case "run_intent_cleanup": {
-      const updatePath = resolve(ai, "UPDATE.md");
-      const commArchiveDir = resolve(ai, "archive", "COMM");
-      const results = [];
-
-      const updateContent = readSafe(updatePath);
-
-      // Check if UPDATE.md has meaningful content (not just template placeholder)
-      const templateHeader = "# UPDATE (Human input — current request)";
-      const lines = updateContent.split("\n").map(l => l.trim()).filter(Boolean);
-      const isTemplate = lines.every(l =>
-        l.startsWith("#") || l.startsWith("-") || l.startsWith("Then run") ||
-        l.startsWith("Clear this") || l === ""
-      );
-
-      if (!updateContent.trim() || isTemplate) {
-        results.push("⚠ UPDATE.md is already empty or contains only the template — no cleanup needed.");
-        return { content: [{ type: "text", text: results.join("\n") }] };
-      }
-
-      // 1. Back up UPDATE.md to .ai/archive/COMM/
-      try {
-        mkdirSync(commArchiveDir, { recursive: true });
-        const ts = new Date().toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 13);
-        const archivePath = resolve(commArchiveDir, `${ts}.intent.md`);
-        writeFileSync(archivePath, updateContent);
-        results.push(`✓ UPDATE.md archived to ${archivePath.replace(cwd + "/", "")}`);
-      } catch (e) {
-        results.push(`⚠ Archive failed: ${e.message} — aborting reset`);
-        return { content: [{ type: "text", text: results.join("\n") }], isError: true };
-      }
-
-      // 2. Reset UPDATE.md to template header
-      const resetContent = `# UPDATE (Human input — current request)\n\nWrite a small delta only:\n- Add: ...\n- Modify: ...\n- Remove: ...\nConstraints: ...\n\nThen run Claude (arch/security/core/devops) or use /gemini for UX/SEO/frontend input.\nClear this file after Claude completes the run.\n`;
-      try {
-        writeFileSync(updatePath, resetContent);
-        results.push("✓ UPDATE.md reset to template header");
-      } catch (e) {
-        results.push(`✗ Reset failed: ${e.message}`);
-        return { content: [{ type: "text", text: results.join("\n") }], isError: true };
-      }
-
-      // 3. Log it
-      const logPath = resolve(ai, "LOG.md");
-      if (existsSync(logPath)) {
-        appendFileSync(logPath, `${today()} | orchestrator-mcp | run_intent_cleanup | UPDATE.md archived and reset (§33)\n`);
-        results.push("✓ LOG.md updated");
-      }
-
-      return { content: [{ type: "text", text: results.join("\n") }] };
     }
 
     default:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AI-OS Stop Hook — auto-stamps .ai/SESSION.md when a Claude session ends.
-# Installed to ~/.ai-os/hooks/stop-hook.sh and referenced in ~/.claude/settings.json
+# Installed to ~/.ai-os/hooks/stop-hook.sh and referenced in .claude/settings.json
 
 AI_DIR="$(pwd)/.ai"
 SESSION_FILE="${AI_DIR}/SESSION.md"
@@ -57,6 +57,43 @@ if [[ -f "$DIGEST_FILE" ]]; then
       [[ -n "$LAST_FILE" ]] && DIGEST_NOTE="updated ${LAST_FILE}"
     fi
     printf -- "- %s: %s\n" "$TODAY" "$DIGEST_NOTE" >> "$DIGEST_FILE"
+  fi
+fi
+
+# Reactive Memory (E-138, §24): detect digest_stale flag set by run_handover.
+# If set, emit a clear reminder so the user knows DIGEST.md needs regeneration.
+STATE_FILE="${AI_DIR}/state.json"
+if [[ -f "$STATE_FILE" ]] && command -v python3 &>/dev/null; then
+  export AI_OS_STATE="$STATE_FILE"
+  STALE_REASON=$(python3 - <<'PY'
+import json, os
+try:
+    with open(os.environ.get("AI_OS_STATE", ""), "r") as f:
+        state = json.load(f)
+    if state.get("digest_stale"):
+        reason = state.get("digest_stale_reason", "task completed")
+        print(reason[:80])
+    else:
+        print("")
+except Exception:
+    print("")
+PY
+  )
+
+  if [[ -n "$STALE_REASON" ]]; then
+    cat >&2 <<WARN
+
+╔══════════════════════════════════════════════════════════════╗
+║  REACTIVE MEMORY — DIGEST.md IS STALE (§24)                 ║
+╠══════════════════════════════════════════════════════════════╣
+║  Reason: ${STALE_REASON}
+║                                                              ║
+║  Regenerate DIGEST.md before the next session:              ║
+║    skill: "ai-digest"                                        ║
+║    or: activate_agent('digest_updater')                      ║
+╚══════════════════════════════════════════════════════════════╝
+
+WARN
   fi
 fi
 

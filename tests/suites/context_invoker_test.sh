@@ -154,4 +154,5 @@ _assert_file_contains "T-19: pre-commit.sh has check_architect_src_comodificatio
 _assert_file_contains "T-20: pre-commit.sh warns on architect.md + src/ co-stage" \
   "$PRECOMMIT" "ARCH_WARN"
 
-echo "── context_invoker_test: done ───────────────────────────────────────"
+echo ""
+assert_summary

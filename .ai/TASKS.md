@@ -47,6 +47,40 @@
   Status: DONE 2026-03-23 — Created src/shared/skills/release-manager/SKILL.md — bumps package.json, aggregates DONE tasks into CHANGELOG.md, tags commit, optionally triggers ai archive.
 - [x] E-135: Create the `docs-architect` Gemini Sub-Agent in `src/gemini/agents/docs-architect.md`. It must periodically audit public documentation (`README.md`, `CONTRIBUTING.md`) against `.ai/architect.md` and `.mcp.json` to prevent drift. | Tier: 1
   Status: DONE 2026-03-23 — Created src/gemini/agents/docs-architect.md — audits README.md/CONTRIBUTING.md vs architect.md and .mcp.json for drift; produces gap report and recommends P-## tasks.
+- [x] E-136: E-136: Implement the `lsp-mcp` server wrapping `typescript-language-server`. | Tier: 2
+  Status: DONE 2026-03-31 — lsp-mcp MCP server created — get_definitions, get_references, get_diagnostics via TypeScript compiler API; registered in registry.json and .mcp.json
+- [x] E-137: E-137: Implement the `patch_file` tool in `src/bin/ai` and MCP servers. | Tier: 2
+  Status: DONE 2026-03-31 — patch-mcp MCP server created — patch_file with MD5 optimistic-lock verification + get_file_md5; registered in registry.json and .mcp.json
+- [x] E-138: E-138: Implement post-task `Reactive Memory` hook for automated `DIGEST.md` updates. | Tier: 2
+  Status: DONE 2026-03-31 — Reactive Memory hook: run_handover sets digest_stale=true in state.json; stop-hook.sh emits banner; run_preflight surfaces stale warning at session start
+- [x] E-139: E-139: Implement the `ai-compact` skill for history distillation and context preservation. | Tier: 2
+  Status: DONE 2026-03-31 — ai-compact skill created — distills SESSION.md to Active Context, archives raw log, resets to minimal header; user-invocable via /compact
+- [x] E-140: E-140: Implement `token-budget-mcp` with SQLite persistence. | Tier: 2
+  Status: DONE 2026-04-01 — token-budget-mcp created — report_cost/get_token_budget/get_usage_report/set_budget/reset_session, SQLite at ~/.ai-os/usage.sqlite, BUDGET_WARN on threshold
+- [x] E-141: E-141: Implement the `propose_patch` tool with interactive TUI diff previews. | Tier: 2
+  Status: DONE 2026-04-01 — propose-patch-mcp created — propose_patch/confirm_patch/reject_patch/list_pending_patches/preview_patch, delta/diff fallback formatter, in-memory patch store, path traversal blocked
+- [x] E-142: E-142: Implement the `github-bridge-mcp` using GitHub CLI (gh) integration. | Tier: 2
+  Status: DONE 2026-04-01 — github-bridge-mcp created — check_gh_auth/fetch_assigned_issues/get_issue/create_update_from_issues/get_pr_status via gh CLI whitelist; ai sync --github wired into src/bin/ai
+- [ ] E-143: E-144: Implement Role-Aware interceptors in filesystem MCPs to throw `[ANTI_DRIFT_VIOLATION]` when Gemini targets `src/`. | Tier: 2
 
 ## Tester (TestSprite)
-- [ ] T-1: Add idempotency tests for `ai init` and `ai sync`: assert that CLAUDE.md, GEMINI.md, and .mcp.json are always overwritten by ensure_ai_templates() and do_sync(); verify second run produces identical output (content matches template); covers P1 gap flagged in [TESTS_WARN] 2026-03-23 | Tier: 1
+- [x] T-1: Add idempotency tests for `ai init` and `ai sync`: assert that CLAUDE.md, GEMINI.md, and .mcp.json are always overwritten by ensure_ai_templates() and do_sync(); verify second run produces identical output (content matches template); covers P1 gap flagged in [TESTS_WARN] 2026-03-23 | Tier: 1
+  Status: DONE 2026-03-31 — idempotency_test.sh created — 16 tests covering CLAUDE.md/GEMINI.md/.mcp.json overwrite on repeated init/sync; 16/16 passing
+
+## Architect (Gemini)
+- [x] P-1: P-54: Design the `lsp-mcp` server wrapping `typescript-language-server` or `pyright` for true symbol/type awareness. | Tier: 2
+  Status: DONE 2026-03-31 — LSP-MCP designed (\u00a712) \u2014 wraps language servers for real-time diagnostics and symbol jump. E-136 implementation ready.
+- [x] P-2: P-55: Design the `ai-compact` and `ai-digest-reactive` logic for automated context management. | Tier: 2
+  Status: DONE 2026-03-31 — ai-compact designed (\u00a713) \u2014 distill SESSION.md when >2k tokens, archive raw log. E-139 implementation ready.
+- [x] P-3: P-56: Design the `patch_file` tool with MD5/timestamp validation to prevent race conditions. | Tier: 2
+  Status: DONE 2026-03-31 — patch_file designed (\u00a725) \u2014 MD5/timestamp lock to prevent race conditions during write. E-137 implementation ready.
+- [x] P-4: P-57: Design the `token-budget-mcp` and budget-aware planning protocol. | Tier: 2
+  Status: DONE 2026-03-31 — token-budget-mcp designed (plans/agentic_upgrades_phase2.md \u00a71) \u2014 SQLite usage tracking. E-140 ready.
+- [x] P-5: P-58: Design the `github-bridge-mcp` for autonomous issue-to-blueprint flows. | Tier: 2
+  Status: DONE 2026-03-31 — github-bridge-mcp designed (plans/agentic_upgrades_phase2.md \u00a72) \u2014 gh CLI issue sync. E-142 ready.
+- [x] P-6: P-59: Design the "Just-in-Time" (Level 2) Skill Loading architecture. | Tier: 2
+  Status: DONE 2026-03-31 — JIT Skill Loading designed (plans/agentic_upgrades_phase2.md \u00a73) \u2014 Metadata discovery vs Hard activation. E-142 ready.
+- [ ] P-7: P-60: Design the `propose_patch` TUI diff preview flow and user confirmation hook. | Tier: 2
+- [ ] P-8: P-61: Architectural Fragmentation (\u00a736) \u2014 Split architect.md into Domain Blueprints to reduce session-start context tax. | Tier: 1
+- [ ] P-9: P-62: "Metadata-Only" Default Mode \u2014 Update ai sync to only provide Skill Summaries to agents by default. | Tier: 1
+- [ ] P-10: P-63: Design MCP-Level Role-Based Access Control (RBAC) to enforce the Anti-Drift Protocol by blocking Architect writes to `src/`. | Tier: 2

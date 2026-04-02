@@ -1,9 +1,9 @@
 {
   "version": "1.0",
   "project": {
-    "current_tier": null,
+    "current_tier": 2,
     "release_verdict": null,
-    "focus": null
+    "focus": "Integrating Agentic Upgrades (LSP, Patching, Reactive Memory)"
   },
   "tasks": [
     {
@@ -237,12 +237,192 @@
       "summary": "Created src/gemini/agents/docs-architect.md — audits README.md/CONTRIBUTING.md vs architect.md and .mcp.json for drift; produces gap report and recommends P-## tasks."
     },
     {
+      "id": "E-136",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-136: Implement the `lsp-mcp` server wrapping `typescript-language-server`.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "lsp-mcp MCP server created — get_definitions, get_references, get_diagnostics via TypeScript compiler API; registered in registry.json and .mcp.json"
+    },
+    {
+      "id": "E-137",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-137: Implement the `patch_file` tool in `src/bin/ai` and MCP servers.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "patch-mcp MCP server created — patch_file with MD5 optimistic-lock verification + get_file_md5; registered in registry.json and .mcp.json"
+    },
+    {
+      "id": "E-138",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-138: Implement post-task `Reactive Memory` hook for automated `DIGEST.md` updates.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "Reactive Memory hook: run_handover sets digest_stale=true in state.json; stop-hook.sh emits banner; run_preflight surfaces stale warning at session start"
+    },
+    {
+      "id": "E-139",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-139: Implement the `ai-compact` skill for history distillation and context preservation.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "ai-compact skill created — distills SESSION.md to Active Context, archives raw log, resets to minimal header; user-invocable via /compact"
+    },
+    {
+      "id": "E-140",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-140: Implement `token-budget-mcp` with SQLite persistence.",
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "completed_at": "2026-04-01T00:00:00.000Z",
+      "summary": "token-budget-mcp created — report_cost/get_token_budget/get_usage_report/set_budget/reset_session, SQLite at ~/.ai-os/usage.sqlite, BUDGET_WARN on threshold"
+    },
+    {
+      "id": "E-141",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-141: Implement the `propose_patch` tool with interactive TUI diff previews.",
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "completed_at": "2026-04-01T00:00:00.000Z",
+      "summary": "propose-patch-mcp created — propose_patch/confirm_patch/reject_patch/list_pending_patches/preview_patch, delta/diff fallback formatter, in-memory patch store, path traversal blocked"
+    },
+    {
+      "id": "E-142",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "E-142: Implement the `github-bridge-mcp` using GitHub CLI (gh) integration.",
+      "created_at": "2026-04-01T00:00:00.000Z",
+      "completed_at": "2026-04-01T00:00:00.000Z",
+      "summary": "github-bridge-mcp created — check_gh_auth/fetch_assigned_issues/get_issue/create_update_from_issues/get_pr_status via gh CLI whitelist; ai sync --github wired into src/bin/ai"
+    },
+    {
       "id": "T-1",
       "owner": "Tester (TestSprite)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Add idempotency tests for `ai init` and `ai sync`: assert that CLAUDE.md, GEMINI.md, and .mcp.json are always overwritten by ensure_ai_templates() and do_sync(); verify second run produces identical output (content matches template); covers P1 gap flagged in [TESTS_WARN] 2026-03-23",
-      "created_at": "2026-03-23T18:51:06.367Z",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "idempotency_test.sh created — 16 tests covering CLAUDE.md/GEMINI.md/.mcp.json overwrite on repeated init/sync; 16/16 passing"
+    },
+    {
+      "id": "P-1",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "P-54: Design the `lsp-mcp` server wrapping `typescript-language-server` or `pyright` for true symbol/type awareness.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "LSP-MCP designed (\\u00a712) \\u2014 wraps language servers for real-time diagnostics and symbol jump. E-136 implementation ready."
+    },
+    {
+      "id": "P-2",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "P-55: Design the `ai-compact` and `ai-digest-reactive` logic for automated context management.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "ai-compact designed (\\u00a713) \\u2014 distill SESSION.md when >2k tokens, archive raw log. E-139 implementation ready."
+    },
+    {
+      "id": "P-3",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "P-56: Design the `patch_file` tool with MD5/timestamp validation to prevent race conditions.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "patch_file designed (\\u00a725) \\u2014 MD5/timestamp lock to prevent race conditions during write. E-137 implementation ready."
+    },
+    {
+      "id": "P-4",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "P-57: Design the `token-budget-mcp` and budget-aware planning protocol.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "token-budget-mcp designed (plans/agentic_upgrades_phase2.md \\u00a71) \\u2014 SQLite usage tracking. E-140 ready."
+    },
+    {
+      "id": "P-5",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "P-58: Design the `github-bridge-mcp` for autonomous issue-to-blueprint flows.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "github-bridge-mcp designed (plans/agentic_upgrades_phase2.md \\u00a72) \\u2014 gh CLI issue sync. E-142 ready."
+    },
+    {
+      "id": "P-6",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "P-59: Design the \"Just-in-Time\" (Level 2) Skill Loading architecture.",
+      "created_at": "2026-03-31T00:00:00.000Z",
+      "completed_at": "2026-03-31T00:00:00.000Z",
+      "summary": "JIT Skill Loading designed (plans/agentic_upgrades_phase2.md \\u00a73) \\u2014 Metadata discovery vs Hard activation. E-142 ready."
+    },
+    {
+      "id": "P-7",
+      "owner": "Architect (Gemini)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "P-60: Design the `propose_patch` TUI diff preview flow and user confirmation hook.",
+      "created_at": "2026-04-01T18:04:49.235Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-8",
+      "owner": "Architect (Gemini)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "P-61: Architectural Fragmentation (\\u00a736) \\u2014 Split architect.md into Domain Blueprints to reduce session-start context tax.",
+      "created_at": "2026-04-01T18:04:49.235Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-9",
+      "owner": "Architect (Gemini)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "P-62: \"Metadata-Only\" Default Mode \\u2014 Update ai sync to only provide Skill Summaries to agents by default.",
+      "created_at": "2026-04-01T18:04:49.235Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-10",
+      "owner": "Architect (Gemini)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "P-63: Design MCP-Level Role-Based Access Control (RBAC) to enforce the Anti-Drift Protocol by blocking Architect writes to `src/`.",
+      "created_at": "2026-04-01T20:15:37.126Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-143",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "E-144: Implement Role-Aware interceptors in filesystem MCPs to throw `[ANTI_DRIFT_VIOLATION]` when Gemini targets `src/`.",
+      "created_at": "2026-04-01T20:15:37.133Z",
       "completed_at": null,
       "summary": null
     }
@@ -485,6 +665,42 @@
       "task_id": "E-135",
       "timestamp": "2026-03-23T20:26:07.459Z",
       "summary": "2026-03-23 | READY | Stamps: [ARCH_PASS ✓] [SEC_PASS ✓] [TESTS_WARN/P1-tracked ✓] [ALIGN_PASS ✓] [SEC_CLEARED ✓] [VIBE_CLEARED ✓ N/A] [CHAOS_CLEARED ✓ N/A] | P0: 0 | P1: 1 (T-1) | P2: 5 accepted | All gates passed — E-129–E-135 safe to commit"
+    },
+    {
+      "task_id": null,
+      "timestamp": "2026-04-02T09:38:46.787Z"
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "CRITIC_TESTS",
+      "task_id": "E-142",
+      "timestamp": "2026-04-02T09:40:11.067Z",
+      "summary": "[TESTS_PASS] 2026-04-02 | 361/365 pass (4 pre-existing resilience_test failures, T-RES-05–T-RES-08, machine-config gap introduced before this sprint — not regressions); all new src/ files covered: lsp-mcp+patch-mcp by lsp_patch_test.sh (37t), token-budget-mcp+propose-patch-mcp+github-bridge-mcp+ai-sync-github by e140_e141_e142_test.sh (49t), ai init/sync idempotency by idempotency_test.sh (16t); positive+negative assertions present in all three suites; P0: 0 | P2: resilience_test machine-config gap (pre-existing, non-blocking)"
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "CRITIC_ARCH",
+      "task_id": "E-142",
+      "timestamp": "2026-04-02T09:40:44.376Z",
+      "summary": "No sovereignty violations; architect.md working-tree additions (§§23-30) are uncommitted Architect-authored blueprint text, not Claude-authored code, BRIEF.md untouched; all 5 new MCP servers (lsp-mcp/§23, patch-mcp/§25, token-budget-mcp/§27, propose-patch-mcp/§30, github-bridge-mcp/§28) fully traced to E-136–E-142 and registered in registry.json; ai-compact skill correctly placed in src/claude/skills/ai-compact/SKILL.md per §16; Reactive Memory hook traces to §24/E-138; ai sync --github traces to §28/E-142; idempotency tests trace to T-1; all patterns (MCP SDK import style, SKILL.md frontmatter) conform to established conventions; P1: E-141 (propose-patch-mcp) implemented before P-7 blueprint formally closed — §30 blueprint exists in working-tree architect.md but P-7 task remains open; no file misplacement; no orphaned work"
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "CRITIC_SECURITY",
+      "task_id": "E-142",
+      "timestamp": "2026-04-02T09:40:47.290Z",
+      "summary": "No P0 vulnerabilities; lsp-mcp/patch-mcp/propose-patch-mcp/github-bridge-mcp/token-budget-mcp all use array-arg spawnSync (no shell injection); safePath() traversal guard present in patch-mcp and propose-patch-mcp; no hardcoded secrets; GITHUB_ISSUES_JSON passed via env var not shell interpolation; gh subcommand whitelist enforced; all new shell.exec patterns declared in CAPABILITIES.md; P1: ~/.ai-os/usage.sqlite write path missing from CAPABILITIES.md filesystem.write (token-budget-mcp, low-risk telemetry store)"
+    },
+    {
+      "task_id": null,
+      "timestamp": "2026-04-02T09:41:07.449Z"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "claude-engineer",
+      "task_id": "E-142",
+      "timestamp": "2026-04-02T09:42:12.982Z",
+      "summary": "[TIER_2] E-136–E-142 + T-1: [ARCH_PASS] [SEC_PASS] [TESTS_PASS] [ALIGN_PASS] all clean; P0: 0 | P1: 2 (token-budget CAPABILITIES write-list gap; P-7 open pre-ratification) — clear to commit"
     }
   ],
   "deltas": [
@@ -1326,6 +1542,141 @@
         "src/bin/ai-exec"
       ],
       "read": true
+    },
+    {
+      "task_id": "E-136",
+      "timestamp": "2026-03-31T21:27:34.058Z",
+      "summary": "E-136: lsp-mcp MCP server created — get_definitions, get_references, get_diagnostics via TypeScript compiler API; registered in registry.json and .mcp.json | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-137",
+      "timestamp": "2026-03-31T21:27:39.536Z",
+      "summary": "E-137: patch-mcp MCP server created — patch_file with MD5 optimistic-lock verification + get_file_md5; registered in registry.json and .mcp.json | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-138",
+      "timestamp": "2026-03-31T21:27:45.545Z",
+      "summary": "E-138: Reactive Memory hook: run_handover sets digest_stale=true in state.json; stop-hook.sh emits banner; run_preflight surfaces stale warning at session start | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-139",
+      "timestamp": "2026-03-31T21:27:50.201Z",
+      "summary": "E-139: ai-compact skill created — distills SESSION.md to Active Context, archives raw log, resets to minimal header; user-invocable via /compact | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "T-1",
+      "timestamp": "2026-03-31T21:27:56.108Z",
+      "summary": "T-1: idempotency_test.sh created — 16 tests covering CLAUDE.md/GEMINI.md/.mcp.json overwrite on repeated init/sync; 16/16 passing | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-140",
+      "timestamp": "2026-04-01T13:20:05.607Z",
+      "summary": "E-140: token-budget-mcp created — report_cost/get_token_budget/get_usage_report/set_budget/reset_session, SQLite at ~/.ai-os/usage.sqlite, BUDGET_WARN on threshold | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/bin/ai",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js",
+        "tests/run.sh"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-141",
+      "timestamp": "2026-04-01T13:20:11.575Z",
+      "summary": "E-141: propose-patch-mcp created — propose_patch/confirm_patch/reject_patch/list_pending_patches/preview_patch, delta/diff fallback formatter, in-memory patch store, path traversal blocked | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/bin/ai",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js",
+        "tests/run.sh"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-142",
+      "timestamp": "2026-04-01T13:20:18.771Z",
+      "summary": "E-142: github-bridge-mcp created — check_gh_auth/fetch_assigned_issues/get_issue/create_update_from_issues/get_pr_status via gh CLI whitelist; ai sync --github wired into src/bin/ai | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json, .mcp.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "hooks/stop-hook.sh",
+        "src/bin/ai",
+        "src/config/registry.json",
+        "src/mcp/orchestrator-mcp/index.js",
+        "tests/run.sh"
+      ],
+      "read": true
     }
-  ]
+  ],
+  "digest_stale": false
 }

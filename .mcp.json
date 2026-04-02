@@ -33,12 +33,6 @@
         "/Users/emirkovacevic/.ai-os/mcp/vibe-check-mcp/index.js"
       ]
     },
-    "intent-refiner-mcp": {
-      "command": "node",
-      "args": [
-        "/Users/emirkovacevic/.ai-os/mcp/intent-refiner-mcp/index.js"
-      ]
-    },
     "task-synchronizer-mcp": {
       "command": "node",
       "args": [
@@ -97,6 +91,36 @@
       "command": "node",
       "args": [
         "/Users/emirkovacevic/.ai-os/mcp/verification-mcp/index.js"
+      ]
+    },
+    "lsp-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/lsp-mcp/index.js"
+      ]
+    },
+    "patch-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/patch-mcp/index.js"
+      ]
+    },
+    "token-budget-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/token-budget-mcp/index.js"
+      ]
+    },
+    "propose-patch-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/propose-patch-mcp/index.js"
+      ]
+    },
+    "github-bridge-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/github-bridge-mcp/index.js"
       ]
     }
   }

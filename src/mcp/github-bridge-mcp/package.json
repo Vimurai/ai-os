@@ -1,0 +1,11 @@
+{
+  "name": "github-bridge-mcp",
+  "version": "1.0.0",
+  "description": "AI-OS GitHub Bridge (§28) — fetch assigned issues via gh CLI and seed UPDATE.md for autonomous Architect cycles.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

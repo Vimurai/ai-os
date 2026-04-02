@@ -34,7 +34,7 @@ for suite in "${SUITES[@]}"; do
   suite_exit="${suite_exit:-0}"
 
   # Parse counts from machine-readable summary line emitted by assert_summary()
-  summary=$(echo "$output" | grep "^SUITE_RESULT" | tail -1)
+  summary=$(echo "$output" | grep "^SUITE_RESULT" | tail -1 || true)
   passes=$(echo "$summary" | grep -oE 'PASS=[0-9]+' | grep -oE '[0-9]+' || echo 0)
   fails=$(echo "$summary"  | grep -oE 'FAIL=[0-9]+' | grep -oE '[0-9]+' || echo 0)
   passes="${passes:-0}"; fails="${fails:-0}"
