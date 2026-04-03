@@ -7,446 +7,6 @@
   },
   "tasks": [
     {
-      "id": "E-113",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 3,
-      "description": "Create tests/suites/resilience_test.sh with the 3 scenarios defined in P-52 §34.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "Created tests/suites/resilience_test.sh with 14 tests covering Scenario A (Layer 1/2 fallback), Scenario B (Layer 3 manual recovery), Scenario C (state corruption). 14/14 passing."
-    },
-    {
-      "id": "E-114",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Update src/templates/architect.md.template and src/templates/CAPABILITIES.md (P-53).",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "Added §30 (Bootloader Resilience), §31 (Memory Palace), §32 (Verification Audit) sections to src/templates/architect.md.template. Closes P-53 template sync gap."
-    },
-    {
-      "id": "E-115",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Update project CAPABILITIES.md to register new tools (completes E-110).",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "Created project-level CAPABILITIES.md at repo root with ~/.ai-os/memory/** (write) and ~/.ai-os/config/** (read) registered. Completes E-110 for the project deployment."
-    },
-    {
-      "id": "E-116",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update context-invoker-mcp to support Project Scope. Modify src/mcp/context-invoker-mcp/index.js to insert project-scoped directories (.claude/skills, .gemini/skills, .claude/agents, .gemini/agents) at the beginning of SKILL_ROOTS and AGENT_ROOTS, prioritizing them over global ones.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "context-invoker-mcp: project-scoped .claude/.gemini dirs prepended to SKILL_ROOTS/AGENT_ROOTS when .ai/ present"
-    },
-    {
-      "id": "E-117",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Update ai doctor output in src/bin/ai to explicitly check and report on project-scoped .gemini and .claude directories (and their agents/ / skills/ subdirectories) if a .ai directory is present in the current working directory. Update output titles to specify 'Global' and 'Project-Scoped'.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "ai doctor: renamed sections to Global, added Project-Scoped section for .claude/.gemini when in AI-OS project"
-    },
-    {
-      "id": "E-118",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update _run_compliance_audit python inline script inside src/bin/ai to also scan .claude/agents, .claude/skills, .gemini/agents, and .gemini/skills in the project root if a .ai directory is present, ensuring project-scoped modifications are properly audited for Ghost Tools.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "_run_compliance_audit: added .claude/agents, .claude/skills, .gemini/agents, .gemini/skills to Python scan paths"
-    },
-    {
-      "id": "E-119",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add unit tests for `context-invoker-mcp` to ensure it properly resolves skills and agents in the project scope if they exist, or verify this manually in a script. Update any integration tests related to `ai doctor --compliance` to handle project-scoped output if needed.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "tests/suites/context_invoker_test.sh created — 20 assertions, 20/20 passing"
-    },
-    {
-      "id": "E-120",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Add explicit ANTI-DRIFT PROTOCOL sections to src/claude/CLAUDE.md and src/gemini/GEMINI.md containing the exact refusal templates specified in §35. Update src/templates/CLAUDE.md and src/templates/GEMINI.md as well.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "ANTI-DRIFT PROTOCOL section added to src/claude/CLAUDE.md, src/gemini/GEMINI.md, src/templates/CLAUDE.md, src/templates/GEMINI.md"
-    },
-    {
-      "id": "E-121",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update verification-mcp (src/mcp/verification-mcp/index.js) and the inline python audit script in src/bin/ai (_run_compliance_audit) to include a check for the 'ANTI-DRIFT PROTOCOL' string in CLAUDE.md and GEMINI.md. If missing, it must throw a CRITICAL error.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "_run_compliance_audit: ANTI_DRIFT_HEADER check added; CRITICAL error if missing from CLAUDE.md/GEMINI.md"
-    },
-    {
-      "id": "E-122",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update hooks/pre-commit.sh to emit a warning if a commit contains changes to both 'src/' and '.ai/architect.md' unless the log explicitly proves an approved implementation delta.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "hooks/pre-commit.sh: check_architect_src_comodification warns on src/ + architect.md co-staged without [IMPL_DELTA]"
-    },
-    {
-      "id": "E-123",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update `install_global()` in `src/bin/ai` to remove all modifications to `~/.gemini` and `~/.claude`. `ai install` must strictly target `~/.ai-os` or `.config/github-copilot`. Remove calls to `configure_gemini_mcp` and `enable_claude_agent_teams` from this global installation function.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "install_global() rewritten — targets ~/ .ai-os and ~/.config/github-copilot only; removed rm -rf ~/.gemini/~/.claude, global agent/skill installs, configure_gemini_mcp and enable_claude_agent_teams calls"
-    },
-    {
-      "id": "E-124",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `configure_gemini_mcp()` in `src/bin/ai` to `_configure_project_gemini_settings(TARGET_DIR)`. It must operate exclusively on the project-scoped `.gemini/settings.json`, following the strict project-scoping policy defined in §21.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "configure_gemini_mcp() renamed to _configure_project_gemini_settings(TARGET_DIR); now writes TARGET_DIR/settings.json instead of ~/.gemini/settings.json; signature changed to accept target_dir as first arg"
-    },
-    {
-      "id": "E-125",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `enable_claude_agent_teams()` in `src/bin/ai` to merge its logic (enabling agent teams, auto-enabling registry MCP tool permissions) into the existing `_configure_project_claude_settings(TARGET_DIR)` function. It must operate exclusively on the project-scoped `.claude/settings.json`.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "enable_claude_agent_teams() merged into _configure_project_claude_settings(TARGET_DIR) — agent teams env var, Bash(gemini -p *) permission, and registry-driven MCP permissions now written to project-scoped .claude/settings.json; old global function removed"
-    },
-    {
-      "id": "E-126",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update `do_init()` in `src/bin/ai` to execute the project-scoped configuration functions (`_configure_project_claude_settings \".claude\"` and `_configure_project_gemini_settings \".gemini\"`) upon scaffolding a new AI-OS project.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "ensure_ai_templates() now calls _configure_project_gemini_settings \".gemini\" after populating .gemini/ dir; both .claude/ and .gemini/ settings.json written on ai init"
-    },
-    {
-      "id": "E-127",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update `do_sync()` in `src/bin/ai` to entirely remove the fallback global `~/.claude` and `~/.gemini` syncing logic. Synchronization of agents, skills, and CLAUDE.md/GEMINI.md files must only occur within the local project directory if `.ai/` is present. Update `ai doctor` checks to align with the deprecation of global scoping.",
-      "created_at": "2026-03-22T00:00:00.000Z",
-      "completed_at": "2026-03-22T00:00:00.000Z",
-      "summary": "do_sync() removes global ~/.claude/~/.gemini fallback — project-only sync when .ai/ present; exits early with guidance if not in AI-OS project; _configure_project_gemini_settings added to sync block; ai doctor global section updated to reflect user-owned global dirs"
-    },
-    {
-      "id": "E-128",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update the `ai-review` skill (`src/gemini/skills/ai-review/SKILL.md` and `src/claude/skills/ai-review/SKILL.md` if applicable) to instruct the Architect to use `mcp_task-synchronizer-mcp_add_stamp` (with `ARCH_AUDIT` type) instead of appending multi-line text directly to `.ai/REVIEWS.md`. This ensures compliance with Check 4 and D-007.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Updated ai-review skills (Claude + Gemini) to use mcp__task-synchronizer-mcp__add_stamp instead of direct REVIEWS.md appends. Synced to all 4 Claude locations and .gemini/skills."
-    },
-    {
-      "id": "E-129",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Update src/bin/ai-exec with Worktree Resilience. Implement a `trap` for `EXIT ERR SIGINT SIGTERM` to ensure `git worktree remove --force <path>` is reliably called on teardown. On start, `ai-exec` must run `git worktree prune` and explicitly wipe any orphaned `.ai-worktree-*` directories to prevent state locks from aborted runs.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "src/bin/ai-exec: trap now covers EXIT ERR SIGINT SIGTERM and is registered before create_worktree; git worktree prune + orphaned /tmp/ai-exec-* and .ai-worktree-* dirs wiped on startup."
-    },
-    {
-      "id": "E-130",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement the PostToolUse Hook for the Automatic Quality Gate (AQG). Create or update a hook (e.g., `hooks/post-tool-use.sh`) to intercept file modification tools. It must automatically execute local tests (e.g., `tests/run.sh`) for any modified `src/**` files. If tests fail, it must exit with code `1` and inject a `[LOCKED - AQG FAILED]` prefix into the tool output, forcing the agent to resolve the test failure before proceeding.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Created hooks/post-tool-use.sh (AQG): intercepts Write/Edit on src/** files, runs tests/run.sh, exits 1 with [LOCKED - AQG FAILED] on failure. Registered in _configure_project_claude_settings() in src/bin/ai, .claude/settings.json, and added ai doctor check."
-    },
-    {
-      "id": "E-131",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Create the `commit-crafter` Claude Skill in `src/claude/skills/commit-crafter/SKILL.md`. It must automate the strict AI-OS commit hook requirements by staging changes, formatting Conventional Commits, and injecting required UACS stamps and E-## task IDs. Ensure it explicitly forbids Claude from using `--author` flags or appending `Co-authored-by` trailers, adhering to the new Git Identity mandate in `architect.md`.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Created src/claude/skills/commit-crafter/SKILL.md — automates Conventional Commits with E-## IDs and UACS stamps; enforces Git Identity mandate (no --author, no Co-authored-by)."
-    },
-    {
-      "id": "E-132",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Create the `aqg-resolver` Claude Sub-Agent in `src/claude/agents/aqg-resolver.md`. It should be a low-context autonomous fixer triggered when the Executor is `[LOCKED - AQG FAILED]`. Its role is to read linter/test stderr, apply exact file fixes without altering business logic, and re-run the gate.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Created src/claude/agents/aqg-resolver.md — low-context autonomous fixer for [LOCKED - AQG FAILED]; reads test stderr, applies minimal fix, re-runs gate; reports [AQG_RESOLVER_BLOCKED] after 2 failed attempts."
-    },
-    {
-      "id": "E-133",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Create the `bug-reproducer` Claude Skill in `src/claude/skills/bug-reproducer/SKILL.md`. This skill enforces empirical validation for Tier 2/3 bug fixes by forcing the Executor to create an isolated `repro.sh` or failing test case that proves the bug exists before modifying source code.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Created src/claude/skills/bug-reproducer/SKILL.md — mandates repro.sh or failing test before any src/ edit for Tier 2/3 bugs; confirms reproduction before proceeding."
-    },
-    {
-      "id": "E-134",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Create the `release-manager` Shared Skill in `src/shared/skills/release-manager/SKILL.md`. This skill handles the sprint lifecycle by bumping `package.json`, aggregating `DONE` tasks into `CHANGELOG.md`, tagging the commit, and optionally triggering an `ai archive`.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Created src/shared/skills/release-manager/SKILL.md — bumps package.json, aggregates DONE tasks into CHANGELOG.md, tags commit, optionally triggers ai archive."
-    },
-    {
-      "id": "E-135",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Create the `docs-architect` Gemini Sub-Agent in `src/gemini/agents/docs-architect.md`. It must periodically audit public documentation (`README.md`, `CONTRIBUTING.md`) against `.ai/architect.md` and `.mcp.json` to prevent drift.",
-      "created_at": "2026-03-23T00:00:00.000Z",
-      "completed_at": "2026-03-23T00:00:00.000Z",
-      "summary": "Created src/gemini/agents/docs-architect.md — audits README.md/CONTRIBUTING.md vs architect.md and .mcp.json for drift; produces gap report and recommends P-## tasks."
-    },
-    {
-      "id": "E-136",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-136: Implement the `lsp-mcp` server wrapping `typescript-language-server`.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "lsp-mcp MCP server created — get_definitions, get_references, get_diagnostics via TypeScript compiler API; registered in registry.json and .mcp.json"
-    },
-    {
-      "id": "E-137",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-137: Implement the `patch_file` tool in `src/bin/ai` and MCP servers.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "patch-mcp MCP server created — patch_file with MD5 optimistic-lock verification + get_file_md5; registered in registry.json and .mcp.json"
-    },
-    {
-      "id": "E-138",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-138: Implement post-task `Reactive Memory` hook for automated `DIGEST.md` updates.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "Reactive Memory hook: run_handover sets digest_stale=true in state.json; stop-hook.sh emits banner; run_preflight surfaces stale warning at session start"
-    },
-    {
-      "id": "E-139",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-139: Implement the `ai-compact` skill for history distillation and context preservation.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "ai-compact skill created — distills SESSION.md to Active Context, archives raw log, resets to minimal header; user-invocable via /compact"
-    },
-    {
-      "id": "E-140",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-140: Implement `token-budget-mcp` with SQLite persistence.",
-      "created_at": "2026-04-01T00:00:00.000Z",
-      "completed_at": "2026-04-01T00:00:00.000Z",
-      "summary": "token-budget-mcp created — report_cost/get_token_budget/get_usage_report/set_budget/reset_session, SQLite at ~/.ai-os/usage.sqlite, BUDGET_WARN on threshold"
-    },
-    {
-      "id": "E-141",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-141: Implement the `propose_patch` tool with interactive TUI diff previews.",
-      "created_at": "2026-04-01T00:00:00.000Z",
-      "completed_at": "2026-04-01T00:00:00.000Z",
-      "summary": "propose-patch-mcp created — propose_patch/confirm_patch/reject_patch/list_pending_patches/preview_patch, delta/diff fallback formatter, in-memory patch store, path traversal blocked"
-    },
-    {
-      "id": "E-142",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-142: Implement the `github-bridge-mcp` using GitHub CLI (gh) integration.",
-      "created_at": "2026-04-01T00:00:00.000Z",
-      "completed_at": "2026-04-01T00:00:00.000Z",
-      "summary": "github-bridge-mcp created — check_gh_auth/fetch_assigned_issues/get_issue/create_update_from_issues/get_pr_status via gh CLI whitelist; ai sync --github wired into src/bin/ai"
-    },
-    {
-      "id": "T-1",
-      "owner": "Tester (TestSprite)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Add idempotency tests for `ai init` and `ai sync`: assert that CLAUDE.md, GEMINI.md, and .mcp.json are always overwritten by ensure_ai_templates() and do_sync(); verify second run produces identical output (content matches template); covers P1 gap flagged in [TESTS_WARN] 2026-03-23",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "idempotency_test.sh created — 16 tests covering CLAUDE.md/GEMINI.md/.mcp.json overwrite on repeated init/sync; 16/16 passing"
-    },
-    {
-      "id": "P-1",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-54: Design the `lsp-mcp` server wrapping `typescript-language-server` or `pyright` for true symbol/type awareness.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "LSP-MCP designed (\\u00a712) \\u2014 wraps language servers for real-time diagnostics and symbol jump. E-136 implementation ready."
-    },
-    {
-      "id": "P-2",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-55: Design the `ai-compact` and `ai-digest-reactive` logic for automated context management.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "ai-compact designed (\\u00a713) \\u2014 distill SESSION.md when >2k tokens, archive raw log. E-139 implementation ready."
-    },
-    {
-      "id": "P-3",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-56: Design the `patch_file` tool with MD5/timestamp validation to prevent race conditions.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "patch_file designed (\\u00a725) \\u2014 MD5/timestamp lock to prevent race conditions during write. E-137 implementation ready."
-    },
-    {
-      "id": "P-4",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-57: Design the `token-budget-mcp` and budget-aware planning protocol.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "token-budget-mcp designed (plans/agentic_upgrades_phase2.md \\u00a71) \\u2014 SQLite usage tracking. E-140 ready."
-    },
-    {
-      "id": "P-5",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-58: Design the `github-bridge-mcp` for autonomous issue-to-blueprint flows.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "github-bridge-mcp designed (plans/agentic_upgrades_phase2.md \\u00a72) \\u2014 gh CLI issue sync. E-142 ready."
-    },
-    {
-      "id": "P-6",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-59: Design the \"Just-in-Time\" (Level 2) Skill Loading architecture.",
-      "created_at": "2026-03-31T00:00:00.000Z",
-      "completed_at": "2026-03-31T00:00:00.000Z",
-      "summary": "JIT Skill Loading designed (plans/agentic_upgrades_phase2.md \\u00a73) \\u2014 Metadata discovery vs Hard activation. E-142 ready."
-    },
-    {
-      "id": "P-7",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-60: Design the `propose_patch` TUI diff preview flow and user confirmation hook.",
-      "created_at": "2026-04-01T18:04:49.235Z",
-      "completed_at": "2026-04-03T08:09:53.945Z",
-      "summary": "P-60 (propose_patch) was fully designed in architect.md §30 and implemented by Claude in E-141."
-    },
-    {
-      "id": "P-8",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "P-61: Architectural Fragmentation (\\u00a736) \\u2014 Split architect.md into Domain Blueprints to reduce session-start context tax.",
-      "created_at": "2026-04-01T18:04:49.235Z",
-      "completed_at": "2026-04-03T08:09:53.948Z",
-      "summary": "P-61 (Architectural Fragmentation) blueprinted in §39. Handed over to Claude via E-151."
-    },
-    {
-      "id": "P-9",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "P-62: \"Metadata-Only\" Default Mode \\u2014 Update ai sync to only provide Skill Summaries to agents by default.",
-      "created_at": "2026-04-01T18:04:49.235Z",
-      "completed_at": "2026-04-03T08:09:53.949Z",
-      "summary": "P-62 (Metadata-Only Sync) blueprinted in §29 JIT Skill Loading. Handed over to Claude via E-152."
-    },
-    {
-      "id": "P-10",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "P-63: Design MCP-Level Role-Based Access Control (RBAC) to enforce the Anti-Drift Protocol by blocking Architect writes to `src/`.",
-      "created_at": "2026-04-01T20:15:37.126Z",
-      "completed_at": "2026-04-03T08:09:53.951Z",
-      "summary": "P-63 (MCP-Level RBAC) was fully designed in architect.md §35 and implemented by Claude in E-143."
-    },
-    {
-      "id": "E-143",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "E-144: Implement Role-Aware interceptors in filesystem MCPs to throw `[ANTI_DRIFT_VIOLATION]` when Gemini targets `src/`.",
-      "created_at": "2026-04-01T20:15:37.133Z",
-      "completed_at": "2026-04-02T09:53:22.848Z",
-      "summary": "Role-Aware RBAC interceptors implemented. roleGuard() added to patch-mcp (patch_file) and propose-patch-mcp (propose_patch + confirm_patch defense-in-depth). check_role_access pre-flight tool added to context-guardian-mcp. Architect blocked from src/ writes with [ANTI_DRIFT_VIOLATION]; .ai/ and plans/ whitelisted. 25 new tests in e143_test.sh, all passing."
-    },
-    {
-      "id": "E-144",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `digest_updater` agent to adhere to JIT principles. It currently reads 8 core `.ai/` files in full. It must be updated to use file timestamps or `grep` to identify changes, preventing massive token burn on unchanged files.",
-      "created_at": "2026-04-02T20:52:53.033Z",
-      "completed_at": "2026-04-02T20:58:17.710Z",
-      "summary": "Refactored digest_updater agent to JIT principles — git-based change detection, grep-first targeted reads, section-level preservation for unchanged files; eliminates unconditional 8-file full reads"
-    },
-    {
-      "id": "E-145",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor broad CLI prompts in `src/bin/ai` (such as `do_update`, `do_onboard` which trigger \"Scan the codebase\" loops). Enforce the 6-file Token Economics limit mechanically within the execution wrapper to prevent unconstrained `ls -R` and `cat` token burners.",
-      "created_at": "2026-04-02T20:52:53.040Z",
-      "completed_at": "2026-04-02T20:59:41.644Z",
-      "summary": "Enforced 6-file Token Economics limit in do_update(), do_onboard(), and do_digest() prompts — replaced open-ended \"scan codebase\" with explicit JIT read order and hard file-count cap; forbidden ls -R and cat loops"
-    },
-    {
       "id": "E-146",
       "owner": "Engineer (Claude)",
       "status": "DONE",
@@ -545,6 +105,46 @@
       "created_at": "2026-04-03T08:17:54.291Z",
       "completed_at": "2026-04-03T08:26:13.115Z",
       "summary": "Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import"
+    },
+    {
+      "id": "P-1",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions.",
+      "created_at": "2026-04-03T08:42:14.722Z",
+      "completed_at": "2026-04-03T08:44:53.164Z",
+      "summary": "Handed over to Claude as E-156"
+    },
+    {
+      "id": "P-2",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns.",
+      "created_at": "2026-04-03T08:42:14.726Z",
+      "completed_at": "2026-04-03T08:44:53.166Z",
+      "summary": "Handed over to Claude as E-157"
+    },
+    {
+      "id": "E-156",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions.",
+      "created_at": "2026-04-03T08:44:53.156Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-157",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns.",
+      "created_at": "2026-04-03T08:44:53.161Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [
@@ -1973,7 +1573,7 @@
         ".claude/agents/devops_engineer.md",
         ".claude/agents/digest_updater.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-152",
@@ -1991,7 +1591,7 @@
         ".claude/agents/devops_engineer.md",
         ".claude/agents/digest_updater.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-153",
@@ -2009,7 +1609,7 @@
         ".claude/agents/devops_engineer.md",
         ".claude/agents/digest_updater.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-154",
@@ -2027,7 +1627,7 @@
         ".claude/agents/devops_engineer.md",
         ".claude/agents/digest_updater.md"
       ],
-      "read": false
+      "read": true
     },
     {
       "task_id": "E-155",
@@ -2045,9 +1645,9 @@
         ".claude/agents/devops_engineer.md",
         ".claude/agents/digest_updater.md"
       ],
-      "read": false
+      "read": true
     }
   ],
-  "digest_stale": true,
-  "digest_stale_reason": "E-155 marked DONE — Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import"
+  "digest_stale": false,
+  "digest_stale_reason": null
 }
