@@ -129,22 +129,22 @@
     {
       "id": "E-156",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions.",
       "created_at": "2026-04-03T08:44:53.156Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-03T12:04:37.751Z",
+      "summary": "Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures)"
     },
     {
       "id": "E-157",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md)",
       "created_at": "2026-04-03T08:44:53.161Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-03T12:04:34.048Z",
+      "summary": "Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token"
     }
   ],
   "stamps": [
@@ -1646,8 +1646,40 @@
         ".claude/agents/digest_updater.md"
       ],
       "read": true
+    },
+    {
+      "task_id": "E-157",
+      "timestamp": "2026-04-03T12:04:34.116Z",
+      "summary": "E-157: Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/state.json, src/mcp/patch-mcp/index.js, src/mcp/task-synchronizer-mcp/index.js",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/state.json",
+        "src/mcp/patch-mcp/index.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "src/mcp/task-synchronizer-mcp/package.json",
+        "tests/suites/lsp_patch_test.sh",
+        "tests/suites/migrate_state_test.sh"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-156",
+      "timestamp": "2026-04-03T12:04:37.789Z",
+      "summary": "E-156: Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures) | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/state.json, src/mcp/patch-mcp/index.js, src/mcp/task-synchronizer-mcp/index.js",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/state.json",
+        "src/mcp/patch-mcp/index.js",
+        "src/mcp/task-synchronizer-mcp/index.js",
+        "src/mcp/task-synchronizer-mcp/package.json",
+        "tests/suites/lsp_patch_test.sh",
+        "tests/suites/migrate_state_test.sh"
+      ],
+      "read": true
     }
   ],
-  "digest_stale": false,
-  "digest_stale_reason": null
+  "digest_stale": true,
+  "digest_stale_reason": "E-156 marked DONE — Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures)"
 }

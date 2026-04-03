@@ -181,15 +181,58 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ── Staleness check ──
       if (args.expected_md5) {
         if (currentMd5 !== args.expected_md5) {
+          // Fuzzy fallback (E-157): if old_content is still present exactly once,
+          // the drift happened elsewhere — apply the patch and warn.
+          const first  = current.indexOf(args.old_content);
+          const second = first !== -1 ? current.indexOf(args.old_content, first + 1) : -1;
+
+          if (first !== -1 && second === -1) {
+            // Exactly one occurrence — safe to apply despite MD5 mismatch.
+            const patched =
+              current.slice(0, first) +
+              args.new_content +
+              current.slice(first + args.old_content.length);
+
+            try {
+              writeFileSync(abs, patched, "utf8");
+            } catch (e) {
+              return {
+                content: [{ type: "text", text: `✗ Write failed: ${e.message}` }],
+                isError: true,
+              };
+            }
+
+            const newMd5 = md5(patched);
+            return {
+              content: [{
+                type: "text",
+                text:
+                  `[PATCH_APPLIED_WITH_DRIFT] Patch applied despite MD5 mismatch — file drifted elsewhere.\n` +
+                  `  path:        ${abs}\n` +
+                  `  expected MD5: ${args.expected_md5}\n` +
+                  `  actual   MD5: ${currentMd5}\n` +
+                  `  new      MD5: ${newMd5}\n\n` +
+                  `old_content was found exactly once; replacement applied safely.\n` +
+                  `Use new MD5 as expected_md5 for any follow-up patches.`,
+              }],
+              metadata: { md5: newMd5, path: abs },
+            };
+          }
+
+          // old_content not found, or found ambiguously — hard reject.
+          const reason = first === -1
+            ? "old_content not found in file"
+            : "old_content found multiple times (ambiguous replacement)";
           return {
             content: [{
               type: "text",
               text:
-                `✗ STALE WRITE BLOCKED — file has changed since last read.\n` +
+                `✗ [MD5_MISMATCH] File has changed and patch cannot be applied safely.\n` +
                 `  expected MD5: ${args.expected_md5}\n` +
                 `  current  MD5: ${currentMd5}\n` +
+                `  reason: ${reason}\n` +
                 `  path: ${abs}\n\n` +
-                `Re-read the file and recompute the patch before retrying.`,
+                `Re-read the file and reconstruct the patch before retrying.`,
             }],
             isError: true,
           };

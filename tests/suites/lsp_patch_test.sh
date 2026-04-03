@@ -83,8 +83,8 @@ assert_contains "patch-mcp: get_file_md5 tool" "get_file_md5" "$PATCH"
 assert_contains "patch-mcp: uses crypto.createHash md5" "createHash" "$PATCH"
 assert_contains "patch-mcp: md5 digest hex"             "hex"        "$PATCH"
 
-# Staleness check: rejects when expected_md5 != current
-assert_contains "patch-mcp: STALE WRITE BLOCKED message" "STALE WRITE BLOCKED" "$PATCH"
+# Staleness check: rejects with MD5_MISMATCH when old_content not found (E-157 fuzzy fallback)
+assert_contains "patch-mcp: MD5_MISMATCH reject message" "MD5_MISMATCH" "$PATCH"
 
 # Fallback: old_content exact match when no expected_md5
 assert_contains "patch-mcp: PATCH MISMATCH fallback"    "PATCH MISMATCH" "$PATCH"

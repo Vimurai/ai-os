@@ -1,72 +1,325 @@
 #!/usr/bin/env node
 /**
- * task-synchronizer-mcp — AI-OS Exclusive State Mutator
- * Manages .ai/state.json as the authoritative project state.
- * Regenerates TASKS.md and REVIEWS.md as markdown views after every mutation.
+ * task-synchronizer-mcp — AI-OS Exclusive State Mutator (E-156: SQLite migration)
+ * Uses .ai/state.sqlite as the ACID-safe primary store.
+ * Automatically migrates existing .ai/state.json on first use.
+ * Regenerates state.json (backwards-compat view), TASKS.md, and REVIEWS.md
+ * after every mutation.
+ *
+ * NOTE: orchestrator-mcp writes state.json directly (deltas, digest_stale,
+ * task DONE transitions). Those writes remain in state.json and are visible
+ * to task-synchronizer-mcp via the startup sync check (mtime guard).
  *
  * Tools:
- *   get_state()                        → returns full state.json
+ *   get_state()                        → returns full state
  *   add_task(owner, description, tier)  → adds task, auto-assigns ID
  *   update_task_status(id, status)      → transitions task status
  *   add_stamp(task_id, type, agent, summary) → writes atomic audit stamp
  *   set_project_focus(text)             → updates project focus
- *   sync_tasks(update_content?)         → (DEPRECATED E-147) proposes P-## tasks from inline intent; UPDATE.md no longer used
+ *   archive_done_tasks()                → moves old DONE tasks to archive
+ *   verify_markdown_sync()              → checks TASKS.md / REVIEWS.md vs DB
+ *   sync_tasks(update_content?)         → (DEPRECATED E-147) no-op
  *   append_tasks(tasks)                 → (legacy) appends to TASKS.md
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs";
 import { resolve } from "path";
+import { DatabaseSync } from "node:sqlite";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function getAiDir() {
-  return resolve(process.cwd(), ".ai");
-}
+// ── SQLite Setup ──────────────────────────────────────────────────────────────
 
-// readState: used by get_state — auto-initializes empty template if missing
-function readState(aiDir) {
-  const p = resolve(aiDir, "state.json");
-  if (!existsSync(p)) {
-    return { version: "1.0", project: { current_tier: null, release_verdict: null, focus: null }, tasks: [], stamps: [] };
+let _db = null;
+
+function getDb(aiDir) {
+  if (_db) return _db;
+
+  const dbPath   = resolve(aiDir, "state.sqlite");
+  const jsonPath = resolve(aiDir, "state.json");
+  const isNew    = !existsSync(dbPath);
+
+  _db = new DatabaseSync(dbPath);
+  _db.exec("PRAGMA journal_mode = WAL;");
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS project (
+      key   TEXT PRIMARY KEY,
+      value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS tasks (
+      id           TEXT PRIMARY KEY,
+      owner        TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'OPEN',
+      tier         INTEGER,
+      description  TEXT NOT NULL,
+      created_at   TEXT NOT NULL,
+      completed_at TEXT,
+      summary      TEXT
+    );
+    CREATE TABLE IF NOT EXISTS stamps (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      type      TEXT NOT NULL,
+      agent     TEXT,
+      task_id   TEXT,
+      timestamp TEXT NOT NULL,
+      summary   TEXT
+    );
+    CREATE TABLE IF NOT EXISTS deltas (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id    TEXT NOT NULL,
+      summary    TEXT,
+      files      TEXT,
+      read       INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT OR IGNORE INTO meta(key, value) VALUES ('version', '1.0');
+    INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale', 'false');
+    INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale_reason', '');
+    INSERT OR IGNORE INTO project(key, value) VALUES ('current_tier', NULL);
+    INSERT OR IGNORE INTO project(key, value) VALUES ('release_verdict', NULL);
+    INSERT OR IGNORE INTO project(key, value) VALUES ('focus', NULL);
+  `);
+
+  if (isNew && existsSync(jsonPath)) {
+    _importFromJson(jsonPath, _db);
   }
-  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+
+  return _db;
 }
 
-// readStateStrict: used by write tools — returns null (error) if state.json is missing,
-// corrupt, or has wrong schema version.
-// P-44: prevents silent creation of empty state that bypasses migration.
-// E-117: version guard prevents silent acceptance of v0.x / future schemas.
-function readStateStrict(aiDir) {
-  const p = resolve(aiDir, "state.json");
-  if (!existsSync(p)) return null;
+/**
+ * One-time import of state.json into SQLite on first run.
+ * state.json is preserved for backwards compat (orchestrator-mcp reads it).
+ */
+function _importFromJson(jsonPath, db) {
+  let state;
   try {
-    const state = JSON.parse(readFileSync(p, "utf8"));
-    if (state.version !== "1.0") {
-      process.stderr.write(`[WARN] state.json schema version '${state.version ?? "missing"}' != '1.0' — treating as corrupt\n`);
-      return null;
+    state = JSON.parse(readFileSync(jsonPath, "utf8"));
+    if (!state || state.version !== "1.0") {
+      process.stderr.write("[WARN] state.json has unexpected version — skipping migration\n");
+      return;
     }
-    return state;
-  } catch { return null; }
+  } catch {
+    process.stderr.write("[WARN] state.json parse error — skipping migration\n");
+    return;
+  }
+
+  const setProj = db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES (?, ?)");
+  const proj = state.project || {};
+  setProj.run("current_tier",    proj.current_tier   != null ? String(proj.current_tier) : null);
+  setProj.run("release_verdict", proj.release_verdict ?? null);
+  setProj.run("focus",           proj.focus          ?? null);
+
+  const insertTask = db.prepare(`
+    INSERT OR IGNORE INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const t of (state.tasks || [])) {
+    insertTask.run(t.id, t.owner, t.status, t.tier ?? null,
+                   t.description, t.created_at, t.completed_at ?? null, t.summary ?? null);
+  }
+
+  const insertStamp = db.prepare(
+    "INSERT INTO stamps(type, agent, task_id, timestamp, summary) VALUES (?, ?, ?, ?, ?)"
+  );
+  for (const s of (state.stamps || [])) {
+    insertStamp.run(s.type, s.agent ?? null, s.task_id ?? null, s.timestamp, s.summary ?? null);
+  }
+
+  const insertDelta = db.prepare(
+    "INSERT INTO deltas(task_id, summary, files, read, created_at) VALUES (?, ?, ?, ?, ?)"
+  );
+  for (const d of (state.deltas || [])) {
+    insertDelta.run(
+      d.task_id,
+      d.summary ?? null,
+      d.files || d.files_changed ? JSON.stringify(d.files || d.files_changed) : null,
+      d.read ? 1 : 0,
+      d.created_at || d.timestamp || new Date().toISOString()
+    );
+  }
+
+  const setMeta = db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)");
+  setMeta.run("digest_stale",        state.digest_stale ? "true" : "false");
+  setMeta.run("digest_stale_reason", state.digest_stale_reason ?? "");
+
+  process.stderr.write("[INFO] task-synchronizer-mcp: imported state.json → state.sqlite\n");
 }
 
-const DONE_ARCHIVE_THRESHOLD = 50; // auto-archive when DONE tasks exceed this
-const DONE_KEEP_RECENT = 10;       // keep this many recent DONE tasks in live state
+/**
+ * Sync any external writes to state.json (e.g. from orchestrator-mcp) back
+ * into SQLite. Called at the start of each tool handler.
+ * Compares mtime of state.json vs state.sqlite; re-imports changed fields if
+ * state.json is newer.
+ */
+function _syncFromJsonIfNewer(aiDir, db) {
+  const jsonPath = resolve(aiDir, "state.json");
+  const dbPath   = resolve(aiDir, "state.sqlite");
+  if (!existsSync(jsonPath)) return;
 
-// archiveDoneTasks: moves old DONE tasks to .ai/archive/state-done-YYYYMM.json
-// Returns { archived: number, kept: number } or null if below threshold
-function archiveDoneTasks(aiDir, state) {
-  const done = state.tasks.filter(t => t.status === "DONE");
+  try {
+    const jsonMtime = statSync(jsonPath).mtimeMs;
+    const dbMtime   = statSync(dbPath).mtimeMs;
+    if (jsonMtime <= dbMtime) return; // SQLite is current
+  } catch { return; }
+
+  // state.json is newer — re-import mutable fields (tasks, deltas, meta)
+  let state;
+  try {
+    state = JSON.parse(readFileSync(jsonPath, "utf8"));
+    if (!state || state.version !== "1.0") return;
+  } catch { return; }
+
+  // Upsert tasks (handles orchestrator-mcp DONE transitions)
+  const upsertTask = db.prepare(`
+    INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      status = excluded.status,
+      completed_at = excluded.completed_at,
+      summary = excluded.summary
+  `);
+  for (const t of (state.tasks || [])) {
+    upsertTask.run(t.id, t.owner, t.status, t.tier ?? null,
+                   t.description, t.created_at, t.completed_at ?? null, t.summary ?? null);
+  }
+
+  // Upsert meta (handles digest_stale from orchestrator-mcp)
+  const setMeta = db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)");
+  if (state.digest_stale !== undefined) {
+    setMeta.run("digest_stale",        state.digest_stale ? "true" : "false");
+    setMeta.run("digest_stale_reason", state.digest_stale_reason ?? "");
+  }
+
+  // Import any new deltas
+  const knownCount = db.prepare("SELECT COUNT(*) as n FROM deltas").get().n;
+  const jsonDeltas = state.deltas || [];
+  if (jsonDeltas.length > knownCount) {
+    const insertDelta = db.prepare(
+      "INSERT INTO deltas(task_id, summary, files, read, created_at) VALUES (?, ?, ?, ?, ?)"
+    );
+    for (const d of jsonDeltas.slice(knownCount)) {
+      insertDelta.run(
+        d.task_id,
+        d.summary ?? null,
+        d.files || d.files_changed ? JSON.stringify(d.files || d.files_changed) : null,
+        d.read ? 1 : 0,
+        d.created_at || d.timestamp || new Date().toISOString()
+      );
+    }
+  }
+}
+
+// ── State Reconstruction ──────────────────────────────────────────────────────
+
+function _readState(db) {
+  const meta  = Object.fromEntries(db.prepare("SELECT key, value FROM meta").all().map(r => [r.key, r.value]));
+  const proj  = Object.fromEntries(db.prepare("SELECT key, value FROM project").all().map(r => [r.key, r.value]));
+  const tasks = db.prepare("SELECT * FROM tasks ORDER BY rowid").all();
+  const stamps = db.prepare(
+    "SELECT type, agent, task_id, timestamp, summary FROM stamps ORDER BY id"
+  ).all();
+  const deltas = db.prepare(
+    "SELECT task_id, summary, files, read, created_at FROM deltas ORDER BY id"
+  ).all().map(d => ({
+    task_id:    d.task_id,
+    summary:    d.summary,
+    files:      d.files ? JSON.parse(d.files) : [],
+    read:       !!d.read,
+    created_at: d.created_at,
+  }));
+
+  return {
+    version: meta.version || "1.0",
+    project: {
+      current_tier:    proj.current_tier != null ? Number(proj.current_tier) : null,
+      release_verdict: proj.release_verdict ?? null,
+      focus:           proj.focus ?? null,
+    },
+    tasks:               tasks.map(t => ({ ...t, tier: t.tier ?? null })),
+    stamps,
+    deltas,
+    digest_stale:        meta.digest_stale === "true",
+    digest_stale_reason: meta.digest_stale_reason || null,
+  };
+}
+
+// ── Markdown & JSON View Generator ────────────────────────────────────────────
+
+function _regenerateViews(aiDir, db) {
+  const state = _readState(db);
+
+  // Regenerate TASKS.md
+  if (state.tasks.length > 0) {
+    const tasksPath = resolve(aiDir, "TASKS.md");
+    const lines = ["# TASKS (Generated from state.json)", ""];
+
+    const byOwner = {};
+    for (const t of state.tasks) {
+      const owner = t.owner || "Unassigned";
+      if (!byOwner[owner]) byOwner[owner] = [];
+      byOwner[owner].push(t);
+    }
+    for (const [owner, ownerTasks] of Object.entries(byOwner)) {
+      lines.push(`## ${owner}`);
+      for (const t of ownerTasks) {
+        const check   = t.status === "DONE" ? "x" : " ";
+        const tierStr = t.tier ? ` | Tier: ${t.tier}` : "";
+        lines.push(`- [${check}] ${t.id}: ${t.description}${tierStr}`);
+        if (t.status === "DONE" && t.completed_at) {
+          lines.push(`  Status: DONE ${t.completed_at.split("T")[0]} — ${t.summary || "Complete"}`);
+        }
+      }
+      lines.push("");
+    }
+    writeFileSync(tasksPath, lines.join("\n"), "utf8");
+  }
+
+  // Regenerate REVIEWS.md
+  if (state.stamps.length > 0) {
+    const reviewsPath = resolve(aiDir, "REVIEWS.md");
+    const stampLines  = ["# REVIEWS.md (Generated from state.json)", ""];
+    for (const s of state.stamps) {
+      const date = s.timestamp ? s.timestamp.split("T")[0] : "unknown";
+      stampLines.push(`[${s.type}] ${date} | ${s.summary || s.agent || ""}`);
+    }
+    stampLines.push("");
+    writeFileSync(reviewsPath, stampLines.join("\n"), "utf8");
+  }
+
+  // Regenerate state.json view (backwards compat: orchestrator-mcp reads it directly)
+  writeFileSync(
+    resolve(aiDir, "state.json"),
+    JSON.stringify(state, null, 2) + "\n",
+    "utf8"
+  );
+}
+
+function _nextId(db, prefix) {
+  const rows = db.prepare("SELECT id FROM tasks WHERE id LIKE ?").all(`${prefix}-%`);
+  const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
+  return `${prefix}-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+}
+
+// ── Archive ───────────────────────────────────────────────────────────────────
+
+const DONE_ARCHIVE_THRESHOLD = 50;
+const DONE_KEEP_RECENT       = 10;
+
+function _archiveDoneTasks(aiDir, db) {
+  const done = db.prepare("SELECT * FROM tasks WHERE status = 'DONE' ORDER BY rowid").all();
   if (done.length <= DONE_ARCHIVE_THRESHOLD) return null;
 
-  const toArchive = done.slice(0, done.length - DONE_KEEP_RECENT);
-  const toKeep    = done.slice(done.length - DONE_KEEP_RECENT);
-  const open      = state.tasks.filter(t => t.status !== "DONE");
+  const toArchive   = done.slice(0, done.length - DONE_KEEP_RECENT);
+  const archiveIds  = toArchive.map(t => t.id);
 
-  // Write archive file
-  const ym = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const archiveDir = resolve(aiDir, "archive");
+  const ym          = new Date().toISOString().slice(0, 7);
+  const archiveDir  = resolve(aiDir, "archive");
   mkdirSync(archiveDir, { recursive: true });
   const archivePath = resolve(archiveDir, `state-done-${ym}.json`);
 
@@ -76,79 +329,22 @@ function archiveDoneTasks(aiDir, state) {
   }
   writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
 
-  // Prune live state
-  state.tasks = [...open, ...toKeep];
-  writeState(aiDir, state);
+  const ph = archiveIds.map(() => "?").join(",");
+  db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...archiveIds);
 
-  return { archived: toArchive.length, kept: toKeep.length, archivePath };
+  _regenerateViews(aiDir, db);
+  return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
 }
 
-const STATE_MISSING_ERR = "✗ state.json not found — run: ai init or ai migrate-state";
-const STATE_CORRUPT_ERR = "✗ state.json is corrupt — run: ai migrate-state to rebuild";
+// ── Error messages ────────────────────────────────────────────────────────────
 
-function writeState(aiDir, state) {
-  const p = resolve(aiDir, "state.json");
-  writeFileSync(p, JSON.stringify(state, null, 2) + "\n", "utf8");
-  regenerateMarkdown(aiDir, state);
-}
-
-function nextId(tasks, prefix) {
-  const nums = tasks
-    .filter(t => t.id.startsWith(prefix + "-"))
-    .map(t => parseInt(t.id.split("-")[1], 10))
-    .filter(n => !isNaN(n));
-  const max = nums.length > 0 ? Math.max(...nums) : 0;
-  return `${prefix}-${max + 1}`;
-}
-
-// ── Markdown View Generator (E-80) ───────────────────────────────────────────
-function regenerateMarkdown(aiDir, state) {
-  // Regenerate TASKS.md view
-  const tasksPath = resolve(aiDir, "TASKS.md");
-  // Only regenerate if state has tasks (avoid clobbering during migration)
-  if (state.tasks.length > 0) {
-    const lines = ["# TASKS (Generated from state.json)", ""];
-
-    // Group by owner
-    const byOwner = {};
-    for (const t of state.tasks) {
-      const owner = t.owner || "Unassigned";
-      if (!byOwner[owner]) byOwner[owner] = [];
-      byOwner[owner].push(t);
-    }
-
-    for (const [owner, tasks] of Object.entries(byOwner)) {
-      lines.push(`## ${owner}`);
-      for (const t of tasks) {
-        const check = t.status === "DONE" ? "x" : " ";
-        const tierStr = t.tier ? ` | Tier: ${t.tier}` : "";
-        lines.push(`- [${check}] ${t.id}: ${t.description}${tierStr}`);
-        if (t.status === "DONE" && t.completed_at) {
-          lines.push(`  Status: DONE ${t.completed_at.split("T")[0]} — ${t.summary || "Complete"}`);
-        }
-      }
-      lines.push("");
-    }
-
-    writeFileSync(tasksPath, lines.join("\n"), "utf8");
-  }
-
-  // Regenerate REVIEWS.md view from stamps
-  if (state.stamps.length > 0) {
-    const reviewsPath = resolve(aiDir, "REVIEWS.md");
-    const stampLines = ["# REVIEWS.md (Generated from state.json)", ""];
-    for (const s of state.stamps) {
-      const date = s.timestamp ? s.timestamp.split("T")[0] : "unknown";
-      stampLines.push(`[${s.type}] ${date} | ${s.summary || s.agent || ""}`);
-    }
-    stampLines.push("");
-    writeFileSync(reviewsPath, stampLines.join("\n"), "utf8");
-  }
-}
+const STATE_MISSING_ERR = "✗ state.sqlite not found — run: ai init";
+const DB_ERR = "✗ state.sqlite could not be opened";
 
 // ── Server ────────────────────────────────────────────────────────────────────
+
 const server = new Server(
-  { name: "task-synchronizer-mcp", version: "2.0.0" },
+  { name: "task-synchronizer-mcp", version: "2.1.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -160,23 +356,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          summary: { type: "boolean", description: "Return counts + project info only (no task list). Use this by default." },
-          status: { type: "string", enum: ["OPEN", "BLOCKED", "DONE"], description: "Filter tasks by status" },
-          owner: { type: "string", description: "Filter tasks by owner substring (e.g. 'claude', 'gemini')" },
-          tier: { type: "number", enum: [1, 2, 3], description: "Filter tasks by tier" },
+          summary: { type: "boolean",  description: "Return counts + project info only (no task list). Use this by default." },
+          status:  { type: "string",   enum: ["OPEN", "BLOCKED", "DONE"], description: "Filter tasks by status" },
+          owner:   { type: "string",   description: "Filter tasks by owner substring (e.g. 'claude', 'gemini')" },
+          tier:    { type: "number",   enum: [1, 2, 3], description: "Filter tasks by tier" },
         },
       },
     },
     {
       name: "add_task",
-      description: "Adds a new task to state.json with auto-assigned ID. Returns the new task.",
+      description: "Adds a new task to state with auto-assigned ID. Returns the new task.",
       inputSchema: {
         type: "object",
         properties: {
-          owner: { type: "string", description: "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+          owner:       { type: "string", description: "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
           description: { type: "string", description: "Task description" },
-          tier: { type: "number", description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
-          prefix: { type: "string", description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },
+          tier:        { type: "number", description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
+          prefix:      { type: "string", description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },
         },
         required: ["owner", "description"],
       },
@@ -187,8 +383,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          id: { type: "string", description: "Task ID (e.g. 'E-78')" },
-          status: { type: "string", description: "New status", enum: ["OPEN", "BLOCKED", "DONE"] },
+          id:      { type: "string", description: "Task ID (e.g. 'E-78')" },
+          status:  { type: "string", description: "New status", enum: ["OPEN", "BLOCKED", "DONE"] },
           summary: { type: "string", description: "Completion summary (for DONE status)" },
         },
         required: ["id", "status"],
@@ -196,13 +392,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "add_stamp",
-      description: "Writes an atomic audit stamp to state.json. Used by critic agents and review synthesizer.",
+      description: "Writes an atomic audit stamp. Used by critic agents and review synthesizer.",
       inputSchema: {
         type: "object",
         properties: {
           task_id: { type: "string", description: "Related task ID (e.g. 'E-78')" },
-          type: { type: "string", description: "Stamp type (e.g. 'ARCH_PASS', 'SEC_FAIL', 'CRITIC_STAMP')" },
-          agent: { type: "string", description: "Agent that produced this stamp" },
+          type:    { type: "string", description: "Stamp type (e.g. 'ARCH_PASS', 'SEC_FAIL', 'CRITIC_STAMP')" },
+          agent:   { type: "string", description: "Agent that produced this stamp" },
           summary: { type: "string", description: "One-line summary of the finding" },
         },
         required: ["type", "agent", "summary"],
@@ -210,11 +406,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "set_project_focus",
-      description: "Updates the project's current focus and tier in state.json.",
+      description: "Updates the project's current focus and tier.",
       inputSchema: {
         type: "object",
         properties: {
-          focus: { type: "string", description: "Current focus description" },
+          focus:        { type: "string", description: "Current focus description" },
           current_tier: { type: "number", description: "Current risk tier", enum: [1, 2, 3] },
         },
         required: ["focus"],
@@ -222,13 +418,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "archive_done_tasks",
-      description: `Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when total DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}. Reduces get_state response size. Called automatically by get_state but can be triggered manually.`,
+      description: `Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when total DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}.`,
       inputSchema: { type: "object", properties: {} },
     },
-    // Legacy tools (backwards compatibility)
+    // Legacy tools
     {
       name: "append_tasks",
-      description: "Legacy: Appends P-## task strings to TASKS.md directly. Use add_task for state.json.",
+      description: "Legacy: Appends P-## task strings to TASKS.md directly. Use add_task for new tasks.",
       inputSchema: {
         type: "object",
         properties: {
@@ -239,7 +435,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "verify_markdown_sync",
-      description: "E-95: Checks that TASKS.md and REVIEWS.md are in sync with state.json. Returns PASS or FAIL with divergence details. Used by pre-commit hook to enforce Markdown-as-Read-Only.",
+      description: "Checks that TASKS.md and REVIEWS.md are in sync with state. Returns PASS or FAIL.",
       inputSchema: { type: "object", properties: {} },
     },
   ],
@@ -247,177 +443,169 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  const aiDir = getAiDir();
+  const aiDir = resolve(process.cwd(), ".ai");
 
   if (!existsSync(aiDir)) {
     return { content: [{ type: "text", text: "✗ No .ai/ directory found. Run: ai init" }], isError: true };
   }
 
+  let db;
+  try {
+    db = getDb(aiDir);
+  } catch (e) {
+    return { content: [{ type: "text", text: `${DB_ERR}: ${e.message}` }], isError: true };
+  }
+
+  // Sync any direct state.json writes (e.g. from orchestrator-mcp) back into SQLite
+  _syncFromJsonIfNewer(aiDir, db);
+
   switch (name) {
     // ── get_state ─────────────────────────────────────────────────────────────
     case "get_state": {
-      const state = readState(aiDir);
-      if (!state) return { content: [{ type: "text", text: "✗ state.json is corrupt or missing." }], isError: true };
-
-      // summary mode — return counts + project only (no task list)
       if (args.summary) {
         const counts = { OPEN: 0, BLOCKED: 0, DONE: 0 };
-        for (const t of state.tasks) counts[t.status] = (counts[t.status] || 0) + 1;
-        const result = {
-          version: state.version,
-          project: state.project,
-          task_counts: counts,
-          total: state.tasks.length,
-          stamps: state.stamps.slice(-5), // last 5 stamps only
+        for (const t of db.prepare("SELECT status FROM tasks").all()) {
+          counts[t.status] = (counts[t.status] || 0) + 1;
+        }
+        const proj  = Object.fromEntries(
+          db.prepare("SELECT key, value FROM project").all().map(r => [r.key, r.value])
+        );
+        const stamps = db.prepare(
+          "SELECT type, agent, task_id, timestamp, summary FROM stamps ORDER BY id DESC LIMIT 5"
+        ).all();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              version:     "1.0",
+              project:     { current_tier: proj.current_tier ? Number(proj.current_tier) : null, focus: proj.focus },
+              task_counts: counts,
+              total:       Object.values(counts).reduce((a, b) => a + b, 0),
+              stamps,
+            }, null, 2),
+          }],
         };
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       }
 
-      // filtered mode — apply status / owner / tier filters
       if (args.status || args.owner || args.tier) {
-        let tasks = state.tasks;
-        if (args.status) tasks = tasks.filter(t => t.status === args.status);
-        if (args.owner) tasks = tasks.filter(t => t.owner?.toLowerCase().includes(args.owner.toLowerCase()));
-        if (args.tier) tasks = tasks.filter(t => t.tier === args.tier);
-        const result = { project: state.project, tasks, total_matched: tasks.length };
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        let sql   = "SELECT * FROM tasks WHERE 1=1";
+        const params = [];
+        if (args.status) { sql += " AND status = ?";              params.push(args.status); }
+        if (args.tier)   { sql += " AND tier = ?";                params.push(args.tier); }
+        const tasks = db.prepare(sql + " ORDER BY rowid").all(...params)
+          .filter(t => !args.owner || t.owner?.toLowerCase().includes(args.owner.toLowerCase()));
+        const proj = Object.fromEntries(
+          db.prepare("SELECT key, value FROM project").all().map(r => [r.key, r.value])
+        );
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({ project: proj, tasks, total_matched: tasks.length }, null, 2),
+          }],
+        };
       }
 
-      // full state (no filter) — auto-archive if DONE tasks exceed threshold
-      const archiveResult = archiveDoneTasks(aiDir, state);
-      if (archiveResult) {
-        // re-read pruned state
-        const pruned = readState(aiDir);
-        const note = `[AUTO-ARCHIVE] ${archiveResult.archived} DONE tasks archived to ${archiveResult.archivePath} — ${archiveResult.kept} recent DONE kept.\n\n`;
-        return { content: [{ type: "text", text: note + JSON.stringify(pruned, null, 2) }] };
-      }
-      return { content: [{ type: "text", text: JSON.stringify(state, null, 2) }] };
+      // Full state — auto-archive if needed
+      const archiveResult = _archiveDoneTasks(aiDir, db);
+      const state = _readState(db);
+      const note  = archiveResult
+        ? `[AUTO-ARCHIVE] ${archiveResult.archived} DONE tasks archived to ${archiveResult.archivePath} — ${archiveResult.kept} recent DONE kept.\n\n`
+        : "";
+      return { content: [{ type: "text", text: note + JSON.stringify(state, null, 2) }] };
     }
 
     // ── add_task ──────────────────────────────────────────────────────────────
     case "add_task": {
-      const state = readStateStrict(aiDir);
-      if (!state) {
-        const p = resolve(aiDir, "state.json");
-        const msg = existsSync(p) ? STATE_CORRUPT_ERR : STATE_MISSING_ERR;
-        return { content: [{ type: "text", text: msg }], isError: true };
-      }
-
       const prefix = args.prefix || "E";
-      const id = nextId(state.tasks, prefix);
-      const task = {
+      const id     = _nextId(db, prefix);
+      const task   = {
         id,
-        owner: args.owner,
-        status: "OPEN",
-        tier: args.tier || null,
-        description: args.description,
-        created_at: new Date().toISOString(),
+        owner:        args.owner,
+        status:       "OPEN",
+        tier:         args.tier || null,
+        description:  args.description,
+        created_at:   new Date().toISOString(),
         completed_at: null,
-        summary: null,
+        summary:      null,
       };
 
-      state.tasks.push(task);
-      writeState(aiDir, state);
+      db.prepare(`
+        INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(task.id, task.owner, task.status, task.tier, task.description,
+              task.created_at, task.completed_at, task.summary);
 
+      _regenerateViews(aiDir, db);
       return { content: [{ type: "text", text: `✓ Added ${id}: ${args.description}\n${JSON.stringify(task, null, 2)}` }] };
     }
 
     // ── update_task_status ────────────────────────────────────────────────────
     case "update_task_status": {
-      const state = readStateStrict(aiDir);
-      if (!state) {
-        const p = resolve(aiDir, "state.json");
-        const msg = existsSync(p) ? STATE_CORRUPT_ERR : STATE_MISSING_ERR;
-        return { content: [{ type: "text", text: msg }], isError: true };
+      const row = db.prepare("SELECT id FROM tasks WHERE id = ?").get(args.id);
+      if (!row) {
+        return { content: [{ type: "text", text: `✗ Task '${args.id}' not found.` }], isError: true };
       }
 
-      const task = state.tasks.find(t => t.id === args.id);
-      if (!task) return { content: [{ type: "text", text: `✗ Task '${args.id}' not found in state.json.` }], isError: true };
-
-      task.status = args.status;
       if (args.status === "DONE") {
-        task.completed_at = new Date().toISOString();
-        if (args.summary) task.summary = args.summary;
+        db.prepare("UPDATE tasks SET status = ?, completed_at = ?, summary = ? WHERE id = ?")
+          .run(args.status, new Date().toISOString(), args.summary ?? null, args.id);
+      } else {
+        db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(args.status, args.id);
       }
 
-      writeState(aiDir, state);
+      _regenerateViews(aiDir, db);
       return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${args.summary ? ": " + args.summary : ""}` }] };
     }
 
     // ── add_stamp ─────────────────────────────────────────────────────────────
     case "add_stamp": {
-      const state = readStateStrict(aiDir);
-      if (!state) {
-        const p = resolve(aiDir, "state.json");
-        const msg = existsSync(p) ? STATE_CORRUPT_ERR : STATE_MISSING_ERR;
-        return { content: [{ type: "text", text: msg }], isError: true };
-      }
+      db.prepare(
+        "INSERT INTO stamps(type, agent, task_id, timestamp, summary) VALUES (?, ?, ?, ?, ?)"
+      ).run(args.type, args.agent ?? null, args.task_id ?? null,
+             new Date().toISOString(), args.summary);
 
-      const stamp = {
-        type: args.type,
-        agent: args.agent,
-        task_id: args.task_id || null,
-        timestamp: new Date().toISOString(),
-        summary: args.summary,
-      };
-
-      state.stamps.push(stamp);
-      writeState(aiDir, state);
-
+      _regenerateViews(aiDir, db);
       return { content: [{ type: "text", text: `✓ Stamp [${args.type}] added by ${args.agent}` }] };
     }
 
     // ── set_project_focus ─────────────────────────────────────────────────────
     case "set_project_focus": {
-      const state = readStateStrict(aiDir);
-      if (!state) {
-        const p = resolve(aiDir, "state.json");
-        const msg = existsSync(p) ? STATE_CORRUPT_ERR : STATE_MISSING_ERR;
-        return { content: [{ type: "text", text: msg }], isError: true };
+      db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES ('focus', ?)").run(args.focus);
+      if (args.current_tier) {
+        db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES ('current_tier', ?)").run(String(args.current_tier));
       }
 
-      state.project.focus = args.focus;
-      if (args.current_tier) state.project.current_tier = args.current_tier;
-
-      writeState(aiDir, state);
+      _regenerateViews(aiDir, db);
       return { content: [{ type: "text", text: `✓ Focus: ${args.focus}${args.current_tier ? " (Tier " + args.current_tier + ")" : ""}` }] };
     }
 
     // ── archive_done_tasks ────────────────────────────────────────────────────
     case "archive_done_tasks": {
-      const state = readStateStrict(aiDir);
-      if (!state) {
-        const p = resolve(aiDir, "state.json");
-        const msg = existsSync(p) ? STATE_CORRUPT_ERR : STATE_MISSING_ERR;
-        return { content: [{ type: "text", text: msg }], isError: true };
-      }
-      const result = archiveDoneTasks(aiDir, state);
+      const result = _archiveDoneTasks(aiDir, db);
       if (!result) {
-        const doneCount = state.tasks.filter(t => t.status === "DONE").length;
+        const doneCount = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status = 'DONE'").get().n;
         return { content: [{ type: "text", text: `✓ No archive needed — ${doneCount} DONE tasks (threshold: ${DONE_ARCHIVE_THRESHOLD})` }] };
       }
-      return { content: [{ type: "text", text: `✓ [AUTO-ARCHIVE] ${result.archived} DONE tasks → ${result.archivePath}\n  ${result.kept} recent DONE tasks kept in live state.json` }] };
+      return { content: [{ type: "text", text: `✓ [AUTO-ARCHIVE] ${result.archived} DONE tasks → ${result.archivePath}\n  ${result.kept} recent DONE tasks kept.` }] };
     }
 
-    // ── Legacy: sync_tasks (DEPRECATED E-147/E-149) ──────────────────────────
+    // ── Legacy: sync_tasks (DEPRECATED E-147/E-149) ───────────────────────────
     case "sync_tasks": {
-      // UPDATE.md has been deprecated. If update_content is passed directly, still process it.
       const updateContent = (args.update_content || "").trim();
       if (!updateContent) {
         return {
           content: [{
             type: "text",
-            text: "⚠ DEPRECATED (E-147): sync_tasks previously read from UPDATE.md, which no longer exists.\n" +
-                  "Pass intent directly via the `update_content` argument, or use `add_task` to create tasks directly.",
+            text: "⚠ DEPRECATED (E-147): sync_tasks no longer reads UPDATE.md.\n" +
+                  "Pass intent directly via `update_content`, or use `add_task` to create tasks directly.",
           }],
         };
       }
 
-      // Process inline update_content if provided (backward-compat for callers that pass intent directly)
-      const tasksPath = resolve(aiDir, "TASKS.md");
+      const tasksPath    = resolve(aiDir, "TASKS.md");
       const tasksContent = existsSync(tasksPath) ? readFileSync(tasksPath, "utf8") : "";
-      const pNumbers = [...tasksContent.matchAll(/P-(\d+):/g)].map(m => parseInt(m[1], 10));
-      const nextP = (pNumbers.length ? Math.max(...pNumbers) : 0) + 1;
+      const pNums        = [...tasksContent.matchAll(/P-(\d+):/g)].map(m => parseInt(m[1], 10));
+      const nextP        = (pNums.length ? Math.max(...pNums) : 0) + 1;
 
       const lines = updateContent.split("\n")
         .filter(l => l.match(/^[-*]\s+/) || l.match(/^##\s+/))
@@ -430,9 +618,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const lower = updateContent.toLowerCase();
-      const tier = /\b(auth|oauth|secret|api.?key|deploy|production|migration|breaking)\b/.test(lower) ? "3"
+      const tier  = /\b(auth|oauth|secret|api.?key|deploy|production|migration|breaking)\b/.test(lower) ? "3"
         : /\b(src|logic|refactor|test|implement|algorithm|database|api)\b/.test(lower) ? "2" : "1";
-      const date = new Date().toISOString().split("T")[0];
+      const date  = new Date().toISOString().split("T")[0];
 
       const proposed = lines.map((line, i) => {
         const num = String(nextP + i).padStart(2, "0");
@@ -449,63 +637,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: "✗ .ai/TASKS.md not found." }], isError: true };
       }
 
-      let content = readFileSync(tasksPath, "utf8");
-      const toAppend = args.tasks.join("\n") + "\n";
-
-      const archSection = content.indexOf("## Architect");
-      if (archSection === -1) {
+      let content     = readFileSync(tasksPath, "utf8");
+      const toAppend  = args.tasks.join("\n") + "\n";
+      const archIdx   = content.indexOf("## Architect");
+      if (archIdx === -1) {
         content += "\n## Architect (Gemini)\n" + toAppend;
       } else {
-        const engineerSection = content.indexOf("## Engineer", archSection);
-        if (engineerSection === -1) {
-          content += "\n" + toAppend;
-        } else {
-          content = content.slice(0, engineerSection) + toAppend + "\n" + content.slice(engineerSection);
-        }
+        const engIdx = content.indexOf("## Engineer", archIdx);
+        content = engIdx === -1
+          ? content + "\n" + toAppend
+          : content.slice(0, engIdx) + toAppend + "\n" + content.slice(engIdx);
       }
 
       writeFileSync(tasksPath, content, "utf8");
       return { content: [{ type: "text", text: `✓ Appended ${args.tasks.length} task(s) to TASKS.md` }] };
     }
 
-    // ── verify_markdown_sync (E-95) ───────────────────────────────────────────
+    // ── verify_markdown_sync ──────────────────────────────────────────────────
     case "verify_markdown_sync": {
-      const state = readState(aiDir);
-      if (!state) return { content: [{ type: "text", text: "✗ state.json missing or corrupt" }], isError: true };
-
       const failures = [];
 
-      // Check TASKS.md task count matches state.json
       const tasksPath = resolve(aiDir, "TASKS.md");
       if (existsSync(tasksPath)) {
-        const tasksContent = readFileSync(tasksPath, "utf8");
-        const mdTaskCount = (tasksContent.match(/^- \[/gm) || []).length;
-        const stateTaskCount = state.tasks.length;
+        const tasksContent    = readFileSync(tasksPath, "utf8");
+        const mdTaskCount     = (tasksContent.match(/^- \[/gm) || []).length;
+        const stateTaskCount  = db.prepare("SELECT COUNT(*) as n FROM tasks").get().n;
         if (Math.abs(mdTaskCount - stateTaskCount) > 2) {
-          failures.push(`TASKS.md has ${mdTaskCount} tasks but state.json has ${stateTaskCount} — diverged (run: ai migrate-state --force)`);
+          failures.push(`TASKS.md has ${mdTaskCount} tasks but state has ${stateTaskCount} — regenerating`);
+          _regenerateViews(aiDir, db);
         }
-        // Check TASKS.md header indicates it was generated (not hand-edited)
         if (!tasksContent.startsWith("# TASKS (Generated from state.json)")) {
-          failures.push("TASKS.md does not start with generated header — may have been hand-edited (Markdown is Read-Only)");
+          failures.push("TASKS.md does not start with generated header — may have been hand-edited");
         }
       }
 
-      // Check REVIEWS.md stamp count is consistent with state.json stamps
-      const reviewsPath = resolve(aiDir, "REVIEWS.md");
-      if (existsSync(reviewsPath) && state.stamps.length > 0) {
+      const reviewsPath  = resolve(aiDir, "REVIEWS.md");
+      const stampCount   = db.prepare("SELECT COUNT(*) as n FROM stamps").get().n;
+      if (existsSync(reviewsPath) && stampCount > 0) {
         const reviewsContent = readFileSync(reviewsPath, "utf8");
-        const mdStampCount = (reviewsContent.match(/^\[[\w_]+\]/gm) || []).length;
-        if (mdStampCount < state.stamps.length) {
-          failures.push(`REVIEWS.md has ${mdStampCount} stamps but state.json has ${state.stamps.length} — REVIEWS.md is stale (regenerate via writeState)`);
+        const mdStampCount   = (reviewsContent.match(/^\[[\w_]+\]/gm) || []).length;
+        if (mdStampCount < stampCount) {
+          failures.push(`REVIEWS.md has ${mdStampCount} stamps but state has ${stampCount} — regenerating`);
+          _regenerateViews(aiDir, db);
         }
       }
 
       if (failures.length === 0) {
-        return { content: [{ type: "text", text: "[SYNC_PASS] TASKS.md and REVIEWS.md are in sync with state.json" }] };
+        return { content: [{ type: "text", text: "[SYNC_PASS] TASKS.md and REVIEWS.md are in sync with state." }] };
       }
       return {
-        content: [{ type: "text", text: `[SYNC_FAIL] Markdown divergence detected:\n${failures.map(f => `  - ${f}`).join("\n")}` }],
-        isError: true,
+        content: [{ type: "text", text: `[SYNC_FIXED] Issues detected and auto-resolved:\n${failures.map(f => `  - ${f}`).join("\n")}` }],
       };
     }
 

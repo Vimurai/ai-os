@@ -21,8 +21,10 @@
   Status: DONE 2026-04-03 — Refactored context-invoker-mcp: added readHead() helper (openSync/readSync, 4096 bytes max); listAvailable() now uses readHead instead of readFileSync — frontmatter parsing never loads full skill/agent content
 - [x] E-155: Refactor `context-guardian-mcp` to use `git grep` or `ripgrep` via `child_process` when scanning `src/` for TODO/FIXME markers in `strict` mode, instead of recursively reading every source file completely into Node memory. Loading every file fully is a critical performance flaw and memory burner for large codebases. | Tier: 2
   Status: DONE 2026-04-03 — Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import
-- [ ] E-156: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2
-- [ ] E-157: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md) | Tier: 2
+- [x] E-156: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2
+  Status: DONE 2026-04-03 — Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures)
+- [x] E-157: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md) | Tier: 2
+  Status: DONE 2026-04-03 — Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

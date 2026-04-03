@@ -1,7 +1,7 @@
 {
   "name": "task-synchronizer-mcp",
-  "version": "1.0.0",
-  "description": "AI-OS UACS: Watches UPDATE.md for changes and maps refined intent to TASKS.md P-## entries",
+  "version": "2.1.0",
+  "description": "AI-OS Exclusive State Mutator — SQLite-backed state with TASKS.md/REVIEWS.md markdown views",
   "type": "module",
   "main": "index.js",
   "scripts": { "start": "node index.js" },

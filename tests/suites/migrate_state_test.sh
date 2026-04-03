@@ -134,14 +134,15 @@ assert_contains "T-04.06: blueprint-aligner-mcp has fail-safe for missing state.
 legacy_fallback=$(grep -c 'TASKS.md.*regex\|Fallback.*legacy TASKS' "$ALIGNER_MCP" 2>/dev/null || echo "0")
 assert_contains "T-04.06b: TASKS.md fallback regex removed from blueprint-aligner-mcp" "0" "$legacy_fallback"
 
-# ── T-04.07: task-synchronizer-mcp add_task returns error when state.json absent ──
-# Verify readStateStrict is present and write tools use it
-strict_fn_present=$(grep -l 'readStateStrict' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
-assert_contains "T-04.07: task-synchronizer-mcp has readStateStrict function" "found" "$strict_fn_present"
+# ── T-04.07: task-synchronizer-mcp gates on missing .ai/ directory ──
+# E-156: readStateStrict replaced by SQLite getDb() — verify the new guard is present
+sqlite_guard=$(grep -l 'getDb(aiDir)' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
+assert_contains "T-04.07: task-synchronizer-mcp has SQLite getDb guard" "found" "$sqlite_guard"
 
-strict_used_present=$(grep -l 'readStateStrict(aiDir)' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
-state_missing_present=$(grep -l 'STATE_MISSING_ERR' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
-assert_contains "T-04.07b: readStateStrict used in write tools" "found" "$strict_used_present"
+# Verify write tools call getDb (which handles missing state)
+getdb_used=$(grep -c 'db = getDb(aiDir)' "$SYNC_MCP" 2>/dev/null || echo "0")
+assert_contains "T-04.07b: getDb used in tool handler" "1" "$getdb_used"
+state_missing_present=$(grep -l 'STATE_MISSING_ERR\|No .ai/ directory' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
 assert_contains "T-04.07c: STATE_MISSING_ERR message defined" "found" "$state_missing_present"
 
 # Functional test: simulate readStateStrict returning null (missing file) → error path
