@@ -145,6 +145,26 @@
       "created_at": "2026-04-03T08:44:53.161Z",
       "completed_at": "2026-04-03T12:04:34.048Z",
       "summary": "Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token"
+    },
+    {
+      "id": "P-3",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Ratify or remediate the `Co-Authored-By` trailer violation from commit d351dc9 (§12 Git Identity mandate).",
+      "created_at": "2026-04-03T12:14:16.452Z",
+      "completed_at": "2026-04-03T12:20:56.572Z",
+      "summary": "Blueprinted in git-remediation.md and handed over to Claude as E-158"
+    },
+    {
+      "id": "E-158",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Create and execute `scripts/remediate_git_identity.sh` to rewrite commit history and remove unauthorized AI co-author trailers. (See `.ai/blueprints/git-remediation.md`)",
+      "created_at": "2026-04-03T12:20:56.562Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [
@@ -442,6 +462,20 @@
       "task_id": "none",
       "timestamp": "2026-04-03T08:17:54.293Z",
       "summary": "Identified memory and token burn flaws in MCP servers (archive-manager, context-invoker, context-guardian) causing full-file loads. E-153, E-154, E-155 spawned to enforce streaming and bounded reads."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude (blueprint-aligner-mcp)",
+      "task_id": "E-156",
+      "timestamp": "2026-04-03T12:09:46.561Z",
+      "summary": "[TIER_2] E-156+E-157: SQLite migration (WAL, auto-import, mtime sync) + fuzzy patch fallback; 334/336 tests pass; 2 pre-existing e140 failures unrelated; WARN flags are false positives (LOG.md gitignored, no new npm dep, test/package updates covered by task scope) — clear to commit"
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": null,
+      "timestamp": "2026-04-03T12:13:40.813Z",
+      "summary": "Blueprint aligned; Robustness tasks in flight; Git Identity P0 violation requires remediation task"
     }
   ],
   "deltas": [
@@ -1680,6 +1714,6 @@
       "read": true
     }
   ],
-  "digest_stale": true,
-  "digest_stale_reason": "E-156 marked DONE — Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures)"
+  "digest_stale": false,
+  "digest_stale_reason": null
 }

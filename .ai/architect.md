@@ -22,6 +22,7 @@
 | MCP Servers | `.ai/blueprints/mcp.md` | MCP server specs, LSP, patching, token budget, GitHub bridge |
 | Governance | `.ai/blueprints/governance.md` | Token economics, JIT limits, UPDATE.md deprecation, preflight rules |
 | Robustness | `.ai/blueprints/robustness.md` | State IO, sync race conditions, and patch resolution fallbacks |
+| Git Identity | `.ai/blueprints/git-remediation.md` | Remediation plan for unauthorized Git commit trailers |
 
 ## JIT Loading Protocol
 1. Read `.ai/DIGEST.md` first — covers 80% of session-start context needs.
