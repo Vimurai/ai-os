@@ -41,3 +41,5 @@
 [undefined] 2026-04-02 | 
 [CRITIC_STAMP] 2026-04-02 | [TIER_2] E-136–E-142 + T-1: [ARCH_PASS] [SEC_PASS] [TESTS_PASS] [ALIGN_PASS] all clean; P0: 0 | P1: 2 (token-budget CAPABILITIES write-list gap; P-7 open pre-ratification) — clear to commit
 [CRITIC_STAMP] 2026-04-02 | [TIER_2] E-143: roleGuard in patch-mcp + propose-patch-mcp + check_role_access in context-guardian-mcp; 25/25 tests pass; no P0; ANTI_DRIFT_VIOLATION blocks Architect from src/; .ai/ and plans/ whitelisted — clear to commit
+[ARCH_AUDIT] 2026-04-02 | ARCH_AUDIT complete. Identified severe token burners and JIT violations across CLI prompts and agent Preflights. Added Sections 36/37 to architect.md and spawned E-144, E-145, E-146 to enforce JIT Token Economics. Blueprint is Aligned.
+[ARCH_AUDIT] 2026-04-03 | Identified memory and token burn flaws in MCP servers (archive-manager, context-invoker, context-guardian) causing full-file loads. E-153, E-154, E-155 spawned to enforce streaming and bounded reads.

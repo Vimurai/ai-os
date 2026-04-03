@@ -1,61 +1,56 @@
 ---
 name: ai-update
-description: Use activate_skill with this name when the user wants to start an Architect session, process a new UPDATE.md intent, or generate P-## task entries. Reads UPDATE.md, classifies intent as Vague/Tier1/2/3, and produces structured architectural blueprints.
+description: Start a new AI-OS session. Reads intent from conversation context, runs the Intent Gate (Gate 1), detects the TSRT risk tier, and outputs the appropriate tiered session prompt. Equivalent to running `ai update` in the terminal.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Grep, Glob
+allowed-tools: Read, Glob, Grep, Bash
 context: default
 agent: default
 ---
 
-# AI-OS Update — Architect Session Start (Gemini)
+# AI-OS Update — Session Start
 
 ## Dynamic Context Injection
-Current UPDATE.md: !cat .ai/UPDATE.md 2>/dev/null || echo "(empty)"
-Open P-## tasks: !grep "^- \[ \] P-" .ai/TASKS.md 2>/dev/null | head -5 || echo "(none)"
-Recent LOG: !tail -3 .ai/LOG.md 2>/dev/null
+Staged changes: !git diff --staged --name-only 2>/dev/null || echo "(no staged changes)"
+Working changes: !git diff --name-only 2>/dev/null | head -10
+Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | head -5 || echo "(none)"
 
-## Step 1 — Intent Gate (prd_writer)
+## Instructions
 
-Read `.ai/UPDATE.md` above. Classify intent:
+You are the **Principal Software Engineer** (or **Principal Architect** if operating as Gemini).
 
-| Classification | Criteria | Action |
-|---|---|---|
-| **Vague** | < 8 words, no action verb, no target | Return clarification questions — do NOT write tasks |
-| **Tier 1** | Docs/style/typo | 1 P-## task, skip security review |
-| **Tier 2** | Logic/refactor/API | 1–3 P-## tasks, note blueprint section |
-| **Tier 3** | Auth/deploy/breaking/new feature | P-## task + flag [SEC_REQUIRED] |
+### Step 1 — Intent Gate (Gate 1)
+Read the user's intent from the **current conversation message**. Check:
+- Is the intent clear? (≥ 8 words, contains an action verb)
+- If vague: stop and ask for clarification. Do NOT proceed.
+- If high-risk (auth/deploy/secrets/migration): confirm `[SEC_CLEARED]` exists in `.ai/LOG.md`.
 
-## Step 2 — Preflight
+### Step 2 — TSRT Tier Detection
+Classify the intent:
+- **Tier 1** (CSS/docs/typos only): proceed with minimal preflight — read DIGEST only.
+- **Tier 2** (logic/refactor/tests): standard preflight — read DIGEST + TASKS.
+- **Tier 3** (auth/secrets/new features/breaking): full preflight + CAPABILITIES.md mandatory.
 
-1. Read `.ai/DIGEST.md` — current project snapshot
-2. Read `.ai/architect.md` — your blueprint (source of truth)
-3. Read `.ai/TASKS.md` — find current highest P-## number
+### Step 3 — Preflight (Tier-appropriate)
+**All tiers:**
+1. Read `.ai/DIGEST.md` — Triad Health & current snapshot.
+2. Read `.ai/TASKS.md` — assigned tasks (Tier 2+).
 
-## Step 3 — Architect Action
+**Tier 2 + Tier 3 only:**
+3. Read `.ai/architect.md` — Principal Architect blueprint (only if task requires it).
 
-**You own:** `architect.md`, `BRIEF.md`, `TASKS.md` (P-## only)
-**You do NOT own:** `src/**`, `LOG.md`, `E-## tasks`
+**Tier 3 only:**
+4. Read `.ai/CAPABILITIES.md` — allowed scope (mandatory).
 
-Choose your action based on the intent:
+### Step 4 — Execute
+Follow your role's domain sovereignty (§12):
+- **Claude**: Implement, debug, manage environment. Own `src/`, `LOG.md`, `TASKS.md` (E-##).
+- **Gemini**: Plan, design, research. Own `architect.md`, `BRIEF.md`, `TASKS.md` (P-##).
 
-### A. Write P-## Tasks (for new intent)
-```markdown
-- [ ] P-##: <blueprint title>
-  Tier: <1/2/3> | Blueprint: architect.md §<section> | Unblocks: E-##
-  What: <measurable outcome>
-```
+### Step 5 — Handover
+After completing work, update:
+1. `.ai/LOG.md` — append session entry with hypothesis, changes, security check.
+2. `.ai/TASKS.md` — mark completed E-## tasks DONE.
+3. `.ai/DIGEST.md` — if snapshot is stale.
 
-### B. Update `architect.md` (for architectural changes)
-Add to the relevant section. Do NOT change existing blueprints without documenting the reason.
-
-### C. Update `BRIEF.md` Goals (only if new product goal)
-Add to Goals section only. Do NOT rewrite existing goals.
-
-## Step 4 — Handover
-Append to `.ai/LOG.md`:
-```
-YYYY-MM-DD | Gemini (Architect) | Update | <P-## created / architect.md updated>
-```
-
-⚠️ **Domain Rule**: Do NOT write application code (`src/**`). Redirect all coding requests to Claude.
+⚠️ **TOKEN ECONOMICS**: Do NOT read files outside your immediate domain unless the task requires it. Max 6 files total.

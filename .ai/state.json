@@ -379,42 +379,42 @@
     {
       "id": "P-7",
       "owner": "Architect (Gemini)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "P-60: Design the `propose_patch` TUI diff preview flow and user confirmation hook.",
       "created_at": "2026-04-01T18:04:49.235Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-03T08:09:53.945Z",
+      "summary": "P-60 (propose_patch) was fully designed in architect.md §30 and implemented by Claude in E-141."
     },
     {
       "id": "P-8",
       "owner": "Architect (Gemini)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "P-61: Architectural Fragmentation (\\u00a736) \\u2014 Split architect.md into Domain Blueprints to reduce session-start context tax.",
       "created_at": "2026-04-01T18:04:49.235Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-03T08:09:53.948Z",
+      "summary": "P-61 (Architectural Fragmentation) blueprinted in §39. Handed over to Claude via E-151."
     },
     {
       "id": "P-9",
       "owner": "Architect (Gemini)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "P-62: \"Metadata-Only\" Default Mode \\u2014 Update ai sync to only provide Skill Summaries to agents by default.",
       "created_at": "2026-04-01T18:04:49.235Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-03T08:09:53.949Z",
+      "summary": "P-62 (Metadata-Only Sync) blueprinted in §29 JIT Skill Loading. Handed over to Claude via E-152."
     },
     {
       "id": "P-10",
       "owner": "Architect (Gemini)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "P-63: Design MCP-Level Role-Based Access Control (RBAC) to enforce the Anti-Drift Protocol by blocking Architect writes to `src/`.",
       "created_at": "2026-04-01T20:15:37.126Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-03T08:09:53.951Z",
+      "summary": "P-63 (MCP-Level RBAC) was fully designed in architect.md §35 and implemented by Claude in E-143."
     },
     {
       "id": "E-143",
@@ -425,6 +425,126 @@
       "created_at": "2026-04-01T20:15:37.133Z",
       "completed_at": "2026-04-02T09:53:22.848Z",
       "summary": "Role-Aware RBAC interceptors implemented. roleGuard() added to patch-mcp (patch_file) and propose-patch-mcp (propose_patch + confirm_patch defense-in-depth). check_role_access pre-flight tool added to context-guardian-mcp. Architect blocked from src/ writes with [ANTI_DRIFT_VIOLATION]; .ai/ and plans/ whitelisted. 25 new tests in e143_test.sh, all passing."
+    },
+    {
+      "id": "E-144",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `digest_updater` agent to adhere to JIT principles. It currently reads 8 core `.ai/` files in full. It must be updated to use file timestamps or `grep` to identify changes, preventing massive token burn on unchanged files.",
+      "created_at": "2026-04-02T20:52:53.033Z",
+      "completed_at": "2026-04-02T20:58:17.710Z",
+      "summary": "Refactored digest_updater agent to JIT principles — git-based change detection, grep-first targeted reads, section-level preservation for unchanged files; eliminates unconditional 8-file full reads"
+    },
+    {
+      "id": "E-145",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor broad CLI prompts in `src/bin/ai` (such as `do_update`, `do_onboard` which trigger \"Scan the codebase\" loops). Enforce the 6-file Token Economics limit mechanically within the execution wrapper to prevent unconstrained `ls -R` and `cat` token burners.",
+      "created_at": "2026-04-02T20:52:53.040Z",
+      "completed_at": "2026-04-02T20:59:41.644Z",
+      "summary": "Enforced 6-file Token Economics limit in do_update(), do_onboard(), and do_digest() prompts — replaced open-ended \"scan codebase\" with explicit JIT read order and hard file-count cap; forbidden ls -R and cat loops"
+    },
+    {
+      "id": "E-146",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Standardize Preflight blocks across all Claude and Gemini agents (e.g., `devops_engineer`, `vibe_sentinel`). Force them to strictly read ONLY `DIGEST.md` and `UPDATE.md` upon initialization. Redundant full-folder ingestions during Tier 3 multi-agent handovers must be eliminated.",
+      "created_at": "2026-04-02T20:52:53.042Z",
+      "completed_at": "2026-04-02T21:02:29.089Z",
+      "summary": "Standardized preflight blocks across devops_engineer, security_engineer, decision_recorder, claude_tasks agents — removed UPDATE.md references, enforced DIGEST-first pattern, moved domain files to JIT sections; Gemini agents already compliant"
+    },
+    {
+      "id": "E-147",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Deprecate `UPDATE.md` globally across the AI-OS framework. Remove all dependencies on `UPDATE.md` from `src/bin/ai`, templates (`src/templates`), agent preflights, and skills (like `ai-update`, `ai-preflight`, `ai-review`). Delete `UPDATE.md` from the standard scaffolding and ensure it is never created.",
+      "created_at": "2026-04-02T20:56:02.994Z",
+      "completed_at": "2026-04-03T07:54:23.769Z",
+      "summary": "Deprecated UPDATE.md globally — removed from ensure_ai_templates() scaffolding, preflight() output, do_update/do_onboard/do_digest prompts, ai-preflight skill, ai-review skill, bug-reproducer skill, GEMINI.md trigger table; refactored ai-update skill to use conversation context; marked ai-update-lifecycle as DEPRECATED no-op"
+    },
+    {
+      "id": "E-148",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor the `ai update` CLI command. It must no longer read from or rely on `UPDATE.md`. Instead, it should trigger an agent to scan the project (respecting JIT limits) and autonomously update the current project state directly into `.ai/DIGEST.md` and `.ai/state.json`.",
+      "created_at": "2026-04-02T20:56:02.997Z",
+      "completed_at": "2026-04-03T07:57:58.799Z",
+      "summary": "Refactored do_update() in src/bin/ai — removed UPDATE.md dependency and ensure_ai_templates call; now accepts inline intent from CLI args, triggers digest_updater agent (JIT) for DIGEST refresh, and directs task-synchronizer-mcp for state.json updates"
+    },
+    {
+      "id": "E-149",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor all MCP servers currently relying on `UPDATE.md`. Deprecate or redesign `intent-refiner-mcp`. Update `task-synchronizer-mcp`, `risk-analyzer-mcp`, and `github-bridge-mcp` to process intent directly from CLI inputs, chat histories, or API requests, fully excising `UPDATE.md` references.",
+      "created_at": "2026-04-02T20:56:02.999Z",
+      "completed_at": "2026-04-03T08:01:50.482Z",
+      "summary": "Removed UPDATE.md from all three MCP servers: orchestrator-mcp (removed UPDATE.md preflight pointer, deprecated run_intent_cleanup as no-op), task-synchronizer-mcp (deprecated sync_tasks to return deprecation notice without reading UPDATE.md), github-bridge-mcp (renamed create_update_from_issues→create_intent_from_issues, fixed schema/handler name mismatch bug, removed UPDATE.md writes)"
+    },
+    {
+      "id": "E-150",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Propagate the \"AIS: Fresh Conversations\" token economics rule into the core `src/templates/RULES.md` and `src/templates/architect.md.template` files, so that all new AI-OS scaffoldings enforce the use of `/clear` between unrelated tasks to prevent exponential token bloat.",
+      "created_at": "2026-04-03T08:04:35.020Z",
+      "completed_at": "2026-04-03T08:07:09.395Z",
+      "summary": "Added AIS Fresh Conversations rule + 6-file JIT limit to src/templates/RULES.md; added §33 Token Economics section to src/templates/architect.md.template; synced RULES.md to .ai/RULES.md"
+    },
+    {
+      "id": "E-151",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement Architectural Fragmentation (§39). Split the monolithic `.ai/architect.md` into granular Domain Blueprints (e.g., `.ai/blueprints/core.md`, `security.md`) to reduce the session-start context tax. Update preflight scripts and templates to read the primary index file and use JIT loading for sub-blueprints. (Fulfills P-61)",
+      "created_at": "2026-04-03T08:09:53.940Z",
+      "completed_at": "2026-04-03T08:15:23.106Z",
+      "summary": "Implemented Architectural Fragmentation (§39) — created .ai/blueprints/ with 5 domain files (core, security, agents, mcp, governance); architect.md reduced from 490+ lines to 35-line lightweight index/router; updated orchestrator-mcp run_preflight pointer and src/templates/architect.md.template with §34 Domain Blueprints pattern"
+    },
+    {
+      "id": "E-152",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement \"Metadata-Only\" Default Mode for `ai sync` (§29). Ensure `ai sync` only provides Skill Summaries to agents by default, rather than full `SKILL.md` contents. Full skill content should only be injected dynamically via `activate_skill`. Update `context-invoker-mcp` accordingly. (Fulfills P-62)",
+      "created_at": "2026-04-03T08:09:53.943Z",
+      "completed_at": "2026-04-03T08:20:19.934Z",
+      "summary": "Metadata-only default mode for ai sync: added list_skills/list_agents tools to context-invoker-mcp (Level 1 metadata), added _generate_skills_index() to src/bin/ai that writes _SKILLS_INDEX.md (name+description) to each synced skills dir after sync_skills_20()"
+    },
+    {
+      "id": "E-153",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `archive-manager-mcp` to use file streams (e.g., `readline`) instead of `readFileSync` and string `split` when counting lines and words for token estimation. Loading full, potentially bloated log files into memory to count words is a robustness flaw and memory/token burner.",
+      "created_at": "2026-04-03T08:16:13.690Z",
+      "completed_at": "2026-04-03T08:26:06.078Z",
+      "summary": "Refactored archive-manager-mcp: replaced readFileSync + string split for line/word counting with readline createInterface streams; added countFileStats() helper — no full file load into memory"
+    },
+    {
+      "id": "E-154",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `context-invoker-mcp` to only read the top chunk (e.g., first 4KB or using a stream) of skill/agent files when parsing YAML frontmatter during list operations. Currently, it reads the entire content of every skill and agent into memory just to extract the `description` field, causing massive overhead.",
+      "created_at": "2026-04-03T08:16:13.693Z",
+      "completed_at": "2026-04-03T08:26:09.640Z",
+      "summary": "Refactored context-invoker-mcp: added readHead() helper (openSync/readSync, 4096 bytes max); listAvailable() now uses readHead instead of readFileSync — frontmatter parsing never loads full skill/agent content"
+    },
+    {
+      "id": "E-155",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `context-guardian-mcp` to use `git grep` or `ripgrep` via `child_process` when scanning `src/` for TODO/FIXME markers in `strict` mode, instead of recursively reading every source file completely into Node memory. Loading every file fully is a critical performance flaw and memory burner for large codebases.",
+      "created_at": "2026-04-03T08:17:54.291Z",
+      "completed_at": "2026-04-03T08:26:13.115Z",
+      "summary": "Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import"
     }
   ],
   "stamps": [
@@ -708,6 +828,20 @@
       "task_id": "E-143",
       "timestamp": "2026-04-02T09:53:42.212Z",
       "summary": "[TIER_2] E-143: roleGuard in patch-mcp + propose-patch-mcp + check_role_access in context-guardian-mcp; 25/25 tests pass; no P0; ANTI_DRIFT_VIOLATION blocks Architect from src/; .ai/ and plans/ whitelisted — clear to commit"
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": "none",
+      "timestamp": "2026-04-02T20:53:00.968Z",
+      "summary": "ARCH_AUDIT complete. Identified severe token burners and JIT violations across CLI prompts and agent Preflights. Added Sections 36/37 to architect.md and spawned E-144, E-145, E-146 to enforce JIT Token Economics. Blueprint is Aligned."
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": "none",
+      "timestamp": "2026-04-03T08:17:54.293Z",
+      "summary": "Identified memory and token burn flaws in MCP servers (archive-manager, context-invoker, context-guardian) causing full-file loads. E-153, E-154, E-155 spawned to enforce streaming and bounded reads."
     }
   ],
   "deltas": [
@@ -1695,9 +1829,225 @@
         "src/mcp/patch-mcp/index.js",
         "src/mcp/propose-patch-mcp/index.js"
       ],
+      "read": true
+    },
+    {
+      "task_id": "E-144",
+      "timestamp": "2026-04-02T20:58:17.759Z",
+      "summary": "E-144: Refactored digest_updater agent to JIT principles — git-based change detection, grep-first targeted reads, section-level preservation for unchanged files; eliminates unconditional 8-file full reads | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/digest_updater.md",
+        ".gemini/agents/digest_updater.md",
+        ".gemini/agents/docs-architect.md",
+        ".gemini/agents/gemini_tasks.md",
+        ".gemini/agents/knowledge_architect.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-145",
+      "timestamp": "2026-04-02T20:59:41.674Z",
+      "summary": "E-145: Enforced 6-file Token Economics limit in do_update(), do_onboard(), and do_digest() prompts — replaced open-ended \"scan codebase\" with explicit JIT read order and hard file-count cap; forbidden ls -R and cat loops | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/digest_updater.md",
+        ".gemini/agents/digest_updater.md",
+        ".gemini/agents/docs-architect.md",
+        ".gemini/agents/gemini_tasks.md",
+        ".gemini/agents/knowledge_architect.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-146",
+      "timestamp": "2026-04-02T21:02:29.129Z",
+      "summary": "E-146: Standardized preflight blocks across devops_engineer, security_engineer, decision_recorder, claude_tasks agents — removed UPDATE.md references, enforced DIGEST-first pattern, moved domain files to JIT sections; Gemini agents already compliant | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md",
+        ".claude/agents/security_engineer.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-147",
+      "timestamp": "2026-04-03T07:54:23.816Z",
+      "summary": "E-147: Deprecated UPDATE.md globally — removed from ensure_ai_templates() scaffolding, preflight() output, do_update/do_onboard/do_digest prompts, ai-preflight skill, ai-review skill, bug-reproducer skill, GEMINI.md trigger table; refactored ai-update skill to use conversation context; marked ai-update-lifecycle as DEPRECATED no-op | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md",
+        ".claude/agents/security_engineer.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-148",
+      "timestamp": "2026-04-03T07:57:58.849Z",
+      "summary": "E-148: Refactored do_update() in src/bin/ai — removed UPDATE.md dependency and ensure_ai_templates call; now accepts inline intent from CLI args, triggers digest_updater agent (JIT) for DIGEST refresh, and directs task-synchronizer-mcp for state.json updates | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md",
+        ".claude/agents/security_engineer.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-149",
+      "timestamp": "2026-04-03T08:01:50.543Z",
+      "summary": "E-149: Removed UPDATE.md from all three MCP servers: orchestrator-mcp (removed UPDATE.md preflight pointer, deprecated run_intent_cleanup as no-op), task-synchronizer-mcp (deprecated sync_tasks to return deprecation notice without reading UPDATE.md), github-bridge-mcp (renamed create_update_from_issues→create_intent_from_issues, fixed schema/handler name mismatch bug, removed UPDATE.md writes) | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/TASKS.md, .ai/architect.md, .ai/state.json",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md",
+        ".claude/agents/security_engineer.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-150",
+      "timestamp": "2026-04-03T08:07:09.441Z",
+      "summary": "E-150: Added AIS Fresh Conversations rule + 6-file JIT limit to src/templates/RULES.md; added §33 Token Economics section to src/templates/architect.md.template; synced RULES.md to .ai/RULES.md | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md"
+      ],
+      "read": true
+    },
+    {
+      "task_id": "E-151",
+      "timestamp": "2026-04-03T08:15:23.148Z",
+      "summary": "E-151: Implemented Architectural Fragmentation (§39) — created .ai/blueprints/ with 5 domain files (core, security, agents, mcp, governance); architect.md reduced from 490+ lines to 35-line lightweight index/router; updated orchestrator-mcp run_preflight pointer and src/templates/architect.md.template with §34 Domain Blueprints pattern | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-152",
+      "timestamp": "2026-04-03T08:20:20.005Z",
+      "summary": "E-152: Metadata-only default mode for ai sync: added list_skills/list_agents tools to context-invoker-mcp (Level 1 metadata), added _generate_skills_index() to src/bin/ai that writes _SKILLS_INDEX.md (name+description) to each synced skills dir after sync_skills_20() | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-153",
+      "timestamp": "2026-04-03T08:26:06.131Z",
+      "summary": "E-153: Refactored archive-manager-mcp: replaced readFileSync + string split for line/word counting with readline createInterface streams; added countFileStats() helper — no full file load into memory | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-154",
+      "timestamp": "2026-04-03T08:26:09.685Z",
+      "summary": "E-154: Refactored context-invoker-mcp: added readHead() helper (openSync/readSync, 4096 bytes max); listAvailable() now uses readHead instead of readFileSync — frontmatter parsing never loads full skill/agent content | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md"
+      ],
+      "read": false
+    },
+    {
+      "task_id": "E-155",
+      "timestamp": "2026-04-03T08:26:13.157Z",
+      "summary": "E-155: Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import | Files: .ai/DIGEST.md, .ai/REVIEWS.md, .ai/RULES.md, .ai/TASKS.md, .ai/architect.md",
+      "files_changed": [
+        ".ai/DIGEST.md",
+        ".ai/REVIEWS.md",
+        ".ai/RULES.md",
+        ".ai/TASKS.md",
+        ".ai/architect.md",
+        ".ai/state.json",
+        ".claude/agents/claude_tasks.md",
+        ".claude/agents/decision_recorder.md",
+        ".claude/agents/devops_engineer.md",
+        ".claude/agents/digest_updater.md"
+      ],
       "read": false
     }
   ],
   "digest_stale": true,
-  "digest_stale_reason": "E-143 marked DONE — Role-Aware RBAC interceptors implemented. roleGuard() added to patch-mcp (patch_file) and propose-patch-mcp (propose_patch + confirm_patch defense-in-depth). check_role_access pre-flight tool added to context-guardian-mcp. Architect blocked from src/ writes with [ANTI_DRIFT_VIOLATION]; .ai/ and plans/ whitelisted. 25 new tests in e143_test.sh, all passing."
+  "digest_stale_reason": "E-155 marked DONE — Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import"
 }

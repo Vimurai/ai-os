@@ -12,7 +12,7 @@ Commands:
   ai install          Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot; enable agent teams; set up hooks
   ai init             Create/upgrade .ai/ in current repo (safe, no overwrite)
   ai onboard          Print the Principal Architect reverse-engineering prompt for existing repos
-  ai update [--force] Prepare UPDATE.md + print TSRT-tiered session prompt (Gate 1)
+  ai update [--force] Scan project and update DIGEST.md + TASKS.md (Gate 1)
   ai preflight        Print DIGEST-first read order + SESSION stamp template
   ai review <who> [--tier <1|2|3>]  Print tier-aware critic prompts (auto-detects tier)
   ai test [--vibe]    Run automated tests (TestSprite) or Vibe/Chaos audit (--vibe)
@@ -109,7 +109,6 @@ ensure_ai_templates() {
   ensure_file_if_missing "$T/DIGEST.md"        ".ai/DIGEST.md"
   ensure_file_if_missing "$T/BRIEF.md"         ".ai/BRIEF.md"
   ensure_file_if_missing "$T/TASKS.md"         ".ai/TASKS.md"
-  ensure_file_if_missing "$T/UPDATE.md"        ".ai/UPDATE.md"
   ensure_file_if_missing "$T/LOG.md"           ".ai/LOG.md"
   ensure_file_if_missing "$T/architect.md.template" ".ai/architect.md"
   ensure_file_if_missing "$T/state.json"          ".ai/state.json"
@@ -508,7 +507,7 @@ do_init() {
 }
 
 # ── TSRT: Tier classifier (bash-native, no MCP dependency) ──────────────────
-# Reads UPDATE.md + staged diff, returns 1/2/3 via stdout.
+# Reads staged diff, returns 1/2/3 via stdout.
 # Used by do_update and do_review for gate skipping.
 
 # ── Gate 1: Intent Gate ───────────────────────────────────────────────────────
@@ -519,20 +518,46 @@ do_update() {
     echo "✗ No .ai/ directory found. Run: ai init"
     exit 1
   fi
-  ensure_ai_templates
 
-  cat <<'PROMPT'
+  # Capture inline intent from CLI args (e.g., ai update "add feature X")
+  local INTENT="${*:-}"
+  local INTENT_BLOCK=""
+  if [[ -n "$INTENT" && "$INTENT" != "--force" ]]; then
+    INTENT_BLOCK="
+INTENT FROM CLI:
+  ${INTENT}
+"
+  fi
+
+  cat <<PROMPT
 ━━ AI-OS UPDATE SESSION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+${INTENT_BLOCK}
 ROLE: Principal Architect (Gemini) or Principal Software Engineer (Claude).
 
-ACTION REQUIRED:
-1. Read the user's intent from the chat message or context.
-2. Scan the current project structure and codebase to understand the system.
-3. Seed or update the `.ai/` files (`DIGEST.md`, `architect.md`, `TASKS.md` via `task-synchronizer-mcp`) according to the project structure and the new request.
-4. Do NOT look for an UPDATE.md file. All intent is provided via conversation.
+TOKEN ECONOMICS — HARD LIMIT: Read at most 6 files. No ls -R, no glob sweeps.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — REFRESH PROJECT STATE (JIT)
+Run the digest_updater agent to refresh .ai/DIGEST.md:
+  activate_agent('digest_updater')
+The agent uses git-based change detection — only reads files changed since
+last DIGEST update. If nothing changed, it exits early (no token burn).
+
+STEP 2 — READ CONTEXT (max 3 files)
+  a. .ai/DIGEST.md    ← refreshed project snapshot
+  b. .ai/TASKS.md     ← open E-## / P-## tasks
+  c. .ai/architect.md ← ONLY if intent requires architectural context
+
+STEP 3 — PROCESS INTENT
+Intent comes from the conversation message above${INTENT_BLOCK:+ (or CLI arg above)}.
+Do NOT look for an UPDATE.md file — it no longer exists.
+
+STEP 4 — UPDATE STATE
+Based on the intent and refreshed DIGEST:
+  • New tasks: mcp__task-synchronizer-mcp__add_task({ prefix, description, tier })
+  • DIGEST is already updated by Step 1 — do not rewrite it manually.
+  • Log changes: append to .ai/LOG.md.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PROMPT
 }
 
@@ -546,12 +571,17 @@ Paste this prompt into Claude or Gemini:
 I have just initialized AI-OS v2 in this existing codebase.
 Your task is to reverse-engineer this repository and establish the Triad.
 
-1. Analyze the project structure, dependencies, and core logic.
-2. Populate `.ai/DIGEST.md` with the snapshot (max 50 lines).
-3. Populate `.ai/BRIEF.md` with the system architecture summary.
-4. Draft the first `.ai/architect.md` blueprint.
+TOKEN ECONOMICS — HARD LIMIT: Read at most 6 files total. Do NOT run ls -R,
+find ., or read every source file. Use targeted reads only.
 
-Do NOT write any application code. output only `.ai/` documentation."
+1. Read README.md and package.json (or equivalent manifest) — 2 files max.
+2. Read the entry point (e.g. src/index.*, src/bin/*) — 1 file.
+3. Grep for key patterns (imports, exports, routes) rather than reading whole dirs.
+4. Populate `.ai/DIGEST.md` with the snapshot (max 50 lines).
+5. Populate `.ai/BRIEF.md` with the system architecture summary.
+6. Draft the first `.ai/architect.md` blueprint.
+
+Do NOT write any application code. Output only `.ai/` documentation."
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ONBD
 }
@@ -566,9 +596,8 @@ preflight() {
 ━━ PREFLIGHT READ ORDER (DIGEST-FIRST) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Always read:
   1. .ai/DIGEST.md        ← replaces most reads if current
-  2. .ai/architect.md     ← The Principal Architect's Blueprint
-  3. .ai/UPDATE.md        ← current request
-  4. .ai/TASKS.md         ← your assigned tasks
+  2. .ai/TASKS.md         ← your assigned tasks
+  3. .ai/architect.md     ← Blueprint (only if task requires architectural detail)
 
 The absolute source of truth is .ai/.
 Handover protocol (Engineer): Always record execution state back to LOG.md.
@@ -591,9 +620,10 @@ do_digest() {
 ━━ REGENERATE DIGEST PROMPT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Paste into Claude Code:
 
-"Use the digest_updater agent to regenerate .ai/DIGEST.md from current
- project state. Read: BRIEF, TASKS, DECISIONS, ARCH, SECURITY, REVIEWS
- (recent), QUESTIONS (open), LOG (last 30 lines).
+"Use the digest_updater agent to regenerate .ai/DIGEST.md.
+ TOKEN ECONOMICS: Use JIT reads — grep first, full reads only for changed files.
+ Step 1: git log --since=<DIGEST mtime> --name-only -- '.ai/*.md' | sort -u
+ Step 2: Read ONLY files listed above. Max 6 files total.
  Keep DIGEST ≤ 60 lines, bullets only. Include Recent changes (last 10)."
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DGT
@@ -920,7 +950,7 @@ do_review() {
     i=$((i+1))
   done
 
-  # Auto-detect tier from UPDATE.md + diff unless overridden
+  # Auto-detect tier from staged diff unless overridden
   local TIER="${TIER_OVERRIDE}"
   if [[ -z "$TIER" && -d ".ai" ]]; then
     TIER=$(detect_tier 2>/dev/null || echo "2")
@@ -1159,6 +1189,70 @@ sync_skills_20() {
   # Also copy any remaining legacy flat .md files
   cp -f "${src_dir}"/*.md "${dst_dir}/" 2>/dev/null || true
   echo "  $count Skills 2.0 folder(s) + legacy flat files synced from ${src_dir}"
+  # Regenerate _SKILLS_INDEX.md in dst_dir (metadata-only manifest for §29 Level 1 loading)
+  _generate_skills_index "${dst_dir}"
+}
+
+_generate_skills_index() {
+  # Generate _SKILLS_INDEX.md — name + one-line description for each skill.
+  # Agents use this for Level 1 (metadata-only) discovery without loading full SKILL.md content.
+  local dir="$1"
+  local index_file="${dir}/_SKILLS_INDEX.md"
+  {
+    echo "# Skills Index (metadata-only — §29 JIT Skill Loading)"
+    echo "# Use activate_skill(<name>) to load full content."
+    echo ""
+    # Skills 2.0: folder-based
+    for skill_dir in "${dir}"/*/; do
+      [[ -d "$skill_dir" && -f "${skill_dir}SKILL.md" ]] || continue
+      local name desc
+      name=$(basename "$skill_dir")
+      desc=$(python3 -c "
+import re, sys
+try:
+    c = open('${skill_dir}SKILL.md').read()
+    m = re.match(r'^---\n(.*?)\n---', c, re.DOTALL)
+    if m:
+        for line in m.group(1).splitlines():
+            if line.startswith('description:'):
+                print(line.split(':', 1)[1].strip())
+                sys.exit(0)
+except: pass
+print('')
+" 2>/dev/null)
+      if [[ -n "$desc" ]]; then
+        echo "- ${name}: ${desc}"
+      else
+        echo "- ${name}"
+      fi
+    done
+    # Legacy flat .md files
+    for skill_file in "${dir}"/*.md; do
+      [[ -f "$skill_file" ]] || continue
+      local fname
+      fname=$(basename "$skill_file" .md)
+      [[ "$fname" == "_SKILLS_INDEX" ]] && continue
+      local desc
+      desc=$(python3 -c "
+import re, sys
+try:
+    c = open('${skill_file}').read()
+    m = re.match(r'^---\n(.*?)\n---', c, re.DOTALL)
+    if m:
+        for line in m.group(1).splitlines():
+            if line.startswith('description:'):
+                print(line.split(':', 1)[1].strip())
+                sys.exit(0)
+except: pass
+print('')
+" 2>/dev/null)
+      if [[ -n "$desc" ]]; then
+        echo "- ${fname}: ${desc}"
+      else
+        echo "- ${fname}"
+      fi
+    done
+  } > "$index_file"
 }
 
 do_sync_github() {
@@ -1256,14 +1350,14 @@ do_sync() {
     sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
     sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
     _configure_project_claude_settings ".claude"
-    echo "  .claude/ synced (agents + skills + settings.json)"
+    echo "  .claude/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
 
     mkdir -p ".gemini/agents" ".gemini/skills"
     cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
     sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
     sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
     _configure_project_gemini_settings ".gemini"
-    echo "  .gemini/ synced (agents + skills + settings.json)"
+    echo "  .gemini/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
     echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."

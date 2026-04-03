@@ -1,48 +1,25 @@
 ---
 name: ai-update-lifecycle
-description: Manages the UPDATE.md lifecycle — archives the processed intent after Gate 1 completes, reinitializes a fresh template, and warns when UPDATE.md is overloaded (>500 lines). Prevents stale intent accumulation.
+description: DEPRECATED — UPDATE.md has been removed from AI-OS. Intent is now provided directly via conversation context. This skill is a no-op and will be removed in a future cleanup.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Read, Write, Bash
+allowed-tools: Read
 context: default
 agent: default
 ---
 
-# AI-OS Update Lifecycle
+# AI-OS Update Lifecycle — DEPRECATED
 
-Manages `.ai/UPDATE.md` after Gate 1 (prd_writer) has processed it.
+> ⚠️ **DEPRECATED**: `UPDATE.md` has been removed from AI-OS (E-147).
+> Intent is now provided directly via conversation context — no file needed.
+> This skill is a no-op. Do NOT invoke it.
 
-## Dynamic Context Injection
-UPDATE.md line count: !wc -l .ai/UPDATE.md 2>/dev/null | awk '{print $1}' || echo "0"
-Last modified: !stat -f "%Sm" .ai/UPDATE.md 2>/dev/null || stat -c "%y" .ai/UPDATE.md 2>/dev/null || echo "unknown"
+## Migration
 
-## Step 1 — Guard Check
+If you were previously using `ai-update-lifecycle` to archive UPDATE.md:
+- There is nothing to archive — UPDATE.md no longer exists.
+- Session intent lives in the conversation history.
+- Use `ai-compact` to distill long sessions when context grows large.
 
-Before archiving, verify Gate 1 has processed the current UPDATE.md:
-- Check `.ai/LOG.md` for a `prd_writer` entry dated today or matching the current session.
-- If NO prd_writer entry found: **STOP — do not archive unprocessed intent.**
-
-## Step 2 — Warn on Overload
-
-If UPDATE.md exceeds 500 lines:
-```
-⚠️  UPDATE.md is overloaded (>500 lines). This usually means:
-- Multiple unprocessed sessions were stacked without archiving.
-- Gate 1 was bypassed.
-Action: Review UPDATE.md, extract distinct intents, run ai-update for each.
-```
-
-## Step 3 — Archive Processed UPDATE.md
-
-Execute the `run_intent_cleanup` tool from the `orchestrator-mcp` server.
-This tool will automatically:
-1. Backup `UPDATE.md` to the `.ai/archive/COMM/` directory with a timestamp.
-2. Reinitialize `UPDATE.md` with the standard empty template.
-3. Append an entry to `LOG.md`.
-
-Do NOT use manual bash commands (`cp`, `mkdir`, etc.) to perform this action.
-
-## Rules
-- Never archive if prd_writer has not processed the current UPDATE.md.
-- Never delete archive files.
-- Trigger automatically after prd_writer completes, or when `ai archive` is run.
+## Replacement
+Use `skill: "ai-compact"` to manage session context accumulation.

@@ -20,7 +20,7 @@ Recent UACS_VERIFIED: !grep -m1 "\[UACS_VERIFIED\]" .ai/LOG.md 2>/dev/null || ec
 
 Classify the current changes using `risk-analyzer-mcp`:
 ```
-classify_risk()   ← reads UPDATE.md + staged diff automatically
+classify_risk()   ← reads staged diff automatically
 ```
 
 Or classify manually:

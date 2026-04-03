@@ -11,15 +11,18 @@ agent: general-purpose
 ROLE: SECURITY_ENGINEER
 Target: .ai/SECURITY.md (primary) + .ai/THREAT_MODEL.md (update if needed)
 
-## Preflight (token-saver)
-1. Read .ai/DIGEST.md.
-2. Read .ai/UPDATE.md.
-3. Read .ai/ARCH.md (boundary map — read-only, do not modify).
-4. Read .ai/CAPABILITIES.md (current allowed scope).
-5. Read .ai/ENV.md (secrets and storage).
-6. Read .ai/THREAT_MODEL.md (existing threats).
-7. Read .ai/INTERFACES.md (trust boundaries at API level).
-8. Check .mcp.json — verify filesystem scope matches CAPABILITIES.md.
+## Preflight (JIT — DIGEST-first, max 2 reads on init)
+1. Read `.ai/DIGEST.md` — project snapshot (stack, known risks, MCP servers).
+2. Read `.ai/TASKS.md` — identify which E-## task triggered this agent.
+— Stop here. Do NOT read additional files unless the task explicitly requires them. —
+
+## Domain Reads (JIT — read only when task touches this area)
+- `.ai/ARCH.md` — only if reviewing architectural boundaries (read-only, do not modify)
+- `.ai/CAPABILITIES.md` — only if modifying scope or verifying filesystem permissions
+- `.ai/ENV.md` — only if task involves secrets, storage, or credential handling
+- `.ai/THREAT_MODEL.md` — only if adding/updating threat entries
+- `.ai/INTERFACES.md` — only if task introduces a new trust boundary or API surface
+- `.mcp.json` — only if verifying filesystem scope matches CAPABILITIES.md
 
 ## Produce SECURITY.md with:
 - **Threat model summary**: link to THREAT_MODEL.md for full detail.

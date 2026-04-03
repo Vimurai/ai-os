@@ -11,9 +11,22 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { createReadStream, readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { createInterface } from "readline";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
+
+// Stream-based line/word counter — avoids loading full file into memory (E-153)
+function countFileStats(fpath) {
+  return new Promise((res, rej) => {
+    let lines = 0;
+    let words = 0;
+    const rl = createInterface({ input: createReadStream(fpath, { encoding: "utf8" }), crlfDelay: Infinity });
+    rl.on("line", (line) => { lines++; words += line.split(/\s+/).filter(Boolean).length; });
+    rl.on("close", () => res({ lines, words }));
+    rl.on("error", rej);
+  });
+}
 
 // ── State.json DONE-task archiving ────────────────────────────────────────────
 const DONE_ARCHIVE_THRESHOLD = 50;
@@ -105,13 +118,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const fpath = resolve(aiDir, fname);
       if (!existsSync(fpath)) continue;
 
-      let content = "";
-      try { content = readFileSync(fpath, "utf8"); } catch { continue; }
+      let stats;
+      try { stats = await countFileStats(fpath); } catch { continue; }
 
-      const lineCount  = content.split("\n").length;
+      const lineCount = stats.lines;
       // Token estimate: word count × 1.3 (empirical for markdown prose)
-      const wordCount  = content.split(/\s+/).filter(Boolean).length;
-      const tokenEstimate = Math.round(wordCount * 1.3);
+      const tokenEstimate = Math.round(stats.words * 1.3);
 
       files.push({ file: fname, lines: lineCount, tokens: tokenEstimate });
       totalLines  += lineCount;

@@ -55,7 +55,7 @@ SEED → CLASSIFY → [prd_writer] → BLUEPRINT → [aligner check] → HANDOVE
 
 | When you discover mid-planning...                          | Pause. Dispatch.              |
 | :--------------------------------------------------------- | :---------------------------- |
-| UPDATE.md has new non-empty content                        | `prd_writer` NOW              |
+| New feature request received in chat                       | `prd_writer` NOW              |
 | Blueprint section touches auth, secrets, new integrations  | `prd_writer` adds SEC_CLEARED req |
 | UX/design validation needed on a new component             | `ux_reviewer` NOW             |
 | Need to understand past decisions / git archaeology        | `repo-oracle` NOW             |

@@ -11,10 +11,14 @@ agent: general-purpose
 ROLE: DECISION_RECORDER
 Target: .ai/DECISIONS.md
 
-## Preflight (token-saver)
-1. Read .ai/DECISIONS.md — note highest D-### number to continue sequencing.
-2. Read .ai/LOG.md (last 50 lines) — scan for decision keywords.
-3. Read .ai/UPDATE.md — the current intent (context for new decisions).
+## Preflight (JIT — DIGEST-first, max 2 reads on init)
+1. Read `.ai/DIGEST.md` — project snapshot (context for new decisions).
+2. Read `.ai/DECISIONS.md` — note highest D-### number to continue sequencing.
+— Use conversation context + LOG.md grep for decision signals. Do NOT read LOG.md in full. —
+
+## Domain Reads (JIT — read only when needed)
+- `.ai/LOG.md` (last 50 lines) — only if conversation context lacks sufficient decision signal
+  `Read .ai/LOG.md offset=<last 50 lines>`
 
 ## Decision Detection
 

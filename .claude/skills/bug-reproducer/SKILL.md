@@ -26,9 +26,8 @@ Apply this skill for **Tier 2 and Tier 3 bug fixes only**. Skip for:
 
 ## Step 1 — Understand the Bug Report
 
-Read the bug description from `UPDATE.md` or the current task in `TASKS.md`:
+Read the bug description from the current task in `TASKS.md` or conversation context:
 ```bash
-cat .ai/UPDATE.md
 grep "^- \[ \]" .ai/TASKS.md | head -3
 ```
 

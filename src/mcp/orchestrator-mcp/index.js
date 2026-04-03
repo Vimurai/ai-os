@@ -75,9 +75,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "run_intent_cleanup",
       description:
-        "Archives UPDATE.md to .ai/archive/COMM/ and resets it to the template header. " +
-        "Call after prd_writer finishes task generation or after run_handover closes a session's primary intent. " +
-        "Implements §33 Intent Lifecycle Management to prevent Intent Drift.",
+        "DEPRECATED (E-147): UPDATE.md has been removed from AI-OS. Intent is now provided via conversation context. " +
+        "This tool is a no-op and returns a deprecation notice. Use `skill: ai-compact` to manage session context instead.",
       inputSchema: { type: "object", properties: {} },
     },
     {
@@ -129,9 +128,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // Add pointers for removed files to prevent double-read trap
-      sections.push(`## architect.md\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/architect.md\` ONLY if you need architectural details for your specific task.)`);
-      sections.push(`## UPDATE.md\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/UPDATE.md\` ONLY if you are the Architect taking new instructions.)`);
+      // Add pointer for architect.md index — skip by default to save tokens
+      sections.push(`## architect.md (INDEX)\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/architect.md\` ONLY if you need architectural details for your specific task.\nIt is now a lightweight index (~30 lines). Domain blueprints are in \`.ai/blueprints/<domain>.md\` — load only the one relevant to your task.)`);
 
       // E-103: state.json summary — task counts + last 3 stamps (structured data preferred over MD view)
       const statePath = resolve(ai, "state.json");
@@ -478,6 +476,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
+
+    // ── run_intent_cleanup (DEPRECATED E-147) ─────────────────────────────────
+    case "run_intent_cleanup":
+      return {
+        content: [{
+          type: "text",
+          text: "⚠ DEPRECATED (E-147): run_intent_cleanup is a no-op. UPDATE.md has been removed from AI-OS.\n" +
+                "Intent is provided via conversation context. Use `skill: ai-compact` to manage session context instead.",
+        }],
+      };
 
     default:
       return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };

@@ -10,8 +10,9 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, existsSync, readdirSync, statSync } from "fs";
-import { resolve, join } from "path";
+import { readFileSync, existsSync } from "fs";
+import { resolve, relative, extname } from "path";
+import { spawnSync } from "child_process";
 
 const server = new Server(
   { name: "context-guardian-mcp", version: "1.0.0" },
@@ -206,24 +207,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   }
 
-  // ── Strict mode: scan src/ for TODO/FIXME ─────────────────────────────────
+  // ── Strict mode: scan src/ for TODO/FIXME via git grep (E-155) ──────────────
   if (strict) {
     const srcDir = resolve(cwd, "src");
     if (existsSync(srcDir)) {
       const srcIssues = [];
-      scanDir(srcDir, [".js", ".ts", ".sh", ".py", ".go"], (filePath, content) => {
-        if (filePath.includes("context-guardian-mcp/index.js")) return;
-        const lines = content.split("\n");
-        lines.forEach((line, i) => {
-          // Skip lines where the marker appears inside a regex literal (e.g. /\b(TODO|FIXME)\b/)
-          // to avoid false positives from pattern definitions in source files (E-62).
-          const isRegexLiteral = /\/[^/]*\b(TODO|FIXME|HACK|XXX)\b[^/]*\//.test(line);
-          if (!isRegexLiteral && /\b(TODO|FIXME|HACK|XXX)\b/.test(line)) {
-            srcIssues.push(`${filePath.replace(cwd, "")}:${i + 1}: ${line.trim().slice(0, 80)}`);
+      const EXTS = new Set([".js", ".ts", ".sh", ".py", ".go"]);
+      // git grep avoids loading every source file into Node memory
+      const grepResult = spawnSync(
+        "git", ["grep", "-n", "-E", "\\b(TODO|FIXME|HACK|XXX)\\b", "--", "src/"],
+        { cwd, encoding: "utf8", timeout: 10000 }
+      );
+      if (!grepResult.error && grepResult.stdout) {
+        for (const line of grepResult.stdout.split("\n").filter(Boolean)) {
+          const colon1 = line.indexOf(":");
+          const colon2 = line.indexOf(":", colon1 + 1);
+          if (colon1 === -1 || colon2 === -1) continue;
+          const filePath = line.slice(0, colon1);
+          const lineNum  = line.slice(colon1 + 1, colon2);
+          const content  = line.slice(colon2 + 1);
+          if (!EXTS.has(extname(filePath))) continue;
+          if (filePath.includes("context-guardian-mcp/index.js")) continue;
+          // Skip regex literal false positives (E-62)
+          const isRegexLiteral = /\/[^/]*\b(TODO|FIXME|HACK|XXX)\b[^/]*\//.test(content);
+          if (!isRegexLiteral) {
+            srcIssues.push(`${filePath}:${lineNum}: ${content.trim().slice(0, 80)}`);
           }
-        });
-      });
-
+        }
+      }
       if (srcIssues.length > 0) {
         issues.push({
           source: "src/**",
@@ -268,24 +279,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   return { content: [{ type: "text", text: lines.join("\n") }] };
 });
 
-function scanDir(dir, exts, callback) {
-  try {
-    const entries = readdirSync(dir);
-    for (const entry of entries) {
-      if (entry.startsWith(".") || entry === "node_modules") continue;
-      const full = join(dir, entry);
-      const stat = statSync(full);
-      if (stat.isDirectory()) {
-        scanDir(full, exts, callback);
-      } else if (exts.some((e) => full.endsWith(e))) {
-        try {
-          const content = readFileSync(full, "utf8");
-          callback(full, content);
-        } catch { /* skip unreadable files */ }
-      }
-    }
-  } catch { /* skip unreadable dirs */ }
-}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

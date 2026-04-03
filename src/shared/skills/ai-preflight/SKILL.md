@@ -1,6 +1,6 @@
 ---
 name: ai-preflight
-description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → architect.md → UPDATE.md → TASKS.md) and stamps SESSION.md.
+description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Glob
@@ -28,10 +28,7 @@ Contains: product summary, stack, Triad health, current focus, known risks, rece
 **DO NOT read `.ai/architect.md` during preflight.** It is skipped to save tokens.
 Only use `filesystem.read` on `.ai/architect.md` *after* preflight, and ONLY IF your specific assigned task explicitly requires architectural details.
 
-### 3. Read `.ai/UPDATE.md` ← CURRENT REQUEST
-Human intent for this session. Always read.
-
-### 4. Read `.ai/TASKS.md` ← YOUR ASSIGNMENTS
+### 3. Read `.ai/TASKS.md` ← YOUR ASSIGNMENTS
 Assigned tasks (E-## for Claude, P-## for Gemini). Always read.
 
 ### 5. Check Implementation Deltas ← FEEDBACK LOOP (P-42 §29)
@@ -102,9 +99,8 @@ for st in s['stamps'][-3:]:
 " 2>/dev/null || tail -3 .ai/REVIEWS.md
 ```
 
-**Step 3 — Read UPDATE.md and open tasks**
+**Step 3 — Read open tasks**
 ```bash
-cat .ai/UPDATE.md
 grep "^- \[ \]" .ai/TASKS.md | head -10
 ```
 

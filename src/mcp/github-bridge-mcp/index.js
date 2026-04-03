@@ -3,14 +3,14 @@
  * github-bridge-mcp — AI-OS GitHub Bridge (E-142, §28)
  *
  * Connects GitHub events to the AI-OS Architect cycle.
- * Fetches assigned issues via `gh` CLI and seeds UPDATE.md for Gemini to blueprint.
+ * Fetches assigned issues via `gh` CLI and formats them as P-## task proposals for Gemini.
  *
  * Requires: GitHub CLI (`gh`) installed and authenticated (`gh auth status`).
  *
  * Tools:
  *   fetch_assigned_issues(limit?)         → assigned open issues for current user
  *   get_issue(number)                     → full details of a specific issue
- *   create_update_from_issues(numbers[])  → writes selected issues to UPDATE.md
+ *   create_intent_from_issues(numbers[])  → formats selected issues as P-## task proposals
  *   get_pr_status(pr?)                    → current PR status / review state
  *   check_gh_auth()                       → verify gh CLI is installed + authenticated
  *
@@ -104,7 +104,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "get_issue",
       description:
         "Fetches full details (title, body, labels, comments) for a specific GitHub issue. " +
-        "Use before create_update_from_issues to review the full context.",
+        "Use before create_intent_from_issues to review the full context.",
       inputSchema: {
         type: "object",
         properties: {
@@ -115,11 +115,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
-      name: "create_update_from_issues",
+      name: "create_intent_from_issues",
       description:
-        "Writes selected GitHub issues to .ai/UPDATE.md to seed the Architect (Gemini) cycle. " +
-        "Gemini will then generate blueprints (P-## tasks) from the issue content. " +
-        "IMPORTANT: Appends to UPDATE.md — does not overwrite existing intent.",
+        "Formats selected GitHub issues as structured P-## task proposals for the Architect (Gemini) cycle. " +
+        "Returns formatted issue content with an 'Action Required' prompt — Gemini then creates tasks via add_task. " +
+        "Does not write to any file — intent is returned inline for immediate use in conversation.",
       inputSchema: {
         type: "object",
         properties: {
@@ -277,8 +277,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
-    // ── create_tasks_from_issues ─────────────────────────────────────────────
-    case "create_tasks_from_issues": {
+    // ── create_intent_from_issues ─────────────────────────────────────────────
+    case "create_intent_from_issues": {
       const numbers = (args.numbers || []).map(n => Math.round(Number(n))).filter(n => n > 0);
       if (numbers.length === 0) {
         return { content: [{ type: "text", text: "✗ No valid issue numbers provided." }], isError: true };

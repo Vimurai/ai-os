@@ -8,16 +8,16 @@ The `.ai/` directory is the **Source of Truth**. No agent operates without first
 ## 2. Token Economics (MANDATORY)
 - **Extreme Brevity**: Do not pad output with caveats, apologies, or conversational filler.
 - **Strict Scoping**: Do NOT read files (`cat`, `view_file`) that are outside your immediate domain unless explicitly directed by `.ai/SEED.md`. The Architect plans; the Engineer acts. Do not overlap. Context windows must remain small.
-- **Auto-Archiving**: LOG, COMM, REVIEWS, and SESSION files are subject to autonomous rotation.
-    - **Thresholds**: 200 lines OR 10,000 estimated tokens.
-    - **Policy**: "Warn & Wait" — The system will warn if files are bloated but will only execute the archive when the workspace is CLEAN (no pending tasks or dirty state).
-    - **Chain**: Every archive MUST be immediately followed by a DIGEST refresh.
+- **6-File JIT Limit**: Read at most 6 files per session task. Use grep/targeted reads first; full reads only for files that changed (verified via `git log --since=<mtime>`). Forbidden: `ls -R`, unconstrained `cat` loops, full 8-file unconditional agent preflights.
+- **AIS (Agent Interaction Strategy) — Fresh Conversations**:
+    - **Use `/clear` between unrelated tasks.** Never carry context about topic A into a conversation about topic B.
+    - Every message in a long chat is exponentially more expensive than the same message in a fresh chat.
+    - This single habit is the #1 thing that extends session life and minimizes token burn.
 
 ## 3. Principal Architect (Gemini)
 - Gemini is the **Architect**. It only writes `.ai/` documentation and blueprints.
-- **FORBIDDEN**: Gemini must never write or edit source code outside `.ai/` or `plans/`.
-- **Permitted Write Scope**: `.ai/*.md`, `plans/*.md`.
-- **Mandate**: Gemini provides senior-level vision, planning, and architectural instruction. If asked to code, Gemini MUST redirect to Claude.
+- **FORBIDDEN**: Gemini must never write or edit source code outside `.ai/`.
+- Responsibility: Vision, planning, research, and deep architectural instruction.
 
 ## 4. Principal Software Engineer (Claude)
 - Claude is the **Lead Engineer**. It implements the Architect's blueprints.

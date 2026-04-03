@@ -10,7 +10,7 @@
  *   update_task_status(id, status)      → transitions task status
  *   add_stamp(task_id, type, agent, summary) → writes atomic audit stamp
  *   set_project_focus(text)             → updates project focus
- *   sync_tasks(update_content?)         → (legacy) proposes P-## tasks from UPDATE.md
+ *   sync_tasks(update_content?)         → (DEPRECATED E-147) proposes P-## tasks from inline intent; UPDATE.md no longer used
  *   append_tasks(tasks)                 → (legacy) appends to TASKS.md
  */
 
@@ -399,16 +399,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: `✓ [AUTO-ARCHIVE] ${result.archived} DONE tasks → ${result.archivePath}\n  ${result.kept} recent DONE tasks kept in live state.json` }] };
     }
 
-    // ── Legacy: sync_tasks ────────────────────────────────────────────────────
+    // ── Legacy: sync_tasks (DEPRECATED E-147/E-149) ──────────────────────────
     case "sync_tasks": {
-      const updatePath = resolve(aiDir, "UPDATE.md");
-      const updateContent = args.update_content ??
-        (existsSync(updatePath) ? readFileSync(updatePath, "utf8") : "");
-
-      if (!updateContent.trim()) {
-        return { content: [{ type: "text", text: "UPDATE.md is empty — nothing to sync." }] };
+      // UPDATE.md has been deprecated. If update_content is passed directly, still process it.
+      const updateContent = (args.update_content || "").trim();
+      if (!updateContent) {
+        return {
+          content: [{
+            type: "text",
+            text: "⚠ DEPRECATED (E-147): sync_tasks previously read from UPDATE.md, which no longer exists.\n" +
+                  "Pass intent directly via the `update_content` argument, or use `add_task` to create tasks directly.",
+          }],
+        };
       }
 
+      // Process inline update_content if provided (backward-compat for callers that pass intent directly)
       const tasksPath = resolve(aiDir, "TASKS.md");
       const tasksContent = existsSync(tasksPath) ? readFileSync(tasksPath, "utf8") : "";
       const pNumbers = [...tasksContent.matchAll(/P-(\d+):/g)].map(m => parseInt(m[1], 10));
@@ -421,7 +426,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         .slice(0, 5);
 
       if (lines.length === 0) {
-        return { content: [{ type: "text", text: "Could not extract actionable intent from UPDATE.md." }] };
+        return { content: [{ type: "text", text: "Could not extract actionable intent from provided content." }] };
       }
 
       const lower = updateContent.toLowerCase();
@@ -434,7 +439,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return `- [ ] P-${num}: Blueprint for "${line}"\n  Tier: ${tier} | Proposed: ${date}`;
       });
 
-      return { content: [{ type: "text", text: `## Proposed P-## Tasks\n\n${proposed.join("\n\n")}\n\nTo apply: call append_tasks.` }] };
+      return { content: [{ type: "text", text: `## Proposed P-## Tasks\n\n${proposed.join("\n\n")}\n\nTo apply: call append_tasks.\n\n⚠ Prefer using \`add_task\` directly for new task creation.` }] };
     }
 
     // ── Legacy: append_tasks ──────────────────────────────────────────────────

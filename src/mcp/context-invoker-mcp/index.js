@@ -13,9 +13,22 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, existsSync, readdirSync } from "fs";
+import { readFileSync, openSync, readSync, closeSync, existsSync, readdirSync } from "fs";
 import { resolve, join, sep } from "path";
 import { homedir } from "os";
+
+// Read only the first 4 KB of a file — sufficient to capture YAML frontmatter (E-154)
+const HEAD_BYTES = 4096;
+function readHead(filePath) {
+  const fd = openSync(filePath, "r");
+  try {
+    const buf = Buffer.alloc(HEAD_BYTES);
+    const bytesRead = readSync(fd, buf, 0, HEAD_BYTES, 0);
+    return buf.slice(0, bytesRead).toString("utf8");
+  } finally {
+    closeSync(fd);
+  }
+}
 
 const HOME = homedir();
 const cwd = process.cwd();
@@ -138,8 +151,8 @@ function listAvailable(roots, ext) {
         }
         if (found.has(name)) continue; // first-found wins (priority order)
         try {
-          const content = readFileSync(filePath, "utf8");
-          const fm = parseFrontmatter(content);
+          const head = readHead(filePath); // 4 KB max — frontmatter always within first 4 KB
+          const fm = parseFrontmatter(head);
           found.set(name, fm.description || "");
         } catch {
           found.set(name, "");
@@ -158,11 +171,27 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
+      name: "list_skills",
+      description:
+        "Returns metadata-only summaries for all available skills (name + one-line description). " +
+        "Use this FIRST to discover what skills are available before loading one with activate_skill. " +
+        "This is Level 1 (metadata-only) per §29 JIT Skill Loading — zero token cost.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
+      name: "list_agents",
+      description:
+        "Returns metadata-only summaries for all available agents (name + one-line description). " +
+        "Use this FIRST to discover what agents are available before loading one with activate_agent. " +
+        "This is Level 1 (metadata-only) per §29 JIT Skill Loading — zero token cost.",
+      inputSchema: { type: "object", properties: {} },
+    },
+    {
       name: "activate_skill",
       description:
-        "Returns the full SKILL.md content for a named Claude/shared skill. " +
-        "Use this to dynamically load skill instructions into context. " +
-        "Call list_skills first if unsure of the exact name.",
+        "Returns the FULL SKILL.md content for a named Claude/shared skill (Level 2 — full load). " +
+        "Call list_skills first to discover available skill names with metadata-only cost. " +
+        "Only call this when you are ready to execute the skill — do NOT preload speculatively.",
       inputSchema: {
         type: "object",
         properties: {
@@ -172,7 +201,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           list_skills: {
             type: "boolean",
-            description: "If true, returns a list of all available skill names instead of loading one",
+            description: "DEPRECATED: use the list_skills tool instead. If true, returns metadata list.",
             default: false,
           },
         },
@@ -182,9 +211,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "activate_agent",
       description:
-        "Returns the full agent .md content for a named Claude/Gemini agent. " +
-        "Use this to dynamically load agent instructions into context before delegating a task. " +
-        "Call with list_agents:true to discover available agent names.",
+        "Returns the FULL agent .md content for a named Claude/Gemini agent (Level 2 — full load). " +
+        "Call list_agents first to discover available agent names with metadata-only cost. " +
+        "Only call this when you are ready to delegate to the agent — do NOT preload speculatively.",
       inputSchema: {
         type: "object",
         properties: {
@@ -194,7 +223,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           list_agents: {
             type: "boolean",
-            description: "If true, returns a list of all available agent names instead of loading one",
+            description: "DEPRECATED: use the list_agents tool instead. If true, returns metadata list.",
             default: false,
           },
         },
@@ -208,6 +237,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   switch (name) {
+    // ── list_skills — Level 1 metadata-only (§29 JIT Skill Loading) ──────────
+    case "list_skills": {
+      const skills = listAvailable(SKILL_ROOTS, ".md");
+      const lines = skills.map(([n, desc]) => desc ? `  - ${n}: ${desc}` : `  - ${n}`);
+      return {
+        content: [{ type: "text", text: `## Available Skills (metadata-only — use activate_skill for full content)\n${lines.join("\n")}` }],
+      };
+    }
+
+    // ── list_agents — Level 1 metadata-only (§29 JIT Skill Loading) ──────────
+    case "list_agents": {
+      const agents = listAvailable(AGENT_ROOTS, ".md");
+      const lines = agents.map(([n, desc]) => desc ? `  - ${n}: ${desc}` : `  - ${n}`);
+      return {
+        content: [{ type: "text", text: `## Available Agents (metadata-only — use activate_agent for full content)\n${lines.join("\n")}` }],
+      };
+    }
+
     case "activate_skill": {
       if (args.list_skills) {
         const skills = listAvailable(SKILL_ROOTS, ".md");

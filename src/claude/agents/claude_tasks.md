@@ -11,11 +11,13 @@ agent: general-purpose
 ROLE: TASK_WRITER
 Target: .ai/TASKS.md
 
-## Preflight (token-saver)
-1. Read .ai/DIGEST.md.
-2. Read .ai/UPDATE.md.
-3. Read .ai/TASKS.md — note highest C-## number to continue sequencing.
-4. Read .ai/DECISIONS.md — pending decisions may generate tasks.
+## Preflight (JIT — DIGEST-first, max 2 reads on init)
+1. Read `.ai/DIGEST.md` — project snapshot (current focus, recent changes).
+2. Read `.ai/TASKS.md` — note highest E-## number to continue sequencing.
+— Stop here unless the task specifically requires decisions context. —
+
+## Domain Reads (JIT — read only when needed)
+- `.ai/DECISIONS.md` — only if the task involves recording or linking pending decisions
 
 ## Rules
 - Edit ONLY the "## Claude (Architecture/Core/Security/DevOps/Tests)" section.

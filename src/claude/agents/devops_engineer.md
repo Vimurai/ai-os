@@ -11,12 +11,15 @@ agent: general-purpose
 ROLE: DEVOPS_ENGINEER
 Target: .ai/DEVOPS.md
 
-## Preflight (token-saver)
-1. Read .ai/DIGEST.md.
-2. Read .ai/UPDATE.md.
-3. Read .ai/REPO.md (stack, package manager, entry points).
-4. Read .ai/QUALITY.md (CI gates and testing baselines).
-5. Read .ai/ARCH.md (deployment topology — read-only).
+## Preflight (JIT — DIGEST-first, max 2 reads on init)
+1. Read `.ai/DIGEST.md` — project snapshot (stack, recent changes, MCP servers).
+2. Read `.ai/TASKS.md` — identify which E-## task triggered this agent.
+— Stop here. Do NOT read additional files unless the task explicitly requires them. —
+
+## Domain Reads (JIT — read only when task touches this area)
+- `.ai/REPO.md` — only if stack/package manager not covered by DIGEST
+- `.ai/QUALITY.md` — only if writing or changing CI gates/test baselines
+- `.ai/ARCH.md` — only if reviewing deployment topology (read-only)
 
 ## Produce DEVOPS.md with:
 - **Reproducible commands** (copy-paste ready):
