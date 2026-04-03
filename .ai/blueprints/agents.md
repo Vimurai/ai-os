@@ -62,6 +62,13 @@
 - Claude sub-agents: MUST define `tools` array and explicit `description` trigger conditions.
 - Gemini skills: `description` must have imperative trigger language for `activate_skill` auto-dispatch.
 
+### §17.6 Gemini Agent Frontmatter Compliance
+- **The Problem**: The `verification-mcp` compliance audit currently fails for all Gemini sub-agents (`digest_updater`, `docs-architect`, `gemini_tasks`, `knowledge_architect`, `memory_curator`, `ux_reviewer`) because they are missing mandatory UACS YAML fields.
+- **The Solution (P-5)**: 
+  - Add `disable-model-invocation: false`
+  - Add `user-invocable: false` (or true if intended for manual use)
+  - Add `allowed-tools: Read, Grep, Glob` (or specific tools required) to the top of all agent markdown files in `src/gemini/agents/`.
+
 ## §18. Autonomous Command Suite (UACS) Logic
 - **`intent-refiner-mcp`** (DEPRECATED — E-147): Previously bridged chat → TASKS.md via UPDATE.md. Now a no-op.
 - **`blueprint-aligner-mcp`**: Compares `git diff` vs `architect.md`. Returns `[PASS/FAIL]` with deviation report.

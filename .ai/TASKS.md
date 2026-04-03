@@ -25,7 +25,11 @@
   Status: DONE 2026-04-03 — Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures)
 - [x] E-157: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md) | Tier: 2
   Status: DONE 2026-04-03 — Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token
-- [ ] E-158: Create and execute `scripts/remediate_git_identity.sh` to rewrite commit history and remove unauthorized AI co-author trailers. (See `.ai/blueprints/git-remediation.md`) | Tier: 2
+- [x] E-158: Create and execute `scripts/remediate_git_identity.sh` to rewrite commit history and remove unauthorized AI co-author trailers. (See `.ai/blueprints/git-remediation.md`) | Tier: 2
+  Status: DONE 2026-04-03 — Skipped by user — no action required
+- [ ] E-159: Add `maxBuffer` limits (e.g., `10 * 1024 * 1024`) to all `spawnSync` calls across all MCP servers (especially `github-bridge-mcp` and `lsp-mcp`) to prevent Node `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` crashes. (See `.ai/blueprints/robustness.md`) | Tier: 2
+- [ ] E-160: Add mandatory YAML frontmatter (`disable-model-invocation`, `user-invocable`, `allowed-tools`) to all Gemini sub-agents in `src/gemini/agents/` to fix `verification-mcp` compliance failures. (See `.ai/blueprints/agents.md`) | Tier: 2
+- [ ] E-161: Add result bounding (e.g., `| head -n 100`) to the `git grep` call in `context-guardian-mcp` to prevent token leakage on massive codebases. (See `.ai/blueprints/robustness.md`) | Tier: 2
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2
@@ -34,3 +38,9 @@
   Status: DONE 2026-04-03 — Handed over to Claude as E-157
 - [x] P-3: Ratify or remediate the `Co-Authored-By` trailer violation from commit d351dc9 (§12 Git Identity mandate). | Tier: 1
   Status: DONE 2026-04-03 — Blueprinted in git-remediation.md and handed over to Claude as E-158
+- [x] P-4: Add `maxBuffer` limits (e.g., `10 * 1024 * 1024`) to all `spawnSync` calls across all MCP servers (especially `github-bridge-mcp` and `lsp-mcp`) to prevent Node `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` crashes. | Tier: 2
+  Status: DONE 2026-04-03 — Handed over to Claude as E-159
+- [x] P-5: Add mandatory YAML frontmatter (`disable-model-invocation`, `user-invocable`, `allowed-tools`) to all Gemini sub-agents in `src/gemini/agents/` to fix `verification-mcp` compliance failures. | Tier: 2
+  Status: DONE 2026-04-03 — Handed over to Claude as E-160
+- [x] P-6: Add result bounding (e.g., `| head -n 100`) to the `git grep` call in `context-guardian-mcp` to prevent token leakage on massive codebases. | Tier: 2
+  Status: DONE 2026-04-03 — Handed over to Claude as E-161

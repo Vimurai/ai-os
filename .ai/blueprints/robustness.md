@@ -40,3 +40,30 @@ The `patch-mcp` needs a mechanism to gracefully handle minor file drifts without
   - If `old_content` is no longer found (meaning the target block itself was modified), *then* reject the patch and return the standard `[MD5_MISMATCH]` error, forcing a re-read.
 
 This ensures the optimistic lock still protects against destructive overwrites while eliminating unnecessary retry turns for unrelated file modifications.
+
+## 3. Unbounded `spawnSync` Calls in MCP Servers
+
+### The Problem
+Multiple MCP servers (`github-bridge-mcp`, `lsp-mcp`, `archive-manager-mcp`, `propose-patch-mcp`) use `spawnSync` to execute child processes (like `gh`, `tsc`, `patch`). While some have `timeout` options configured, none of them configure a `maxBuffer` option.
+By default, Node's `spawnSync` has a 1MB `maxBuffer`. If a process (like a TypeScript compiler on a large codebase or a `gh` command pulling large issues) emits more than 1MB of stdout/stderr, the Node process will crash with an `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` error. Furthermore, unconstrained stdout can leak massive amounts of text back into the LLM context window, causing a severe token burn.
+
+### The Solution: Explicit `maxBuffer` Boundaries
+All `spawnSync` and `execSync` invocations must be explicitly bounded.
+
+#### Implementation Strategy (P-4)
+- [ ] P-4: **Add `maxBuffer` limits to all `spawnSync` calls.**
+  - Audit all MCP servers for `spawnSync` and `execSync`.
+  - Add `maxBuffer: 10 * 1024 * 1024` (10MB) to all options objects to prevent silent crashes, or an appropriate lower limit if the output is meant to be piped directly to the LLM.
+
+## 4. Unbounded `git grep` in `context-guardian-mcp`
+
+### The Problem
+Task E-155 correctly refactored `context-guardian-mcp`'s strict mode to use `git grep` instead of recursively loading files into Node's memory. However, the command does not cap the number of results. In a legacy codebase with thousands of `TODO` or `FIXME` markers, this will dump a massive list back to the LLM, causing a major token leak.
+
+### The Solution: Result Capping
+The output must be safely paginated or capped.
+
+#### Implementation Strategy (P-6)
+- [ ] P-6: **Add result bounding to the `git grep` call in `context-guardian-mcp`.**
+  - Pipe the `git grep` output through `head -n 100` or slice the array in JavaScript before returning the result.
+  - Append a warning to the output if the result set was truncated (e.g., `"...and X more unresolved markers found."`).

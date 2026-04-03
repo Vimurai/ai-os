@@ -43,3 +43,5 @@
 [CRITIC_STAMP] 2026-04-02 | [TIER_2] E-143: roleGuard in patch-mcp + propose-patch-mcp + check_role_access in context-guardian-mcp; 25/25 tests pass; no P0; ANTI_DRIFT_VIOLATION blocks Architect from src/; .ai/ and plans/ whitelisted — clear to commit
 [ARCH_AUDIT] 2026-04-02 | ARCH_AUDIT complete. Identified severe token burners and JIT violations across CLI prompts and agent Preflights. Added Sections 36/37 to architect.md and spawned E-144, E-145, E-146 to enforce JIT Token Economics. Blueprint is Aligned.
 [ARCH_AUDIT] 2026-04-03 | Identified memory and token burn flaws in MCP servers (archive-manager, context-invoker, context-guardian) causing full-file loads. E-153, E-154, E-155 spawned to enforce streaming and bounded reads.
+[CRITIC_STAMP] 2026-04-03 | [TIER_2] E-156+E-157: SQLite migration (WAL, auto-import, mtime sync) + fuzzy patch fallback; 334/336 tests pass; 2 pre-existing e140 failures unrelated; WARN flags are false positives (LOG.md gitignored, no new npm dep, test/package updates covered by task scope) — clear to commit
+[ARCH_AUDIT] 2026-04-03 | Blueprint aligned; Robustness tasks in flight; Git Identity P0 violation requires remediation task
