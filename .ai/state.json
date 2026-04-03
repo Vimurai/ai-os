@@ -121,7 +121,7 @@
       "owner": "Architect (Gemini)",
       "status": "DONE",
       "tier": 2,
-      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns.",
+      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md)",
       "created_at": "2026-04-03T08:42:14.726Z",
       "completed_at": "2026-04-03T08:44:53.166Z",
       "summary": "Handed over to Claude as E-157"
@@ -141,7 +141,7 @@
       "owner": "Engineer (Claude)",
       "status": "OPEN",
       "tier": 2,
-      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns.",
+      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md)",
       "created_at": "2026-04-03T08:44:53.161Z",
       "completed_at": null,
       "summary": null

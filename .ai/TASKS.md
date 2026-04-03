@@ -22,10 +22,10 @@
 - [x] E-155: Refactor `context-guardian-mcp` to use `git grep` or `ripgrep` via `child_process` when scanning `src/` for TODO/FIXME markers in `strict` mode, instead of recursively reading every source file completely into Node memory. Loading every file fully is a critical performance flaw and memory burner for large codebases. | Tier: 2
   Status: DONE 2026-04-03 — Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import
 - [ ] E-156: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2
-- [ ] E-157: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. | Tier: 2
+- [ ] E-157: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md) | Tier: 2
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2
   Status: DONE 2026-04-03 — Handed over to Claude as E-156
-- [x] P-2: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. | Tier: 2
+- [x] P-2: Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md) | Tier: 2
   Status: DONE 2026-04-03 — Handed over to Claude as E-157
