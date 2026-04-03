@@ -185,6 +185,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       cwd,
       encoding: "utf8",
       timeout: 30000,
+      maxBuffer: 10 * 1024 * 1024,
     });
 
     if (result.error) {

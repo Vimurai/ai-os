@@ -27,7 +27,7 @@ function today() {
 }
 
 function gitRead(args, cwd) {
-  const r = spawnSync("git", args, { cwd, encoding: "utf8", timeout: 10000 });
+  const r = spawnSync("git", args, { cwd, encoding: "utf8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 });
   return r.error ? "" : (r.stdout || "");
 }
 

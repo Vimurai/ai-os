@@ -27,9 +27,12 @@
   Status: DONE 2026-04-03 — Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token
 - [x] E-158: Create and execute `scripts/remediate_git_identity.sh` to rewrite commit history and remove unauthorized AI co-author trailers. (See `.ai/blueprints/git-remediation.md`) | Tier: 2
   Status: DONE 2026-04-03 — Skipped by user — no action required
-- [ ] E-159: Add `maxBuffer` limits (e.g., `10 * 1024 * 1024`) to all `spawnSync` calls across all MCP servers (especially `github-bridge-mcp` and `lsp-mcp`) to prevent Node `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` crashes. (See `.ai/blueprints/robustness.md`) | Tier: 2
-- [ ] E-160: Add mandatory YAML frontmatter (`disable-model-invocation`, `user-invocable`, `allowed-tools`) to all Gemini sub-agents in `src/gemini/agents/` to fix `verification-mcp` compliance failures. (See `.ai/blueprints/agents.md`) | Tier: 2
-- [ ] E-161: Add result bounding (e.g., `| head -n 100`) to the `git grep` call in `context-guardian-mcp` to prevent token leakage on massive codebases. (See `.ai/blueprints/robustness.md`) | Tier: 2
+- [x] E-159: Add `maxBuffer` limits (e.g., `10 * 1024 * 1024`) to all `spawnSync` calls across all MCP servers (especially `github-bridge-mcp` and `lsp-mcp`) to prevent Node `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` crashes. (See `.ai/blueprints/robustness.md`) | Tier: 2
+  Status: DONE 2026-04-03 — Added maxBuffer 10MB to all spawnSync calls: lsp-mcp, github-bridge-mcp, propose-patch-mcp, archive-manager-mcp, orchestrator-mcp, context-guardian-mcp
+- [x] E-160: Add mandatory YAML frontmatter (`disable-model-invocation`, `user-invocable`, `allowed-tools`) to all Gemini sub-agents in `src/gemini/agents/` to fix `verification-mcp` compliance failures. (See `.ai/blueprints/agents.md`) | Tier: 2
+  Status: DONE 2026-04-03 — Added disable-model-invocation, user-invocable, and allowed-tools frontmatter to all 6 Gemini sub-agents: digest_updater, docs-architect, gemini_tasks, knowledge_architect, memory_curator, ux_reviewer. Tools scoped per least-privilege per agent role.
+- [x] E-161: Add result bounding (e.g., `| head -n 100`) to the `git grep` call in `context-guardian-mcp` to prevent token leakage on massive codebases. (See `.ai/blueprints/robustness.md`) | Tier: 2
+  Status: DONE 2026-04-03 — Added result bounding to git grep output in context-guardian-mcp via .slice(0, 100) on the split lines array; also added maxBuffer: 10 * 1024 * 1024 to the same spawnSync call (covered by E-159).
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

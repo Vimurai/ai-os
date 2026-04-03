@@ -43,6 +43,7 @@ function gh(subcommand, args = []) {
   const result = spawnSync("gh", [subcommand, ...args], {
     encoding: "utf8",
     timeout: GH_TIMEOUT,
+    maxBuffer: 10 * 1024 * 1024,
   });
   const ok = !result.error && result.status === 0;
   return { ok, stdout: result.stdout || "", stderr: result.stderr || "", status: result.status };
@@ -156,7 +157,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (name) {
     // ── check_gh_auth ─────────────────────────────────────────────────────────
     case "check_gh_auth": {
-      const version = spawnSync("gh", ["--version"], { encoding: "utf8", timeout: 5000 });
+      const version = spawnSync("gh", ["--version"], { encoding: "utf8", timeout: 5000, maxBuffer: 10 * 1024 * 1024 });
       if (version.error || version.status !== 0) {
         return {
           content: [{

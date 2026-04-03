@@ -216,10 +216,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // git grep avoids loading every source file into Node memory
       const grepResult = spawnSync(
         "git", ["grep", "-n", "-E", "\\b(TODO|FIXME|HACK|XXX)\\b", "--", "src/"],
-        { cwd, encoding: "utf8", timeout: 10000 }
+        { cwd, encoding: "utf8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 }
       );
       if (!grepResult.error && grepResult.stdout) {
-        for (const line of grepResult.stdout.split("\n").filter(Boolean)) {
+        for (const line of grepResult.stdout.split("\n").filter(Boolean).slice(0, 100)) {
           const colon1 = line.indexOf(":");
           const colon2 = line.indexOf(":", colon1 + 1);
           if (colon1 === -1 || colon2 === -1) continue;

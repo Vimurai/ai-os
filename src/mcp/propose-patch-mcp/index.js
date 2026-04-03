@@ -88,6 +88,7 @@ function formatDiff(diffContent, absPath) {
     input: diffContent,
     encoding: "utf8",
     timeout: 5000,
+    maxBuffer: 10 * 1024 * 1024,
   });
   if (!delta.error && delta.status === 0 && delta.stdout?.trim()) {
     return delta.stdout;
@@ -99,6 +100,7 @@ function formatDiff(diffContent, absPath) {
       input: diffContent,
       encoding: "utf8",
       timeout: 5000,
+      maxBuffer: 10 * 1024 * 1024,
     });
     // diff exits 1 when files differ (that's expected), 2 on error
     if (diffResult.status !== 2 && diffResult.stdout?.trim()) {
@@ -282,6 +284,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             input: patch.diff_content,
             encoding: "utf8",
             timeout: 10000,
+            maxBuffer: 10 * 1024 * 1024,
           });
           if (result.status !== 0) {
             return {

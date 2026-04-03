@@ -282,6 +282,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         cwd: targetPath,
         encoding: "utf8",
         timeout: 30000,
+        maxBuffer: 10 * 1024 * 1024,
       });
 
       const output = (tscResult.stdout || "") + (tscResult.stderr || "");
