@@ -86,10 +86,3 @@ process.stdout.write((r1 !== null && r2 === null && r3 === null) ? 'ok' : 'fail'
 assert_contains "context-invoker-mcp: path traversal rejected" "ok" "$validation_result"
 
 assert_summary
-name');
-const r3 = validateName('ai_update');
-process.stdout.write((r1 !== null && r2 === null && r3 === null) ? 'ok' : 'fail');
-" 2>/dev/null || echo "error")
-assert_contains "context-invoker-mcp: path traversal rejected" "ok" "$validation_result"
-
-assert_summary
