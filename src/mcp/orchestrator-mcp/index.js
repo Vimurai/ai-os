@@ -12,7 +12,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
 import { readStateStrict, writeState } from "../shared/state-writer.js";
@@ -20,6 +20,22 @@ import { readStateStrict, writeState } from "../shared/state-writer.js";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readSafe(p) {
   try { return existsSync(p) ? readFileSync(p, "utf8") : ""; } catch { return ""; }
+}
+
+// Read at most maxLines lines without loading the entire file into memory (P-10)
+function readBoundedLines(p, maxLines) {
+  if (!existsSync(p)) return "";
+  try {
+    const fd = openSync(p, "r");
+    const buf = Buffer.alloc(maxLines * 250); // generous estimate per line
+    const bytesRead = readSync(fd, buf, 0, buf.length, 0);
+    closeSync(fd);
+    const text = buf.toString("utf8", 0, bytesRead);
+    const lines = text.split("\n");
+    return lines.length > maxLines
+      ? lines.slice(0, maxLines).join("\n") + "\n... (truncated)"
+      : text;
+  } catch { return ""; }
 }
 
 function today() {
@@ -115,14 +131,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const sections = [];
       for (const f of files) {
-        const content = readSafe(f.path);
+        const content = readBoundedLines(f.path, 80);
         if (content.trim()) {
-          // For large files, truncate to keep context manageable
-          const lines = content.split("\n");
-          const truncated = lines.length > 80
-            ? lines.slice(0, 80).join("\n") + `\n... (${lines.length - 80} more lines)`
-            : content;
-          sections.push(`## ${f.name}\n${truncated}`);
+          sections.push(`## ${f.name}\n${content}`);
         } else {
           sections.push(`## ${f.name}\n(empty)`);
         }
@@ -234,7 +245,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // 3. Generate implementation delta and save to state.json (P-42 §29)
       const diff = getDiff(cwd);
       if (diff.trim()) {
-        // Read blueprint section for comparison
+        // Read blueprint section for comparison — search root architect.md first,
+        // then fall back to .ai/blueprints/*.md (P-11, post E-151 fragmentation)
         const archPath = resolve(ai, "architect.md");
         let bpSection = "";
         if (existsSync(archPath)) {
@@ -247,6 +259,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               before !== -1 ? before : Math.max(0, idx - 500),
               after !== -1 ? after : Math.min(arch.length, idx + 2000)
             );
+          }
+        }
+        if (!bpSection) {
+          const bpDir = resolve(ai, "blueprints");
+          if (existsSync(bpDir)) {
+            for (const file of readdirSync(bpDir).filter(f => f.endsWith(".md"))) {
+              const bpContent = readSafe(resolve(bpDir, file));
+              const idx = bpContent.indexOf(taskId);
+              if (idx !== -1) {
+                const before = bpContent.lastIndexOf("\n## ", idx);
+                const after = bpContent.indexOf("\n## ", idx + 1);
+                bpSection = bpContent.slice(
+                  before !== -1 ? before : Math.max(0, idx - 500),
+                  after !== -1 ? after : Math.min(bpContent.length, idx + 2000)
+                );
+                break;
+              }
+            }
           }
         }
 

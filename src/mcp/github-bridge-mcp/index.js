@@ -264,7 +264,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         issue.assignees?.length ? `Assignees: ${issue.assignees.map(a => a.login).join(", ")}` : "",
         "",
         "### Description",
-        issue.body || "(no description)",
+        issue.body ? (issue.body.length > 5000 ? issue.body.slice(0, 5000) + "\n... (truncated)" : issue.body) : "(no description)",
       ].filter(l => l !== null);
 
       if (issue.comments?.length) {

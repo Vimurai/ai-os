@@ -17,13 +17,24 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve, join } from "path";
 
 const STORE_DIR  = resolve(process.env.HOME || "~", ".ai-os", "memory");
 const STORE_FILE = join(STORE_DIR, "signatures.json");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function readHead(filePath, headBytes = 4096) {
+  const fd = openSync(filePath, "r");
+  try {
+    const buf = Buffer.alloc(headBytes);
+    const bytesRead = readSync(fd, buf, 0, headBytes, 0);
+    return buf.toString("utf8", 0, bytesRead);
+  } finally {
+    closeSync(fd);
+  }
+}
 
 function readStore() {
   try {
@@ -140,7 +151,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       try {
         const archPath = resolve(process.cwd(), ".ai", "architect.md");
         if (existsSync(archPath)) {
-          const firstLine = readFileSync(archPath, "utf8").split("\n")[0] || "";
+          const firstLine = readHead(archPath).split("\n")[0] || "";
           if (firstLine.startsWith("# ")) sig.architect_v = sanitize(firstLine.slice(2).trim(), 100);
         }
       } catch { /* silent */ }

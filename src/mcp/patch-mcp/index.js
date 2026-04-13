@@ -22,7 +22,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, statSync } from "fs";
 import { resolve, relative } from "path";
 import { createHash } from "crypto";
 
@@ -162,6 +162,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!existsSync(abs)) {
         return {
           content: [{ type: "text", text: `✗ File not found: ${abs}` }],
+          isError: true,
+        };
+      }
+
+      const fileSize = statSync(abs).size;
+      if (fileSize > 5 * 1024 * 1024) {
+        return {
+          content: [{ type: "text", text: `[FILE_TOO_LARGE] File exceeds 5MB limit (${(fileSize / 1024 / 1024).toFixed(1)}MB): ${abs}\nUse a different tool or strategy for large files.` }],
           isError: true,
         };
       }

@@ -99,8 +99,11 @@ function generateDelta(taskId, diff, blueprintSection) {
   // Extract changed files from diff
   const changedFiles = [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m => m[1]);
 
-  // Extract added functions/classes/exports
-  const addedLines = diff.split("\n").filter(l => l.startsWith("+") && !l.startsWith("+++"));
+  // Extract added functions/classes/exports (iterative regex avoids full array split on large diffs)
+  const addedLines = [];
+  const addedRe = /^\+(?!\+\+).*$/gm;
+  let am;
+  while ((am = addedRe.exec(diff)) !== null) addedLines.push(am[0]);
   const newFunctions = addedLines
     .filter(l => /^\+\s*(function|const|export|class|async)\s+\w+/i.test(l))
     .map(l => l.replace(/^\+\s*/, "").trim().slice(0, 80))
