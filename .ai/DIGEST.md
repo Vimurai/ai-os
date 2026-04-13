@@ -7,12 +7,12 @@
 - Bash (zero-dependency CLI core), Node.js (MCP servers), SQLite (task-synchronizer-mcp WAL + token-budget-mcp), Playwright (vibe-check-mcp), file-based markdown memory.
 
 ## Triad Health
-- Architect (Gemini): IDLE — P-1 (SQLite migration) + P-2 (fuzzy patch) DONE 2026-04-03; no open P-## tasks
-- Engineer (Claude): IDLE — last completed E-157 (fuzzy-patching fallback in patch-mcp, 2026-04-03); no open E-## tasks
+- Architect (Gemini): IDLE — all P-## tasks through P-12 DONE; no open P-## tasks
+- Engineer (Claude): IDLE — last completed E-161 (context-guardian git grep result bounding); all E-## tasks closed; P-7 through P-12 completed
 - Tester (TestSprite): Active — 334/336 tests pass; 2 pre-existing e140 failures (non-regression)
 
 ## Current Focus
-- All tasks complete — sprint E-144–E-157 (token economics, SQLite migration, fuzzy patch) fully closed
+- All tasks complete — full sprint E-146–E-161 + P-7–P-12 (robustness, SQLite, fuzzy patch, spawnSync, frontmatter) closed
 - No open E-## or P-## tasks; system in idle/ready state
 - Next sprint pending Gemini Architect direction
 
@@ -38,15 +38,13 @@
 - lsp-mcp, patch-mcp, token-budget-mcp, propose-patch-mcp, github-bridge-mcp
 
 ## Recent Changes (last 10)
+- 2026-04-13: P-12 patch-mcp: statSync 5MB size guard added before readFileSync (src/mcp/patch-mcp/)
+- 2026-04-13: P-11 orchestrator-mcp: run_handover scans .ai/blueprints/*.md as fallback (src/mcp/orchestrator-mcp/)
+- 2026-04-13: P-10 orchestrator-mcp: readBoundedLines() helper replaces readFileSync+split+slice (src/mcp/orchestrator-mcp/)
+- 2026-04-13: P-9 blueprint-aligner-mcp: generateDelta uses iterative regex instead of split("\n") (src/mcp/blueprint-aligner-mcp/)
+- 2026-04-13: P-8 memory-manager-mcp: readHead() helper replaces full readFileSync in export_signature (src/mcp/memory-manager-mcp/)
+- 2026-04-13: P-7 github-bridge-mcp: issue.body bounded to 5000 chars in get_issue (src/mcp/github-bridge-mcp/)
+- 2026-04-03: E-161 context-guardian-mcp: git grep output bounded via .slice(0,100) (src/mcp/context-guardian-mcp/)
+- 2026-04-03: E-160 Gemini sub-agents: YAML frontmatter (disable-model-invocation, user-invocable, allowed-tools) added to all 6 agents (src/gemini/agents/)
+- 2026-04-03: E-159 spawnSync maxBuffer 10MB added across all MCP servers (src/mcp/)
 - 2026-04-03: E-157 patch-mcp: fuzzy-patch fallback on MD5 mismatch — single-match apply + [PATCH_APPLIED_WITH_DRIFT] (src/mcp/patch-mcp/)
-- 2026-04-03: E-156 task-synchronizer-mcp: SQLite WAL migration; auto-import state.json; mtime sync guard (src/mcp/task-synchronizer-mcp/)
-- 2026-04-03: E-155 context-guardian-mcp strict: git grep via spawnSync replaces scanDir+readFileSync (src/mcp/context-guardian-mcp/)
-- 2026-04-03: E-154 context-invoker-mcp: readHead() 4KB bounded; frontmatter parsed without full file load (src/mcp/context-invoker-mcp/)
-- 2026-04-03: E-153 archive-manager-mcp: readline streams replace readFileSync+split for line/word counts (src/mcp/archive-manager-mcp/)
-- 2026-04-03: E-152 Metadata-Only Sync — list_skills/list_agents added to context-invoker-mcp (src/bin/ai)
-- 2026-04-03: E-151 Architectural Fragmentation — 5 domain blueprints in .ai/blueprints/ (.ai/)
-- 2026-04-03: E-150 Added AIS Fresh Conversations rule + 6-file JIT limit (src/templates/RULES.md)
-- 2026-04-03: E-149 UPDATE.md purged from orchestrator-mcp, task-synchronizer-mcp, github-bridge-mcp (src/mcp/)
-- 2026-04-03: E-148 do_update() refactored — inline intent, JIT DIGEST refresh, no UPDATE.md (src/bin/ai)
-- 2026-04-09: auto-stamped by Stop hook
-- 2026-04-13: auto-stamped by Stop hook
