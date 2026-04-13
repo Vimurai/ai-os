@@ -67,6 +67,30 @@
   Status: DONE 2026-04-13 — Added withTransaction(db, callback) helper to state-db.js (BEGIN/COMMIT/ROLLBACK); refactored orchestrator-mcp run_handover to wrap task status update and delta/meta multi-table writes in separate transactions for ACID integrity
 - [x] P-23: Make `vibe-check-mcp` timeouts configurable via an optional `timeout_ms` parameter to prevent false positives on slow local servers. (See `.ai/blueprints/robustness_phase3.md` section 4) | Tier: 2
   Status: DONE 2026-04-13 — Made vibe-check-mcp timeouts configurable — added optional timeout_ms parameter (default 15000) to run_vibe_audit and run_chaos_test tool schemas; passed through to page.goto() to prevent false positives on slow local servers
+- [x] P-24: Migrate `propose-patch-mcp` to SQLite persistence. Add a `patches` table to `state-db.js` and refactor the MCP server to use it, replacing the race-prone `patches.json`. (See `.ai/blueprints/robustness_phase4.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Migrated propose-patch-mcp from patches.json to SQLite patches table in state-db.js schema
+- [x] P-25: Implement a research-command whitelist in `safe-exec-mcp` to prevent greedy secret detection from blocking benign commands like `grep`, `find`, and `ls`. (See `.ai/blueprints/robustness_phase4.md` section 2) | Tier: 2
+  Status: DONE 2026-04-13 — Added RESEARCH_CMDS whitelist to safe-exec-mcp to prevent false-positive secret detection on read-only commands
+- [x] P-26: Refactor `run_handover` in `orchestrator-mcp` to wrap both the task status update and the implementation delta write in a single unified `withTransaction` block for ACID integrity. (See `.ai/blueprints/robustness_phase4.md` section 3) | Tier: 2
+  Status: DONE 2026-04-13 — Unified run_handover into single withTransaction covering task DONE + delta insert + meta updates; removed dead blueprint scan code
+- [x] P-27: Remove the redundant `_syncFromJsonIfNewer` logic from `task-synchronizer-mcp` to eliminate unnecessary I/O overhead on every tool call. (See `.ai/blueprints/robustness_phase4.md` section 4) | Tier: 2
+  Status: DONE 2026-04-13 — Removed _syncFromJsonIfNewer from task-synchronizer-mcp; SQLite is sole source of truth
+- [x] P-28: Improve SQLite error visibility in `orchestrator-mcp`'s `run_preflight` by replacing the empty `catch` block with explicit error logging to `stderr`. (See `.ai/blueprints/robustness_phase4.md` section 5) | Tier: 2
+  Status: DONE 2026-04-13 — Replaced empty catch in run_preflight with stderr warning log for SQLite errors
+- [x] P-29: Refactor `context-guardian-mcp` to use SQLite for health checks. Replace the expensive `TASKS.md` parsing in `check_workspace` with direct SQL queries via `state-db.js`. (See `.ai/blueprints/robustness_phase5.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Replaced TASKS.md string parsing in context-guardian-mcp with SQLite query for open task detection
+- [x] P-30: Harden `pre-commit.sh` with SQLite checks. Use the `sqlite3` CLI to verify task consistency and remove the redundant comparison between generated markdown views and `state.json`. (See `.ai/blueprints/robustness_phase5.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Replaced python3+state.json task/stamp count in pre-commit.sh with sqlite3 CLI queries
+- [x] P-31: Standardize all system skills (`ai-archive`, `ai-test`, etc.) to use the `get_state` tool instead of `grep` patterns on `TASKS.md`. (See `.ai/blueprints/robustness_phase5.md` section 1) | Tier: 1
+  Status: DONE 2026-04-13 — Updated ai-archive, ai-test, ai-digest skills to use sqlite3 queries instead of grep TASKS.md patterns
+- [x] P-32: Remove the `grep TASKS.md` fallback from `post-tool-log.sh`. Make `sqlite3` the exclusive source of truth for logic checks in system hooks. (See `.ai/blueprints/robustness_phase5.md` section 2) | Tier: 2
+  Status: DONE 2026-04-13 — Removed grep TASKS.md fallback from post-tool-log.sh; added [MISSING_DEP] warning when sqlite3 unavailable
+- [x] P-33: Port the `task_validator` agent to SQLite. Update its instructions to use `get_state` instead of loading the full `TASKS.md` into context. (See `.ai/blueprints/robustness_phase5.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Updated task_validator agent to use get_state() via task-synchronizer-mcp with TASKS.md fallback
+- [ ] P-34: Restore mandatory YAML frontmatter to all 6 Gemini sub-agents in `src/gemini/agents/`. Authorize specific toolsets per agent role to satisfy `verification-mcp` compliance. (See `.ai/blueprints/robustness_phase6.md` section 1) | Tier: 2
+- [ ] P-35: Align `CAPABILITIES.md` with current SQLite paths. Add explicit READ/WRITE permissions for `~/.ai-os/*.sqlite` and READ for the config registry to prevent `ai-exec` warnings. (See `.ai/blueprints/robustness_phase6.md` section 2) | Tier: 1
+- [ ] P-36: Audit MCP servers (`vibe-check-mcp`, `lsp-mcp`, `task-synchronizer-mcp`) for resource leaks. Ensure all external process handles and database connections are closed in `finally` blocks. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
+- [ ] P-37: Harden the installer and `ai install` logic. Ensure path injection is idempotent and implement a more dynamic strategy for cleaning up deprecated v2 configuration files. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

@@ -60,6 +60,15 @@ export function getDb(aiDir) {
       read       INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS patches (
+      id           TEXT PRIMARY KEY,
+      path         TEXT NOT NULL,
+      diff_content TEXT NOT NULL,
+      description  TEXT,
+      caller_role  TEXT,
+      created_at   TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending'
+    );
     INSERT OR IGNORE INTO meta(key, value) VALUES ('version', '1.0');
     INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale', 'false');
     INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale_reason', '');

@@ -15,7 +15,7 @@ This skill can only be triggered explicitly by the user. The agent cannot invoke
 
 ## Dynamic Context Injection
 Current .ai/ file sizes: !wc -l .ai/LOG.md .ai/REVIEWS.md .ai/SESSION.md .ai/COMM.md 2>/dev/null || echo "(files not found)"
-Open tasks (guardian check): !grep -c "^- \[ \]" .ai/TASKS.md 2>/dev/null || echo "0"
+Open tasks (guardian check): !sqlite3 .ai/state.sqlite "SELECT COUNT(*) FROM tasks WHERE status='OPEN'" 2>/dev/null || echo "0"
 
 ## Pre-Archive Guard (context-guardian-mcp)
 

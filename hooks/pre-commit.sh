@@ -36,9 +36,9 @@ has_recent_critic_stamp() {
 
 # ── E-96: Markdown-as-Read-Only sync check (BLOCKING) ────────────────────────
 check_markdown_sync() {
-  local STATE_FILE="${AI_DIR}/state.json"
+  local SQLITE_FILE="${AI_DIR}/state.sqlite"
   local TASKS_FILE="${AI_DIR}/TASKS.md"
-  [[ -f "$STATE_FILE" && -f "$TASKS_FILE" ]] || return 0  # skip if files missing
+  [[ -f "$TASKS_FILE" ]] || return 0  # skip if TASKS.md missing
 
   # Check 1: Verify TASKS.md has the generated header (indicates it wasn't hand-edited)
   if ! head -1 "$TASKS_FILE" 2>/dev/null | grep -q "Generated from state.json"; then
@@ -58,25 +58,11 @@ SYNC_BLOCK
     exit 1
   fi
 
-  # Check 2: Compare task count in state.json vs TASKS.md checkbox lines
-  if command -v python3 &>/dev/null; then
+  # Check 2: Compare task count in state.sqlite vs TASKS.md checkbox lines (P-30)
+  if [[ -f "$SQLITE_FILE" ]] && command -v sqlite3 &>/dev/null; then
     local STATE_COUNT TASKS_COUNT STATE_STAMPS
-    STATE_COUNT=$(python3 -c "
-import json, sys
-try:
-    s = json.load(open('${STATE_FILE}'))
-    print(len(s.get('tasks', [])))
-except Exception as e:
-    print(0)
-" 2>/dev/null || echo 0)
-    STATE_STAMPS=$(python3 -c "
-import json, sys
-try:
-    s = json.load(open('${STATE_FILE}'))
-    print(len(s.get('stamps', [])))
-except Exception as e:
-    print(0)
-" 2>/dev/null || echo 0)
+    STATE_COUNT=$(sqlite3 "$SQLITE_FILE" "SELECT COUNT(*) FROM tasks" 2>/dev/null || echo 0)
+    STATE_STAMPS=$(sqlite3 "$SQLITE_FILE" "SELECT COUNT(*) FROM stamps" 2>/dev/null || echo 0)
     TASKS_COUNT=$(grep -c '^\- \[' "$TASKS_FILE" 2>/dev/null || echo 0)
 
     local DRIFT=$(( STATE_COUNT - TASKS_COUNT ))

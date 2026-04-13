@@ -106,13 +106,13 @@ LOG_LINE_COUNT=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
 ARCHIVE_THRESHOLD=200
 
 if (( LOG_LINE_COUNT >= ARCHIVE_THRESHOLD )); then
-  # Use sqlite3 for open task count when available (P-18 — reads primary store, not TASKS.md view)
+  # sqlite3 is the mandatory source of truth for open task count (P-32 — no TASKS.md fallback)
   OPEN_TASKS=0
   SQLITE_FILE="${AI_DIR}/state.sqlite"
   if [[ -f "$SQLITE_FILE" ]] && command -v sqlite3 &>/dev/null; then
     OPEN_TASKS=$(sqlite3 "$SQLITE_FILE" "SELECT COUNT(*) FROM tasks WHERE status='OPEN'" 2>/dev/null || echo 0)
-  elif [[ -f "${AI_DIR}/TASKS.md" ]]; then
-    OPEN_TASKS=$(grep -c "^- \[ \]" "${AI_DIR}/TASKS.md" 2>/dev/null || echo 0)
+  else
+    printf "[MISSING_DEP] sqlite3 not found — cannot check open task count for auto-archive trigger\n" >&2
   fi
   OPEN_TASKS="${OPEN_TASKS:-0}"
 

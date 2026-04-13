@@ -277,19 +277,16 @@ else
   _pass "P-10: short file test skipped"
 fi
 
-# ── P-11: blueprints/*.md fallback scan in orchestrator-mcp run_handover ───────
+# ── P-11: blueprints/*.md pointer in orchestrator-mcp run_preflight ──────────
+# Note: the run_handover blueprint scan was removed in P-26 (dead code cleanup —
+# bpSection was computed but never stored or returned). The blueprints/ domain
+# is still surfaced to agents via the run_preflight pointer.
 
-assert_contains "P-11: blueprints directory scan in run_handover" \
+assert_contains "P-11: blueprints pointer in run_preflight" \
   "blueprints" "$ORCH"
 
-assert_contains "P-11: readdirSync used for blueprint scan" \
-  "readdirSync" "$ORCH"
-
-assert_contains "P-11: .md filter on blueprint files" \
+assert_contains "P-11: .md filter present in run_review" \
   ".endsWith(\".md\")" "$ORCH"
-
-assert_contains "P-11: fallback triggered when bpSection is empty" \
-  "if (!bpSection)" "$ORCH"
 
 if command -v node &>/dev/null; then
   TMPDIR_P11=$(mktemp -d)

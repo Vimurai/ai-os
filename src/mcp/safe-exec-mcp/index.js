@@ -20,6 +20,17 @@ const server = new Server(
 
 // ── Risk rule definitions ─────────────────────────────────────────────────────
 
+// Commands that are inherently read-only — bypass SECRET_IN_COMMAND to prevent
+// false positives on research patterns like `grep token file` (P-25).
+const RESEARCH_CMDS = new Set(["grep", "rg", "ls", "find", "cat", "head", "tail", "wc", "stat", "file"]);
+
+function isResearchCmd(raw) {
+  const first = raw.trimStart().split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (RESEARCH_CMDS.has(first)) return true;
+  if (/^git\s+(log|diff|status|show|blame|branch|remote|fetch)\b/.test(raw.trim())) return true;
+  return false;
+}
+
 const BLOCK_RULES = [
   {
     id: "RM_RF_ROOT",
@@ -48,7 +59,7 @@ const BLOCK_RULES = [
   },
   {
     id: "SECRET_IN_COMMAND",
-    pattern: (tokens, raw) => /\b(password|passwd|secret|api.?key|token)(\s*=\s*|\s+)\S{4,}/i.test(raw),
+    pattern: (tokens, raw) => !isResearchCmd(raw) && /\b(password|passwd|secret|api.?key|token)(\s*=\s*|\s+)\S{4,}/i.test(raw),
     message: "Plaintext secret in command — BLOCKED (credential exposure risk)",
   },
 ];

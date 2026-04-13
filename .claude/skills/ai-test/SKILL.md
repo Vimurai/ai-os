@@ -12,7 +12,7 @@ agent: default
 
 ## Dynamic Context Injection
 Test framework: !cat package.json 2>/dev/null | grep -E '"(test|dev|start)"' | head -5 || echo "(no package.json)"
-Open tasks requiring tests: !grep -n "E-[0-9]" .ai/TASKS.md 2>/dev/null | grep -v "\[x\]" | head -5 || echo "(all tasks complete)"
+Open tasks requiring tests: !sqlite3 .ai/state.sqlite "SELECT id, description FROM tasks WHERE status='OPEN' AND owner LIKE '%Claude%' LIMIT 5" 2>/dev/null || echo "(all tasks complete)"
 
 ## Standard Test Run (`ai test`)
 

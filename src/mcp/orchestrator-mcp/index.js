@@ -12,7 +12,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
 import { getDb, readState, regenerateViews, withTransaction } from "../shared/state-db.js";
@@ -194,7 +194,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             sections.push("\n**Architect**: Review these deltas. If any diverge from your blueprint, update architect.md.");
             regenerateViews(ai, db);
           }
-        } catch { /* ignore DB errors during preflight */ }
+        } catch (e) { process.stderr.write(`[WARN] run_preflight SQLite: ${e.message}\n`); }
       }
 
       // Stamp SESSION.md
@@ -225,7 +225,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const logPath = resolve(ai, "LOG.md");
       const results = [];
 
-      // 1. Mark task DONE in SQLite → regenerate views (P-14: SQLite-first)
+      // Unified transaction: task DONE + implementation delta + meta (P-26)
       const dbPath = resolve(ai, "state.sqlite");
       if (!existsSync(dbPath)) {
         results.push(`⚠ state.sqlite missing — run: ai init`);
@@ -238,87 +238,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           } else if (row.status === "DONE") {
             results.push(`⚠ ${taskId} already marked DONE`);
           } else {
+            // Gather diff data BEFORE the transaction (no I/O inside transactions)
+            const diff = getDiff(cwd);
+            const changedFiles = diff.trim()
+              ? [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m => m[1])
+              : [];
+            const deltaText = changedFiles.length > 0
+              ? `${taskId}: ${summary} | Files: ${changedFiles.slice(0, 5).join(", ")}`
+              : null;
+
             withTransaction(db, () => {
               db.prepare("UPDATE tasks SET status = 'DONE', completed_at = ?, summary = ? WHERE id = ?")
                 .run(new Date().toISOString(), summary, taskId);
+              if (deltaText) {
+                db.prepare("INSERT INTO deltas(task_id, summary, files, read) VALUES (?, ?, ?, 0)")
+                  .run(taskId, deltaText, JSON.stringify(changedFiles.slice(0, 10)));
+                db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale', 'true')").run();
+                db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale_reason', ?)")
+                  .run(`${taskId} marked DONE — ${summary}`);
+              }
             });
             regenerateViews(ai, db);
             results.push(`✓ ${taskId} marked DONE in state.sqlite (views regenerated)`);
+            if (deltaText) {
+              results.push(`✓ Implementation delta saved to state.sqlite`);
+              results.push(`✓ digest_stale=true set in state.sqlite (Reactive Memory §24)`);
+            }
           }
         } catch (e) {
           results.push(`⚠ SQLite error: ${e.message}`);
         }
       }
 
-      // 2. Append LOG entry
+      // Append LOG entry (outside transaction — file I/O)
       if (existsSync(logPath)) {
         const logEntry = `${today()} | Claude | ${taskId} | ${summary}\n`;
         appendFileSync(logPath, logEntry);
         results.push(`✓ LOG.md updated`);
       }
 
-      // 3. Generate implementation delta and save to state.json (P-42 §29)
-      const diff = getDiff(cwd);
-      if (diff.trim()) {
-        // Read blueprint section for comparison — search root architect.md first,
-        // then fall back to .ai/blueprints/*.md (P-11, post E-151 fragmentation)
-        const archPath = resolve(ai, "architect.md");
-        let bpSection = "";
-        if (existsSync(archPath)) {
-          const arch = readFileSync(archPath, "utf8");
-          const idx = arch.indexOf(taskId);
-          if (idx !== -1) {
-            const before = arch.lastIndexOf("\n## ", idx);
-            const after = arch.indexOf("\n## ", idx + 1);
-            bpSection = arch.slice(
-              before !== -1 ? before : Math.max(0, idx - 500),
-              after !== -1 ? after : Math.min(arch.length, idx + 2000)
-            );
-          }
-        }
-        if (!bpSection) {
-          const bpDir = resolve(ai, "blueprints");
-          if (existsSync(bpDir)) {
-            for (const file of readdirSync(bpDir).filter(f => f.endsWith(".md"))) {
-              const bpContent = readSafe(resolve(bpDir, file));
-              const idx = bpContent.indexOf(taskId);
-              if (idx !== -1) {
-                const before = bpContent.lastIndexOf("\n## ", idx);
-                const after = bpContent.indexOf("\n## ", idx + 1);
-                bpSection = bpContent.slice(
-                  before !== -1 ? before : Math.max(0, idx - 500),
-                  after !== -1 ? after : Math.min(bpContent.length, idx + 2000)
-                );
-                break;
-              }
-            }
-          }
-        }
-
-        // Save delta + set digest_stale directly in SQLite (P-14)
-        const changedFiles = [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m => m[1]);
-        const deltaText = `${taskId}: ${summary} | Files: ${changedFiles.slice(0, 5).join(", ")}`;
-
-        if (existsSync(resolve(ai, "state.sqlite"))) {
-          try {
-            const db = getDb(ai);
-            withTransaction(db, () => {
-              db.prepare(
-                "INSERT INTO deltas(task_id, summary, files, read) VALUES (?, ?, ?, 0)"
-              ).run(taskId, deltaText, JSON.stringify(changedFiles.slice(0, 10)));
-              db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale', 'true')").run();
-              db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale_reason', ?)").run(`${taskId} marked DONE — ${summary}`);
-            });
-            regenerateViews(ai, db);
-            results.push(`✓ Implementation delta saved to state.sqlite`);
-            results.push(`✓ digest_stale=true set in state.sqlite (Reactive Memory §24)`);
-          } catch (e) {
-            results.push(`⚠ Could not save delta: ${e.message}`);
-          }
-        }
-      }
-
-      // 5. Return digest prompt
       results.push("");
       results.push(
         "## Reactive Memory — DIGEST Update Required\n" +

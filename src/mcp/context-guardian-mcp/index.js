@@ -13,6 +13,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, existsSync } from "fs";
 import { resolve, relative, extname } from "path";
 import { spawnSync } from "child_process";
+import { getDb } from "../shared/state-db.js";
 
 const server = new Server(
   { name: "context-guardian-mcp", version: "1.0.0" },
@@ -121,39 +122,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   const issues = [];
 
-  // ── Check TASKS.md for open [ ] tasks ──────────────────────────────────────
-  const tasksPath = resolve(aiDir, "TASKS.md");
-  if (existsSync(tasksPath)) {
-    const content = readFileSync(tasksPath, "utf8");
-    const openTasks = content
-      .split("\n")
-      .filter((l) => /^- \[ \]/.test(l))
-      .map((l) => l.trim());
+  // ── Check SQLite for open tasks (P-29 — no TASKS.md parsing) ─────────────
+  const dbPath = resolve(aiDir, "state.sqlite");
+  if (existsSync(dbPath)) {
+    try {
+      const db = getDb(aiDir);
+      const openTasks = db.prepare(
+        "SELECT id, description FROM tasks WHERE status='OPEN' ORDER BY rowid"
+      ).all();
 
-    if (openTasks.length > 0) {
-      issues.push({
-        source: ".ai/TASKS.md",
-        type: "OPEN_TASKS",
-        severity: "DIRTY",
-        items: openTasks.slice(0, 10),
-        message: `${openTasks.length} uncompleted task(s) in TASKS.md`,
-      });
-    }
-
-    // Check for "Pending" status lines
-    const pendingLines = content
-      .split("\n")
-      .filter((l) => /Status:\s*(Pending|pending)/.test(l))
-      .map((l) => l.trim());
-
-    if (pendingLines.length > 0) {
-      issues.push({
-        source: ".ai/TASKS.md",
-        type: "PENDING_STATUS",
-        severity: "WARN",
-        items: pendingLines.slice(0, 5),
-        message: `${pendingLines.length} task(s) with Pending status`,
-      });
+      if (openTasks.length > 0) {
+        issues.push({
+          source: "state.sqlite",
+          type: "OPEN_TASKS",
+          severity: "DIRTY",
+          items: openTasks.slice(0, 10).map(t => `- [ ] ${t.id}: ${t.description?.slice(0, 80)}`),
+          message: `${openTasks.length} uncompleted task(s) in state`,
+        });
+      }
+    } catch (e) {
+      process.stderr.write(`[WARN] context-guardian check_workspace SQLite: ${e.message}\n`);
     }
   }
 

@@ -395,6 +395,146 @@
       "created_at": "2026-04-13T13:34:40.889Z",
       "completed_at": "2026-04-13T13:53:17.004Z",
       "summary": "Made vibe-check-mcp timeouts configurable — added optional timeout_ms parameter (default 15000) to run_vibe_audit and run_chaos_test tool schemas; passed through to page.goto() to prevent false positives on slow local servers"
+    },
+    {
+      "id": "P-24",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Migrate `propose-patch-mcp` to SQLite persistence. Add a `patches` table to `state-db.js` and refactor the MCP server to use it, replacing the race-prone `patches.json`. (See `.ai/blueprints/robustness_phase4.md` section 1)",
+      "created_at": "2026-04-13T13:58:33.125Z",
+      "completed_at": "2026-04-13T14:15:12.474Z",
+      "summary": "Migrated propose-patch-mcp from patches.json to SQLite patches table in state-db.js schema"
+    },
+    {
+      "id": "P-25",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement a research-command whitelist in `safe-exec-mcp` to prevent greedy secret detection from blocking benign commands like `grep`, `find`, and `ls`. (See `.ai/blueprints/robustness_phase4.md` section 2)",
+      "created_at": "2026-04-13T13:58:33.128Z",
+      "completed_at": "2026-04-13T14:15:13.628Z",
+      "summary": "Added RESEARCH_CMDS whitelist to safe-exec-mcp to prevent false-positive secret detection on read-only commands"
+    },
+    {
+      "id": "P-26",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `run_handover` in `orchestrator-mcp` to wrap both the task status update and the implementation delta write in a single unified `withTransaction` block for ACID integrity. (See `.ai/blueprints/robustness_phase4.md` section 3)",
+      "created_at": "2026-04-13T13:58:33.134Z",
+      "completed_at": "2026-04-13T14:15:15.435Z",
+      "summary": "Unified run_handover into single withTransaction covering task DONE + delta insert + meta updates; removed dead blueprint scan code"
+    },
+    {
+      "id": "P-27",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Remove the redundant `_syncFromJsonIfNewer` logic from `task-synchronizer-mcp` to eliminate unnecessary I/O overhead on every tool call. (See `.ai/blueprints/robustness_phase4.md` section 4)",
+      "created_at": "2026-04-13T13:58:33.136Z",
+      "completed_at": "2026-04-13T14:15:16.342Z",
+      "summary": "Removed _syncFromJsonIfNewer from task-synchronizer-mcp; SQLite is sole source of truth"
+    },
+    {
+      "id": "P-28",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Improve SQLite error visibility in `orchestrator-mcp`'s `run_preflight` by replacing the empty `catch` block with explicit error logging to `stderr`. (See `.ai/blueprints/robustness_phase4.md` section 5)",
+      "created_at": "2026-04-13T13:58:33.138Z",
+      "completed_at": "2026-04-13T14:15:17.416Z",
+      "summary": "Replaced empty catch in run_preflight with stderr warning log for SQLite errors"
+    },
+    {
+      "id": "P-29",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `context-guardian-mcp` to use SQLite for health checks. Replace the expensive `TASKS.md` parsing in `check_workspace` with direct SQL queries via `state-db.js`. (See `.ai/blueprints/robustness_phase5.md` section 1)",
+      "created_at": "2026-04-13T14:01:05.075Z",
+      "completed_at": "2026-04-13T14:15:18.271Z",
+      "summary": "Replaced TASKS.md string parsing in context-guardian-mcp with SQLite query for open task detection"
+    },
+    {
+      "id": "P-30",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Harden `pre-commit.sh` with SQLite checks. Use the `sqlite3` CLI to verify task consistency and remove the redundant comparison between generated markdown views and `state.json`. (See `.ai/blueprints/robustness_phase5.md` section 1)",
+      "created_at": "2026-04-13T14:01:05.078Z",
+      "completed_at": "2026-04-13T14:15:19.409Z",
+      "summary": "Replaced python3+state.json task/stamp count in pre-commit.sh with sqlite3 CLI queries"
+    },
+    {
+      "id": "P-31",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Standardize all system skills (`ai-archive`, `ai-test`, etc.) to use the `get_state` tool instead of `grep` patterns on `TASKS.md`. (See `.ai/blueprints/robustness_phase5.md` section 1)",
+      "created_at": "2026-04-13T14:01:05.081Z",
+      "completed_at": "2026-04-13T14:15:20.743Z",
+      "summary": "Updated ai-archive, ai-test, ai-digest skills to use sqlite3 queries instead of grep TASKS.md patterns"
+    },
+    {
+      "id": "P-32",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Remove the `grep TASKS.md` fallback from `post-tool-log.sh`. Make `sqlite3` the exclusive source of truth for logic checks in system hooks. (See `.ai/blueprints/robustness_phase5.md` section 2)",
+      "created_at": "2026-04-13T14:01:05.084Z",
+      "completed_at": "2026-04-13T14:15:21.858Z",
+      "summary": "Removed grep TASKS.md fallback from post-tool-log.sh; added [MISSING_DEP] warning when sqlite3 unavailable"
+    },
+    {
+      "id": "P-33",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Port the `task_validator` agent to SQLite. Update its instructions to use `get_state` instead of loading the full `TASKS.md` into context. (See `.ai/blueprints/robustness_phase5.md` section 1)",
+      "created_at": "2026-04-13T14:01:05.085Z",
+      "completed_at": "2026-04-13T14:15:23.093Z",
+      "summary": "Updated task_validator agent to use get_state() via task-synchronizer-mcp with TASKS.md fallback"
+    },
+    {
+      "id": "P-34",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Restore mandatory YAML frontmatter to all 6 Gemini sub-agents in `src/gemini/agents/`. Authorize specific toolsets per agent role to satisfy `verification-mcp` compliance. (See `.ai/blueprints/robustness_phase6.md` section 1)",
+      "created_at": "2026-04-13T14:14:52.288Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-35",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Align `CAPABILITIES.md` with current SQLite paths. Add explicit READ/WRITE permissions for `~/.ai-os/*.sqlite` and READ for the config registry to prevent `ai-exec` warnings. (See `.ai/blueprints/robustness_phase6.md` section 2)",
+      "created_at": "2026-04-13T14:14:52.292Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-36",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Audit MCP servers (`vibe-check-mcp`, `lsp-mcp`, `task-synchronizer-mcp`) for resource leaks. Ensure all external process handles and database connections are closed in `finally` blocks. (See `.ai/blueprints/robustness_phase6.md` section 3)",
+      "created_at": "2026-04-13T14:14:52.297Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-37",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Harden the installer and `ai install` logic. Ensure path injection is idempotent and implement a more dynamic strategy for cleaning up deprecated v2 configuration files. (See `.ai/blueprints/robustness_phase6.md` section 3)",
+      "created_at": "2026-04-13T14:14:52.299Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [

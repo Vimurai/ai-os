@@ -34,30 +34,17 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve, relative } from "path";
 import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
+import { getDb } from "../shared/state-db.js";
 
-// ── Patch store (disk-backed) ─────────────────────────────────────────────────
-// Persisted to .ai/patches.json so patches survive across CLI sessions (P-20).
-// Map<patch_id, { path, diff_content, description, created_at, status }>
+// ── Patch store (SQLite-backed via state-db.js, P-24) ─────────────────────────
+// Patches are stored in the `patches` table of state.sqlite.
+// This replaces the patches.json approach (P-20) for ACID-safe concurrent access.
 
-function getPatchesPath() {
-  return resolve(process.cwd(), ".ai", "patches.json");
-}
-
-function loadPatches() {
-  const p = getPatchesPath();
-  if (!existsSync(p)) return new Map();
-  try {
-    return new Map(Object.entries(JSON.parse(readFileSync(p, "utf8"))));
-  } catch { return new Map(); }
-}
-
-function savePatches(map) {
+function _patchDb() {
   const aiDir = resolve(process.cwd(), ".ai");
-  if (!existsSync(aiDir)) return; // not an AI-OS project
-  writeFileSync(getPatchesPath(), JSON.stringify(Object.fromEntries(map), null, 2), "utf8");
+  if (!existsSync(aiDir)) return null;
+  try { return getDb(aiDir); } catch { return null; }
 }
-
-const patches = loadPatches();
 
 function newPatchId() {
   return "patch-" + randomBytes(4).toString("hex");
@@ -256,6 +243,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const roleBlock = roleGuard(args.caller_role, abs, cwd);
       if (roleBlock) return roleBlock;
 
+      const db = _patchDb();
+      if (!db) {
+        return { content: [{ type: "text", text: "✗ state.sqlite not found — run: ai init" }], isError: true };
+      }
+
       const id = newPatchId();
       const patchData = {
         id,
@@ -266,8 +258,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         created_at: new Date().toISOString(),
         status: "pending",
       };
-      patches.set(id, patchData);
-      savePatches(patches);
+      db.prepare(
+        "INSERT INTO patches(id, path, diff_content, description, caller_role, created_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')"
+      ).run(id, abs, args.diff_content, args.description || null, args.caller_role || null, patchData.created_at);
 
       const formatted = formatDiff(args.diff_content, abs);
       const rendered  = renderPatch(patchData, formatted);
@@ -277,7 +270,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── confirm_patch ─────────────────────────────────────────────────────────
     case "confirm_patch": {
-      const patch = patches.get(args.patch_id);
+      const db = _patchDb();
+      if (!db) {
+        return { content: [{ type: "text", text: "✗ state.sqlite not found — run: ai init" }], isError: true };
+      }
+      const patch = db.prepare("SELECT * FROM patches WHERE id = ?").get(args.patch_id);
       if (!patch) {
         return {
           content: [{ type: "text", text: `✗ Patch not found: '${args.patch_id}'. It may have already been applied or rejected.` }],
@@ -300,7 +297,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       try {
         if (isDiff) {
-          // Use `patch` command to apply unified diff
           const result = spawnSync("patch", [patch.path, "-"], {
             input: patch.diff_content,
             encoding: "utf8",
@@ -317,13 +313,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
           }
         } else {
-          // Treat as full file replacement
           writeFileSync(patch.path, patch.diff_content, "utf8");
         }
 
-        patch.status = "applied";
-        patches.delete(args.patch_id);
-        savePatches(patches);
+        db.prepare("DELETE FROM patches WHERE id = ?").run(args.patch_id);
 
         return {
           content: [{
@@ -341,15 +334,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── reject_patch ──────────────────────────────────────────────────────────
     case "reject_patch": {
-      const patch = patches.get(args.patch_id);
+      const db = _patchDb();
+      if (!db) {
+        return { content: [{ type: "text", text: "✗ state.sqlite not found — run: ai init" }], isError: true };
+      }
+      const patch = db.prepare("SELECT id, path, description FROM patches WHERE id = ?").get(args.patch_id);
       if (!patch) {
         return {
           content: [{ type: "text", text: `✗ Patch not found: '${args.patch_id}'.` }],
           isError: true,
         };
       }
-      patches.delete(args.patch_id);
-      savePatches(patches);
+      db.prepare("DELETE FROM patches WHERE id = ?").run(args.patch_id);
       return {
         content: [{
           type: "text",
@@ -360,7 +356,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── list_pending_patches ──────────────────────────────────────────────────
     case "list_pending_patches": {
-      const pending = [...patches.values()].filter(p => p.status === "pending");
+      const db = _patchDb();
+      const pending = db ? db.prepare("SELECT * FROM patches WHERE status = 'pending' ORDER BY created_at").all() : [];
       if (pending.length === 0) {
         return { content: [{ type: "text", text: "No pending patches." }] };
       }
@@ -374,7 +371,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── preview_patch ─────────────────────────────────────────────────────────
     case "preview_patch": {
-      const patch = patches.get(args.patch_id);
+      const db = _patchDb();
+      if (!db) {
+        return { content: [{ type: "text", text: "✗ state.sqlite not found — run: ai init" }], isError: true };
+      }
+      const patch = db.prepare("SELECT * FROM patches WHERE id = ?").get(args.patch_id);
       if (!patch) {
         return {
           content: [{ type: "text", text: `✗ Patch not found: '${args.patch_id}'.` }],

@@ -25,7 +25,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId } from "../shared/state-db.js";
 
@@ -99,70 +99,6 @@ function _importFromJson(jsonPath, db) {
   setMeta.run("digest_stale_reason", state.digest_stale_reason ?? "");
 
   process.stderr.write("[INFO] task-synchronizer-mcp: imported state.json → state.sqlite\n");
-}
-
-/**
- * Sync any external writes to state.json (e.g. from orchestrator-mcp) back
- * into SQLite. Called at the start of each tool handler.
- * Compares mtime of state.json vs state.sqlite; re-imports changed fields if
- * state.json is newer.
- */
-function _syncFromJsonIfNewer(aiDir, db) {
-  const jsonPath = resolve(aiDir, "state.json");
-  const dbPath   = resolve(aiDir, "state.sqlite");
-  if (!existsSync(jsonPath)) return;
-
-  try {
-    const jsonMtime = statSync(jsonPath).mtimeMs;
-    const dbMtime   = statSync(dbPath).mtimeMs;
-    if (jsonMtime <= dbMtime) return; // SQLite is current
-  } catch { return; }
-
-  // state.json is newer — re-import mutable fields (tasks, deltas, meta)
-  let state;
-  try {
-    state = JSON.parse(readFileSync(jsonPath, "utf8"));
-    if (!state || state.version !== "1.0") return;
-  } catch { return; }
-
-  // Upsert tasks (handles orchestrator-mcp DONE transitions)
-  const upsertTask = db.prepare(`
-    INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      status = excluded.status,
-      completed_at = excluded.completed_at,
-      summary = excluded.summary
-  `);
-  for (const t of (state.tasks || [])) {
-    upsertTask.run(t.id, t.owner, t.status, t.tier ?? null,
-                   t.description, t.created_at, t.completed_at ?? null, t.summary ?? null);
-  }
-
-  // Upsert meta (handles digest_stale from orchestrator-mcp)
-  const setMeta = db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)");
-  if (state.digest_stale !== undefined) {
-    setMeta.run("digest_stale",        state.digest_stale ? "true" : "false");
-    setMeta.run("digest_stale_reason", state.digest_stale_reason ?? "");
-  }
-
-  // Import any new deltas
-  const knownCount = db.prepare("SELECT COUNT(*) as n FROM deltas").get().n;
-  const jsonDeltas = state.deltas || [];
-  if (jsonDeltas.length > knownCount) {
-    const insertDelta = db.prepare(
-      "INSERT INTO deltas(task_id, summary, files, read, created_at) VALUES (?, ?, ?, ?, ?)"
-    );
-    for (const d of jsonDeltas.slice(knownCount)) {
-      insertDelta.run(
-        d.task_id,
-        d.summary ?? null,
-        d.files || d.files_changed ? JSON.stringify(d.files || d.files_changed) : null,
-        d.read ? 1 : 0,
-        d.created_at || d.timestamp || new Date().toISOString()
-      );
-    }
-  }
 }
 
 // ── State helpers delegated to state-db.js (P-15) ────────────────────────────
@@ -317,9 +253,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (e) {
     return { content: [{ type: "text", text: `${DB_ERR}: ${e.message}` }], isError: true };
   }
-
-  // Sync any direct state.json writes (e.g. from orchestrator-mcp) back into SQLite
-  _syncFromJsonIfNewer(aiDir, db);
 
   switch (name) {
     // ── get_state ─────────────────────────────────────────────────────────────
