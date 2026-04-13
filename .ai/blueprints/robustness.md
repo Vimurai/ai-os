@@ -67,3 +67,52 @@ The output must be safely paginated or capped.
 - [ ] P-6: **Add result bounding to the `git grep` call in `context-guardian-mcp`.**
   - Pipe the `git grep` output through `head -n 100` or slice the array in JavaScript before returning the result.
   - Append a warning to the output if the result set was truncated (e.g., `"...and X more unresolved markers found."`).
+
+## 5. Unbounded Context Leak in `github-bridge-mcp`
+
+### The Problem
+In `github-bridge-mcp`, the `get_issue` tool safely truncates comments to 200 characters, but it injects the main `issue.body` directly into the LLM context without bounds (`issue.body || "(no description)"`). If a user pastes a massive crash log or heap dump into an issue description, it will silently blow out the agent's context window and burn tokens.
+
+### The Solution: Length Bounding
+Add a bounds limit to protect the context window.
+- If `issue.body` exceeds 5000 characters, slice it and append `\n... (truncated)` to prevent token leaks.
+
+## 6. Memory Burner in `memory-manager-mcp`
+
+### The Problem
+The `export_signature` tool uses `readFileSync(archPath, "utf8").split("\n")[0]` to grab the `architect_v` string from `.ai/architect.md`. This synchronously loads the entire file into a V8 string, splits it into an array of lines, grabs index 0, and garbage collects the rest.
+
+### The Solution: Streamed Reading
+Port the `readHead(filePath, HEAD_BYTES = 4096)` helper introduced in E-154 (`context-invoker-mcp`) to `memory-manager-mcp` to avoid full file buffer allocations when extracting the first line.
+
+## 7. OOM Risk on Massive Array Splits in `blueprint-aligner-mcp`
+
+### The Problem
+The `generateDelta` function processes the `diff` string (which can be up to 10MB) via `diff.split("\n").filter(...)`. Splitting a 10MB string by newline allocates hundreds of thousands of string references in memory, risking Node heap crashes.
+
+### The Solution: Iterative Regex
+Replace `.split("\n")` with an iterative RegExp `.exec()` loop over the single string or process the diff incrementally without allocating the full array.
+
+## 8. Inefficient File Array Splitting in `orchestrator-mcp`
+
+### The Problem
+In `run_preflight`, to truncate `TASKS.md` to 80 lines for context, it does a full `readFileSync` followed by `content.split("\n").slice(0, 80).join("\n")`. Since `TASKS.md` grows endlessly in long projects, this memory allocation compounds on every single turn.
+
+### The Solution: Bounded Reading
+Limit the read directly or avoid splitting the entire file into memory just to extract the top 80 lines.
+
+## 9. Broken Blueprint Extraction in `orchestrator-mcp` (Post E-151)
+
+### The Problem
+When generating the `IMPLEMENTATION_DELTA`, `run_handover` searches for the task ID inside `architect.md`. Since E-151 fragmented `architect.md` into `.ai/blueprints/<domain>.md`, if the task is mapped in a domain file, `run_handover` will fail to extract the blueprint section.
+
+### The Solution: Domain Fallback
+Refactor the extraction logic to scan through `.ai/blueprints/*.md` if the task ID isn't found in the root index.
+
+## 10. Missing Size Guard in `patch-mcp`
+
+### The Problem
+`patch_file` uses `readFileSync(abs, "utf8")` to load files for string replacement. If directed at a multi-megabyte asset or transpiled chunk, it can freeze or crash the server.
+
+### The Solution: File Size Bounds
+Add a `statSync(abs).size` guard to reject files > 5MB with `[FILE_TOO_LARGE]`, directing the agent to use other tools or strategies instead.
