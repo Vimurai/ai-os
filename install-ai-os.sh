@@ -45,18 +45,29 @@ chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
 
 echo "✓ Files copied to ${AIOS}"
 
-# ── 2) Remove orphaned v2 contracts (left over from previous installs) ────────
+# ── 2) Remove orphaned files from installed dirs (dynamic — no hardcoded list) ─
 
-ORPHANS=(10_WORKFLOW.md 20_OWNERSHIP.md 30_TOKEN_DISCIPLINE.md 40_SECURITY.md 50_DEVOPS.md 60_SEO_COMPLIANCE.md)
-REMOVED=0
-for f in "${ORPHANS[@]}"; do
-  if [[ -f "${AIOS}/contracts/$f" ]]; then
-    rm -f "${AIOS}/contracts/$f"
-    echo "✓ Removed orphaned contract: $f"
-    REMOVED=1
-  fi
-done
-[[ $REMOVED -eq 0 ]] && echo "✓ Contracts clean (no orphans)"
+purge_orphans() {
+  local src_dir="$1"
+  local dst_dir="$2"
+  [[ -d "$dst_dir" ]] || return 0
+  local removed=0
+  while IFS= read -r -d '' dst_file; do
+    local rel="${dst_file#${dst_dir}/}"
+    if [[ ! -f "${src_dir}/${rel}" ]]; then
+      rm -f "$dst_file"
+      echo "✓ Removed orphaned file: ${dst_dir}/${rel}"
+      removed=1
+    fi
+  done < <(find "$dst_dir" -maxdepth 1 -type f -print0 2>/dev/null)
+  [[ $removed -eq 0 ]] && echo "✓ ${dst_dir##*/}/ clean (no orphans)"
+}
+
+# Always run dynamic orphan cleanup (rsync --delete handles this for rsync path;
+# purge_orphans covers the cp fallback path and any gap files)
+purge_orphans "${REPO_DIR}/src/contracts" "${AIOS}/contracts"
+purge_orphans "${REPO_DIR}/src/claude"    "${AIOS}/claude"
+purge_orphans "${REPO_DIR}/src/gemini"    "${AIOS}/gemini"
 
 # ── 3) PATH setup ─────────────────────────────────────────────────────────────
 

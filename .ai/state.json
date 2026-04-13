@@ -499,42 +499,42 @@
     {
       "id": "P-34",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Restore mandatory YAML frontmatter to all 6 Gemini sub-agents in `src/gemini/agents/`. Authorize specific toolsets per agent role to satisfy `verification-mcp` compliance. (See `.ai/blueprints/robustness_phase6.md` section 1)",
       "created_at": "2026-04-13T14:14:52.288Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-13T14:21:24.280Z",
+      "summary": "Restored YAML frontmatter (disable-model-invocation, user-invocable, allowed-tools) to all 6 Gemini sub-agents with least-privilege toolsets"
     },
     {
       "id": "P-35",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Align `CAPABILITIES.md` with current SQLite paths. Add explicit READ/WRITE permissions for `~/.ai-os/*.sqlite` and READ for the config registry to prevent `ai-exec` warnings. (See `.ai/blueprints/robustness_phase6.md` section 2)",
       "created_at": "2026-04-13T14:14:52.292Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-13T14:21:25.471Z",
+      "summary": "Added ~/.ai-os/*.sqlite to filesystem.read and filesystem.write in CAPABILITIES.md with explanatory note"
     },
     {
       "id": "P-36",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Audit MCP servers (`vibe-check-mcp`, `lsp-mcp`, `task-synchronizer-mcp`) for resource leaks. Ensure all external process handles and database connections are closed in `finally` blocks. (See `.ai/blueprints/robustness_phase6.md` section 3)",
       "created_at": "2026-04-13T14:14:52.297Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-13T14:21:27.017Z",
+      "summary": "Fixed per-iteration context leak in vibe-check-mcp runVibeAudit by wrapping each context in a try/finally block"
     },
     {
       "id": "P-37",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Harden the installer and `ai install` logic. Ensure path injection is idempotent and implement a more dynamic strategy for cleaning up deprecated v2 configuration files. (See `.ai/blueprints/robustness_phase6.md` section 3)",
       "created_at": "2026-04-13T14:14:52.299Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-13T14:21:27.831Z",
+      "summary": "Replaced hardcoded ORPHANS list in install-ai-os.sh with dynamic purge_orphans() function covering contracts/, claude/, gemini/"
     }
   ],
   "stamps": [

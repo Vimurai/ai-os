@@ -133,6 +133,7 @@ async function runVibeAudit(baseUrl, routes, timeoutMs) {
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
       });
+      try {
       const page = await context.newPage();
 
       // Inject CLS observer before navigation
@@ -227,8 +228,9 @@ async function runVibeAudit(baseUrl, routes, timeoutMs) {
           violations: focusIssues,
         },
       });
-
-      await context.close();
+      } finally {
+        await context.close();
+      }
     }
   } finally {
     await browser.close();

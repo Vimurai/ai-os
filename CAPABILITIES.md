@@ -15,6 +15,7 @@
 - *.sh
 - ~/.ai-os/config/**
 - ~/.ai-os/memory/**
+- ~/.ai-os/*.sqlite
 
 ## filesystem.write
 # Allowed path patterns for WRITE operations (requires --allow-write in ai-exec).
@@ -22,6 +23,7 @@
 - .ai/**
 - tests/**
 - ~/.ai-os/memory/**
+- ~/.ai-os/*.sqlite
 
 ## shell.exec
 # Allowed commands/patterns for EXECUTE operations (requires [SEC_CLEARED] + --allow-execute).
@@ -56,3 +58,4 @@
 - Any operation touching auth, secrets, or external APIs requires explicit [SEC_CLEARED]
 - WRITE to ~/.ai-os/memory/ is low-risk (architectural signatures only, no secrets per §31 sanitize())
 - READ of ~/.ai-os/config/registry.json is pre-approved for compliance tools (verification-mcp, §32)
+- READ/WRITE of ~/.ai-os/*.sqlite is pre-approved (task-synchronizer-mcp and token-budget-mcp state stores)

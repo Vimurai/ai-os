@@ -87,10 +87,14 @@
   Status: DONE 2026-04-13 — Removed grep TASKS.md fallback from post-tool-log.sh; added [MISSING_DEP] warning when sqlite3 unavailable
 - [x] P-33: Port the `task_validator` agent to SQLite. Update its instructions to use `get_state` instead of loading the full `TASKS.md` into context. (See `.ai/blueprints/robustness_phase5.md` section 1) | Tier: 2
   Status: DONE 2026-04-13 — Updated task_validator agent to use get_state() via task-synchronizer-mcp with TASKS.md fallback
-- [ ] P-34: Restore mandatory YAML frontmatter to all 6 Gemini sub-agents in `src/gemini/agents/`. Authorize specific toolsets per agent role to satisfy `verification-mcp` compliance. (See `.ai/blueprints/robustness_phase6.md` section 1) | Tier: 2
-- [ ] P-35: Align `CAPABILITIES.md` with current SQLite paths. Add explicit READ/WRITE permissions for `~/.ai-os/*.sqlite` and READ for the config registry to prevent `ai-exec` warnings. (See `.ai/blueprints/robustness_phase6.md` section 2) | Tier: 1
-- [ ] P-36: Audit MCP servers (`vibe-check-mcp`, `lsp-mcp`, `task-synchronizer-mcp`) for resource leaks. Ensure all external process handles and database connections are closed in `finally` blocks. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
-- [ ] P-37: Harden the installer and `ai install` logic. Ensure path injection is idempotent and implement a more dynamic strategy for cleaning up deprecated v2 configuration files. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
+- [x] P-34: Restore mandatory YAML frontmatter to all 6 Gemini sub-agents in `src/gemini/agents/`. Authorize specific toolsets per agent role to satisfy `verification-mcp` compliance. (See `.ai/blueprints/robustness_phase6.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Restored YAML frontmatter (disable-model-invocation, user-invocable, allowed-tools) to all 6 Gemini sub-agents with least-privilege toolsets
+- [x] P-35: Align `CAPABILITIES.md` with current SQLite paths. Add explicit READ/WRITE permissions for `~/.ai-os/*.sqlite` and READ for the config registry to prevent `ai-exec` warnings. (See `.ai/blueprints/robustness_phase6.md` section 2) | Tier: 1
+  Status: DONE 2026-04-13 — Added ~/.ai-os/*.sqlite to filesystem.read and filesystem.write in CAPABILITIES.md with explanatory note
+- [x] P-36: Audit MCP servers (`vibe-check-mcp`, `lsp-mcp`, `task-synchronizer-mcp`) for resource leaks. Ensure all external process handles and database connections are closed in `finally` blocks. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
+  Status: DONE 2026-04-13 — Fixed per-iteration context leak in vibe-check-mcp runVibeAudit by wrapping each context in a try/finally block
+- [x] P-37: Harden the installer and `ai install` logic. Ensure path injection is idempotent and implement a more dynamic strategy for cleaning up deprecated v2 configuration files. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
+  Status: DONE 2026-04-13 — Replaced hardcoded ORPHANS list in install-ai-os.sh with dynamic purge_orphans() function covering contracts/, claude/, gemini/
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

@@ -1,6 +1,9 @@
 ---
 name: memory_curator
 description: Trigger on ai install, ai init, or monthly. Builds and maintains the cross-project Memory Palace index at ~/.ai-os/memory-palace.md by scanning local DIGEST.md files, extracting patterns, scoring relevance, pruning stale entries, and seeding new projects with top matching patterns.
+disable-model-invocation: false
+user-invocable: true
+allowed-tools: Read, Write, Glob
 ---
 
 ROLE: MEMORY_CURATOR (Principal Architect — Gemini)

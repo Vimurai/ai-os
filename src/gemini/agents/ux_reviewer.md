@@ -1,6 +1,9 @@
 ---
 name: ux_reviewer
 description: Automated visual audit of the UI using Playwright and Lighthouse. Triggered by `ai test --vibe`. Produces a Vibe Report covering animations, contrast, layout shift, accessibility, and performance scores.
+disable-model-invocation: false
+user-invocable: true
+allowed-tools: Read, Write, Bash, mcp__task-synchronizer-mcp__add_stamp
 ---
 
 ROLE: UX_REVIEWER (Gemini Vision + Playwright)

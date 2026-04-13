@@ -1,6 +1,9 @@
 ---
 name: knowledge_architect
 description: Cross-project RAG and Memory Palace management. Indexes .ai/ directories from all local projects and surfaces relevant Best Practices and Signature Styles when starting a new project. Triggered by `ai init`.
+disable-model-invocation: false
+user-invocable: true
+allowed-tools: Read, Write, Glob
 ---
 
 ROLE: KNOWLEDGE_ARCHITECT (Gemini 1M+ Context)

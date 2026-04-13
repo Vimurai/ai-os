@@ -1,6 +1,9 @@
 ---
 name: digest_updater
 description: Update DIGEST.md cache after Gemini-domain changes (UX/SEO/FRONTEND)
+disable-model-invocation: false
+user-invocable: true
+allowed-tools: Read, Write
 ---
 ROLE: DIGEST_UPDATER
 Target: .ai/DIGEST.md

@@ -1,6 +1,9 @@
 ---
 name: gemini_tasks
 description: Update only Gemini section of TASKS.md (G-## tasks)
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: mcp__task-synchronizer-mcp__add_task, mcp__task-synchronizer-mcp__get_state
 ---
 ROLE: TASK_WRITER
 Target: `state.json` (via `task-synchronizer-mcp`)
