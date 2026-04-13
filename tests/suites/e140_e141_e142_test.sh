@@ -85,7 +85,7 @@ GH_CONTENT=$(cat "$GITHUB_JS")
 assert_contains "github-bridge-mcp: check_gh_auth tool"             "check_gh_auth"             "$GH_CONTENT"
 assert_contains "github-bridge-mcp: fetch_assigned_issues tool"     "fetch_assigned_issues"     "$GH_CONTENT"
 assert_contains "github-bridge-mcp: get_issue tool"                 "get_issue"                 "$GH_CONTENT"
-assert_contains "github-bridge-mcp: create_update_from_issues tool" "create_update_from_issues" "$GH_CONTENT"
+assert_contains "github-bridge-mcp: create_intent_from_issues tool" "create_intent_from_issues" "$GH_CONTENT"
 assert_contains "github-bridge-mcp: get_pr_status tool"             "get_pr_status"             "$GH_CONTENT"
 
 # gh subcommand whitelist
@@ -98,8 +98,8 @@ assert_contains "github-bridge-mcp: auth subcommand whitelisted"  '"auth"'  "$GH
 assert_contains "github-bridge-mcp: uses spawnSync not exec" "spawnSync" "$GH_CONTENT"
 assert_not_contains "github-bridge-mcp: no exec()" "exec(" "$GH_CONTENT"
 
-# Writes to .ai/UPDATE.md
-assert_contains "github-bridge-mcp: writes UPDATE.md" "UPDATE.md" "$GH_CONTENT"
+# Returns inline intent (UPDATE.md deprecated E-147 — tool now returns content directly)
+assert_contains "github-bridge-mcp: returns inline intent" "Action Required" "$GH_CONTENT"
 
 # ── ai sync --github wiring ───────────────────────────────────────────────────
 
