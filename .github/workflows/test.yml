@@ -33,6 +33,6 @@ jobs:
 
       - name: Check .gitignore covers secrets
         run: |
-          git check-ignore -v .env 2>/dev/null || echo ".env not in .gitignore" && exit 1
-          git check-ignore -v node_modules 2>/dev/null || echo "node_modules not in .gitignore" && exit 1
+          git check-ignore -v .env 2>/dev/null || { echo ".env not in .gitignore"; exit 1; }
+          git check-ignore -v node_modules 2>/dev/null || { echo "node_modules not in .gitignore"; exit 1; }
         continue-on-error: false
