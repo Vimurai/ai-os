@@ -219,7 +219,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         { cwd, encoding: "utf8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 }
       );
       if (!grepResult.error && grepResult.stdout) {
-        for (const line of grepResult.stdout.split("\n").filter(Boolean).slice(0, 100)) {
+        // Iterative regex avoids allocating a full split array on large stdout (P-16)
+        const lineRe = /^[^\n]+/gm;
+        let lm;
+        let lineCount = 0;
+        while ((lm = lineRe.exec(grepResult.stdout)) !== null && lineCount < 100) {
+          const line = lm[0];
+          lineCount++;
           const colon1 = line.indexOf(":");
           const colon2 = line.indexOf(":", colon1 + 1);
           if (colon1 === -1 || colon2 === -1) continue;

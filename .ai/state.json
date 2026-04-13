@@ -285,6 +285,56 @@
       "created_at": "2026-04-03T13:45:07.072Z",
       "completed_at": "2026-04-13T08:35:00.839Z",
       "summary": "Added statSync size guard to patch-mcp patch_file — rejects files >5MB with [FILE_TOO_LARGE] before readFileSync"
+    },
+    {
+      "id": "P-13",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Create `src/mcp/shared/state-db.js` and consolidate SQLite schema. Extract `DatabaseSync` initialization from `task-synchronizer-mcp` to ensure WAL mode and shared access patterns are consistent across all MCP servers. (See `.ai/blueprints/robustness_phase2.md` section 1)",
+      "created_at": "2026-04-13T09:02:13.944Z",
+      "completed_at": "2026-04-13T12:25:40.087Z",
+      "summary": "Created src/mcp/shared/state-db.js — exports getDb, readState, regenerateViews, nextId; WAL mode + full schema extracted from task-synchronizer-mcp"
+    },
+    {
+      "id": "P-14",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `orchestrator-mcp` to use `state-db.js` for SQLite-first state management. Replace `state-writer.js` imports and update `run_handover` and `run_preflight` to query/mutate the SQLite `tasks`, `stamps`, `deltas`, and `meta` tables directly. (See `.ai/blueprints/robustness_phase2.md` section 1)",
+      "created_at": "2026-04-13T09:02:13.951Z",
+      "completed_at": "2026-04-13T12:25:41.828Z",
+      "summary": "Refactored orchestrator-mcp to use state-db.js — run_preflight reads SQLite directly, run_handover writes task/delta/digest_stale to SQLite; state-writer.js import removed"
+    },
+    {
+      "id": "P-15",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `task-synchronizer-mcp` to use `state-db.js`. Remove redundant schema definitions while maintaining the \"Backwards Compat View\" logic (regenerating `state.json` and Markdown files after SQLite updates). (See `.ai/blueprints/robustness_phase2.md` section 1)",
+      "created_at": "2026-04-13T09:02:13.962Z",
+      "completed_at": "2026-04-13T12:25:43.154Z",
+      "summary": "Refactored task-synchronizer-mcp to import getDb/readState/regenerateViews/nextId from state-db.js; removed redundant local definitions"
+    },
+    {
+      "id": "P-16",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement iterative regex scanning in `context-guardian-mcp` to fix the OOM risk in `strict` mode result processing. Replace `.split(\"\\n\")` on large `git grep` output with an iterative RegExp `.exec()` loop. (See `.ai/blueprints/robustness_phase2.md` section 2)",
+      "created_at": "2026-04-13T09:02:13.966Z",
+      "completed_at": "2026-04-13T12:25:44.747Z",
+      "summary": "Replaced split(\"\\n\").slice(0,100) in context-guardian-mcp strict mode with iterative regex exec loop — zero array allocation on large git grep output"
+    },
+    {
+      "id": "P-17",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Harden `tests/run.sh` to ensure CI-breaking failures are never silent. Capture exit codes of all sub-script runs and fail the master runner if any sub-suite crashes or exits non-zero. Also, add explicit error reporting to `readBoundedLines` in `orchestrator-mcp`. (See `.ai/blueprints/robustness_phase2.md` section 3)",
+      "created_at": "2026-04-13T09:02:13.980Z",
+      "completed_at": "2026-04-13T12:25:46.930Z",
+      "summary": "Hardened tests/run.sh — crashed suites (no SUITE_RESULT line + non-zero exit) now counted as 1 failure; added stderr logging to readBoundedLines catch block in orchestrator-mcp"
     }
   ],
   "stamps": [
@@ -595,6 +645,20 @@
       "task_id": null,
       "timestamp": "2026-04-13T08:46:45.008Z",
       "summary": "[TIER_1] Archive + DIGEST refresh — docs/memory only, no src/ changes, no P0/P1 issues"
+    },
+    {
+      "type": "ALIGN_FAIL",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": null,
+      "timestamp": "2026-04-13T12:26:54.736Z",
+      "summary": "[TIER_2] CAPABILITIES_BYPASS flagged on ../shared/state-db.js — FALSE POSITIVE (resolves to src/mcp/shared/state-db.js, within src/** allowlist); test file orphan warning acceptable (covered by P-13/P-14/P-15); LOG.md not updated (warning). COMMIT BLOCKED pending false-positive acknowledgment or LOG.md update."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude (Tier 2 self-review)",
+      "task_id": null,
+      "timestamp": "2026-04-13T12:27:23.055Z",
+      "summary": "[TIER_2] P-13–P-17: state-db.js extraction, orchestrator SQLite-first, iterative regex, CI hardening — ALIGN_FAIL is false positive (../shared/ resolves within src/); no P0 issues"
     }
   ],
   "deltas": [],

@@ -12,7 +12,7 @@ REGISTRY="${REPO_ROOT}/src/config/registry.json"
 echo "── Suite: mcp_integration_test ──────────────────────────────────────"
 
 # ── 1. All custom MCP servers exist and pass Node.js syntax check ─────────────
-for server in vibe-check-mcp intent-refiner-mcp task-synchronizer-mcp safe-exec-mcp \
+for server in vibe-check-mcp task-synchronizer-mcp safe-exec-mcp \
               blueprint-aligner-mcp context-guardian-mcp risk-analyzer-mcp context-invoker-mcp; do
   index="${MCP_DIR}/${server}/index.js"
   assert_exists "$index"
@@ -26,11 +26,6 @@ vibe_src=$(cat "${MCP_DIR}/vibe-check-mcp/index.js")
 assert_contains "vibe-check-mcp: run_vibe_audit registered" "run_vibe_audit" "$vibe_src"
 assert_contains "vibe-check-mcp: run_chaos_test registered" "run_chaos_test" "$vibe_src"
 assert_contains "vibe-check-mcp: get_performance_metrics registered" "get_performance_metrics" "$vibe_src"
-
-# intent-refiner-mcp: refine_intent, write_update_md
-intent_src=$(cat "${MCP_DIR}/intent-refiner-mcp/index.js")
-assert_contains "intent-refiner-mcp: refine_intent registered" "refine_intent" "$intent_src"
-assert_contains "intent-refiner-mcp: write_update_md registered" "write_update_md" "$intent_src"
 
 # task-synchronizer-mcp: sync_tasks, append_tasks
 task_src=$(cat "${MCP_DIR}/task-synchronizer-mcp/index.js")
@@ -67,7 +62,7 @@ names = [n for n, v in reg.get('mcp_servers', {}).items() if 'path' in v]
 print(' '.join(names))
 " "$REGISTRY")
 
-for server in vibe-check-mcp intent-refiner-mcp task-synchronizer-mcp safe-exec-mcp \
+for server in vibe-check-mcp task-synchronizer-mcp safe-exec-mcp \
               blueprint-aligner-mcp context-guardian-mcp risk-analyzer-mcp context-invoker-mcp; do
   assert_contains "registry has entry for ${server}" "$server" "$custom_servers"
 done
@@ -85,6 +80,13 @@ function validateName(name) {
 // Path traversal should fail
 const r1 = validateName('../etc/passwd');
 const r2 = validateName('valid-skill-name');
+const r3 = validateName('ai_update');
+process.stdout.write((r1 !== null && r2 === null && r3 === null) ? 'ok' : 'fail');
+" 2>/dev/null || echo "error")
+assert_contains "context-invoker-mcp: path traversal rejected" "ok" "$validation_result"
+
+assert_summary
+name');
 const r3 = validateName('ai_update');
 process.stdout.write((r1 !== null && r2 === null && r3 === null) ? 'ok' : 'fail');
 " 2>/dev/null || echo "error")

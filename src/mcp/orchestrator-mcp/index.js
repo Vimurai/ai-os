@@ -15,7 +15,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
-import { readStateStrict, writeState } from "../shared/state-writer.js";
+import { getDb, readState, regenerateViews } from "../shared/state-db.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readSafe(p) {
@@ -35,7 +35,10 @@ function readBoundedLines(p, maxLines) {
     return lines.length > maxLines
       ? lines.slice(0, maxLines).join("\n") + "\n... (truncated)"
       : text;
-  } catch { return ""; }
+  } catch (e) {
+    process.stderr.write(`[WARN] readBoundedLines(${p}): ${e.message}\n`);
+    return "";
+  }
 }
 
 function today() {
@@ -142,48 +145,56 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // Add pointer for architect.md index — skip by default to save tokens
       sections.push(`## architect.md (INDEX)\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/architect.md\` ONLY if you need architectural details for your specific task.\nIt is now a lightweight index (~30 lines). Domain blueprints are in \`.ai/blueprints/<domain>.md\` — load only the one relevant to your task.)`);
 
-      // E-103: state.json summary — task counts + last 3 stamps (structured data preferred over MD view)
-      const statePath = resolve(ai, "state.json");
-      if (existsSync(statePath)) {
+      // E-103: state summary from SQLite (P-14 — no state.json parse)
+      const dbPath = resolve(ai, "state.sqlite");
+      if (existsSync(dbPath)) {
         try {
-          const state = JSON.parse(readFileSync(statePath, "utf8"));
+          const db = getDb(ai);
 
-          // Task count summary by status
+          // Task count summary
           const counts = { OPEN: 0, BLOCKED: 0, DONE: 0 };
-          for (const t of state.tasks || []) counts[t.status] = (counts[t.status] || 0) + 1;
-          const lastStamps = (state.stamps || []).slice(-3).map(s =>
+          for (const t of db.prepare("SELECT status FROM tasks").all()) {
+            counts[t.status] = (counts[t.status] || 0) + 1;
+          }
+          const total = Object.values(counts).reduce((a, b) => a + b, 0);
+          const lastStamps = db.prepare(
+            "SELECT type, agent, timestamp, summary FROM stamps ORDER BY id DESC LIMIT 3"
+          ).all().map(s =>
             `  [${s.type}] ${s.timestamp ? s.timestamp.split("T")[0] : "??"} | ${s.summary || s.agent || ""}`
           );
+          const focus = db.prepare("SELECT value FROM project WHERE key = 'focus'").get()?.value;
           const stateSummaryLines = [
-            `Tasks: ${counts.OPEN} OPEN | ${counts.BLOCKED} BLOCKED | ${counts.DONE} DONE (total: ${state.tasks.length})`,
+            `Tasks: ${counts.OPEN} OPEN | ${counts.BLOCKED} BLOCKED | ${counts.DONE} DONE (total: ${total})`,
             lastStamps.length > 0 ? `Last stamps:\n${lastStamps.join("\n")}` : "Stamps: none",
-            state.project?.focus ? `Focus: ${state.project.focus}` : "",
+            focus ? `Focus: ${focus}` : "",
           ].filter(Boolean);
           sections.push(`## state.json Summary\n${stateSummaryLines.join("\n")}`);
 
-          // Reactive Memory (E-138, §24): surface stale DIGEST warning at preflight
-          if (state.digest_stale) {
+          // Reactive Memory (E-138, §24): surface stale DIGEST warning
+          const digestStale = db.prepare("SELECT value FROM meta WHERE key = 'digest_stale'").get()?.value;
+          if (digestStale === "true") {
+            const reason = db.prepare("SELECT value FROM meta WHERE key = 'digest_stale_reason'").get()?.value;
             sections.push(
               `## ⚠ DIGEST.md IS STALE (Reactive Memory §24)\n` +
-              `Reason: ${state.digest_stale_reason || "task completed"}\n\n` +
+              `Reason: ${reason || "task completed"}\n\n` +
               `**Action**: Regenerate DIGEST.md before proceeding:\n` +
               `  skill: "ai-digest"  OR  activate_agent('digest_updater')\n\n` +
               `_Clear the flag after regeneration: set state.digest_stale = false_`
             );
           }
 
-          // Check for unread implementation deltas (P-42 §29)
-          const unread = (state.deltas || []).filter(d => !d.read);
+          // Unread implementation deltas (P-42 §29)
+          const unread = db.prepare("SELECT id, task_id, summary FROM deltas WHERE read = 0").all();
           if (unread.length > 0) {
             sections.push("## Unread Implementation Deltas");
             for (const d of unread) {
               sections.push(`- ${d.task_id}: ${d.summary}`);
-              d.read = true;
+              db.prepare("UPDATE deltas SET read = 1 WHERE id = ?").run(d.id);
             }
             sections.push("\n**Architect**: Review these deltas. If any diverge from your blueprint, update architect.md.");
-            writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n");
+            regenerateViews(ai, db);
           }
-        } catch { /* ignore state.json parse errors */ }
+        } catch { /* ignore DB errors during preflight */ }
       }
 
       // Stamp SESSION.md
@@ -214,25 +225,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const logPath = resolve(ai, "LOG.md");
       const results = [];
 
-      // 1. Mark task DONE in state.json → TASKS.md regenerated as view (E-99: D-001 compliance)
-      const state = readStateStrict(ai);
-      if (state) {
-        const task = (state.tasks || []).find(t => t.id === taskId);
-        if (task) {
-          if (task.status === "DONE") {
+      // 1. Mark task DONE in SQLite → regenerate views (P-14: SQLite-first)
+      const dbPath = resolve(ai, "state.sqlite");
+      if (!existsSync(dbPath)) {
+        results.push(`⚠ state.sqlite missing — run: ai init`);
+      } else {
+        try {
+          const db  = getDb(ai);
+          const row = db.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId);
+          if (!row) {
+            results.push(`⚠ ${taskId} not found in state.sqlite`);
+          } else if (row.status === "DONE") {
             results.push(`⚠ ${taskId} already marked DONE`);
           } else {
-            task.status = "DONE";
-            task.completed_at = new Date().toISOString();
-            task.summary = summary;
-            writeState(ai, state);  // writes state.json + regenerates TASKS.md + REVIEWS.md
-            results.push(`✓ ${taskId} marked DONE in state.json (TASKS.md regenerated)`);
+            db.prepare("UPDATE tasks SET status = 'DONE', completed_at = ?, summary = ? WHERE id = ?")
+              .run(new Date().toISOString(), summary, taskId);
+            regenerateViews(ai, db);
+            results.push(`✓ ${taskId} marked DONE in state.sqlite (views regenerated)`);
           }
-        } else {
-          results.push(`⚠ ${taskId} not found in state.json`);
+        } catch (e) {
+          results.push(`⚠ SQLite error: ${e.message}`);
         }
-      } else {
-        results.push(`⚠ state.json missing — run: ai migrate-state to enable task sync`);
       }
 
       // 2. Append LOG entry
@@ -280,43 +293,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        // Generate delta summary
+        // Save delta + set digest_stale directly in SQLite (P-14)
         const changedFiles = [...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m => m[1]);
         const deltaText = `${taskId}: ${summary} | Files: ${changedFiles.slice(0, 5).join(", ")}`;
 
-        // Save delta to state.json if it exists
-        const statePath = resolve(ai, "state.json");
-        if (existsSync(statePath)) {
+        if (existsSync(resolve(ai, "state.sqlite"))) {
           try {
-            const state = JSON.parse(readFileSync(statePath, "utf8"));
-            if (!state.deltas) state.deltas = [];
-            state.deltas.push({
-              task_id: taskId,
-              timestamp: new Date().toISOString(),
-              summary: deltaText,
-              files_changed: changedFiles.slice(0, 10),
-              read: false,
-            });
-            writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n");
-            results.push(`✓ Implementation delta saved to state.json`);
-          } catch {
-            results.push(`⚠ Could not save delta to state.json`);
+            const db = getDb(ai);
+            db.prepare(
+              "INSERT INTO deltas(task_id, summary, files, read) VALUES (?, ?, ?, 0)"
+            ).run(taskId, deltaText, JSON.stringify(changedFiles.slice(0, 10)));
+            db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale', 'true')").run();
+            db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale_reason', ?)").run(`${taskId} marked DONE — ${summary}`);
+            regenerateViews(ai, db);
+            results.push(`✓ Implementation delta saved to state.sqlite`);
+            results.push(`✓ digest_stale=true set in state.sqlite (Reactive Memory §24)`);
+          } catch (e) {
+            results.push(`⚠ Could not save delta: ${e.message}`);
           }
-        }
-      }
-
-      // 4. Reactive Memory (E-138, §24): mark digest_stale in state.json so
-      //    stop-hook.sh and the next preflight can detect and trigger DIGEST update.
-      const statePath2 = resolve(ai, "state.json");
-      if (existsSync(statePath2)) {
-        try {
-          const st2 = JSON.parse(readFileSync(statePath2, "utf8"));
-          st2.digest_stale = true;
-          st2.digest_stale_reason = `${taskId} marked DONE — ${summary}`;
-          writeFileSync(statePath2, JSON.stringify(st2, null, 2) + "\n");
-          results.push(`✓ digest_stale=true set in state.json (Reactive Memory §24)`);
-        } catch {
-          results.push(`⚠ Could not set digest_stale flag`);
         }
       }
 

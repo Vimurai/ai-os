@@ -30,14 +30,19 @@ for suite in "${SUITES[@]}"; do
   suite_name="$(basename "$suite")"
 
   # Run suite in subshell; capture output + exit code
+  suite_exit=0
   output=$(bash "$suite" 2>&1) || suite_exit=$?
-  suite_exit="${suite_exit:-0}"
 
   # Parse counts from machine-readable summary line emitted by assert_summary()
   summary=$(echo "$output" | grep "^SUITE_RESULT" | tail -1 || true)
   passes=$(echo "$summary" | grep -oE 'PASS=[0-9]+' | grep -oE '[0-9]+' || echo 0)
   fails=$(echo "$summary"  | grep -oE 'FAIL=[0-9]+' | grep -oE '[0-9]+' || echo 0)
   passes="${passes:-0}"; fails="${fails:-0}"
+
+  # If the suite script itself crashed (non-zero exit, no SUITE_RESULT line), count it as 1 failure
+  if [[ $suite_exit -ne 0 && -z "$summary" ]]; then
+    fails=$(( fails + 1 ))
+  fi
 
   TOTAL_PASS=$(( TOTAL_PASS + passes ))
   TOTAL_FAIL=$(( TOTAL_FAIL + fails ))

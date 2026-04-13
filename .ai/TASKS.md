@@ -45,6 +45,16 @@
   Status: DONE 2026-04-13 — Fixed run_handover blueprint extraction to scan .ai/blueprints/*.md as fallback when taskId not found in root architect.md (post E-151 fragmentation)
 - [x] P-12: Add a `statSync(abs).size` guard to `patch_file` in `patch-mcp` to fail early with `[FILE_TOO_LARGE]` if the target file exceeds 5MB, preventing blocking I/O freezes on massive assets. (See `.ai/blueprints/robustness.md` section 10) | Tier: 2
   Status: DONE 2026-04-13 — Added statSync size guard to patch-mcp patch_file — rejects files >5MB with [FILE_TOO_LARGE] before readFileSync
+- [x] P-13: Create `src/mcp/shared/state-db.js` and consolidate SQLite schema. Extract `DatabaseSync` initialization from `task-synchronizer-mcp` to ensure WAL mode and shared access patterns are consistent across all MCP servers. (See `.ai/blueprints/robustness_phase2.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Created src/mcp/shared/state-db.js — exports getDb, readState, regenerateViews, nextId; WAL mode + full schema extracted from task-synchronizer-mcp
+- [x] P-14: Refactor `orchestrator-mcp` to use `state-db.js` for SQLite-first state management. Replace `state-writer.js` imports and update `run_handover` and `run_preflight` to query/mutate the SQLite `tasks`, `stamps`, `deltas`, and `meta` tables directly. (See `.ai/blueprints/robustness_phase2.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Refactored orchestrator-mcp to use state-db.js — run_preflight reads SQLite directly, run_handover writes task/delta/digest_stale to SQLite; state-writer.js import removed
+- [x] P-15: Refactor `task-synchronizer-mcp` to use `state-db.js`. Remove redundant schema definitions while maintaining the "Backwards Compat View" logic (regenerating `state.json` and Markdown files after SQLite updates). (See `.ai/blueprints/robustness_phase2.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Refactored task-synchronizer-mcp to import getDb/readState/regenerateViews/nextId from state-db.js; removed redundant local definitions
+- [x] P-16: Implement iterative regex scanning in `context-guardian-mcp` to fix the OOM risk in `strict` mode result processing. Replace `.split("\n")` on large `git grep` output with an iterative RegExp `.exec()` loop. (See `.ai/blueprints/robustness_phase2.md` section 2) | Tier: 2
+  Status: DONE 2026-04-13 — Replaced split("\n").slice(0,100) in context-guardian-mcp strict mode with iterative regex exec loop — zero array allocation on large git grep output
+- [x] P-17: Harden `tests/run.sh` to ensure CI-breaking failures are never silent. Capture exit codes of all sub-script runs and fail the master runner if any sub-suite crashes or exits non-zero. Also, add explicit error reporting to `readBoundedLines` in `orchestrator-mcp`. (See `.ai/blueprints/robustness_phase2.md` section 3) | Tier: 2
+  Status: DONE 2026-04-13 — Hardened tests/run.sh — crashed suites (no SUITE_RESULT line + non-zero exit) now counted as 1 failure; added stderr logging to readBoundedLines catch block in orchestrator-mcp
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

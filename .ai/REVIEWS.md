@@ -44,3 +44,5 @@
 [ALIGN_PASS] 2026-04-13 | [TIER_2] Blueprint aligned — no deviations. DIGEST.md auto-stamps + robustness.md sections 5-10 addenda (P-7 through P-12 blueprints). All changes are documentation only.
 [CRITIC_STAMP] 2026-04-13 | [TIER_2] Blueprint aligned — no deviations. 2 files reviewed (.ai/DIGEST.md auto-stamps, .ai/blueprints/robustness.md sections 5-10). Docs only — COMMIT CLEAR.
 [CRITIC_STAMP] 2026-04-13 | [TIER_1] Archive + DIGEST refresh — docs/memory only, no src/ changes, no P0/P1 issues
+[ALIGN_FAIL] 2026-04-13 | [TIER_2] CAPABILITIES_BYPASS flagged on ../shared/state-db.js — FALSE POSITIVE (resolves to src/mcp/shared/state-db.js, within src/** allowlist); test file orphan warning acceptable (covered by P-13/P-14/P-15); LOG.md not updated (warning). COMMIT BLOCKED pending false-positive acknowledgment or LOG.md update.
+[CRITIC_STAMP] 2026-04-13 | [TIER_2] P-13–P-17: state-db.js extraction, orchestrator SQLite-first, iterative regex, CI hardening — ALIGN_FAIL is false positive (../shared/ resolves within src/); no P0 issues

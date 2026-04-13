@@ -139,9 +139,9 @@ assert_contains "T-04.06b: TASKS.md fallback regex removed from blueprint-aligne
 sqlite_guard=$(grep -l 'getDb(aiDir)' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
 assert_contains "T-04.07: task-synchronizer-mcp has SQLite getDb guard" "found" "$sqlite_guard"
 
-# Verify write tools call getDb (which handles missing state)
-getdb_used=$(grep -c 'db = getDb(aiDir)' "$SYNC_MCP" 2>/dev/null || echo "0")
-assert_contains "T-04.07b: getDb used in tool handler" "1" "$getdb_used"
+# Verify write tools call _getDb (local wrapper around shared getDb)
+getdb_used=$(grep -c 'db = _getDb(aiDir)' "$SYNC_MCP" 2>/dev/null || echo "0")
+assert_contains "T-04.07b: _getDb used in tool handler" "1" "$getdb_used"
 state_missing_present=$(grep -l 'STATE_MISSING_ERR\|No .ai/ directory' "$SYNC_MCP" 2>/dev/null && echo "found" || echo "missing")
 assert_contains "T-04.07c: STATE_MISSING_ERR message defined" "found" "$state_missing_present"
 
