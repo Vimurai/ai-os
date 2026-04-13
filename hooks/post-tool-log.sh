@@ -106,12 +106,15 @@ LOG_LINE_COUNT=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
 ARCHIVE_THRESHOLD=200
 
 if (( LOG_LINE_COUNT >= ARCHIVE_THRESHOLD )); then
-  TASKS_FILE="${AI_DIR}/TASKS.md"
+  # Use sqlite3 for open task count when available (P-18 — reads primary store, not TASKS.md view)
   OPEN_TASKS=0
-  if [[ -f "$TASKS_FILE" ]]; then
-    OPEN_TASKS=$(grep -c "^- \[ \]" "$TASKS_FILE" 2>/dev/null || echo 0)
-    OPEN_TASKS="${OPEN_TASKS:-0}"
+  SQLITE_FILE="${AI_DIR}/state.sqlite"
+  if [[ -f "$SQLITE_FILE" ]] && command -v sqlite3 &>/dev/null; then
+    OPEN_TASKS=$(sqlite3 "$SQLITE_FILE" "SELECT COUNT(*) FROM tasks WHERE status='OPEN'" 2>/dev/null || echo 0)
+  elif [[ -f "${AI_DIR}/TASKS.md" ]]; then
+    OPEN_TASKS=$(grep -c "^- \[ \]" "${AI_DIR}/TASKS.md" 2>/dev/null || echo 0)
   fi
+  OPEN_TASKS="${OPEN_TASKS:-0}"
 
   # Secondary DIRTY signal: uncommitted non-.ai/ changes mean work is in progress
   GIT_DIRTY=0

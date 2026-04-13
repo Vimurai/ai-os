@@ -335,6 +335,66 @@
       "created_at": "2026-04-13T09:02:13.980Z",
       "completed_at": "2026-04-13T12:25:46.930Z",
       "summary": "Hardened tests/run.sh — crashed suites (no SUITE_RESULT line + non-zero exit) now counted as 1 failure; added stderr logging to readBoundedLines catch block in orchestrator-mcp"
+    },
+    {
+      "id": "P-18",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Port `stop-hook.sh` and `post-tool-log.sh` to use `sqlite3` CLI for state checks instead of `python3` + `state.json`. (See `.ai/blueprints/robustness_phase2.md` section 4)",
+      "created_at": "2026-04-13T13:23:19.846Z",
+      "completed_at": "2026-04-13T13:52:56.091Z",
+      "summary": "Ported stop-hook.sh and post-tool-log.sh to use sqlite3 CLI for state checks — removed python3+state.json dependency; stop-hook reads digest_stale/digest_stale_reason from meta table; post-tool-log reads open task count from tasks table with grep fallback"
+    },
+    {
+      "id": "P-19",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement viewport-scoped audits in `vibe-check-mcp`. Limit `querySelectorAll` scans to the first 100 elements or use visibility checks to prevent OOM/freezes on massive pages. (See `.ai/blueprints/robustness_phase2.md` section 5)",
+      "created_at": "2026-04-13T13:23:19.856Z",
+      "completed_at": "2026-04-13T13:53:00.224Z",
+      "summary": "Implemented viewport-scoped audits in vibe-check-mcp — all three querySelectorAll scans (contrast, touch targets, focus rings) now filter to getBoundingClientRect() visible elements only (top < innerHeight && bottom > 0) and cap at 100 elements"
+    },
+    {
+      "id": "P-20",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement disk persistence for `propose-patch-mcp`. Store pending patches in a new `patches` SQLite table or `.ai/patches.json` so they survive across CLI sessions. (See `.ai/blueprints/robustness_phase3.md` section 1)",
+      "created_at": "2026-04-13T13:34:40.875Z",
+      "completed_at": "2026-04-13T13:53:04.717Z",
+      "summary": "Implemented disk persistence for propose-patch-mcp — patches stored in .ai/patches.json; loadPatches() on startup, savePatches() after propose/confirm/reject; applied/rejected patches are pruned; survives CLI session restarts"
+    },
+    {
+      "id": "P-21",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Harden `safe-exec-mcp` secret detection by broadening the `SECRET_IN_COMMAND` regex to catch space-separated secrets (e.g., `--token secret`). (See `.ai/blueprints/robustness_phase3.md` section 2)",
+      "created_at": "2026-04-13T13:34:40.881Z",
+      "completed_at": "2026-04-13T13:53:08.857Z",
+      "summary": "Hardened safe-exec-mcp SECRET_IN_COMMAND regex to catch space-separated secrets (e.g. --token secret_value) — changed \\s*=\\s* to (\\s*=\\s*|\\s+) to detect both assignment and flag-style secrets"
+    },
+    {
+      "id": "P-22",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add transaction support to `state-db.js` via a `withTransaction` helper and refactor `orchestrator-mcp` to ensure multi-table updates are atomic. (See `.ai/blueprints/robustness_phase3.md` section 3)",
+      "created_at": "2026-04-13T13:34:40.885Z",
+      "completed_at": "2026-04-13T13:53:12.847Z",
+      "summary": "Added withTransaction(db, callback) helper to state-db.js (BEGIN/COMMIT/ROLLBACK); refactored orchestrator-mcp run_handover to wrap task status update and delta/meta multi-table writes in separate transactions for ACID integrity"
+    },
+    {
+      "id": "P-23",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Make `vibe-check-mcp` timeouts configurable via an optional `timeout_ms` parameter to prevent false positives on slow local servers. (See `.ai/blueprints/robustness_phase3.md` section 4)",
+      "created_at": "2026-04-13T13:34:40.889Z",
+      "completed_at": "2026-04-13T13:53:17.004Z",
+      "summary": "Made vibe-check-mcp timeouts configurable — added optional timeout_ms parameter (default 15000) to run_vibe_audit and run_chaos_test tool schemas; passed through to page.goto() to prevent false positives on slow local servers"
     }
   ],
   "stamps": [

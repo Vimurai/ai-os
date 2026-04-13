@@ -48,7 +48,7 @@ const BLOCK_RULES = [
   },
   {
     id: "SECRET_IN_COMMAND",
-    pattern: (tokens, raw) => /\b(password|passwd|secret|api.?key|token)\s*=\s*\S{4,}/i.test(raw),
+    pattern: (tokens, raw) => /\b(password|passwd|secret|api.?key|token)(\s*=\s*|\s+)\S{4,}/i.test(raw),
     message: "Plaintext secret in command — BLOCKED (credential exposure risk)",
   },
 ];

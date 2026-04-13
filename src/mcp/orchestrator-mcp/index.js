@@ -15,7 +15,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync, readdirSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
-import { getDb, readState, regenerateViews } from "../shared/state-db.js";
+import { getDb, readState, regenerateViews, withTransaction } from "../shared/state-db.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readSafe(p) {
@@ -238,8 +238,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           } else if (row.status === "DONE") {
             results.push(`⚠ ${taskId} already marked DONE`);
           } else {
-            db.prepare("UPDATE tasks SET status = 'DONE', completed_at = ?, summary = ? WHERE id = ?")
-              .run(new Date().toISOString(), summary, taskId);
+            withTransaction(db, () => {
+              db.prepare("UPDATE tasks SET status = 'DONE', completed_at = ?, summary = ? WHERE id = ?")
+                .run(new Date().toISOString(), summary, taskId);
+            });
             regenerateViews(ai, db);
             results.push(`✓ ${taskId} marked DONE in state.sqlite (views regenerated)`);
           }
@@ -300,11 +302,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (existsSync(resolve(ai, "state.sqlite"))) {
           try {
             const db = getDb(ai);
-            db.prepare(
-              "INSERT INTO deltas(task_id, summary, files, read) VALUES (?, ?, ?, 0)"
-            ).run(taskId, deltaText, JSON.stringify(changedFiles.slice(0, 10)));
-            db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale', 'true')").run();
-            db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale_reason', ?)").run(`${taskId} marked DONE — ${summary}`);
+            withTransaction(db, () => {
+              db.prepare(
+                "INSERT INTO deltas(task_id, summary, files, read) VALUES (?, ?, ?, 0)"
+              ).run(taskId, deltaText, JSON.stringify(changedFiles.slice(0, 10)));
+              db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale', 'true')").run();
+              db.prepare("INSERT OR REPLACE INTO meta(key, value) VALUES ('digest_stale_reason', ?)").run(`${taskId} marked DONE — ${summary}`);
+            });
             regenerateViews(ai, db);
             results.push(`✓ Implementation delta saved to state.sqlite`);
             results.push(`✓ digest_stale=true set in state.sqlite (Reactive Memory §24)`);

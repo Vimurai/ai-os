@@ -55,6 +55,18 @@
   Status: DONE 2026-04-13 — Replaced split("\n").slice(0,100) in context-guardian-mcp strict mode with iterative regex exec loop — zero array allocation on large git grep output
 - [x] P-17: Harden `tests/run.sh` to ensure CI-breaking failures are never silent. Capture exit codes of all sub-script runs and fail the master runner if any sub-suite crashes or exits non-zero. Also, add explicit error reporting to `readBoundedLines` in `orchestrator-mcp`. (See `.ai/blueprints/robustness_phase2.md` section 3) | Tier: 2
   Status: DONE 2026-04-13 — Hardened tests/run.sh — crashed suites (no SUITE_RESULT line + non-zero exit) now counted as 1 failure; added stderr logging to readBoundedLines catch block in orchestrator-mcp
+- [x] P-18: Port `stop-hook.sh` and `post-tool-log.sh` to use `sqlite3` CLI for state checks instead of `python3` + `state.json`. (See `.ai/blueprints/robustness_phase2.md` section 4) | Tier: 2
+  Status: DONE 2026-04-13 — Ported stop-hook.sh and post-tool-log.sh to use sqlite3 CLI for state checks — removed python3+state.json dependency; stop-hook reads digest_stale/digest_stale_reason from meta table; post-tool-log reads open task count from tasks table with grep fallback
+- [x] P-19: Implement viewport-scoped audits in `vibe-check-mcp`. Limit `querySelectorAll` scans to the first 100 elements or use visibility checks to prevent OOM/freezes on massive pages. (See `.ai/blueprints/robustness_phase2.md` section 5) | Tier: 2
+  Status: DONE 2026-04-13 — Implemented viewport-scoped audits in vibe-check-mcp — all three querySelectorAll scans (contrast, touch targets, focus rings) now filter to getBoundingClientRect() visible elements only (top < innerHeight && bottom > 0) and cap at 100 elements
+- [x] P-20: Implement disk persistence for `propose-patch-mcp`. Store pending patches in a new `patches` SQLite table or `.ai/patches.json` so they survive across CLI sessions. (See `.ai/blueprints/robustness_phase3.md` section 1) | Tier: 2
+  Status: DONE 2026-04-13 — Implemented disk persistence for propose-patch-mcp — patches stored in .ai/patches.json; loadPatches() on startup, savePatches() after propose/confirm/reject; applied/rejected patches are pruned; survives CLI session restarts
+- [x] P-21: Harden `safe-exec-mcp` secret detection by broadening the `SECRET_IN_COMMAND` regex to catch space-separated secrets (e.g., `--token secret`). (See `.ai/blueprints/robustness_phase3.md` section 2) | Tier: 2
+  Status: DONE 2026-04-13 — Hardened safe-exec-mcp SECRET_IN_COMMAND regex to catch space-separated secrets (e.g. --token secret_value) — changed \s*=\s* to (\s*=\s*|\s+) to detect both assignment and flag-style secrets
+- [x] P-22: Add transaction support to `state-db.js` via a `withTransaction` helper and refactor `orchestrator-mcp` to ensure multi-table updates are atomic. (See `.ai/blueprints/robustness_phase3.md` section 3) | Tier: 2
+  Status: DONE 2026-04-13 — Added withTransaction(db, callback) helper to state-db.js (BEGIN/COMMIT/ROLLBACK); refactored orchestrator-mcp run_handover to wrap task status update and delta/meta multi-table writes in separate transactions for ACID integrity
+- [x] P-23: Make `vibe-check-mcp` timeouts configurable via an optional `timeout_ms` parameter to prevent false positives on slow local servers. (See `.ai/blueprints/robustness_phase3.md` section 4) | Tier: 2
+  Status: DONE 2026-04-13 — Made vibe-check-mcp timeouts configurable — added optional timeout_ms parameter (default 15000) to run_vibe_audit and run_chaos_test tool schemas; passed through to page.goto() to prevent false positives on slow local servers
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

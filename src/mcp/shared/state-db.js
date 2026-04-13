@@ -159,6 +159,26 @@ export function regenerateViews(aiDir, db) {
 }
 
 /**
+ * Execute a callback inside a single ACID transaction.
+ * Automatically COMMITs on success or ROLLBACKs on throw.
+ *
+ * @param {DatabaseSync} db
+ * @param {function(db): any} callback
+ * @returns the return value of callback
+ */
+export function withTransaction(db, callback) {
+  db.exec("BEGIN");
+  try {
+    const result = callback(db);
+    db.exec("COMMIT");
+    return result;
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/**
  * Compute the next sequential ID for a given prefix (E, P, T).
  */
 export function nextId(db, prefix) {

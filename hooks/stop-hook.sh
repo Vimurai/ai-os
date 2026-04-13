@@ -61,27 +61,19 @@ if [[ -f "$DIGEST_FILE" ]]; then
 fi
 
 # Reactive Memory (E-138, §24): detect digest_stale flag set by run_handover.
-# If set, emit a clear reminder so the user knows DIGEST.md needs regeneration.
-STATE_FILE="${AI_DIR}/state.json"
-if [[ -f "$STATE_FILE" ]] && command -v python3 &>/dev/null; then
-  export AI_OS_STATE="$STATE_FILE"
-  STALE_REASON=$(python3 - <<'PY'
-import json, os
-try:
-    with open(os.environ.get("AI_OS_STATE", ""), "r") as f:
-        state = json.load(f)
-    if state.get("digest_stale"):
-        reason = state.get("digest_stale_reason", "task completed")
-        print(reason[:80])
-    else:
-        print("")
-except Exception:
-    print("")
-PY
-  )
+# Read from state.sqlite directly via sqlite3 CLI (P-18 — no python3/state.json dependency).
+SQLITE_FILE="${AI_DIR}/state.sqlite"
+STALE_REASON=""
+if [[ -f "$SQLITE_FILE" ]] && command -v sqlite3 &>/dev/null; then
+  DIGEST_STALE=$(sqlite3 "$SQLITE_FILE" "SELECT value FROM meta WHERE key='digest_stale'" 2>/dev/null || echo "false")
+  if [[ "$DIGEST_STALE" == "true" ]]; then
+    STALE_REASON=$(sqlite3 "$SQLITE_FILE" "SELECT value FROM meta WHERE key='digest_stale_reason'" 2>/dev/null || echo "task completed")
+    STALE_REASON="${STALE_REASON:0:80}"
+  fi
+fi
 
-  if [[ -n "$STALE_REASON" ]]; then
-    cat >&2 <<WARN
+if [[ -n "$STALE_REASON" ]]; then
+  cat >&2 <<WARN
 
 ╔══════════════════════════════════════════════════════════════╗
 ║  REACTIVE MEMORY — DIGEST.md IS STALE (§24)                 ║
@@ -94,7 +86,6 @@ PY
 ╚══════════════════════════════════════════════════════════════╝
 
 WARN
-  fi
 fi
 
 exit 0

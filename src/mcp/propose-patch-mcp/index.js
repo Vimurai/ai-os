@@ -35,9 +35,29 @@ import { resolve, relative } from "path";
 import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
 
-// ── Patch store (in-memory) ───────────────────────────────────────────────────
+// ── Patch store (disk-backed) ─────────────────────────────────────────────────
+// Persisted to .ai/patches.json so patches survive across CLI sessions (P-20).
 // Map<patch_id, { path, diff_content, description, created_at, status }>
-const patches = new Map();
+
+function getPatchesPath() {
+  return resolve(process.cwd(), ".ai", "patches.json");
+}
+
+function loadPatches() {
+  const p = getPatchesPath();
+  if (!existsSync(p)) return new Map();
+  try {
+    return new Map(Object.entries(JSON.parse(readFileSync(p, "utf8"))));
+  } catch { return new Map(); }
+}
+
+function savePatches(map) {
+  const aiDir = resolve(process.cwd(), ".ai");
+  if (!existsSync(aiDir)) return; // not an AI-OS project
+  writeFileSync(getPatchesPath(), JSON.stringify(Object.fromEntries(map), null, 2), "utf8");
+}
+
+const patches = loadPatches();
 
 function newPatchId() {
   return "patch-" + randomBytes(4).toString("hex");
@@ -247,6 +267,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         status: "pending",
       };
       patches.set(id, patchData);
+      savePatches(patches);
 
       const formatted = formatDiff(args.diff_content, abs);
       const rendered  = renderPatch(patchData, formatted);
@@ -302,6 +323,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         patch.status = "applied";
         patches.delete(args.patch_id);
+        savePatches(patches);
 
         return {
           content: [{
@@ -327,6 +349,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
       patches.delete(args.patch_id);
+      savePatches(patches);
       return {
         content: [{
           type: "text",

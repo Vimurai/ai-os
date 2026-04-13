@@ -46,6 +46,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: "Additional routes to audit (e.g. [\"/dashboard\", \"/login\"])",
             default: ["/"],
           },
+          timeout_ms: {
+            type: "number",
+            description: "Navigation timeout in milliseconds (default: 15000). Increase for slow local servers or heavy SPAs.",
+            default: 15000,
+          },
         },
         required: ["url"],
       },
@@ -65,6 +70,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "number",
             description: "Number of rapid interactions to simulate (default: 20)",
             default: 20,
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Navigation timeout in milliseconds (default: 15000). Increase for slow local servers or heavy SPAs.",
+            default: 15000,
           },
         },
         required: ["url"],
@@ -95,10 +105,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   switch (name) {
     case "run_vibe_audit":
-      return await runVibeAudit(args.url, args.routes ?? ["/"]);
+      return await runVibeAudit(args.url, args.routes ?? ["/"], args.timeout_ms ?? 15000);
 
     case "run_chaos_test":
-      return await runChaosTest(args.url, args.interactions ?? 20);
+      return await runChaosTest(args.url, args.interactions ?? 20, args.timeout_ms ?? 15000);
 
     case "get_performance_metrics":
       return await getPerformanceMetrics(args.url);
@@ -113,7 +123,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // ── run_vibe_audit ────────────────────────────────────────────────────────────
 
-async function runVibeAudit(baseUrl, routes) {
+async function runVibeAudit(baseUrl, routes, timeoutMs) {
   const browser = await chromium.launch({ headless: true });
   const results = [];
 
@@ -135,19 +145,23 @@ async function runVibeAudit(baseUrl, routes) {
         }).observe({ type: "layout-shift", buffered: true });
       });
 
-      await page.goto(url, { waitUntil: "networkidle", timeout: 15000 });
+      await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
 
       // CLS score
       const cls = await page.evaluate(() => window.__clsScore ?? 0);
       const clsStatus = cls < 0.1 ? "PASS" : cls < 0.25 ? "WARN" : "FAIL";
 
-      // Contrast check — sample all visible text elements
+      // Contrast check — sample viewport-visible text elements (P-19)
       const contrastIssues = await page.evaluate(() => {
         const issues = [];
-        const elements = document.querySelectorAll(
+        const vh = window.innerHeight;
+        const elements = Array.from(document.querySelectorAll(
           "p, h1, h2, h3, h4, h5, h6, span, a, button, label"
-        );
-        for (const el of Array.from(elements).slice(0, 50)) {
+        )).filter(el => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
+        }).slice(0, 100);
+        for (const el of elements) {
           const style = window.getComputedStyle(el);
           const fg = style.color;
           const bg = style.backgroundColor;
@@ -159,11 +173,16 @@ async function runVibeAudit(baseUrl, routes) {
         return issues.slice(0, 5);
       });
 
-      // Touch targets
+      // Touch targets — viewport-visible interactive elements (P-19)
       const smallTargets = await page.evaluate(() => {
-        const interactive = document.querySelectorAll("button, a, input, select");
+        const vh = window.innerHeight;
+        const interactive = Array.from(document.querySelectorAll("button, a, input, select"))
+          .filter(el => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
+          }).slice(0, 100);
         const small = [];
-        for (const el of Array.from(interactive).slice(0, 30)) {
+        for (const el of interactive) {
           const rect = el.getBoundingClientRect();
           if (rect.width > 0 && rect.height > 0 && (rect.width < 44 || rect.height < 44)) {
             small.push(`${el.tagName}[${el.textContent?.slice(0, 20) || el.type || ""}] ${Math.round(rect.width)}x${Math.round(rect.height)}px`);
@@ -172,11 +191,16 @@ async function runVibeAudit(baseUrl, routes) {
         return small.slice(0, 5);
       });
 
-      // Focus ring check
+      // Focus ring check — viewport-visible focusable elements (P-19)
       const focusIssues = await page.evaluate(() => {
-        const focusable = document.querySelectorAll("button, a, input, select, textarea");
+        const vh = window.innerHeight;
+        const focusable = Array.from(document.querySelectorAll("button, a, input, select, textarea"))
+          .filter(el => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
+          }).slice(0, 100);
         const issues = [];
-        for (const el of Array.from(focusable).slice(0, 20)) {
+        for (const el of focusable) {
           const style = window.getComputedStyle(el, ":focus");
           const outline = style.outline || style.outlineStyle;
           if (outline === "none" || outline === "0px") {
@@ -254,7 +278,7 @@ function formatVibeReport(results, hasP0) {
 
 // ── run_chaos_test ────────────────────────────────────────────────────────────
 
-async function runChaosTest(url, interactions) {
+async function runChaosTest(url, interactions, timeoutMs) {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
@@ -266,7 +290,7 @@ async function runChaosTest(url, interactions) {
   page.on("pageerror", (err) => errors.push(`Page error: ${err.message}`));
 
   try {
-    await page.goto(url, { waitUntil: "networkidle", timeout: 15000 });
+    await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
 
     // Rapid-click stress on primary CTA
     const primaryCta = await page.$("button[type='submit'], button.primary, button:first-of-type");
@@ -364,7 +388,7 @@ async function getPerformanceMetrics(url) {
     });
 
     const navStart = Date.now();
-    await page.goto(url, { waitUntil: "networkidle", timeout: 15000 });
+    await page.goto(url, { waitUntil: "networkidle", timeout: 15000 }); // get_performance_metrics uses fixed timeout
     const ttfb = Date.now() - navStart;
 
     // Allow Vitals to settle
