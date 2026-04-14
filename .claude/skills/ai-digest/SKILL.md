@@ -13,7 +13,7 @@ agent: default
 ## Dynamic Context Injection
 Current DIGEST age: !stat -f "%Sm" .ai/DIGEST.md 2>/dev/null || stat -c "%y" .ai/DIGEST.md 2>/dev/null || echo "(unknown)"
 Last LOG entry: !tail -5 .ai/LOG.md 2>/dev/null || echo "(LOG.md empty)"
-Open tasks: !sqlite3 .ai/state.sqlite "SELECT COUNT(*) FROM tasks WHERE status='OPEN'" 2>/dev/null || echo "0"
+Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | wc -l | tr -d ' '
 
 ## When to Run
 - DIGEST is flagged as stale (> 3 days old, or last entry doesn't match recent changes)

@@ -9,12 +9,10 @@ agent: general-purpose
 ---
 
 ROLE: TASK_VALIDATOR
-Target: state.sqlite via get_state (read-only validation — never edits tasks)
+Target: .ai/TASKS.md (read-only validation — never edits tasks)
 
 ## Preflight
-1. Call `get_state()` via task-synchronizer-mcp to retrieve all tasks.
-   Use the full response (not summary mode) to get the complete task list.
-   Fallback: Read .ai/TASKS.md if task-synchronizer-mcp is unavailable.
+1. Read .ai/TASKS.md — full content.
 
 ## Validation Steps
 

@@ -44,10 +44,3 @@ Record in .ai/DECISIONS.md if the pipeline choice is non-trivial.
 ## After writing
 Append to .ai/DIGEST.md:
 - YYYY-MM-DD: DEVOPS.md updated — <key change>
-
-## Token Reporting (Tier 2/3 tasks)
-After completing any Tier 2 or Tier 3 DevOps task, call:
-```
-mcp__token-budget-mcp__report_cost({ task_id: "E-##", tokens: <estimate>, model: "claude-sonnet-4-6" })
-```
-Use token count from the LLM response metadata if available; otherwise estimate based on output length.

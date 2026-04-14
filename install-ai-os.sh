@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 # AI-OS v3.2 Installer — thin copier
 # Source files live in src/; this script copies them to ~/.ai-os/ and sets up PATH.
+
+# Guard: require bash (process substitution is bash-only; sh/dash will fail)
+if [ -z "${BASH_VERSION:-}" ]; then
+  echo "Error: This script requires bash." >&2
+  echo "Run:   bash install-ai-os.sh" >&2
+  exit 1
+fi
+
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
