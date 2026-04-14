@@ -1,9 +1,6 @@
 ---
 name: docs-architect
 description: Periodically audits public documentation (README.md, CONTRIBUTING.md) against .ai/architect.md and .mcp.json to detect drift. Produces a structured gap report and recommends P-## tasks.
-disable-model-invocation: false
-user-invocable: true
-allowed-tools: Read, mcp__task-synchronizer-mcp__add_stamp, mcp__task-synchronizer-mcp__add_task
 ---
 
 # Docs Architect
