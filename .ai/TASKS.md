@@ -7,3 +7,11 @@
   Status: DONE 2026-04-14 — Created .ai/blueprints/mcp.md and accurately mapped all 16 MCP servers by core capabilities, security, and Git operations.
 - [x] P-3: Create .ai/blueprints/agents.md and map the structures for Claude and Gemini agents and skills. | Tier: 2
   Status: DONE 2026-04-14 — Created .ai/blueprints/agents.md mapping all Claude, Gemini, and Shared skills and agents across the ecosystem.
+- [x] P-4: Blueprint the monorepo structure (npm workspaces) to unify MCP server dependencies and resolve fragmentation. | Tier: 2
+  Status: DONE 2026-04-14 — Created .ai/blueprints/workspace.md to define npm workspaces and deduplicate MCP dependencies.
+- [x] P-5: Define the execution constraints and CI testing strategy for the Bootloader fallback layer to guarantee SQLite state validity. | Tier: 2
+  Status: DONE 2026-04-14 — Created .ai/blueprints/bootloader.md to define execution constraints and CI tests for the fallback mechanism.
+
+## Engineer (Claude)
+- [ ] E-1: Implement the monorepo workspace structure (npm/pnpm workspaces) across `src/mcp/*` per `.ai/blueprints/workspace.md`. | Tier: 2
+- [ ] E-2: Implement the Bootloader fallback CI validation strategy and resilience tests per `.ai/blueprints/bootloader.md`. | Tier: 2

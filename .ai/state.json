@@ -35,6 +35,46 @@
       "created_at": "2026-04-14T10:46:04.238Z",
       "completed_at": "2026-04-14T10:49:59.733Z",
       "summary": "Created .ai/blueprints/agents.md mapping all Claude, Gemini, and Shared skills and agents across the ecosystem."
+    },
+    {
+      "id": "P-4",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint the monorepo structure (npm workspaces) to unify MCP server dependencies and resolve fragmentation.",
+      "created_at": "2026-04-14T14:54:47.254Z",
+      "completed_at": "2026-04-14T14:56:24.982Z",
+      "summary": "Created .ai/blueprints/workspace.md to define npm workspaces and deduplicate MCP dependencies."
+    },
+    {
+      "id": "P-5",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Define the execution constraints and CI testing strategy for the Bootloader fallback layer to guarantee SQLite state validity.",
+      "created_at": "2026-04-14T14:54:47.256Z",
+      "completed_at": "2026-04-14T14:56:24.983Z",
+      "summary": "Created .ai/blueprints/bootloader.md to define execution constraints and CI tests for the fallback mechanism."
+    },
+    {
+      "id": "E-1",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement the monorepo workspace structure (npm/pnpm workspaces) across `src/mcp/*` per `.ai/blueprints/workspace.md`.",
+      "created_at": "2026-04-14T14:56:24.984Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-2",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement the Bootloader fallback CI validation strategy and resilience tests per `.ai/blueprints/bootloader.md`.",
+      "created_at": "2026-04-14T14:56:24.984Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [

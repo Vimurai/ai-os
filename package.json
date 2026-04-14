@@ -1,0 +1,13 @@
+{
+  "name": "ai-os-v2",
+  "private": true,
+  "workspaces": [
+    "src/mcp/*"
+  ],
+  "scripts": {
+    "test": "bash tests/run.sh"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

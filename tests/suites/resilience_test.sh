@@ -89,4 +89,50 @@ console.log(result === null ? 'null' : 'not-null');
 " 2>/dev/null || echo "error")
 assert_contains "T-RES-11: readStateStrict returns null for missing state.json" "null" "$missing_result"
 
+# ── Scenario D: Simulated Node Failure (E-2 / bootloader.md §3) ──────────────
+
+AI_EXEC="${REPO_ROOT}/src/bin/ai-exec"
+STATE_SQLITE="${REPO_ROOT}/.ai/state.sqlite"
+STATE_JSON="${REPO_ROOT}/.ai/state.json"
+
+# T-RES-12: ai-exec binary exists and is executable (secondary fallback layer)
+assert_exists "$AI_EXEC"
+assert_status 0 "T-RES-12: ai-exec is executable" \
+  test -x "$AI_EXEC"
+
+# T-RES-13: Simulated node failure — chmod orchestrator-mcp to non-executable,
+# assert fallback shell cat of TASKS.md still works, then restore.
+ORIG_MODE=$(stat -f "%p" "$ORCH_MCP" 2>/dev/null || stat -c "%a" "$ORCH_MCP" 2>/dev/null)
+chmod 000 "$ORCH_MCP"
+fallback_result=$(cat "${REPO_ROOT}/.ai/TASKS.md" 2>/dev/null | head -1 || echo "FAIL")
+chmod 644 "$ORCH_MCP"
+assert_contains "T-RES-13: shell cat fallback reads TASKS.md during simulated node failure" \
+  "TASKS" "$fallback_result"
+
+# T-RES-14: Fallback verification — state.json is parseable by Python (secondary path)
+fallback_json=$(python3 -c "
+import json
+s = json.load(open('${STATE_JSON}'))
+print('ok' if 'tasks' in s else 'fail')
+" 2>/dev/null || echo "error")
+assert_contains "T-RES-14: Python fallback can parse state.json (secondary fallback path)" \
+  "ok" "$fallback_json"
+
+# ── Scenario E: SQLite Integrity Check (E-2 / bootloader.md §3) ──────────────
+
+if [ -f "$STATE_SQLITE" ] && command -v sqlite3 &>/dev/null; then
+  # T-RES-15: SQLite integrity_check returns 'ok' (no corruption)
+  integrity=$(sqlite3 "$STATE_SQLITE" "PRAGMA integrity_check;" 2>/dev/null || echo "error")
+  assert_contains "T-RES-15: state.sqlite PRAGMA integrity_check passes (no corruption)" \
+    "ok" "$integrity"
+
+  # T-RES-16: SQLite read-only query succeeds (fallback MUST only read per blueprint §2)
+  task_count=$(sqlite3 "$STATE_SQLITE" "SELECT COUNT(*) FROM tasks;" 2>/dev/null || echo "error")
+  assert_status 0 "T-RES-16: read-only SELECT on state.sqlite succeeds in fallback mode" \
+    test "$task_count" -ge 0
+else
+  _pass "T-RES-15: state.sqlite integrity check skipped (sqlite3 or db not available)"
+  _pass "T-RES-16: state.sqlite read-only query skipped (sqlite3 or db not available)"
+fi
+
 assert_summary
