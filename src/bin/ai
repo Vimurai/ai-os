@@ -1013,10 +1013,25 @@ do_review() {
 
   # Auto-detect tier from staged diff unless overridden
   local TIER="${TIER_OVERRIDE}"
-  if [[ -z "$TIER" && -d ".ai" ]]; then
+  local TIER_SOURCE=""
+  if [[ -n "$TIER_OVERRIDE" ]]; then
+    TIER_SOURCE="manual --tier override"
+  elif [[ -d ".ai" ]]; then
     TIER=$(detect_tier 2>/dev/null || echo "2")
+    case "$TIER" in
+      1) TIER_SOURCE="auto-detected: docs/config only (no logic files staged)" ;;
+      3) TIER_SOURCE="auto-detected: high-risk keywords found in staged diff" ;;
+      *) TIER_SOURCE="auto-detected: logic files staged (src/, *.js/ts/py/sh)" ;;
+    esac
+  else
+    TIER="2"
+    TIER_SOURCE="default (not in AI-OS project)"
   fi
   TIER="${TIER:-2}"
+
+  echo ""
+  echo "TSRT: Tier ${TIER} [${TIER_SOURCE}]"
+  echo ""
 
   case "$who" in
     claude)
@@ -1025,13 +1040,11 @@ do_review() {
         cat <<'TIER1_REVIEW'
 
 ━━ [TIER_1] REVIEW SKIPPED (TSRT) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Tier 1 detected — CSS/Docs/Typos only. Critic review not required.
+Tier 1 — docs/config only. Gate 2 will bypass automatically.
+No [CRITIC_STAMP] required.
 
-ACTION:
-  1. Run linter/prettier locally: npx prettier --check . && npx eslint .
-  2. Commit with [TIER_1] tag: git commit -m "[TIER_1] <description>"
-
-No [CRITIC_STAMP] required for Tier 1 commits.
+ACTION: Commit directly — the pre-commit hook will print:
+  [TIER_1] Docs/config only — Gate 2 bypassed
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TIER1_REVIEW
         return
