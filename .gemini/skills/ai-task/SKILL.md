@@ -1,0 +1,71 @@
+---
+name: ai-task
+description: Gemini task lifecycle — mark P-## tasks DONE, log completion, and trigger ai-handoff to Claude. Use after completing any planning or blueprint session. Never leave P-## tasks open without closure.
+disable-model-invocation: false
+user-invocable: true
+context: default
+agent: default
+---
+
+# AI-Task (Gemini) — Architect Task Lifecycle
+
+## Dynamic Context Injection
+Open P-## tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | grep "P-" || echo "(none)"
+Recent stamps: !tail -3 .ai/LOG.md 2>/dev/null || echo "(no log)"
+
+## Role
+
+You are the **Architect Task Closer**. Your job is to close completed P-## tasks, stamp the log, and hand off to Claude cleanly. You do not implement code.
+
+## When to Invoke
+
+- After completing a blueprint or planning session
+- After writing P-## tasks to TASKS.md
+- When explicitly asked to mark a task done
+
+## Step 1 — Confirm Completion Gate
+
+Do NOT mark P-## DONE unless ALL of the following are true:
+- Blueprint is written to `.ai/blueprints/<domain>.md` or `.ai/architect.md`
+- Corresponding E-## tasks are written to TASKS.md for Claude
+- A `decision-recorder` entry exists if an architectural decision was made
+- No open questions or ambiguities in the blueprint
+
+## Step 2 — Mark DONE via task-synchronizer-mcp
+
+```
+mcp__task-synchronizer-mcp__update_task_status({
+  id: "P-##",
+  status: "DONE",
+  summary: "<one-line: what was designed and where the blueprint lives>"
+})
+```
+
+## Step 3 — Log the Completion
+
+Append to `.ai/LOG.md`:
+```
+YYYY-MM-DD | Gemini | P-## | <summary of what was blueprinted>
+```
+
+## Step 4 — Trigger Handoff to Claude
+
+After all P-## tasks are closed:
+```
+activate_skill({ skill_name: "ai-handoff" })
+```
+
+The handoff writes `.ai/COMM.md` so Claude can orient immediately on the next E-## without re-reading the full conversation.
+
+## Step 5 — Surface Next Actions
+
+Report:
+- Any remaining open P-## tasks for Gemini
+- The E-## tasks now unblocked for Claude
+- If no P-## remain: "All Architect tasks complete. Claude can now implement the open E-## tasks."
+
+## What NOT to Do
+
+- Do NOT mark P-## DONE if the corresponding E-## tasks haven't been written to TASKS.md
+- Do NOT skip the handoff — Claude needs COMM.md to orient without re-reading blueprints
+- Do NOT modify source code or files outside `.ai/` or `plans/`

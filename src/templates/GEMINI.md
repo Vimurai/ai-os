@@ -31,6 +31,11 @@ Skills are context-heavy. When you finish using a skill (like a critic review or
 If blueprint touches auth/secrets → add SEC_CLEARED requirement
 If UX/design validation needed → dispatch `ux_reviewer`
 If architecture consistency check needed → dispatch `architectural-aligner`
+Before writing any blueprint → `activate_skill({ skill_name: "blueprint-writer" })`
+Before writing any P-## or E-## task → `activate_skill({ skill_name: "task-planner" })`
+After any architectural decision → `activate_skill({ skill_name: "decision-recorder" })`
+After completing a planning session → `activate_skill({ skill_name: "ai-task" })`
+Before switching to Claude → `activate_skill({ skill_name: "ai-handoff" })`
 
 ## Project-Scoped Rules
 Full Principal Architect rules are managed in `GEMINI.md` within this project.

@@ -1,6 +1,10 @@
 # Skills Index (metadata-only — §29 JIT Skill Loading)
 # Use activate_skill(<name>) to load full content.
 
+- ai-task: Use activate_skill with this name after completing any P-## blueprint or planning session. Marks task DONE, logs completion, and triggers ai-handoff to Claude. Never leave P-## tasks open without closure.
+- blueprint-writer: Use activate_skill with this name before writing any file to .ai/blueprints/. Validates required sections (Core Concept, Data Model, Security, Rollback Plan, 3+ components, E-## tasks). Blocks lazy or incomplete blueprints.
+- decision-recorder: Use activate_skill with this name after any major architectural decision — technology choice, pattern selection, constraint acceptance. Appends a D-### entry to .ai/DECISIONS.md with rationale and rejected alternatives.
+- task-planner: Use activate_skill with this name before writing P-## or E-## tasks to TASKS.md. Enforces tier, action verb, blueprint reference, acceptance criteria, and circular dependency checks. Blocks vague tasks.
 - ai-archive: Use activate_skill with this name ONLY when the user explicitly requests an archive operation. DESTRUCTIVE — moves LOG.md, COMM.md, REVIEWS.md, SESSION.md to .ai/archive/YYYY-MM/ with timestamps and re-initializes from templates. Never invoke autonomously.
 - ai-digest: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running ai archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
 - ai-preflight: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.

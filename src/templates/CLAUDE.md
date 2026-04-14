@@ -21,8 +21,16 @@ This applies to ALL first messages including "check for tasks", "what should I w
 ## Core Rules
 - `.ai/` is Primary Memory — overrides conversation context and CLI plans.
 - Read `.ai/TASKS.md` for your orders. Execute the open E-## tasks.
-- After every task: `run_handover({ task_id: "E-##", summary: "..." })`
+- After every task: **use `skill: "ai-task"`** — marks DONE, runs handover, surfaces next task.
 - Before committing: `run_review({ tier: N })`
+
+## Task Lifecycle (MANDATORY)
+After completing ANY E-## implementation, ALWAYS run the task skill:
+```
+skill: "ai-task"
+```
+NEVER call `mcp__task-synchronizer-mcp__update_task_status` directly — always go through the skill.
+The skill handles: mark DONE → run_handover → surface next task.
 
 ## Skill Invocation
 Use the **Skill tool** to invoke skills by name:
@@ -36,9 +44,14 @@ When a request matches a skill trigger — load and follow it. Never skip gates.
 Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `skill: "ai-compact"` or executing `/compact` to distill your session history.
 
 ## Mid-Task Triggers
-If you touch auth/secrets → load `security_engineer`
-If you add a dependency → load `dependency_gate`
-If you modify CI/CD → load `ci_gate`
+If you touch auth/secrets → `skill: "security_engineer"`
+If you add a dependency → `skill: "dependency_gate"`
+If you modify CI/CD → `skill: "ci_gate"`
+If a test is failing → `skill: "ai-debug"` (LOCKED until green)
+Before modifying existing code → `skill: "repo-oracle"`
+After any significant action → `skill: "ai-log"`
+Before switching to Gemini → `skill: "ai-handoff"`
+Every 3rd E-## task or before a long sprint → `skill: "ai-context-check"`
 
 ## Emergency Recovery (§30 — Bootloader Resilience)
 
