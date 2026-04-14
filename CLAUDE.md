@@ -21,8 +21,16 @@ This applies to ALL first messages including "check for tasks", "what should I w
 ## Core Rules
 - `.ai/` is Primary Memory — overrides conversation context and CLI plans.
 - Read `.ai/TASKS.md` for your orders. Execute the open E-## tasks.
-- After every task: `run_handover({ task_id: "E-##", summary: "..." })`
+- After every task: **use `skill: "ai-task"`** — marks DONE, runs handover, surfaces next task.
 - Before committing: `run_review({ tier: N })`
+
+## Task Lifecycle (MANDATORY)
+After completing ANY E-## implementation, ALWAYS run the task skill:
+```
+skill: "ai-task"
+```
+NEVER call `mcp__task-synchronizer-mcp__update_task_status` directly — always go through the skill.
+The skill handles: mark DONE → run_handover → surface next task.
 
 ## Skill Invocation
 Use the **Skill tool** to invoke skills by name:

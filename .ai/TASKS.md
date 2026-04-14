@@ -13,5 +13,7 @@
   Status: DONE 2026-04-14 — Created .ai/blueprints/bootloader.md to define execution constraints and CI tests for the fallback mechanism.
 
 ## Engineer (Claude)
-- [ ] E-1: Implement the monorepo workspace structure (npm/pnpm workspaces) across `src/mcp/*` per `.ai/blueprints/workspace.md`. | Tier: 2
-- [ ] E-2: Implement the Bootloader fallback CI validation strategy and resilience tests per `.ai/blueprints/bootloader.md`. | Tier: 2
+- [x] E-1: Implement the monorepo workspace structure (npm/pnpm workspaces) across `src/mcp/*` per `.ai/blueprints/workspace.md`. | Tier: 2
+  Status: DONE 2026-04-14 — Added root package.json with npm workspaces pointing to src/mcp/*. Hoists @modelcontextprotocol/sdk to a single shared install. npm test wired to bash tests/run.sh.
+- [x] E-2: Implement the Bootloader fallback CI validation strategy and resilience tests per `.ai/blueprints/bootloader.md`. | Tier: 2
+  Status: DONE 2026-04-14 — Extended resilience_test.sh with 6 new scenarios (T-RES-12–17): simulated node failure, Python/shell fallback verification, and PRAGMA integrity_check on state.sqlite. Suite grows from 11 to 17 tests. All 413 tests pass.

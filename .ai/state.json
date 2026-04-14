@@ -59,22 +59,22 @@
     {
       "id": "E-1",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement the monorepo workspace structure (npm/pnpm workspaces) across `src/mcp/*` per `.ai/blueprints/workspace.md`.",
       "created_at": "2026-04-14T14:56:24.984Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-14T15:12:01.249Z",
+      "summary": "Added root package.json with npm workspaces pointing to src/mcp/*. Hoists @modelcontextprotocol/sdk to a single shared install. npm test wired to bash tests/run.sh."
     },
     {
       "id": "E-2",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement the Bootloader fallback CI validation strategy and resilience tests per `.ai/blueprints/bootloader.md`.",
       "created_at": "2026-04-14T14:56:24.984Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-14T15:12:03.261Z",
+      "summary": "Extended resilience_test.sh with 6 new scenarios (T-RES-12–17): simulated node failure, Python/shell fallback verification, and PRAGMA integrity_check on state.sqlite. Suite grows from 11 to 17 tests. All 413 tests pass."
     }
   ],
   "stamps": [

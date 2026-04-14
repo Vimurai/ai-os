@@ -1,6 +1,7 @@
 # Skills Index (metadata-only — §29 JIT Skill Loading)
 # Use activate_skill(<name>) to load full content.
 
+- ai-task: Use activate_skill with this name after completing any E-## implementation. Marks task DONE via task-synchronizer-mcp, runs run_handover for Architect delta review, and surfaces the next open task.
 - ai-archive: Use activate_skill with this name ONLY when the user explicitly requests an archive operation. DESTRUCTIVE — moves LOG.md, COMM.md, REVIEWS.md, SESSION.md to .ai/archive/YYYY-MM/ with timestamps and re-initializes from templates. Never invoke autonomously.
 - ai-compact: Use activate_skill with this name when SESSION.md exceeds ~2000 tokens, before a long task, or when asked to compact/distill context. Distills conversation history into "Active Context", archives the raw SESSION.md log, and resets it to a minimal header. Equivalent to running /compact.
 - ai-digest: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running ai archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
