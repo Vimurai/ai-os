@@ -1067,11 +1067,15 @@ Run blueprint-aligner-mcp to verify pattern consistency:
 
 2. Run unit tests: npm test (or equivalent for this project)
 
-3. Synthesize findings and append to .ai/REVIEWS.md:
-   [CRITIC_STAMP] YYYY-MM-DD | [TIER_2] <summary>
+3. Record stamp via MCP — do NOT write directly to .ai/REVIEWS.md:
+   mcp__task-synchronizer-mcp__add_stamp({
+     type: 'CRITIC_STAMP',
+     agent: 'blueprint-aligner-mcp',
+     summary: '[TIER_2] <one-line summary>'
+   })
+   This persists to state.sqlite so the stamp survives regenerateViews().
 
-Manual Thumbs Up required before committing.
-Commit with [TIER_2] tag: git commit -m \"[TIER_2] <description>\""
+Commit after stamp is written: git commit -m \"[TIER_2] <description>\""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TIER2_REVIEW
         return
@@ -1104,8 +1108,10 @@ Execute ALL of the following IN PARALLEL where possible:
    → Verify git diff aligns with blueprint. Return [PASS/FAIL].
 
 After ALL complete:
-  → Append to .ai/REVIEWS.md:
-    [CRITIC_STAMP] YYYY-MM-DD | [TIER_3] <critical findings>
+  → Invoke review_synthesizer agent — it reads all distributed stamps
+    and writes the final CRITIC_STAMP via MCP (persists to state.sqlite):
+    activate_agent('review_synthesizer')
+  → Do NOT write [CRITIC_STAMP] directly to .ai/REVIEWS.md — use MCP only.
   → If all clear: append [UACS_VERIFIED] YYYY-MM-DD to .ai/LOG.md
   → Then run: ai test --vibe (required for Tier 3 release)
 
