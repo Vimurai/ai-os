@@ -1,48 +1,27 @@
-# DIGEST — AI-OS (Updated: 2026-04-14)
-
-## Product
-- CLI framework embedding a Triad AI loop (Architect/Engineer/Tester) into any codebase via `.ai/` memory scaffolding and MCP servers.
-
-## Stack
-- Bash (zero-dependency CLI core), Node.js (MCP servers), SQLite (Exclusive system of record; WAL mode).
-- Playwright (vibe-check-mcp), file-based markdown memory (read-only generated views).
-- `sqlite3` CLI for atomic state checks in shell hooks; `os.homedir()` for reliable path resolution.
+# DIGEST (Token Saver Cache)
 
 ## Triad Health
-- Architect (Gemini): IDLE — Robustness phases 1-8 blueprints complete (P-1 through P-47); no open P-## tasks.
-- Engineer (Claude): IDLE — Robustness phases 2-8 implemented (P-13 through P-47); all tasks closed.
-- Tester (TestSprite): Active — 334/336 tests pass; 2 pre-existing e140 failures (non-regression).
+- Stage: Planning
+- Architect Focus: Blueprinting AI-OS architecture, domain blueprints (MCP, Agents)
+- Engineer Focus: Awaiting implementation tasks
 
-## Current Focus
-- Robustness sprint complete (Phases 1-8) — system stabilized on SQLite-first architecture.
-- Performance/Hygiene: Iterative regex for OOM prevention, viewport-scoped audits, and explicit resource cleanup.
-- Resilience: Unified ACID transactions, multi-route vibe fault tolerance, and explicit implementation delta handover.
+Purpose: Single file that replaces most per-session reads.
+**Strict Limit**: Keep 20–50 lines max. Bullets only. Auto-updated by Stop hook.
 
-## Key Decisions
-- D-010: SQLite-First Singularity (P-28/P-44) — `state.sqlite` is the exclusive system of record; `state.json` and `.md` are views.
-- D-011: Explicit Handover (P-38) — implementation deltas require manual acknowledgment via `mark_deltas_read`.
-- §35: ANTI-DRIFT PROTOCOL — Claude is Engineer only; architecture decisions deferred to Gemini.
-- §39: Architectural Fragmentation — domain blueprints loaded JIT from `.ai/blueprints/` to prevent context bloat.
-- E-147: UPDATE.md deprecated globally — intent and state managed via conversation context and SQLite.
+## Current snapshot
+- Product: AI-OS v2 - Autonomous operating system for AI agents with ACID-compliant SQLite state.
+- Stack: Node.js 20+ (MCP servers), Python 3.10+ (fallbacks), SQLite3, Bash.
+- Current focus (top 3 tasks):
+  - [DONE] P-1: Architect system philosophy and technical strategy.
+  - [DONE] P-2: Map MCP tools to .ai/blueprints/mcp.md.
+  - [DONE] P-3: Map Agent structures to .ai/blueprints/agents.md.
+- Known risks: Token-burn bloat without JIT loading, Bootloader fallback regressions.
 
-## Known Risks
-- P1: [ARCH_AUDIT] 2026-03-23 — Architectural Intelligence dirs missing; 2 MCPs (orchestrator, risk-analyzer) not in registry.json.
-- M-002 (MEDIUM/accepted): ai-exec orphan worktree race condition in concurrent runs.
+## Recent changes (last 10)
+- 2026-04-14: Replaced template boilerplate in Sections 1-6 of architect.md with actual AI-OS philosophy and technical strategy. (.ai/architect.md)
+- 2026-04-14: Created domain blueprint mapping all 16 MCP servers and capabilities. (.ai/blueprints/mcp.md)
+- 2026-04-14: Created domain blueprint mapping all Claude, Gemini, and Shared skills/agents. (.ai/blueprints/agents.md)
+- 2026-04-14: auto-stamped by Stop hook
 
-## MCP Servers
-- filesystem, memory, TestSprite, vibe-check-mcp, task-synchronizer-mcp, safe-exec-mcp.
-- blueprint-aligner-mcp, context-guardian-mcp, risk-analyzer-mcp, context-invoker-mcp.
-- archive-manager-mcp, orchestrator-mcp, memory-manager-mcp, verification-mcp.
-- lsp-mcp, patch-mcp, token-budget-mcp, propose-patch-mcp, github-bridge-mcp.
-
-## Recent Changes (last 10)
-- 2026-04-14: P-47: state-db.js: Migrated to os.homedir() for reliable home path resolution. (.ai/blueprints/robustness_phase8.md)
-- 2026-04-14: P-46: install-ai-os.sh: Extended orphan cleanup to src/shared/ directory. (.ai/blueprints/robustness_phase8.md)
-- 2026-04-14: P-45: ai onboard: Focus extraction refactored to query SQLite via sqlite3 CLI. (.ai/blueprints/robustness_phase8.md)
-- 2026-04-14: P-41: safe-exec-mcp: Added command normalization to resist secret obfuscation. (.ai/blueprints/robustness_phase7.md)
-- 2026-04-14: P-39: vibe-check-mcp: Added per-route isolation to prevent audit crashes on 404/timeouts. (.ai/blueprints/robustness_phase7.md)
-- 2026-04-14: P-38: orchestrator-mcp: Implemented explicit delta acknowledgment via mark_deltas_read. (.ai/blueprints/robustness_phase7.md)
-- 2026-04-13: P-36: vibe-check-mcp: Fixed context leak via try/finally browser session cleanup. (.ai/blueprints/robustness_phase6.md)
-- 2026-04-13: P-35: CAPABILITIES.md: Added explicit write permissions for ~/.ai-os/*.sqlite. (.ai/blueprints/robustness_phase6.md)
-- 2026-04-13: P-34: Gemini Agents: Restored YAML frontmatter with least-privilege toolsets to all 6 sub-agents. (.ai/blueprints/robustness_phase6.md)
-- 2026-04-13: P-25: propose-patch-mcp: Migrated patch store to SQLite for cross-session persistence. (.ai/blueprints/robustness_phase4.md)
+---
+DIGEST must be accurate or flagged as stale. If stale, run: ai digest

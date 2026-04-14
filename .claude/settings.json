@@ -1,37 +1,4 @@
 {
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": ".*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $HOME/.ai-os/hooks/stop-hook.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $HOME/.ai-os/hooks/post-tool-log.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash $HOME/.ai-os/hooks/post-tool-use.sh"
-          }
-        ]
-      }
-    ]
-  },
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
@@ -41,15 +8,11 @@
       "mcp__vibe-check-mcp__run_vibe_audit",
       "mcp__vibe-check-mcp__run_chaos_test",
       "mcp__vibe-check-mcp__get_performance_metrics",
-      "mcp__intent-refiner-mcp__refine_intent",
-      "mcp__intent-refiner-mcp__write_update_md",
       "mcp__task-synchronizer-mcp__get_state",
       "mcp__task-synchronizer-mcp__add_task",
       "mcp__task-synchronizer-mcp__update_task_status",
       "mcp__task-synchronizer-mcp__add_stamp",
       "mcp__task-synchronizer-mcp__set_project_focus",
-      "mcp__task-synchronizer-mcp__sync_tasks",
-      "mcp__task-synchronizer-mcp__append_tasks",
       "mcp__task-synchronizer-mcp__verify_markdown_sync",
       "mcp__task-synchronizer-mcp__archive_done_tasks",
       "mcp__safe-exec-mcp__analyze_command",
@@ -87,9 +50,41 @@
       "mcp__github-bridge-mcp__check_gh_auth",
       "mcp__github-bridge-mcp__fetch_assigned_issues",
       "mcp__github-bridge-mcp__get_issue",
-      "mcp__github-bridge-mcp__create_update_from_issues",
-      "mcp__github-bridge-mcp__get_pr_status",
-      "mcp__github-bridge-mcp__create_tasks_from_issues"
+      "mcp__github-bridge-mcp__create_tasks_from_issues",
+      "mcp__github-bridge-mcp__get_pr_status"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.ai-os/hooks/stop-hook.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.ai-os/hooks/post-tool-log.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.ai-os/hooks/post-tool-use.sh"
+          }
+        ]
+      }
     ]
   }
 }
