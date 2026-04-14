@@ -12,16 +12,16 @@ Commands:
   ai install          Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot; enable agent teams; set up hooks
   ai init             Create/upgrade .ai/ in current repo (safe, no overwrite)
   ai onboard          Print the Principal Architect reverse-engineering prompt for existing repos
-  ai update [--force] Scan project and update DIGEST.md + TASKS.md (Gate 1)
+  ai update [--force] Print update session prompt (Gate 1: Intent Gate — does not scan/write itself)
   ai preflight        Print DIGEST-first read order + SESSION stamp template
   ai review <who> [--tier <1|2|3>]  Print tier-aware critic prompts (auto-detects tier)
   ai test [--vibe]    Run automated tests (TestSprite) or Vibe/Chaos audit (--vibe)
   ai mcp-setup        Install npm dependencies for all AI-OS MCP servers
   ai archive          Move old LOG/COMM/REVIEWS entries to .ai/archive/YYYY-MM/
   ai digest           Print prompt to regenerate DIGEST.md (run when stale)
-  ai sync             Re-sync agent/skill files from ~/.ai-os to project-scoped .claude/ and .gemini/
+  ai sync             Re-sync agents, skills, bootloaders (CLAUDE.md, GEMINI.md, .mcp.json), and hooks from ~/.ai-os
   ai sync --github    Fetch assigned GitHub issues → output to terminal for Architect cycle (§28)
-  ai migrate-state [--force]  Seed state.json from TASKS.md (run once after v3 upgrade)
+  ai migrate-state [--force]  Seed state.json from TASKS.md; task-synchronizer-mcp auto-imports to state.sqlite on first run
   ai doctor [--repair] [--compliance]  Diagnose PATH, config, hooks, MCP; --compliance audits agent frontmatter for Ghost Tools
   ai where            Print install paths
   ai version          Print version
@@ -99,6 +99,22 @@ with open(mcp_path, "w") as f:
 PY
 }
 
+# Remove frontmatter fields unsupported by Gemini CLI v0.37+
+# Usage: strip_gemini_agent_fields <dir>
+strip_gemini_agent_fields() {
+  local dir="${1:-.gemini/agents}"
+  local f
+  for f in "${dir}"/*.md; do
+    [[ -f "$f" ]] || continue
+    # Strip disable-model-invocation, user-invocable, allowed-tools lines inside ---...--- block
+    sed -i '' '/^---$/,/^---$/{
+      /^disable-model-invocation:/d
+      /^user-invocable:/d
+      /^allowed-tools:/d
+    }' "$f"
+  done
+}
+
 ensure_ai_templates() {
   mkdir -p .ai .ai/archive
 
@@ -142,6 +158,7 @@ ensure_ai_templates() {
   # .gemini/ — project-scoped Gemini agents, skills, and settings
   mkdir -p ".gemini/agents" ".gemini/skills"
   cp -rf "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
+  strip_gemini_agent_fields ".gemini/agents"
   sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
   sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
   _configure_project_gemini_settings ".gemini"
@@ -347,6 +364,12 @@ install_global() {
     do_mcp_setup 2>/dev/null || echo "  ⚠  MCP setup: some servers failed — run: ai mcp-setup"
   else
     echo "  ⚠  Node.js not found — MCP setup skipped. Install Node.js then run: ai mcp-setup"
+  fi
+
+  # Strip unsupported Gemini CLI frontmatter fields from global agent sources
+  if [[ -d "${AIOS}/gemini/agents" ]]; then
+    strip_gemini_agent_fields "${AIOS}/gemini/agents"
+    echo "✓ Gemini agent frontmatter sanitized (stripped unsupported fields)"
   fi
 
   echo ""
@@ -934,8 +957,8 @@ PY
 
   echo ""
   echo "[MIGRATE-STATE] Migration complete."
-  printf "  Tasks seeded: %s\n" "$TASK_COUNT"
-  echo "  state.json version: 1.0"
+  printf "  Tasks seeded to state.json: %s\n" "$TASK_COUNT"
+  echo "  state.sqlite: will be created from state.json on first task-synchronizer-mcp call"
   echo "  Run: ai test to verify"
 }
 
@@ -1324,7 +1347,7 @@ for issue in issues:
         (issue.get("body") or "(no description)")[:800],
     ]))
     parts.append(block)
-footer = "\n## Action Required\nGemini (Architect): Review the issues above and create P-## blueprint tasks in state.json via add_task.\n"
+footer = "\n## Action Required\nGemini (Architect): Review the issues above and create P-## blueprint tasks via:\n  mcp__task-synchronizer-mcp__add_task({ prefix: 'P', owner: 'Architect (Gemini)', description: '...', tier: N })\nThis writes to state.sqlite and regenerates TASKS.md automatically.\n"
 print(header + "\n\n---\n\n".join(parts) + "\n" + footer)
 PY
 
@@ -1361,6 +1384,7 @@ do_sync() {
 
     mkdir -p ".gemini/agents" ".gemini/skills"
     cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
+    strip_gemini_agent_fields ".gemini/agents"
     sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
     sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
     _configure_project_gemini_settings ".gemini"
