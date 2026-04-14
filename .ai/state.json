@@ -7,486 +7,6 @@
   },
   "tasks": [
     {
-      "id": "E-146",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Standardize Preflight blocks across all Claude and Gemini agents (e.g., `devops_engineer`, `vibe_sentinel`). Force them to strictly read ONLY `DIGEST.md` and `UPDATE.md` upon initialization. Redundant full-folder ingestions during Tier 3 multi-agent handovers must be eliminated.",
-      "created_at": "2026-04-02T20:52:53.042Z",
-      "completed_at": "2026-04-02T21:02:29.089Z",
-      "summary": "Standardized preflight blocks across devops_engineer, security_engineer, decision_recorder, claude_tasks agents — removed UPDATE.md references, enforced DIGEST-first pattern, moved domain files to JIT sections; Gemini agents already compliant"
-    },
-    {
-      "id": "E-147",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Deprecate `UPDATE.md` globally across the AI-OS framework. Remove all dependencies on `UPDATE.md` from `src/bin/ai`, templates (`src/templates`), agent preflights, and skills (like `ai-update`, `ai-preflight`, `ai-review`). Delete `UPDATE.md` from the standard scaffolding and ensure it is never created.",
-      "created_at": "2026-04-02T20:56:02.994Z",
-      "completed_at": "2026-04-03T07:54:23.769Z",
-      "summary": "Deprecated UPDATE.md globally — removed from ensure_ai_templates() scaffolding, preflight() output, do_update/do_onboard/do_digest prompts, ai-preflight skill, ai-review skill, bug-reproducer skill, GEMINI.md trigger table; refactored ai-update skill to use conversation context; marked ai-update-lifecycle as DEPRECATED no-op"
-    },
-    {
-      "id": "E-148",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor the `ai update` CLI command. It must no longer read from or rely on `UPDATE.md`. Instead, it should trigger an agent to scan the project (respecting JIT limits) and autonomously update the current project state directly into `.ai/DIGEST.md` and `.ai/state.json`.",
-      "created_at": "2026-04-02T20:56:02.997Z",
-      "completed_at": "2026-04-03T07:57:58.799Z",
-      "summary": "Refactored do_update() in src/bin/ai — removed UPDATE.md dependency and ensure_ai_templates call; now accepts inline intent from CLI args, triggers digest_updater agent (JIT) for DIGEST refresh, and directs task-synchronizer-mcp for state.json updates"
-    },
-    {
-      "id": "E-149",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor all MCP servers currently relying on `UPDATE.md`. Deprecate or redesign `intent-refiner-mcp`. Update `task-synchronizer-mcp`, `risk-analyzer-mcp`, and `github-bridge-mcp` to process intent directly from CLI inputs, chat histories, or API requests, fully excising `UPDATE.md` references.",
-      "created_at": "2026-04-02T20:56:02.999Z",
-      "completed_at": "2026-04-03T08:01:50.482Z",
-      "summary": "Removed UPDATE.md from all three MCP servers: orchestrator-mcp (removed UPDATE.md preflight pointer, deprecated run_intent_cleanup as no-op), task-synchronizer-mcp (deprecated sync_tasks to return deprecation notice without reading UPDATE.md), github-bridge-mcp (renamed create_update_from_issues→create_intent_from_issues, fixed schema/handler name mismatch bug, removed UPDATE.md writes)"
-    },
-    {
-      "id": "E-150",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Propagate the \"AIS: Fresh Conversations\" token economics rule into the core `src/templates/RULES.md` and `src/templates/architect.md.template` files, so that all new AI-OS scaffoldings enforce the use of `/clear` between unrelated tasks to prevent exponential token bloat.",
-      "created_at": "2026-04-03T08:04:35.020Z",
-      "completed_at": "2026-04-03T08:07:09.395Z",
-      "summary": "Added AIS Fresh Conversations rule + 6-file JIT limit to src/templates/RULES.md; added §33 Token Economics section to src/templates/architect.md.template; synced RULES.md to .ai/RULES.md"
-    },
-    {
-      "id": "E-151",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement Architectural Fragmentation (§39). Split the monolithic `.ai/architect.md` into granular Domain Blueprints (e.g., `.ai/blueprints/core.md`, `security.md`) to reduce the session-start context tax. Update preflight scripts and templates to read the primary index file and use JIT loading for sub-blueprints. (Fulfills P-61)",
-      "created_at": "2026-04-03T08:09:53.940Z",
-      "completed_at": "2026-04-03T08:15:23.106Z",
-      "summary": "Implemented Architectural Fragmentation (§39) — created .ai/blueprints/ with 5 domain files (core, security, agents, mcp, governance); architect.md reduced from 490+ lines to 35-line lightweight index/router; updated orchestrator-mcp run_preflight pointer and src/templates/architect.md.template with §34 Domain Blueprints pattern"
-    },
-    {
-      "id": "E-152",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement \"Metadata-Only\" Default Mode for `ai sync` (§29). Ensure `ai sync` only provides Skill Summaries to agents by default, rather than full `SKILL.md` contents. Full skill content should only be injected dynamically via `activate_skill`. Update `context-invoker-mcp` accordingly. (Fulfills P-62)",
-      "created_at": "2026-04-03T08:09:53.943Z",
-      "completed_at": "2026-04-03T08:20:19.934Z",
-      "summary": "Metadata-only default mode for ai sync: added list_skills/list_agents tools to context-invoker-mcp (Level 1 metadata), added _generate_skills_index() to src/bin/ai that writes _SKILLS_INDEX.md (name+description) to each synced skills dir after sync_skills_20()"
-    },
-    {
-      "id": "E-153",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `archive-manager-mcp` to use file streams (e.g., `readline`) instead of `readFileSync` and string `split` when counting lines and words for token estimation. Loading full, potentially bloated log files into memory to count words is a robustness flaw and memory/token burner.",
-      "created_at": "2026-04-03T08:16:13.690Z",
-      "completed_at": "2026-04-03T08:26:06.078Z",
-      "summary": "Refactored archive-manager-mcp: replaced readFileSync + string split for line/word counting with readline createInterface streams; added countFileStats() helper — no full file load into memory"
-    },
-    {
-      "id": "E-154",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `context-invoker-mcp` to only read the top chunk (e.g., first 4KB or using a stream) of skill/agent files when parsing YAML frontmatter during list operations. Currently, it reads the entire content of every skill and agent into memory just to extract the `description` field, causing massive overhead.",
-      "created_at": "2026-04-03T08:16:13.693Z",
-      "completed_at": "2026-04-03T08:26:09.640Z",
-      "summary": "Refactored context-invoker-mcp: added readHead() helper (openSync/readSync, 4096 bytes max); listAvailable() now uses readHead instead of readFileSync — frontmatter parsing never loads full skill/agent content"
-    },
-    {
-      "id": "E-155",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `context-guardian-mcp` to use `git grep` or `ripgrep` via `child_process` when scanning `src/` for TODO/FIXME markers in `strict` mode, instead of recursively reading every source file completely into Node memory. Loading every file fully is a critical performance flaw and memory burner for large codebases.",
-      "created_at": "2026-04-03T08:17:54.291Z",
-      "completed_at": "2026-04-03T08:26:13.115Z",
-      "summary": "Refactored context-guardian-mcp strict mode: replaced scanDir recursive readFileSync loop with git grep -n -E; removed scanDir function + readdirSync/statSync imports; added spawnSync + extname; fixed pre-existing missing relative import"
-    },
-    {
-      "id": "P-1",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions.",
-      "created_at": "2026-04-03T08:42:14.722Z",
-      "completed_at": "2026-04-03T08:44:53.164Z",
-      "summary": "Handed over to Claude as E-156"
-    },
-    {
-      "id": "P-2",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md)",
-      "created_at": "2026-04-03T08:42:14.726Z",
-      "completed_at": "2026-04-03T08:44:53.166Z",
-      "summary": "Handed over to Claude as E-157"
-    },
-    {
-      "id": "E-156",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions.",
-      "created_at": "2026-04-03T08:44:53.156Z",
-      "completed_at": "2026-04-03T12:04:37.751Z",
-      "summary": "Migrated task-synchronizer-mcp state to SQLite (node:sqlite, WAL mode): schema covers project/tasks/stamps/deltas/meta tables; auto-imports state.json on first run; _syncFromJsonIfNewer() catches orchestrator-mcp direct writes via mtime guard; all mutations write state.json + TASKS.md + REVIEWS.md as views for backwards compat; updated migrate_state_test.sh to reflect getDb() replacing readStateStrict(); 334/336 tests pass (2 pre-existing e140 failures)"
-    },
-    {
-      "id": "E-157",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement fuzzy-patching fallback in `patch-mcp` to reduce retry turns. (See .ai/blueprints/robustness.md)",
-      "created_at": "2026-04-03T08:44:53.161Z",
-      "completed_at": "2026-04-03T12:04:34.048Z",
-      "summary": "Fuzzy-patching fallback in patch-mcp: on MD5 mismatch, search for old_content in current file; if found exactly once → apply patch + return [PATCH_APPLIED_WITH_DRIFT] with new MD5; if not found or ambiguous → reject with [MD5_MISMATCH]; updated lsp_patch_test.sh to match new error token"
-    },
-    {
-      "id": "P-3",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Ratify or remediate the `Co-Authored-By` trailer violation from commit d351dc9 (§12 Git Identity mandate).",
-      "created_at": "2026-04-03T12:14:16.452Z",
-      "completed_at": "2026-04-03T12:20:56.572Z",
-      "summary": "Blueprinted in git-remediation.md and handed over to Claude as E-158"
-    },
-    {
-      "id": "E-158",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Create and execute `scripts/remediate_git_identity.sh` to rewrite commit history and remove unauthorized AI co-author trailers. (See `.ai/blueprints/git-remediation.md`)",
-      "created_at": "2026-04-03T12:20:56.562Z",
-      "completed_at": "2026-04-03T12:26:04.191Z",
-      "summary": "Skipped by user — no action required"
-    },
-    {
-      "id": "P-4",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add `maxBuffer` limits (e.g., `10 * 1024 * 1024`) to all `spawnSync` calls across all MCP servers (especially `github-bridge-mcp` and `lsp-mcp`) to prevent Node `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` crashes.",
-      "created_at": "2026-04-03T12:43:45.677Z",
-      "completed_at": "2026-04-03T12:44:57.368Z",
-      "summary": "Handed over to Claude as E-159"
-    },
-    {
-      "id": "P-5",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add mandatory YAML frontmatter (`disable-model-invocation`, `user-invocable`, `allowed-tools`) to all Gemini sub-agents in `src/gemini/agents/` to fix `verification-mcp` compliance failures.",
-      "created_at": "2026-04-03T12:43:45.683Z",
-      "completed_at": "2026-04-03T12:44:57.373Z",
-      "summary": "Handed over to Claude as E-160"
-    },
-    {
-      "id": "P-6",
-      "owner": "Architect (Gemini)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add result bounding (e.g., `| head -n 100`) to the `git grep` call in `context-guardian-mcp` to prevent token leakage on massive codebases.",
-      "created_at": "2026-04-03T12:43:45.684Z",
-      "completed_at": "2026-04-03T12:44:57.374Z",
-      "summary": "Handed over to Claude as E-161"
-    },
-    {
-      "id": "E-159",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add `maxBuffer` limits (e.g., `10 * 1024 * 1024`) to all `spawnSync` calls across all MCP servers (especially `github-bridge-mcp` and `lsp-mcp`) to prevent Node `ERR_CHILD_PROCESS_STDIO_MAXBUFFER` crashes. (See `.ai/blueprints/robustness.md`)",
-      "created_at": "2026-04-03T12:44:57.361Z",
-      "completed_at": "2026-04-03T12:52:16.058Z",
-      "summary": "Added maxBuffer 10MB to all spawnSync calls: lsp-mcp, github-bridge-mcp, propose-patch-mcp, archive-manager-mcp, orchestrator-mcp, context-guardian-mcp"
-    },
-    {
-      "id": "E-160",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add mandatory YAML frontmatter (`disable-model-invocation`, `user-invocable`, `allowed-tools`) to all Gemini sub-agents in `src/gemini/agents/` to fix `verification-mcp` compliance failures. (See `.ai/blueprints/agents.md`)",
-      "created_at": "2026-04-03T12:44:57.363Z",
-      "completed_at": "2026-04-03T12:52:09.446Z",
-      "summary": "Added disable-model-invocation, user-invocable, and allowed-tools frontmatter to all 6 Gemini sub-agents: digest_updater, docs-architect, gemini_tasks, knowledge_architect, memory_curator, ux_reviewer. Tools scoped per least-privilege per agent role."
-    },
-    {
-      "id": "E-161",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add result bounding (e.g., `| head -n 100`) to the `git grep` call in `context-guardian-mcp` to prevent token leakage on massive codebases. (See `.ai/blueprints/robustness.md`)",
-      "created_at": "2026-04-03T12:44:57.366Z",
-      "completed_at": "2026-04-03T12:52:11.257Z",
-      "summary": "Added result bounding to git grep output in context-guardian-mcp via .slice(0, 100) on the split lines array; also added maxBuffer: 10 * 1024 * 1024 to the same spawnSync call (covered by E-159)."
-    },
-    {
-      "id": "P-7",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement a 5000-character bounds limit for `issue.body` in `github-bridge-mcp`'s `get_issue` tool to prevent massive token leaks into the LLM context. (See `.ai/blueprints/robustness.md` section 5)",
-      "created_at": "2026-04-03T13:45:07.052Z",
-      "completed_at": "2026-04-13T08:34:51.626Z",
-      "summary": "Bounded issue.body to 5000 chars in github-bridge-mcp get_issue — appends \"... (truncated)\" on overflow"
-    },
-    {
-      "id": "P-8",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `export_signature` in `memory-manager-mcp` to use a `readHead` helper (similar to `context-invoker-mcp`) instead of fully loading and splitting `architect.md` via `readFileSync`. (See `.ai/blueprints/robustness.md` section 6)",
-      "created_at": "2026-04-03T13:45:07.061Z",
-      "completed_at": "2026-04-13T08:34:54.022Z",
-      "summary": "Added readHead() helper (openSync/readSync/closeSync, 4KB) to memory-manager-mcp; export_signature now uses readHead instead of readFileSync for architect_v extraction"
-    },
-    {
-      "id": "P-9",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `generateDelta` in `blueprint-aligner-mcp` to use regex or iterative scanning over the `diff` string instead of `.split(\"\\n\")` to avoid Node.js OOM risks on massive 10MB diffs. (See `.ai/blueprints/robustness.md` section 7)",
-      "created_at": "2026-04-03T13:45:07.063Z",
-      "completed_at": "2026-04-13T08:34:55.660Z",
-      "summary": "Replaced diff.split(\"\\n\").filter() in blueprint-aligner-mcp generateDelta with iterative regex exec loop — avoids full array allocation on large diffs"
-    },
-    {
-      "id": "P-10",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Optimize `run_preflight` in `orchestrator-mcp` by replacing the `readFileSync(...).split(\"\\n\").slice(0, 80)` logic with a more memory-efficient read strategy that avoids full array allocation. (See `.ai/blueprints/robustness.md` section 8)",
-      "created_at": "2026-04-03T13:45:07.065Z",
-      "completed_at": "2026-04-13T08:34:57.815Z",
-      "summary": "Added readBoundedLines() helper to orchestrator-mcp (reads first N*250 bytes via openSync/readSync); run_preflight now uses it instead of readFileSync+split+slice"
-    },
-    {
-      "id": "P-11",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Fix blueprint extraction in `orchestrator-mcp`'s `run_handover`. It currently only scans the root `architect.md`. Update it to also search `.ai/blueprints/*.md` to correctly attach blueprints generated by E-151 Domain Fragmentation. (See `.ai/blueprints/robustness.md` section 9)",
-      "created_at": "2026-04-03T13:45:07.070Z",
-      "completed_at": "2026-04-13T08:34:59.124Z",
-      "summary": "Fixed run_handover blueprint extraction to scan .ai/blueprints/*.md as fallback when taskId not found in root architect.md (post E-151 fragmentation)"
-    },
-    {
-      "id": "P-12",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add a `statSync(abs).size` guard to `patch_file` in `patch-mcp` to fail early with `[FILE_TOO_LARGE]` if the target file exceeds 5MB, preventing blocking I/O freezes on massive assets. (See `.ai/blueprints/robustness.md` section 10)",
-      "created_at": "2026-04-03T13:45:07.072Z",
-      "completed_at": "2026-04-13T08:35:00.839Z",
-      "summary": "Added statSync size guard to patch-mcp patch_file — rejects files >5MB with [FILE_TOO_LARGE] before readFileSync"
-    },
-    {
-      "id": "P-13",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Create `src/mcp/shared/state-db.js` and consolidate SQLite schema. Extract `DatabaseSync` initialization from `task-synchronizer-mcp` to ensure WAL mode and shared access patterns are consistent across all MCP servers. (See `.ai/blueprints/robustness_phase2.md` section 1)",
-      "created_at": "2026-04-13T09:02:13.944Z",
-      "completed_at": "2026-04-13T12:25:40.087Z",
-      "summary": "Created src/mcp/shared/state-db.js — exports getDb, readState, regenerateViews, nextId; WAL mode + full schema extracted from task-synchronizer-mcp"
-    },
-    {
-      "id": "P-14",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `orchestrator-mcp` to use `state-db.js` for SQLite-first state management. Replace `state-writer.js` imports and update `run_handover` and `run_preflight` to query/mutate the SQLite `tasks`, `stamps`, `deltas`, and `meta` tables directly. (See `.ai/blueprints/robustness_phase2.md` section 1)",
-      "created_at": "2026-04-13T09:02:13.951Z",
-      "completed_at": "2026-04-13T12:25:41.828Z",
-      "summary": "Refactored orchestrator-mcp to use state-db.js — run_preflight reads SQLite directly, run_handover writes task/delta/digest_stale to SQLite; state-writer.js import removed"
-    },
-    {
-      "id": "P-15",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `task-synchronizer-mcp` to use `state-db.js`. Remove redundant schema definitions while maintaining the \"Backwards Compat View\" logic (regenerating `state.json` and Markdown files after SQLite updates). (See `.ai/blueprints/robustness_phase2.md` section 1)",
-      "created_at": "2026-04-13T09:02:13.962Z",
-      "completed_at": "2026-04-13T12:25:43.154Z",
-      "summary": "Refactored task-synchronizer-mcp to import getDb/readState/regenerateViews/nextId from state-db.js; removed redundant local definitions"
-    },
-    {
-      "id": "P-16",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement iterative regex scanning in `context-guardian-mcp` to fix the OOM risk in `strict` mode result processing. Replace `.split(\"\\n\")` on large `git grep` output with an iterative RegExp `.exec()` loop. (See `.ai/blueprints/robustness_phase2.md` section 2)",
-      "created_at": "2026-04-13T09:02:13.966Z",
-      "completed_at": "2026-04-13T12:25:44.747Z",
-      "summary": "Replaced split(\"\\n\").slice(0,100) in context-guardian-mcp strict mode with iterative regex exec loop — zero array allocation on large git grep output"
-    },
-    {
-      "id": "P-17",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Harden `tests/run.sh` to ensure CI-breaking failures are never silent. Capture exit codes of all sub-script runs and fail the master runner if any sub-suite crashes or exits non-zero. Also, add explicit error reporting to `readBoundedLines` in `orchestrator-mcp`. (See `.ai/blueprints/robustness_phase2.md` section 3)",
-      "created_at": "2026-04-13T09:02:13.980Z",
-      "completed_at": "2026-04-13T12:25:46.930Z",
-      "summary": "Hardened tests/run.sh — crashed suites (no SUITE_RESULT line + non-zero exit) now counted as 1 failure; added stderr logging to readBoundedLines catch block in orchestrator-mcp"
-    },
-    {
-      "id": "P-18",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Port `stop-hook.sh` and `post-tool-log.sh` to use `sqlite3` CLI for state checks instead of `python3` + `state.json`. (See `.ai/blueprints/robustness_phase2.md` section 4)",
-      "created_at": "2026-04-13T13:23:19.846Z",
-      "completed_at": "2026-04-13T13:52:56.091Z",
-      "summary": "Ported stop-hook.sh and post-tool-log.sh to use sqlite3 CLI for state checks — removed python3+state.json dependency; stop-hook reads digest_stale/digest_stale_reason from meta table; post-tool-log reads open task count from tasks table with grep fallback"
-    },
-    {
-      "id": "P-19",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement viewport-scoped audits in `vibe-check-mcp`. Limit `querySelectorAll` scans to the first 100 elements or use visibility checks to prevent OOM/freezes on massive pages. (See `.ai/blueprints/robustness_phase2.md` section 5)",
-      "created_at": "2026-04-13T13:23:19.856Z",
-      "completed_at": "2026-04-13T13:53:00.224Z",
-      "summary": "Implemented viewport-scoped audits in vibe-check-mcp — all three querySelectorAll scans (contrast, touch targets, focus rings) now filter to getBoundingClientRect() visible elements only (top < innerHeight && bottom > 0) and cap at 100 elements"
-    },
-    {
-      "id": "P-20",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement disk persistence for `propose-patch-mcp`. Store pending patches in a new `patches` SQLite table or `.ai/patches.json` so they survive across CLI sessions. (See `.ai/blueprints/robustness_phase3.md` section 1)",
-      "created_at": "2026-04-13T13:34:40.875Z",
-      "completed_at": "2026-04-13T13:53:04.717Z",
-      "summary": "Implemented disk persistence for propose-patch-mcp — patches stored in .ai/patches.json; loadPatches() on startup, savePatches() after propose/confirm/reject; applied/rejected patches are pruned; survives CLI session restarts"
-    },
-    {
-      "id": "P-21",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Harden `safe-exec-mcp` secret detection by broadening the `SECRET_IN_COMMAND` regex to catch space-separated secrets (e.g., `--token secret`). (See `.ai/blueprints/robustness_phase3.md` section 2)",
-      "created_at": "2026-04-13T13:34:40.881Z",
-      "completed_at": "2026-04-13T13:53:08.857Z",
-      "summary": "Hardened safe-exec-mcp SECRET_IN_COMMAND regex to catch space-separated secrets (e.g. --token secret_value) — changed \\s*=\\s* to (\\s*=\\s*|\\s+) to detect both assignment and flag-style secrets"
-    },
-    {
-      "id": "P-22",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Add transaction support to `state-db.js` via a `withTransaction` helper and refactor `orchestrator-mcp` to ensure multi-table updates are atomic. (See `.ai/blueprints/robustness_phase3.md` section 3)",
-      "created_at": "2026-04-13T13:34:40.885Z",
-      "completed_at": "2026-04-13T13:53:12.847Z",
-      "summary": "Added withTransaction(db, callback) helper to state-db.js (BEGIN/COMMIT/ROLLBACK); refactored orchestrator-mcp run_handover to wrap task status update and delta/meta multi-table writes in separate transactions for ACID integrity"
-    },
-    {
-      "id": "P-23",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Make `vibe-check-mcp` timeouts configurable via an optional `timeout_ms` parameter to prevent false positives on slow local servers. (See `.ai/blueprints/robustness_phase3.md` section 4)",
-      "created_at": "2026-04-13T13:34:40.889Z",
-      "completed_at": "2026-04-13T13:53:17.004Z",
-      "summary": "Made vibe-check-mcp timeouts configurable — added optional timeout_ms parameter (default 15000) to run_vibe_audit and run_chaos_test tool schemas; passed through to page.goto() to prevent false positives on slow local servers"
-    },
-    {
-      "id": "P-24",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Migrate `propose-patch-mcp` to SQLite persistence. Add a `patches` table to `state-db.js` and refactor the MCP server to use it, replacing the race-prone `patches.json`. (See `.ai/blueprints/robustness_phase4.md` section 1)",
-      "created_at": "2026-04-13T13:58:33.125Z",
-      "completed_at": "2026-04-13T14:15:12.474Z",
-      "summary": "Migrated propose-patch-mcp from patches.json to SQLite patches table in state-db.js schema"
-    },
-    {
-      "id": "P-25",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Implement a research-command whitelist in `safe-exec-mcp` to prevent greedy secret detection from blocking benign commands like `grep`, `find`, and `ls`. (See `.ai/blueprints/robustness_phase4.md` section 2)",
-      "created_at": "2026-04-13T13:58:33.128Z",
-      "completed_at": "2026-04-13T14:15:13.628Z",
-      "summary": "Added RESEARCH_CMDS whitelist to safe-exec-mcp to prevent false-positive secret detection on read-only commands"
-    },
-    {
-      "id": "P-26",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `run_handover` in `orchestrator-mcp` to wrap both the task status update and the implementation delta write in a single unified `withTransaction` block for ACID integrity. (See `.ai/blueprints/robustness_phase4.md` section 3)",
-      "created_at": "2026-04-13T13:58:33.134Z",
-      "completed_at": "2026-04-13T14:15:15.435Z",
-      "summary": "Unified run_handover into single withTransaction covering task DONE + delta insert + meta updates; removed dead blueprint scan code"
-    },
-    {
-      "id": "P-27",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Remove the redundant `_syncFromJsonIfNewer` logic from `task-synchronizer-mcp` to eliminate unnecessary I/O overhead on every tool call. (See `.ai/blueprints/robustness_phase4.md` section 4)",
-      "created_at": "2026-04-13T13:58:33.136Z",
-      "completed_at": "2026-04-13T14:15:16.342Z",
-      "summary": "Removed _syncFromJsonIfNewer from task-synchronizer-mcp; SQLite is sole source of truth"
-    },
-    {
-      "id": "P-28",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Improve SQLite error visibility in `orchestrator-mcp`'s `run_preflight` by replacing the empty `catch` block with explicit error logging to `stderr`. (See `.ai/blueprints/robustness_phase4.md` section 5)",
-      "created_at": "2026-04-13T13:58:33.138Z",
-      "completed_at": "2026-04-13T14:15:17.416Z",
-      "summary": "Replaced empty catch in run_preflight with stderr warning log for SQLite errors"
-    },
-    {
-      "id": "P-29",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Refactor `context-guardian-mcp` to use SQLite for health checks. Replace the expensive `TASKS.md` parsing in `check_workspace` with direct SQL queries via `state-db.js`. (See `.ai/blueprints/robustness_phase5.md` section 1)",
-      "created_at": "2026-04-13T14:01:05.075Z",
-      "completed_at": "2026-04-13T14:15:18.271Z",
-      "summary": "Replaced TASKS.md string parsing in context-guardian-mcp with SQLite query for open task detection"
-    },
-    {
-      "id": "P-30",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Harden `pre-commit.sh` with SQLite checks. Use the `sqlite3` CLI to verify task consistency and remove the redundant comparison between generated markdown views and `state.json`. (See `.ai/blueprints/robustness_phase5.md` section 1)",
-      "created_at": "2026-04-13T14:01:05.078Z",
-      "completed_at": "2026-04-13T14:15:19.409Z",
-      "summary": "Replaced python3+state.json task/stamp count in pre-commit.sh with sqlite3 CLI queries"
-    },
-    {
-      "id": "P-31",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 1,
-      "description": "Standardize all system skills (`ai-archive`, `ai-test`, etc.) to use the `get_state` tool instead of `grep` patterns on `TASKS.md`. (See `.ai/blueprints/robustness_phase5.md` section 1)",
-      "created_at": "2026-04-13T14:01:05.081Z",
-      "completed_at": "2026-04-13T14:15:20.743Z",
-      "summary": "Updated ai-archive, ai-test, ai-digest skills to use sqlite3 queries instead of grep TASKS.md patterns"
-    },
-    {
-      "id": "P-32",
-      "owner": "Engineer (Claude)",
-      "status": "DONE",
-      "tier": 2,
-      "description": "Remove the `grep TASKS.md` fallback from `post-tool-log.sh`. Make `sqlite3` the exclusive source of truth for logic checks in system hooks. (See `.ai/blueprints/robustness_phase5.md` section 2)",
-      "created_at": "2026-04-13T14:01:05.084Z",
-      "completed_at": "2026-04-13T14:15:21.858Z",
-      "summary": "Removed grep TASKS.md fallback from post-tool-log.sh; added [MISSING_DEP] warning when sqlite3 unavailable"
-    },
-    {
       "id": "P-33",
       "owner": "Engineer (Claude)",
       "status": "DONE",
@@ -585,6 +105,56 @@
       "created_at": "2026-04-13T15:00:45.592Z",
       "completed_at": "2026-04-14T09:15:54.703Z",
       "summary": "Fixed token-budget-mcp getDb() to only cache connection after full schema setup; added stderr warning on init failure"
+    },
+    {
+      "id": "P-43",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add `timeout_ms` and explicit CDP session cleanup to `get_performance_metrics` in `vibe-check-mcp`. (See `.ai/blueprints/robustness_phase8.md` section 1)",
+      "created_at": "2026-04-14T09:19:22.037Z",
+      "completed_at": "2026-04-14T09:30:15.882Z",
+      "summary": "Added timeout_ms param to get_performance_metrics; hoisted CDP client; detach() in finally block"
+    },
+    {
+      "id": "P-44",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Clean up stale documentation in `task-synchronizer-mcp` regarding `orchestrator-mcp` direct writes. (See `.ai/blueprints/robustness_phase8.md` section 2)",
+      "created_at": "2026-04-14T09:19:22.040Z",
+      "completed_at": "2026-04-14T09:30:17.485Z",
+      "summary": "Removed stale NOTE about orchestrator direct writes; updated JSDoc tool list to include mark_deltas_read"
+    },
+    {
+      "id": "P-45",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `ai onboard` in `src/bin/ai` to pull project focus from `state.sqlite` using `sqlite3` CLI, falling back to `state.json`. (See `.ai/blueprints/robustness_phase8.md` section 2)",
+      "created_at": "2026-04-14T09:19:22.042Z",
+      "completed_at": "2026-04-14T09:30:19.166Z",
+      "summary": "Refactored _export_signature_to_global_store to extract focus via sqlite3 CLI first, passing to python3 as argv[3] with state.json fallback"
+    },
+    {
+      "id": "P-46",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Extend installer orphan cleanup in `install-ai-os.sh` to cover the `shared/` directory. (See `.ai/blueprints/robustness_phase8.md` section 3)",
+      "created_at": "2026-04-14T09:19:22.044Z",
+      "completed_at": "2026-04-14T09:30:20.510Z",
+      "summary": "Extended purge_orphans in install-ai-os.sh to cover src/shared/ directory"
+    },
+    {
+      "id": "P-47",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update `state-db.js` to use `os.homedir()` instead of fragile environment variable checks for global path resolution. (See `.ai/blueprints/robustness_phase8.md` section 3)",
+      "created_at": "2026-04-14T09:19:22.046Z",
+      "completed_at": "2026-04-14T09:30:21.858Z",
+      "summary": "Replaced process.env.HOME || \"~\" with os.homedir() in token-budget-mcp for reliable home directory resolution"
     }
   ],
   "stamps": [

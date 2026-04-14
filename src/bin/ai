@@ -694,7 +694,13 @@ _export_signature_to_global_store() {
   local SIG_FILE="${MEM_DIR}/signatures.json"
   if ! command -v python3 &>/dev/null; then return 0; fi
 
-  python3 - "$SIG_FILE" "$MEM_DIR" <<'PY'
+  # P-45: Extract focus from state.sqlite (SQLite-first); fall back to state.json in Python
+  local _FOCUS=""
+  if [[ -f ".ai/state.sqlite" ]] && command -v sqlite3 &>/dev/null; then
+    _FOCUS=$(sqlite3 ".ai/state.sqlite" "SELECT value FROM project WHERE key='focus'" 2>/dev/null || true)
+  fi
+
+  python3 - "$SIG_FILE" "$MEM_DIR" "$_FOCUS" <<'PY'
 import json, sys, os
 from datetime import datetime, timezone
 
@@ -707,13 +713,14 @@ try:
     # Build signature from available .ai/ context
     project_name = os.path.basename(os.getcwd())
 
-    # Extract focus from state.json
-    focus = ""
-    try:
-        s = json.load(open(".ai/state.json"))
-        focus = s.get("project", {}).get("focus") or ""
-    except Exception:
-        pass
+    # Extract focus — prefer pre-computed SQLite value, fall back to state.json
+    focus = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else ""
+    if not focus:
+        try:
+            s = json.load(open(".ai/state.json"))
+            focus = s.get("project", {}).get("focus") or ""
+        except Exception:
+            pass
 
     # Extract summary from DIGEST.md (first 5 non-header, non-empty lines)
     summary_lines = []

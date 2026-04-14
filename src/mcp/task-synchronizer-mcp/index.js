@@ -4,11 +4,8 @@
  * Uses .ai/state.sqlite as the ACID-safe primary store.
  * Automatically migrates existing .ai/state.json on first use.
  * Regenerates state.json (backwards-compat view), TASKS.md, and REVIEWS.md
- * after every mutation.
- *
- * NOTE: orchestrator-mcp writes state.json directly (deltas, digest_stale,
- * task DONE transitions). Those writes remain in state.json and are visible
- * to task-synchronizer-mcp via the startup sync check (mtime guard).
+ * after every mutation. All state writes — including deltas and task transitions
+ * from orchestrator-mcp — go through SQLite (P-26, P-27).
  *
  * Tools:
  *   get_state()                        → returns full state
@@ -18,6 +15,7 @@
  *   set_project_focus(text)             → updates project focus
  *   archive_done_tasks()                → moves old DONE tasks to archive
  *   verify_markdown_sync()              → checks TASKS.md / REVIEWS.md vs DB
+ *   mark_deltas_read(task_ids?)         → acknowledge implementation deltas
  *   sync_tasks(update_content?)         → (DEPRECATED E-147) no-op
  *   append_tasks(tasks)                 → (legacy) appends to TASKS.md
  */

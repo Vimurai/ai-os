@@ -68,6 +68,7 @@ purge_orphans() {
 purge_orphans "${REPO_DIR}/src/contracts" "${AIOS}/contracts"
 purge_orphans "${REPO_DIR}/src/claude"    "${AIOS}/claude"
 purge_orphans "${REPO_DIR}/src/gemini"    "${AIOS}/gemini"
+purge_orphans "${REPO_DIR}/src/shared"    "${AIOS}/shared"
 
 # ── 3) PATH setup ─────────────────────────────────────────────────────────────
 

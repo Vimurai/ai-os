@@ -24,11 +24,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { mkdirSync, existsSync } from "fs";
 import { resolve, join } from "path";
+import { homedir } from "os";
 import { DatabaseSync } from "node:sqlite";
 
 // ── SQLite setup ──────────────────────────────────────────────────────────────
 
-const STORE_DIR  = resolve(process.env.HOME || "~", ".ai-os");
+const STORE_DIR  = resolve(homedir(), ".ai-os");
 const DB_PATH    = join(STORE_DIR, "usage.sqlite");
 
 let db = null;

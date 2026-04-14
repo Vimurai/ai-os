@@ -91,6 +91,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             description: "URL to measure",
           },
+          timeout_ms: {
+            type: "number",
+            description: "Navigation timeout in milliseconds (default: 15000). Increase for slow local servers.",
+            default: 15000,
+          },
         },
         required: ["url"],
       },
@@ -111,7 +116,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return await runChaosTest(args.url, args.interactions ?? 20, args.timeout_ms ?? 15000);
 
     case "get_performance_metrics":
-      return await getPerformanceMetrics(args.url);
+      return await getPerformanceMetrics(args.url, args.timeout_ms ?? 15000);
 
     default:
       return {
@@ -374,14 +379,15 @@ async function runChaosTest(url, interactions, timeoutMs) {
 
 // ── get_performance_metrics ───────────────────────────────────────────────────
 
-async function getPerformanceMetrics(url) {
+async function getPerformanceMetrics(url, timeoutMs) {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
+  let client = null;
 
   try {
     // Enable CDP for performance metrics
-    const client = await context.newCDPSession(page);
+    client = await context.newCDPSession(page);
     await client.send("Performance.enable");
 
     // Inject Web Vitals observers
@@ -401,7 +407,7 @@ async function getPerformanceMetrics(url) {
     });
 
     const navStart = Date.now();
-    await page.goto(url, { waitUntil: "networkidle", timeout: 15000 }); // get_performance_metrics uses fixed timeout
+    await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
     const ttfb = Date.now() - navStart;
 
     // Allow Vitals to settle
@@ -439,6 +445,7 @@ async function getPerformanceMetrics(url) {
 
     return { content: [{ type: "text", text: report }] };
   } finally {
+    if (client) await client.detach().catch(() => {});
     await context.close();
     await browser.close();
   }
