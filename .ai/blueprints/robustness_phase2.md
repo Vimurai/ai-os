@@ -31,6 +31,24 @@ Refactor the result processing to use a single string and iterative regex execut
 - **Orchestrator**: Log IO errors to `stderr` so the agent can diagnose permission issues.
 - **Tests**: Ensure the master runner captures the exit code of every sub-script and fails the entire run if any sub-script returns non-zero.
 
+## 4. Hook State Drift (Critical)
+
+### The Problem
+`stop-hook.sh` and `post-tool-log.sh` use `python3` to parse `state.json`. Since the system of record moved to SQLite, these hooks are now reading stale data or contributing to split-brain drift.
+
+### The Solution: SQLite hooks
+Refactor bash hooks to use `sqlite3` CLI for state checks.
+- **Logic**: Use `sqlite3 .ai/state.sqlite "SELECT value FROM meta WHERE key='digest_stale'"` directly.
+- **Benefit**: Atomic, non-blocking reads from the actual system of record.
+
+## 5. Viewport-Only Vibe Audits (Mid-Level)
+
+### The Problem
+`vibe-check-mcp` runs `querySelectorAll` on full documents, which can cause OOM/freezes on massive single-page apps or long-scroll sites.
+
+### The Solution: Scoped Selection
+Limit audits to the first 100 elements or the current viewport.
+
 ---
 
 ## Strategic Tasks (P-##)
@@ -49,3 +67,8 @@ Refactor the result processing to use a single string and iterative regex execut
   - Fix OOM risk in `strict` mode result processing.
 - [ ] **P-17: Harden `tests/run.sh` and `orchestrator-mcp` error reporting.**
   - Ensure CI-breaking failures are never silent.
+- [ ] **P-18: Port `stop-hook.sh` and `post-tool-log.sh` to use `sqlite3`.**
+  - Remove `python3` dependency for state checks.
+  - Target `state.sqlite` directly.
+- [ ] **P-19: Implement viewport-scoped audits in `vibe-check-mcp`.**
+  - Add `limit` or visibility checks to `querySelectorAll` logic.
