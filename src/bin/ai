@@ -531,7 +531,38 @@ do_init() {
 
 # ── TSRT: Tier classifier (bash-native, no MCP dependency) ──────────────────
 # Reads staged diff, returns 1/2/3 via stdout.
-# Used by do_update and do_review for gate skipping.
+# Used by do_update, do_review, and the pre-commit hook for gate skipping.
+#
+# Tier 1 — Docs/config only (no logic files):
+#   *.md, *.txt, .gitignore, .ai/**, .claude/**, .gemini/**, *.json (non-src)
+# Tier 2 — Logic change (src/, *.js, *.ts, *.py, *.sh, hooks, mcp):
+#   any file matching LOGIC_RE
+# Tier 3 — High-risk (auth, secrets, deploy, breaking, CI):
+#   any staged file content matching HIGH_RISK_RE
+detect_tier() {
+  local staged_files
+  staged_files=$(git diff --staged --name-only 2>/dev/null)
+
+  # No staged files → default Tier 2 (conservative)
+  [[ -z "$staged_files" ]] && echo "2" && return
+
+  # Tier 3: high-risk keywords in diff content
+  local HIGH_RISK_RE='\b(auth|oauth|secret|api[_-]?key|deploy|production|migration|breaking|password|token)\b'
+  if git diff --staged 2>/dev/null | grep -qiE "$HIGH_RISK_RE"; then
+    echo "3" && return
+  fi
+
+  # Tier 2: any logic file in staged list
+  local LOGIC_RE='\.(js|ts|mjs|cjs|jsx|tsx|py|go|rb|java|sh|bash|zsh)$|^src/|^mcp/|hooks/'
+  while IFS= read -r file; do
+    if [[ "$file" =~ $LOGIC_RE ]]; then
+      echo "2" && return
+    fi
+  done <<< "$staged_files"
+
+  # All files are docs/config → Tier 1
+  echo "1"
+}
 
 # ── Gate 1: Intent Gate ───────────────────────────────────────────────────────
 # Returns: 0 = pass, 1 = vague (hard block), 2 = high-risk (soft block / warning)
