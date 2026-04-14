@@ -2,6 +2,11 @@
 # Use activate_skill(<name>) to load full content.
 
 - ai-task: Use activate_skill with this name after completing any E-## implementation. Marks task DONE via task-synchronizer-mcp, runs run_handover for Architect delta review, and surfaces the next open task.
+- ai-log: Use activate_skill with this name after any significant action not covered by a hook. Appends a structured entry to .ai/LOG.md (RULES §4). Warns if LOG.md ≥ 200 lines.
+- ai-handoff: Use activate_skill with this name before switching between Claude and Gemini. Produces a structured handoff packet in .ai/COMM.md covering completed work, decisions, blueprint divergence, and next actions.
+- ai-debug: Use activate_skill with this name when a test is failing or a bug is being investigated. Enforces structured hypothesis→test→observe loop. Blocks git add until all tests are green.
+- repo-oracle: Use activate_skill with this name before modifying existing code or when asked why something was built a certain way. Queries git log, git blame, LOG.md, and DECISIONS.md for historical context.
+- ai-context-check: Use activate_skill with this name at the start of any large task or proactively every 3 E-## tasks. Checks SESSION.md line count and token estimate via archive-manager-mcp. Recommends ai-compact or /clear if bloated.
 - ai-archive: Use activate_skill with this name ONLY when the user explicitly requests an archive operation. DESTRUCTIVE — moves LOG.md, COMM.md, REVIEWS.md, SESSION.md to .ai/archive/YYYY-MM/ with timestamps and re-initializes from templates. Never invoke autonomously.
 - ai-compact: Use activate_skill with this name when SESSION.md exceeds ~2000 tokens, before a long task, or when asked to compact/distill context. Distills conversation history into "Active Context", archives the raw SESSION.md log, and resets it to a minimal header. Equivalent to running /compact.
 - ai-digest: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running ai archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.

@@ -44,9 +44,14 @@ When a request matches a skill trigger — load and follow it. Never skip gates.
 Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `skill: "ai-compact"` or executing `/compact` to distill your session history.
 
 ## Mid-Task Triggers
-If you touch auth/secrets → load `security_engineer`
-If you add a dependency → load `dependency_gate`
-If you modify CI/CD → load `ci_gate`
+If you touch auth/secrets → `skill: "security_engineer"`
+If you add a dependency → `skill: "dependency_gate"`
+If you modify CI/CD → `skill: "ci_gate"`
+If a test is failing → `skill: "ai-debug"` (LOCKED until green)
+Before modifying existing code → `skill: "repo-oracle"`
+After any significant action → `skill: "ai-log"`
+Before switching to Gemini → `skill: "ai-handoff"`
+Every 3rd E-## task or before a long sprint → `skill: "ai-context-check"`
 
 ## Emergency Recovery (§30 — Bootloader Resilience)
 
