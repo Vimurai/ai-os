@@ -6,7 +6,7 @@
 
   [![Version](https://img.shields.io/badge/version-v3.3-blue.svg)](https://github.com/google/gemini-cli)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![Tests](https://img.shields.io/badge/tests-407%2F407%20passed-brightgreen.svg)](tests/)
+  [![Tests](https://img.shields.io/badge/tests-423%2F423%20passed-brightgreen.svg)](tests/)
 </div>
 
 ---
@@ -96,14 +96,46 @@ ai review claude  # Dispatches parallel critics (Arch, Security, Tests)
 
 ## 🔌 The MCP Nervous System
 
-AI-OS is powered by a custom Model Context Protocol (MCP) suite that gives agents "hands" in your system:
+AI-OS is powered by 19 registered MCP servers that give agents "hands" in your system:
 
-*   **`task-synchronizer-mcp`**: The ACID backend coordinating state via SQLite.
-*   **`context-invoker-mcp`**: The JIT engine for loading skills and agent personas.
-*   **`blueprint-aligner-mcp`**: Prevents "Plan Drift" by diffing work against the Architect's rules.
-*   **`safe-exec-mcp`**: An UACS-compliant gate that blocks destructive commands and plaintext secrets.
-*   **`vibe-check-mcp`**: Headless Playwright for screenshots, CLS measurements, and accessibility audits.
-*   **`patch-mcp`**: High-performance file editing with MD5 optimistic locking and fuzzy fallbacks.
+### State & Orchestration
+| Server | Purpose |
+| :--- | :--- |
+| **`orchestrator-mcp`** | Session preflight, handover, review dispatch — the Triad conductor |
+| **`task-synchronizer-mcp`** | ACID-compliant SQLite backend for all task state and stamps |
+| **`context-invoker-mcp`** | JIT engine — loads skills and agent personas on demand |
+| **`archive-manager-mcp`** | Monitors context health; rotates LOG.md/SESSION.md to `.ai/archive/` |
+| **`token-budget-mcp`** | Tracks token spend per session; enforces budget limits |
+
+### Code & File Operations
+| Server | Purpose |
+| :--- | :--- |
+| **`patch-mcp`** | High-performance file editing with MD5 optimistic locking and fuzzy fallbacks |
+| **`propose-patch-mcp`** | Staged patch proposals — preview, confirm, or reject before applying |
+| **`lsp-mcp`** | LSP-powered definitions, references, and diagnostics without a full IDE |
+| **`filesystem`** | Sandboxed file read/write/list within allowed project directories |
+
+### Safety & Compliance
+| Server | Purpose |
+| :--- | :--- |
+| **`safe-exec-mcp`** | UACS gate — blocks destructive shell commands and plaintext secrets |
+| **`risk-analyzer-mcp`** | Classifies task risk tier (1/2/3) and gates required critic dispatches |
+| **`context-guardian-mcp`** | Role-access enforcement — verifies workspace and agent permissions |
+| **`verification-mcp`** | §32 compliance audit — detects Ghost Tools and invalid YAML frontmatter |
+| **`blueprint-aligner-mcp`** | Diffs implementation against Architect blueprints; flags Plan Drift |
+
+### Intelligence & Memory
+| Server | Purpose |
+| :--- | :--- |
+| **`memory`** | Persistent knowledge graph — entities, relations, observations across sessions |
+| **`memory-manager-mcp`** | High-level memory query and signature export over the knowledge graph |
+| **`github-bridge-mcp`** | Fetches GitHub issues and PRs; converts them to AI-OS intent tasks |
+
+### Quality & Testing
+| Server | Purpose |
+| :--- | :--- |
+| **`vibe-check-mcp`** | Headless Playwright — screenshots, CLS measurements, accessibility audits |
+| **`TestSprite`** | E2E test generation and execution via the TestSprite cloud platform |
 
 ---
 

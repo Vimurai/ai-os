@@ -18,8 +18,10 @@ assert_status 0 "T-05.01: verification-mcp syntax OK" \
   node -e "import('file://${VERIFY_MCP}').catch(e => { if (e instanceof SyntaxError) process.exit(1); })"
 
 # Helper: audit agent markdown content (inlines parseFrontmatter + auditAgent logic)
+# $1 = content, $2 = optional path hint (e.g. "/gemini/skills/foo/SKILL.md")
 audit_agent() {
   local content="$1"
+  local path_hint="${2:-/claude/skills/test.md}"
   local MD_FILE
   MD_FILE=$(mktemp /tmp/tmp_verify_XXXXXX.md)
   printf '%s' "$content" > "$MD_FILE"
@@ -47,12 +49,17 @@ audit_agent() {
       if (tool.startsWith('mcp__')) return true;
       return false;
     }
+    const mdPath = '${path_hint}';
+    const isGeminiPath = mdPath.includes('/gemini/');
+    const requiredFields = isGeminiPath
+      ? ['name','description']
+      : ['name','description','disable-model-invocation','user-invocable','allowed-tools'];
     const text = readFileSync('${MD_FILE}', 'utf8');
     const fm = parseFrontmatter(text);
     if (!fm) { console.log('NO_FRONTMATTER'); process.exit(0); }
     const violations = [];
     const warnings   = [];
-    for (const field of ['name','description','disable-model-invocation','user-invocable','allowed-tools']) {
+    for (const field of requiredFields) {
       if (!fm[field]) warnings.push('MISSING_FIELD:' + field);
     }
     const tools = (fm['allowed-tools'] || '').split(',').map(t => t.trim()).filter(Boolean);
@@ -171,5 +178,52 @@ if [[ -d "$AGENTS_DIR" ]]; then
   " --input-type=module 2>/dev/null || echo "error")
   assert_contains "T-05.07: bulk scan of src/claude/agents/ — zero CRITICAL violations" "criticals=0" "$bulk"
 fi
+
+# ── E-3: Gemini path conditionalization ──────────────────────────────────────
+
+# T-05.08: Gemini skill with only name+description → PASS (Claude fields not required)
+GEMINI_MINIMAL='---
+name: blueprint-writer
+description: Enforce blueprint structure before writing to .ai/blueprints/.
+context: default
+agent: default
+---
+# Blueprint Writer body'
+result=$(audit_agent "$GEMINI_MINIMAL" "/gemini/skills/blueprint-writer/SKILL.md")
+assert_contains "T-05.08: Gemini skill missing Claude fields → PASS (not WARN)" "PASS" "$result"
+assert_not_contains "T-05.08b: disable-model-invocation not required for Gemini" "MISSING_FIELD:disable-model-invocation" "$result"
+assert_not_contains "T-05.08c: user-invocable not required for Gemini" "MISSING_FIELD:user-invocable" "$result"
+assert_not_contains "T-05.08d: allowed-tools not required for Gemini" "MISSING_FIELD:allowed-tools" "$result"
+
+# T-05.09: Gemini skill missing name → WARN (name is always required)
+GEMINI_NO_NAME='---
+description: A Gemini skill without a name field.
+---
+# No name'
+result=$(audit_agent "$GEMINI_NO_NAME" "/gemini/skills/no-name/SKILL.md")
+assert_contains "T-05.09: Gemini skill missing name → WARN" "WARN" "$result"
+assert_contains "T-05.09b: name reported as missing" "MISSING_FIELD:name" "$result"
+
+# T-05.10: Claude skill missing disable-model-invocation → WARN (Claude path enforces all 5)
+CLAUDE_PARTIAL='---
+name: partial-claude-skill
+description: A Claude skill missing Claude-specific fields.
+allowed-tools: Read
+---
+# Partial Claude skill'
+result=$(audit_agent "$CLAUDE_PARTIAL" "/claude/skills/partial/SKILL.md")
+assert_contains "T-05.10: Claude skill missing disable-model-invocation → WARN" "WARN" "$result"
+assert_contains "T-05.10b: disable-model-invocation reported missing for Claude" "MISSING_FIELD:disable-model-invocation" "$result"
+
+# T-05.11: Ghost Tool in Gemini skill → FAIL (tool checks still apply if allowed-tools present)
+GEMINI_GHOST='---
+name: bad-gemini-skill
+description: Gemini skill with a ghost tool declared.
+allowed-tools: Read, GhostTool999
+---
+# Ghost in Gemini'
+result=$(audit_agent "$GEMINI_GHOST" "/gemini/skills/bad/SKILL.md")
+assert_contains "T-05.11: Ghost Tool in Gemini skill still detected as FAIL" "FAIL" "$result"
+assert_contains "T-05.11b: Ghost Tool name reported" "GhostTool999" "$result"
 
 assert_summary

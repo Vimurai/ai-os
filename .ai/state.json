@@ -75,6 +75,66 @@
       "created_at": "2026-04-14T14:56:24.984Z",
       "completed_at": "2026-04-14T15:12:03.261Z",
       "summary": "Extended resilience_test.sh with 6 new scenarios (T-RES-12–17): simulated node failure, Python/shell fallback verification, and PRAGMA integrity_check on state.sqlite. Suite grows from 11 to 17 tests. All 413 tests pass."
+    },
+    {
+      "id": "P-6",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update README.md — Add all registered MCP servers from .mcp.json (e.g., filesystem, memory, orchestrator-mcp, etc.) to the MCP Nervous System section to resolve documentation drift.",
+      "created_at": "2026-04-14T20:59:41.277Z",
+      "completed_at": "2026-04-14T21:08:05.408Z",
+      "summary": "Converted to E-4 (Architect forbidden from writing README.md)."
+    },
+    {
+      "id": "P-7",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update CONTRIBUTING.md — Create the file and add development setup, skill/agent authoring guidelines (YAML frontmatter), git workflow, and ensure no ghost tools are referenced to resolve documentation drift.",
+      "created_at": "2026-04-14T20:59:41.278Z",
+      "completed_at": "2026-04-14T21:08:05.410Z",
+      "summary": "Converted to E-5 (Architect forbidden from writing CONTRIBUTING.md)."
+    },
+    {
+      "id": "P-8",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update agents.md blueprint to explicitly state that Gemini YAML schema does not require `disable-model-invocation`, `user-invocable`, or `allowed-tools`.",
+      "created_at": "2026-04-14T21:04:32.748Z",
+      "completed_at": "2026-04-14T21:05:37.733Z",
+      "summary": "Added YAML schema note to agents.md clarifying Gemini frontmatter exemptions."
+    },
+    {
+      "id": "E-3",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Fix verification-mcp bug where Claude-specific YAML fields are erroneously enforced on Gemini agents. Conditionalize the check based on the file path (`/gemini/` vs `/claude/`).",
+      "created_at": "2026-04-14T21:04:32.749Z",
+      "completed_at": "2026-04-14T21:09:08.751Z",
+      "summary": "Conditionalized verification-mcp required fields by path: Gemini skills (/gemini/) only require name+description; Claude/shared require all 5. Added T-05.08–11 tests. Suite 12→22 tests, 423/423 pass."
+    },
+    {
+      "id": "E-4",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update README.md — Add all registered MCP servers from .mcp.json (e.g., filesystem, memory, orchestrator-mcp, etc.) to the MCP Nervous System section to resolve documentation drift.",
+      "created_at": "2026-04-14T21:08:05.409Z",
+      "completed_at": "2026-04-14T21:11:19.187Z",
+      "summary": "Updated README.md MCP Nervous System section with all 19 registered servers grouped by category (State, Code, Safety, Intelligence, Quality). Updated test badge to 423/423."
+    },
+    {
+      "id": "E-5",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Create CONTRIBUTING.md — Add development setup, skill/agent authoring guidelines (YAML frontmatter), git workflow, and ensure no ghost tools are referenced to resolve documentation drift.",
+      "created_at": "2026-04-14T21:08:05.411Z",
+      "completed_at": "2026-04-14T21:11:20.547Z",
+      "summary": "Created CONTRIBUTING.md with dev setup, project structure, Claude/Gemini skill frontmatter schemas, Ghost Tool rules, MCP server skeleton, git workflow, and test authoring guide."
     }
   ],
   "stamps": [
@@ -105,6 +165,13 @@
       "task_id": null,
       "timestamp": "2026-04-14T14:45:03.841Z",
       "summary": "ARCH_AUDIT: System is healthy, domain blueprints created, zero open tasks, token usage is 0, high MCP orchestration fragmentation risk noted."
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-docs-architect",
+      "task_id": "",
+      "timestamp": "2026-04-14T20:59:41.271Z",
+      "summary": "Docs audit complete — 2 gaps found in README/CONTRIBUTING vs architect.md"
     }
   ],
   "deltas": [],

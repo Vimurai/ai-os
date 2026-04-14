@@ -88,8 +88,12 @@ function auditAgent(mdPath, registry) {
   const violations = [];
   const warnings   = [];
 
-  // Check required §17.1.2 fields
-  for (const field of ["name", "description", "disable-model-invocation", "user-invocable", "allowed-tools"]) {
+  // Check required frontmatter fields — Claude/shared require all 5; Gemini only needs name + description
+  const isGeminiPath = mdPath.includes("/gemini/");
+  const requiredFields = isGeminiPath
+    ? ["name", "description"]
+    : ["name", "description", "disable-model-invocation", "user-invocable", "allowed-tools"];
+  for (const field of requiredFields) {
     if (!fm[field]) warnings.push(`Missing required frontmatter field: '${field}'`);
   }
 
