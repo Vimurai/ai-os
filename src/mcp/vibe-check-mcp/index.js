@@ -134,100 +134,105 @@ async function runVibeAudit(baseUrl, routes, timeoutMs) {
         viewport: { width: 1280, height: 720 },
       });
       try {
-      const page = await context.newPage();
+        try {
+          const page = await context.newPage();
 
-      // Inject CLS observer before navigation
-      await page.addInitScript(() => {
-        window.__clsScore = 0;
-        new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            if (!entry.hadRecentInput) window.__clsScore += entry.value;
-          }
-        }).observe({ type: "layout-shift", buffered: true });
-      });
+          // Inject CLS observer before navigation
+          await page.addInitScript(() => {
+            window.__clsScore = 0;
+            new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                if (!entry.hadRecentInput) window.__clsScore += entry.value;
+              }
+            }).observe({ type: "layout-shift", buffered: true });
+          });
 
-      await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
+          await page.goto(url, { waitUntil: "networkidle", timeout: timeoutMs });
 
-      // CLS score
-      const cls = await page.evaluate(() => window.__clsScore ?? 0);
-      const clsStatus = cls < 0.1 ? "PASS" : cls < 0.25 ? "WARN" : "FAIL";
+          // CLS score
+          const cls = await page.evaluate(() => window.__clsScore ?? 0);
+          const clsStatus = cls < 0.1 ? "PASS" : cls < 0.25 ? "WARN" : "FAIL";
 
-      // Contrast check — sample viewport-visible text elements (P-19)
-      const contrastIssues = await page.evaluate(() => {
-        const issues = [];
-        const vh = window.innerHeight;
-        const elements = Array.from(document.querySelectorAll(
-          "p, h1, h2, h3, h4, h5, h6, span, a, button, label"
-        )).filter(el => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
-        }).slice(0, 100);
-        for (const el of elements) {
-          const style = window.getComputedStyle(el);
-          const fg = style.color;
-          const bg = style.backgroundColor;
-          // Basic luminance check (simplified — full WCAG requires exact parsing)
-          if (fg === bg || (bg === "rgba(0, 0, 0, 0)" && fg === "rgba(0, 0, 0, 0)")) {
-            issues.push(`Invisible text on: ${el.tagName} "${el.textContent?.slice(0, 30)}"`);
-          }
+          // Contrast check — sample viewport-visible text elements (P-19)
+          const contrastIssues = await page.evaluate(() => {
+            const issues = [];
+            const vh = window.innerHeight;
+            const elements = Array.from(document.querySelectorAll(
+              "p, h1, h2, h3, h4, h5, h6, span, a, button, label"
+            )).filter(el => {
+              const r = el.getBoundingClientRect();
+              return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
+            }).slice(0, 100);
+            for (const el of elements) {
+              const style = window.getComputedStyle(el);
+              const fg = style.color;
+              const bg = style.backgroundColor;
+              // Basic luminance check (simplified — full WCAG requires exact parsing)
+              if (fg === bg || (bg === "rgba(0, 0, 0, 0)" && fg === "rgba(0, 0, 0, 0)")) {
+                issues.push(`Invisible text on: ${el.tagName} "${el.textContent?.slice(0, 30)}"`);
+              }
+            }
+            return issues.slice(0, 5);
+          });
+
+          // Touch targets — viewport-visible interactive elements (P-19)
+          const smallTargets = await page.evaluate(() => {
+            const vh = window.innerHeight;
+            const interactive = Array.from(document.querySelectorAll("button, a, input, select"))
+              .filter(el => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
+              }).slice(0, 100);
+            const small = [];
+            for (const el of interactive) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0 && (rect.width < 44 || rect.height < 44)) {
+                small.push(`${el.tagName}[${el.textContent?.slice(0, 20) || el.type || ""}] ${Math.round(rect.width)}x${Math.round(rect.height)}px`);
+              }
+            }
+            return small.slice(0, 5);
+          });
+
+          // Focus ring check — viewport-visible focusable elements (P-19)
+          const focusIssues = await page.evaluate(() => {
+            const vh = window.innerHeight;
+            const focusable = Array.from(document.querySelectorAll("button, a, input, select, textarea"))
+              .filter(el => {
+                const r = el.getBoundingClientRect();
+                return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
+              }).slice(0, 100);
+            const issues = [];
+            for (const el of focusable) {
+              const style = window.getComputedStyle(el, ":focus");
+              const outline = style.outline || style.outlineStyle;
+              if (outline === "none" || outline === "0px") {
+                issues.push(`No focus ring: ${el.tagName}[${el.textContent?.slice(0, 20) || el.type}]`);
+              }
+            }
+            return issues.slice(0, 5);
+          });
+
+          results.push({
+            route,
+            url,
+            cls: { score: cls.toFixed(4), status: clsStatus },
+            contrast: {
+              status: contrastIssues.length === 0 ? "PASS" : "WARN",
+              issues: contrastIssues,
+            },
+            touchTargets: {
+              status: smallTargets.length === 0 ? "PASS" : "WARN",
+              violations: smallTargets,
+            },
+            focusRings: {
+              status: focusIssues.length === 0 ? "PASS" : "FAIL",
+              violations: focusIssues,
+            },
+          });
+        } catch (routeErr) {
+          // P-39: isolate single-route failures — record FAULT and continue
+          results.push({ route, url, fault: true, error: routeErr.message });
         }
-        return issues.slice(0, 5);
-      });
-
-      // Touch targets — viewport-visible interactive elements (P-19)
-      const smallTargets = await page.evaluate(() => {
-        const vh = window.innerHeight;
-        const interactive = Array.from(document.querySelectorAll("button, a, input, select"))
-          .filter(el => {
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
-          }).slice(0, 100);
-        const small = [];
-        for (const el of interactive) {
-          const rect = el.getBoundingClientRect();
-          if (rect.width > 0 && rect.height > 0 && (rect.width < 44 || rect.height < 44)) {
-            small.push(`${el.tagName}[${el.textContent?.slice(0, 20) || el.type || ""}] ${Math.round(rect.width)}x${Math.round(rect.height)}px`);
-          }
-        }
-        return small.slice(0, 5);
-      });
-
-      // Focus ring check — viewport-visible focusable elements (P-19)
-      const focusIssues = await page.evaluate(() => {
-        const vh = window.innerHeight;
-        const focusable = Array.from(document.querySelectorAll("button, a, input, select, textarea"))
-          .filter(el => {
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0 && r.top < vh && r.bottom > 0;
-          }).slice(0, 100);
-        const issues = [];
-        for (const el of focusable) {
-          const style = window.getComputedStyle(el, ":focus");
-          const outline = style.outline || style.outlineStyle;
-          if (outline === "none" || outline === "0px") {
-            issues.push(`No focus ring: ${el.tagName}[${el.textContent?.slice(0, 20) || el.type}]`);
-          }
-        }
-        return issues.slice(0, 5);
-      });
-
-      results.push({
-        route,
-        url,
-        cls: { score: cls.toFixed(4), status: clsStatus },
-        contrast: {
-          status: contrastIssues.length === 0 ? "PASS" : "WARN",
-          issues: contrastIssues,
-        },
-        touchTargets: {
-          status: smallTargets.length === 0 ? "PASS" : "WARN",
-          violations: smallTargets,
-        },
-        focusRings: {
-          status: focusIssues.length === 0 ? "PASS" : "FAIL",
-          violations: focusIssues,
-        },
-      });
       } finally {
         await context.close();
       }
@@ -238,8 +243,9 @@ async function runVibeAudit(baseUrl, routes, timeoutMs) {
 
   const hasP0 = results.some(
     (r) =>
-      r.cls.status === "FAIL" ||
-      r.focusRings.status === "FAIL"
+      r.fault ||
+      r.cls?.status === "FAIL" ||
+      r.focusRings?.status === "FAIL"
   );
 
   const report = formatVibeReport(results, hasP0);
@@ -249,11 +255,12 @@ async function runVibeAudit(baseUrl, routes, timeoutMs) {
 function formatVibeReport(results, hasP0) {
   const date = new Date().toISOString().split("T")[0];
   const score = Math.max(0, 10 - results.reduce((acc, r) => {
-    if (r.cls.status === "FAIL") acc += 3;
-    else if (r.cls.status === "WARN") acc += 1;
-    if (r.focusRings.status === "FAIL") acc += 2;
-    if (r.contrast.issues.length > 0) acc += 1;
-    if (r.touchTargets.violations.length > 0) acc += 1;
+    if (r.fault) return acc + 3;
+    if (r.cls?.status === "FAIL") acc += 3;
+    else if (r.cls?.status === "WARN") acc += 1;
+    if (r.focusRings?.status === "FAIL") acc += 2;
+    if (r.contrast?.issues?.length > 0) acc += 1;
+    if (r.touchTargets?.violations?.length > 0) acc += 1;
     return acc;
   }, 0));
 
@@ -261,6 +268,10 @@ function formatVibeReport(results, hasP0) {
 
   for (const r of results) {
     out += `## Route: ${r.route}\n`;
+    if (r.fault) {
+      out += `- Status: FAULT — ${r.error}\n\n`;
+      continue;
+    }
     out += `- CLS: ${r.cls.score} — ${r.cls.status}\n`;
     out += `- Contrast: ${r.contrast.status}${r.contrast.issues.length ? "\n  " + r.contrast.issues.join("\n  ") : ""}\n`;
     out += `- Touch targets: ${r.touchTargets.status}${r.touchTargets.violations.length ? "\n  " + r.touchTargets.violations.join("\n  ") : ""}\n`;

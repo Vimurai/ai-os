@@ -47,3 +47,10 @@ Update THREAT_MODEL.md when:
 Append to .ai/DIGEST.md:
 - YYYY-MM-DD: SECURITY.md updated — <key change>
 Notify human if any P0 threats are unmitigated.
+
+## Token Reporting (Tier 2/3 tasks)
+After completing any Tier 2 or Tier 3 security review, call:
+```
+mcp__token-budget-mcp__report_cost({ task_id: "E-##", tokens: <estimate>, model: "claude-sonnet-4-6" })
+```
+Use token count from the LLM response metadata if available; otherwise estimate based on output length.

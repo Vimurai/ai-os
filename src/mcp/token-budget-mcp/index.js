@@ -37,9 +37,9 @@ function getDb() {
   if (db) return db;
   try {
     mkdirSync(STORE_DIR, { recursive: true });
-    db = new DatabaseSync(DB_PATH);
-    db.exec("PRAGMA journal_mode = WAL;");
-    db.exec(`
+    const conn = new DatabaseSync(DB_PATH);
+    conn.exec("PRAGMA journal_mode = WAL;");
+    conn.exec(`
       CREATE TABLE IF NOT EXISTS usage (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,
         task_id   TEXT    NOT NULL,
@@ -57,8 +57,10 @@ function getDb() {
       INSERT OR IGNORE INTO budget(key, value) VALUES ('token_warn_threshold', '50000');
       INSERT OR IGNORE INTO budget(key, value) VALUES ('usd_warn_threshold',   '1.00');
     `);
+    db = conn; // only cache after full schema setup succeeds
     return db;
   } catch (e) {
+    process.stderr.write(`[WARN] token-budget-mcp: DB init failed (${e.code || e.message}) — token tracking unavailable\n`);
     return null;
   }
 }

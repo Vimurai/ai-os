@@ -95,6 +95,16 @@
   Status: DONE 2026-04-13 — Fixed per-iteration context leak in vibe-check-mcp runVibeAudit by wrapping each context in a try/finally block
 - [x] P-37: Harden the installer and `ai install` logic. Ensure path injection is idempotent and implement a more dynamic strategy for cleaning up deprecated v2 configuration files. (See `.ai/blueprints/robustness_phase6.md` section 3) | Tier: 2
   Status: DONE 2026-04-13 — Replaced hardcoded ORPHANS list in install-ai-os.sh with dynamic purge_orphans() function covering contracts/, claude/, gemini/
+- [x] P-38: Implement explicit delta acknowledgment in `orchestrator-mcp`. Stop marking implementation deltas as read automatically during `run_preflight`. Add a `mark_deltas_read` tool so the Architect can confirm incorporation manually. (See `.ai/blueprints/robustness_phase7.md` section 1) | Tier: 2
+  Status: DONE 2026-04-14 — Removed auto-read from run_preflight; added mark_deltas_read tool to task-synchronizer-mcp for explicit Architect acknowledgment
+- [x] P-39: Harden `run_vibe_audit` in `vibe-check-mcp` against single-route failures. Add an inner `try...catch` loop so that a timeout or 404 on one route doesn't crash the entire audit session. (See `.ai/blueprints/robustness_phase7.md` section 2) | Tier: 2
+  Status: DONE 2026-04-14 — Added inner try/catch per route in runVibeAudit; FAULT routes are recorded and reported without aborting the full audit
+- [x] P-40: Integrate `report_cost` into the Triad workflow. Add directives to specialized agents (Security, DevOps) to report token usage via `token-budget-mcp` after completing high-tier tasks. (See `.ai/blueprints/robustness_phase7.md` section 3) | Tier: 1
+  Status: DONE 2026-04-14 — Added report_cost directives to security_engineer and devops_engineer agents for Tier 2/3 tasks
+- [x] P-41: Add normalization to `safe-exec-mcp` to resist basic command obfuscation (like quoted strings). Strip quotes and escapes from the command buffer before running the secret detection regex. (See `.ai/blueprints/robustness_phase7.md` section 4) | Tier: 2
+  Status: DONE 2026-04-14 — Added normalizeForSecretScan() to safe-exec-mcp stripping quote concatenation and backslash escapes before SECRET_IN_COMMAND regex
+- [x] P-42: Fix the `mkdirSync` race condition in `token-budget-mcp` and ensure robust initial SQLite creation in high-concurrency environments. (See `.ai/blueprints/robustness_phase7.md` section 4) | Tier: 2
+  Status: DONE 2026-04-14 — Fixed token-budget-mcp getDb() to only cache connection after full schema setup; added stderr warning on init failure
 
 ## Architect (Gemini)
 - [x] P-1: Migrate `task-synchronizer-mcp` state to SQLite to prevent race conditions. | Tier: 2

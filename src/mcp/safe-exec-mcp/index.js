@@ -31,6 +31,16 @@ function isResearchCmd(raw) {
   return false;
 }
 
+// Normalize a command string for secret scanning — strips basic obfuscation:
+// quoted string concatenation (token="sec""ret"), backslash escapes, and outer quotes.
+function normalizeForSecretScan(raw) {
+  return raw
+    .replace(/""/g, "")      // remove adjacent double-quote pairs (concat obfuscation)
+    .replace(/''/g, "")      // remove adjacent single-quote pairs
+    .replace(/\\(.)/g, "$1") // collapse backslash escapes: \x → x
+    .replace(/["']/g, "");   // strip remaining quotes
+}
+
 const BLOCK_RULES = [
   {
     id: "RM_RF_ROOT",
@@ -59,7 +69,7 @@ const BLOCK_RULES = [
   },
   {
     id: "SECRET_IN_COMMAND",
-    pattern: (tokens, raw) => !isResearchCmd(raw) && /\b(password|passwd|secret|api.?key|token)(\s*=\s*|\s+)\S{4,}/i.test(raw),
+    pattern: (tokens, raw) => !isResearchCmd(raw) && /\b(password|passwd|secret|api.?key|token)(\s*=\s*|\s+)\S{4,}/i.test(normalizeForSecretScan(raw)),
     message: "Plaintext secret in command — BLOCKED (credential exposure risk)",
   },
 ];

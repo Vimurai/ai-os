@@ -535,6 +535,56 @@
       "created_at": "2026-04-13T14:14:52.299Z",
       "completed_at": "2026-04-13T14:21:27.831Z",
       "summary": "Replaced hardcoded ORPHANS list in install-ai-os.sh with dynamic purge_orphans() function covering contracts/, claude/, gemini/"
+    },
+    {
+      "id": "P-38",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement explicit delta acknowledgment in `orchestrator-mcp`. Stop marking implementation deltas as read automatically during `run_preflight`. Add a `mark_deltas_read` tool so the Architect can confirm incorporation manually. (See `.ai/blueprints/robustness_phase7.md` section 1)",
+      "created_at": "2026-04-13T15:00:45.577Z",
+      "completed_at": "2026-04-14T09:15:49.386Z",
+      "summary": "Removed auto-read from run_preflight; added mark_deltas_read tool to task-synchronizer-mcp for explicit Architect acknowledgment"
+    },
+    {
+      "id": "P-39",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Harden `run_vibe_audit` in `vibe-check-mcp` against single-route failures. Add an inner `try...catch` loop so that a timeout or 404 on one route doesn't crash the entire audit session. (See `.ai/blueprints/robustness_phase7.md` section 2)",
+      "created_at": "2026-04-13T15:00:45.582Z",
+      "completed_at": "2026-04-14T09:15:50.688Z",
+      "summary": "Added inner try/catch per route in runVibeAudit; FAULT routes are recorded and reported without aborting the full audit"
+    },
+    {
+      "id": "P-40",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Integrate `report_cost` into the Triad workflow. Add directives to specialized agents (Security, DevOps) to report token usage via `token-budget-mcp` after completing high-tier tasks. (See `.ai/blueprints/robustness_phase7.md` section 3)",
+      "created_at": "2026-04-13T15:00:45.585Z",
+      "completed_at": "2026-04-14T09:15:51.900Z",
+      "summary": "Added report_cost directives to security_engineer and devops_engineer agents for Tier 2/3 tasks"
+    },
+    {
+      "id": "P-41",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add normalization to `safe-exec-mcp` to resist basic command obfuscation (like quoted strings). Strip quotes and escapes from the command buffer before running the secret detection regex. (See `.ai/blueprints/robustness_phase7.md` section 4)",
+      "created_at": "2026-04-13T15:00:45.589Z",
+      "completed_at": "2026-04-14T09:15:53.695Z",
+      "summary": "Added normalizeForSecretScan() to safe-exec-mcp stripping quote concatenation and backslash escapes before SECRET_IN_COMMAND regex"
+    },
+    {
+      "id": "P-42",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Fix the `mkdirSync` race condition in `token-budget-mcp` and ensure robust initial SQLite creation in high-concurrency environments. (See `.ai/blueprints/robustness_phase7.md` section 4)",
+      "created_at": "2026-04-13T15:00:45.592Z",
+      "completed_at": "2026-04-14T09:15:54.703Z",
+      "summary": "Fixed token-budget-mcp getDb() to only cache connection after full schema setup; added stderr warning on init failure"
     }
   ],
   "stamps": [

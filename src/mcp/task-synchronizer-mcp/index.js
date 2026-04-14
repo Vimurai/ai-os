@@ -236,6 +236,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: "Checks that TASKS.md and REVIEWS.md are in sync with state. Returns PASS or FAIL.",
       inputSchema: { type: "object", properties: {} },
     },
+    {
+      name: "mark_deltas_read",
+      description: "Marks implementation deltas as read after the Architect has incorporated them into architect.md. Pass specific task_ids to acknowledge selectively, or omit to acknowledge all unread deltas.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          task_ids: {
+            type: "array",
+            items: { type: "string" },
+            description: "Task IDs whose deltas to acknowledge (e.g. ['E-78', 'E-79']). Omit to acknowledge all unread.",
+          },
+        },
+      },
+    },
   ],
 }));
 
@@ -482,6 +496,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       return {
         content: [{ type: "text", text: `[SYNC_FIXED] Issues detected and auto-resolved:\n${failures.map(f => `  - ${f}`).join("\n")}` }],
+      };
+    }
+
+    // ── mark_deltas_read ──────────────────────────────────────────────────────
+    case "mark_deltas_read": {
+      const taskIds = Array.isArray(args.task_ids) && args.task_ids.length > 0
+        ? args.task_ids.map(id => String(id).trim().toUpperCase())
+        : null;
+
+      let marked;
+      if (taskIds) {
+        const ph = taskIds.map(() => "?").join(",");
+        marked = db.prepare(
+          `UPDATE deltas SET read = 1 WHERE read = 0 AND task_id IN (${ph})`
+        ).run(...taskIds).changes;
+      } else {
+        marked = db.prepare("UPDATE deltas SET read = 1 WHERE read = 0").run().changes;
+      }
+
+      if (marked > 0) _regenerateViews(aiDir, db);
+
+      const scope = taskIds ? taskIds.join(", ") : "all unread";
+      return {
+        content: [{
+          type: "text",
+          text: marked > 0
+            ? `✓ Acknowledged ${marked} delta(s) for ${scope}.`
+            : `⚠ No unread deltas found${taskIds ? ` for ${scope}` : ""}.`,
+        }],
       };
     }
 

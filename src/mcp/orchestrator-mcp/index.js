@@ -183,16 +183,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             );
           }
 
-          // Unread implementation deltas (P-42 §29)
+          // Unread implementation deltas (P-38: no auto-read — Architect must call mark_deltas_read)
           const unread = db.prepare("SELECT id, task_id, summary FROM deltas WHERE read = 0").all();
           if (unread.length > 0) {
             sections.push("## Unread Implementation Deltas");
             for (const d of unread) {
               sections.push(`- ${d.task_id}: ${d.summary}`);
-              db.prepare("UPDATE deltas SET read = 1 WHERE id = ?").run(d.id);
             }
-            sections.push("\n**Architect**: Review these deltas. If any diverge from your blueprint, update architect.md.");
-            regenerateViews(ai, db);
+            sections.push(
+              "\n**Architect**: Review these deltas. If any diverge from your blueprint, update architect.md.\n" +
+              "Then call `mark_deltas_read` via task-synchronizer-mcp to acknowledge."
+            );
           }
         } catch (e) { process.stderr.write(`[WARN] run_preflight SQLite: ${e.message}\n`); }
       }
