@@ -1,18 +1,21 @@
 # Handshake + Preflight (Global)
 
 HARD RULES:
-1) Every Claude run begins with PREFLIGHT (token-saver mode):
-   - Read .ai/DIGEST.md first — if current, it replaces most other reads.
-   - Read .ai/TASKS.md (your section only).
-   - Read .ai/QUESTIONS.md (open questions only).
-   - Open role-specific docs (ARCH/SECURITY/DEVOPS or UX/SEO/FRONTEND) ONLY if editing them.
-   - Open BRIEF/REPO/INTERFACES/CAPABILITIES/ENV only if the task requires info not in DIGEST.
+1) Every session begins with PREFLIGHT via the skill:
+   ```
+   skill: "ai-preflight"
+   ```
+   This calls orchestrator-mcp::run_preflight() — reads DIGEST.md + TASKS.md,
+   queries state.sqlite for task counts, focus, and unread deltas.
+   Do NOT manually read .ai/ files before running preflight.
 
-2) Stamp .ai/SESSION.md after preflight:
-   - The Stop hook does this automatically — only manual-stamp if hook fails.
-   - Manual format: Time, Actor, Notes (brief summary of what was done).
+2) Session stamp (.ai/SESSION.md):
+   - The Stop hook auto-stamps after every session — only manual-stamp if hook fails.
 
-3) Gemini consultation: use /gemini skill inline. Do NOT maintain a separate Gemini session.
-   Record outcomes in .ai/DECISIONS.md.
+3) Gemini ↔ Claude handoff:
+   - Architect (Gemini) creates P-## tasks via add_task MCP tool.
+   - Engineer (Claude) picks up open E-## tasks from TASKS.md.
+   - After completing: run_handover({ task_id: "E-##", summary: "..." })
+   - Record architectural decisions in .ai/DECISIONS.md.
 
-4) If .ai/ is missing or incomplete: stop and instruct — run `ai init` (no guessing).
+4) If .ai/ is missing or incomplete: stop and run `ai init` — do not guess.

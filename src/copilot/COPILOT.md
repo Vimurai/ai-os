@@ -19,8 +19,7 @@ Produce production-ready output. Read project context before acting.
 
 ## Preflight (token-saver — always run first)
 1. If `.ai/DIGEST.md` exists → read it. If current, skip BRIEF/REPO/INTERFACES/ENV.
-2. If `.ai/UPDATE.md` exists → read it (latest request context).
-3. If `.ai/TASKS.md` exists → scan open tasks relevant to the request.
+2. If `.ai/TASKS.md` exists → scan open tasks relevant to the request.
 4. If `.github/copilot-instructions.md` exists → read it (project-specific rules).
 5. Open domain files (ARCH/SECURITY/DEVOPS) ONLY when the task directly touches that domain.
 6. Never re-read a file already read this session.

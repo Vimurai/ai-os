@@ -142,8 +142,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // Add pointer for architect.md index — skip by default to save tokens
-      sections.push(`## architect.md (INDEX)\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/architect.md\` ONLY if you need architectural details for your specific task.\nIt is now a lightweight index (~30 lines). Domain blueprints are in \`.ai/blueprints/<domain>.md\` — load only the one relevant to your task.)`);
+      // Add pointer for architect.md — skip by default to save tokens
+      sections.push(`## architect.md\n(Skipped to save tokens. Use \`filesystem.read\` on \`.ai/architect.md\` ONLY if your specific task requires architectural context.)`);
 
       // E-103: state summary from SQLite (P-14 — no state.json parse)
       const dbPath = resolve(ai, "state.sqlite");

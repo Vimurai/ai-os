@@ -217,18 +217,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description: `Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when total DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}.`,
       inputSchema: { type: "object", properties: {} },
     },
-    // Legacy tools
-    {
-      name: "append_tasks",
-      description: "Legacy: Appends P-## task strings to TASKS.md directly. Use add_task for new tasks.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          tasks: { type: "array", items: { type: "string" }, description: "Task strings to append" },
-        },
-        required: ["tasks"],
-      },
-    },
+    // append_tasks intentionally removed from tool list — disabled (bypasses SQLite).
+    // Call add_task instead.
     {
       name: "verify_markdown_sync",
       description: "Checks that TASKS.md and REVIEWS.md are in sync with state. Returns PASS or FAIL.",
@@ -434,30 +424,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return `- [ ] P-${num}: Blueprint for "${line}"\n  Tier: ${tier} | Proposed: ${date}`;
       });
 
-      return { content: [{ type: "text", text: `## Proposed P-## Tasks\n\n${proposed.join("\n\n")}\n\nTo apply: call append_tasks.\n\n⚠ Prefer using \`add_task\` directly for new task creation.` }] };
+      return { content: [{ type: "text", text: `## Proposed P-## Tasks\n\n${proposed.join("\n\n")}\n\nTo apply: use add_task directly:\n  add_task({ prefix: 'P', owner: 'Architect (Gemini)', description: '...', tier: N })` }] };
     }
 
-    // ── Legacy: append_tasks ──────────────────────────────────────────────────
+    // ── REMOVED: append_tasks ─────────────────────────────────────────────────
+    // This tool wrote directly to TASKS.md, bypassing state.sqlite entirely.
+    // TASKS.md is now a generated view — hand-writing to it causes DB/file desync.
     case "append_tasks": {
-      const tasksPath = resolve(aiDir, "TASKS.md");
-      if (!existsSync(tasksPath)) {
-        return { content: [{ type: "text", text: "✗ .ai/TASKS.md not found." }], isError: true };
-      }
-
-      let content     = readFileSync(tasksPath, "utf8");
-      const toAppend  = args.tasks.join("\n") + "\n";
-      const archIdx   = content.indexOf("## Architect");
-      if (archIdx === -1) {
-        content += "\n## Architect (Gemini)\n" + toAppend;
-      } else {
-        const engIdx = content.indexOf("## Engineer", archIdx);
-        content = engIdx === -1
-          ? content + "\n" + toAppend
-          : content.slice(0, engIdx) + toAppend + "\n" + content.slice(engIdx);
-      }
-
-      writeFileSync(tasksPath, content, "utf8");
-      return { content: [{ type: "text", text: `✓ Appended ${args.tasks.length} task(s) to TASKS.md` }] };
+      return {
+        content: [{
+          type: "text",
+          text: "✗ append_tasks is disabled — it bypasses state.sqlite and causes desync.\n" +
+                "Use add_task instead:\n" +
+                "  add_task({ prefix: 'P', owner: 'Architect (Gemini)', description: '...', tier: 1 })\n" +
+                "add_task writes to state.sqlite and regenerates TASKS.md, state.json, and REVIEWS.md atomically.",
+        }],
+        isError: true,
+      };
     }
 
     // ── verify_markdown_sync ──────────────────────────────────────────────────

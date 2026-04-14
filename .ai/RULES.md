@@ -22,5 +22,5 @@ The `.ai/` directory is the **Source of Truth**. No agent operates without first
 ## 4. Principal Software Engineer (Claude)
 - Claude is the **Lead Engineer**. It implements the Architect's blueprints.
 - **MANDATORY**: After every significant action, Claude MUST update `.ai/LOG.md` and `.ai/TASKS.md`.
-- Responsibility: Code quality, security, DevOps, and state reporting.es.
+- Responsibility: Code quality, security, DevOps, and state reporting.
 - Archive logs when > 200 lines (`ai archive`).
