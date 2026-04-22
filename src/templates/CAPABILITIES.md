@@ -33,6 +33,14 @@
 - git status
 - git diff
 - ai test
+# computer-use-mcp sandbox tools (E-8, SEC_CLEARED 2026-04-21, D-002)
+- xdpyinfo (Linux only — Xvfb health check on DISPLAY=:99)
+- scrot (Linux only — screenshot to tmp file, deleted immediately)
+- xdotool (Linux only — mouse/keyboard in sandboxed DISPLAY=:99)
+- screencapture (macOS only — host display, test/dev use only)
+- cliclick (macOS only — mouse/keyboard, test/dev use only)
+- osascript (macOS only — key combos via System Events)
+- base64 (encode screenshot data, pipes from tmp file)
 
 ## network.outbound
 # Allowed external domains for network operations.

@@ -147,6 +147,15 @@
       "allowed-tools": ["check_gh_auth", "fetch_assigned_issues", "get_issue", "create_tasks_from_issues", "get_pr_status"],
       "disable-model-invocation": false,
       "_note": "§28 GitHub Bridge: fetches assigned issues via gh CLI and seeds state.json for autonomous Architect cycles"
+    },
+    "computer-use-mcp": {
+      "path": "src/mcp/computer-use-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["capture_screen", "left_click", "right_click", "double_click", "type_text", "key_press", "health_check"],
+      "disable-model-invocation": false,
+      "_note": "E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for TestSprite visual QA. Linux: Xvfb DISPLAY=:99. macOS: host display with warning. Decision D-002.",
+      "_security": "SEC_CLEARED E-8 2026-04-21 — DISPLAY hardcoded to :99, HOME=/tmp/computer-use-sandbox, keyboard input sanitized, no persistent screenshots. See .ai/SECURITY.md T-CU-001..T-CU-005."
     }
   }
 }

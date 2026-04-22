@@ -122,6 +122,16 @@
       "args": [
         "/Users/emirkovacevic/.ai-os/mcp/github-bridge-mcp/index.js"
       ]
+    },
+    "computer-use-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/computer-use-mcp/index.js"
+      ],
+      "env": {
+        "DISPLAY": ":99",
+        "HOME": "/tmp/computer-use-sandbox"
+      }
     }
   }
 }

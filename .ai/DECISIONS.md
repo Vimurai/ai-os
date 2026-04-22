@@ -40,3 +40,41 @@
 - Delete root `package.json` and `package-lock.json`. Each MCP server's own `package.json` remains untouched. Run `npm install` inside each `src/mcp/<server>/` directory to restore isolated installs. No source code changes required.
 
 ---
+
+## D-002 — computer-use-mcp: New MCP Server for Native Computer Use (E-8)
+
+**Date**: 2026-04-21
+**Task**: E-8
+**Decision**: computer-use-mcp (confirmed 2026-04-21)
+
+### Why needed
+`vibe-check-mcp` uses Playwright (DOM/headless Chrome scraping) for visual QA. This approach misses native UI elements, OS-level dialogs, and non-web surfaces. The blueprint (`.ai/blueprints/capabilities.md` §2) mandates augmenting vibe-check-mcp with native OS-level Computer Use capabilities so TestSprite can visually assert UI state without DOM coupling — aligning with Project Mariner / Claude Computer Use.
+
+### Alternatives considered
+1. **Extend Playwright** — DOM scraping; can't interact with native OS windows, Electron chrome, or non-web surfaces. Rejected.
+2. **Screenshot diffing (pixelmatch/resemble.js)** — no interaction capability; brittle to font/DPI changes. Rejected.
+3. **Selenium + OS-level driver** — heavyweight; no AI-native interaction model. Rejected.
+4. **computer-use-mcp (chosen draft)** — wraps the Claude Computer Use API (screen capture + coordinate click + keyboard) in an MCP server; sandboxed to a headless X11/Wayland virtual display. Directly integrates with the Triad AI loop. Strongly preferred per blueprint.
+
+### Size / weight
+- New MCP server at `src/mcp/computer-use-mcp/` (~300–500 LOC Node.js).
+- Runtime deps: `@anthropic-ai/sdk` (already hoisted in workspace), `xvfb` (virtual display, system-level, no npm package), optionally `screenshot-desktop` (~15KB npm).
+- No net-new npm packages beyond what is already in the workspace.
+
+### Security track record
+- Anthropic SDK: actively maintained, no known critical CVEs as of 2026-04.
+- X11/Xvfb virtual display: isolation boundary between agent and host display. Well-understood Linux subsystem.
+- **Key risk**: if sandbox escapes, agent can interact with host machine. Mitigation: strict `DISPLAY` env var isolation + sandboxed headless buffer only — no access to `$DISPLAY=:0` (host display). Reviewed by `security_engineer` gate (mandatory for Tier 3).
+
+### Maintenance status
+- Anthropic SDK: actively maintained by Anthropic. Monthly releases.
+- Xvfb: part of X.Org project; stable, minimal churn.
+
+### License
+- Anthropic SDK: MIT — compatible.
+- Xvfb: MIT/X11 — compatible.
+
+### Rollback plan
+- Delete `src/mcp/computer-use-mcp/` directory and remove its entry from `src/config/registry.json` and `.mcp.json`. Re-run `bash install-ai-os.sh` to sync. vibe-check-mcp (Playwright) remains intact and resumes as the sole visual QA tool.
+
+---

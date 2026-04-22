@@ -16,6 +16,9 @@ The AI-OS ecosystem divides cognitive labor across specialized agents and dynami
 - **`trigger-audit`**: Scans diffs and descriptions for mandatory trigger keywords (auth, secrets).
 
 ## 2. Principal Architect (Gemini)
+
+> **YAML Schema Note:** Gemini agents and skills do not support or require Claude-specific frontmatter fields such as `disable-model-invocation`, `user-invocable`, and `allowed-tools`. The system's compliance audit tool conditionally ignores these fields for the Gemini domain.
+
 ### Agents
 - **`docs-architect`**: Audits public docs against `architect.md` to detect drift.
 - **`gemini_tasks`**: Updates the Gemini section of `TASKS.md` (G-## tasks).
