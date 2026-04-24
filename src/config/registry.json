@@ -148,6 +148,23 @@
       "disable-model-invocation": false,
       "_note": "§28 GitHub Bridge: fetches assigned issues via gh CLI and seeds state.json for autonomous Architect cycles"
     },
+    "approval-mcp": {
+      "path": "src/mcp/approval-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["request_approval"],
+      "disable-model-invocation": false,
+      "_note": "E-10 HITL Gate: blocks Tier 3 ops until human types y/Y in terminal. Audit trail in ~/.ai-os/approvals.sqlite. Cannot be bypassed. Blueprint: interop.md §2. SEC_CLEARED 2026-04-24.",
+      "_security": "T-HITL-001: ANSI stripped. T-HITL-002: DB_PATH hardcoded. T-HITL-003: stdin.isTTY required. T-HITL-004: SQLite write before response. T-HITL-005: maxLength 200/500 enforced."
+    },
+    "advisor-mcp": {
+      "path": "src/mcp/advisor-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["ask_architect"],
+      "disable-model-invocation": false,
+      "_note": "E-9 A2A Bridge: Claude queries Gemini Architect mid-execution via `gemini -p`. Read-only — Gemini cannot write files. All rulings logged as [A2A_RULING] in .ai/LOG.md. Blueprint: interop.md §1."
+    },
     "computer-use-mcp": {
       "path": "src/mcp/computer-use-mcp/index.js",
       "capability": "EXECUTE",

@@ -10,16 +10,19 @@
 ```
 [Claude/Gemini Agent] ──MCP protocol──> [MCP Server layer]
                                                |
-              ┌────────────────────────────────┼────────────────────────┐
-              |                                |                        |
-   [filesystem MCP]               [computer-use-mcp]         [TestSprite MCP]
-   scoped to project root         BOUNDARY: headless          BOUNDARY: external
-   (host path: .)                 Xvfb :99 only               TestSprite cloud API
-              |                                |                        |
-   [Project files only]      [Virtual display framebuffer]   [test results → local disk]
-                             [NO host display :0]
-                             [NO host home dir]
-                             [NO unrestricted network]
+   ┌───────────────────────┬─────────────────┼──────────────────┬────────────────────┐
+   |                       |                 |                  |                    |
+[filesystem MCP]  [computer-use-mcp]  [approval-mcp]   [advisor-mcp]        [TestSprite MCP]
+scoped to          BOUNDARY: headless  BOUNDARY: host   BOUNDARY: Gemini     BOUNDARY: external
+project root       Xvfb :99 only       terminal TTY     subprocess (RO)      TestSprite cloud API
+(host path: .)          |                   |                  |                    |
+[Project files]  [Virtual display]  [Human operator   [Gemini process:     [test results →
+  only            framebuffer        Y/N console]      read-only, no         local disk]
+                 [NO host :0]       [state.sqlite:     file writes]
+                 [NO host home]      hardcoded path,
+                 [NO unrestricted    append-only]
+                  network]          [NO auto-approve,
+                                    TTY required]
 ```
 
 ---
@@ -164,6 +167,99 @@
   3. `.gitignore` must include any file that could contain secrets at rest.
   4. `npm audit` and `dependency_gate` run before any new dependency that handles credentials.
 - **Status**: MITIGATED by convention; no automated secret-scanning hook present (gap).
+
+---
+
+---
+
+### T-HITL-001: Prompt Injection via ANSI / Terminal Control Characters
+
+- **Component**: approval-mcp (`request_approval` tool)
+- **Category**: Prompt injection / display spoofing
+- **Severity**: P0 (Critical)
+- **Attack vector**: Claude (or a compromised caller) passes `action` or `reason` strings containing ANSI escape sequences (`\x1b[2J` screen-clear, `\x1b[A` cursor-up) or raw control characters (`\r`, `\n`, `\x08`) that manipulate the terminal display. The human operator sees a falsified prompt and approves an action they did not intend to.
+- **Impact**: Complete defeat of the HITL guarantee. The operator believes they are approving action A, but Claude receives approval for action B. All Tier 3 operations become exploitable.
+- **Mitigations**:
+  1. Strip all ANSI escape sequences and non-printable characters from `action` and `reason` before writing to `process.stdout`. Pattern: `/[\x00-\x1F\x7F]|\x1b\[[0-9;]*[A-Za-z]/g` replaced with `[CTRL]` or removed.
+  2. Enforce length limits (T-HITL-005) before sanitization.
+  3. Frame the prompt with a server-generated boundary string not derived from input (e.g., `=== APPROVAL REQUEST ===`).
+  4. Write the raw (pre-sanitized) value to `state.sqlite` alongside the sanitized display string for post-hoc audit.
+- **Residual risk**: Low with sanitization applied before display. Critical if raw strings reach `process.stdout.write`.
+- **Status**: UNMITIGATED (E-10 not yet implemented)
+- **Owner**: Engineer (E-10)
+
+---
+
+### T-HITL-002: SQLite Path Injection / Path Traversal
+
+- **Component**: approval-mcp (state persistence layer)
+- **Category**: Path traversal / audit trail destruction
+- **Severity**: P0 (Critical)
+- **Attack vector**: The `state.sqlite` path is derived from an environment variable, constructor argument, or any runtime input. An attacker redirects writes to `/dev/null` (destroying the audit trail silently) or to `../../.ssh/authorized_keys` (corrupting a sensitive file with SQLite binary data).
+- **Impact**: OASF audit trail is undetectably destroyed, or arbitrary file corruption at the redirected path.
+- **Mitigations**:
+  1. Hardcode the DB path as a source-level constant: `const DB_PATH = path.join(__dirname, '../../state/state.sqlite');`. No env var, no argument.
+  2. On startup, resolve and validate: `path.resolve(DB_PATH)` must begin with the known project root. Exit non-zero if check fails.
+  3. Set file permissions to `0o600` on first open; validate mode on subsequent opens.
+  4. Defense-in-depth: the `scope_safety` skill must flag any `path.join` or `fs.open` call that includes runtime-supplied values in paths leading to `.sqlite` files.
+- **Residual risk**: Low if path is a hardcoded constant. High if any runtime value influences it.
+- **Status**: UNMITIGATED (E-10 not yet implemented)
+- **Owner**: Engineer (E-10)
+
+---
+
+### T-HITL-003: Auto-Approval Without Human Interaction
+
+- **Component**: approval-mcp (readline / TTY interaction layer)
+- **Category**: Authentication bypass / gate nullification
+- **Severity**: P0 (Critical)
+- **Attack vector**: The interactive readline prompt is bypassed when stdin is non-TTY (piped input), when a timeout auto-resolves to APPROVED, when a `--auto-approve` / `NODE_ENV=test` flag is present, or when a readline error causes the promise to resolve to APPROVED by default.
+- **Impact**: The entire HITL gate is nullified. All Tier 3 operations proceed without any human consent. This is functionally equivalent to removing the gate.
+- **Mitigations**:
+  1. Assert `process.stdin.isTTY === true` at startup. If false, refuse to start or reject all approval requests with `REJECTED` + error message.
+  2. No timeout-based auto-APPROVED. The prompt must block indefinitely. A timeout that resolves to REJECTED is the only acceptable safe-fail.
+  3. No `--auto-approve` or test-mode bypass in `index.js`. Test harnesses must use a separate test double.
+  4. Accept only explicit `y`/`Y` as approval. Empty input, enter with no character, and unrecognized input must resolve to REJECTED.
+  5. Commit the SQLite record before returning the MCP response — prevents unrecorded approvals if a crash occurs between the record write and the response send.
+- **Residual risk**: Low with TTY assertion and no-timeout enforced. Critical if either is absent.
+- **Status**: UNMITIGATED (E-10 not yet implemented)
+- **Owner**: Engineer (E-10)
+
+---
+
+### T-HITL-004: Gate Circumvention
+
+- **Component**: approval-mcp (system integration / registration)
+- **Category**: Security control bypass
+- **Severity**: P1 (High)
+- **Attack vector**: The gate is bypassed structurally: the server is not registered in `.mcp.json`, `safe-exec-mcp` or `trigger-audit` misses the Tier 3 classification, or a future refactor removes the `request_approval` call from the execution path. No error is raised; the operation silently proceeds.
+- **Impact**: Tier 3 operations execute without human consent. The bypass is undetectable without an audit reconciliation check.
+- **Mitigations**:
+  1. Register `approval-mcp` in `src/config/registry.json` and `.mcp.json`; add CI assertion that the registry entry is present.
+  2. `disable-model-invocation` must not suppress `request_approval` — the tool calls `readline`, not a model. Confirm this property is preserved in implementation.
+  3. Add an end-to-end CI test: known Tier 3 command → `safe-exec-mcp` emits `[TIER_3_RISK]` → `request_approval` is called (mock TTY, respond Y).
+  4. Post-task OASF reconciliation: `verification-mcp` or `orchestrator-mcp` must verify that every completed Tier 3 task has a corresponding approval record in `state.sqlite`. Flag any gap as a compliance violation.
+- **Residual risk**: Medium — requires end-to-end tests and audit reconciliation to fully close. Detection path (item 4) is partial mitigation.
+- **Status**: UNMITIGATED (E-10 not yet implemented)
+- **Owner**: Engineer (E-10)
+
+---
+
+### T-HITL-005: Unbounded Input Length — DoS and Display Overflow
+
+- **Component**: approval-mcp (input validation layer)
+- **Category**: Denial of service / resource exhaustion
+- **Severity**: P2 (Medium)
+- **Attack vector**: `action` or `reason` strings are multi-megabyte. This causes terminal buffer overflow, memory exhaustion in Node.js before the prompt is displayed, or unbounded growth of `state.sqlite` if the full string is stored.
+- **Impact**: approval-mcp crashes or hangs; terminal display is corrupted (obscuring the Y/N prompt); SQLite file grows without bound over time.
+- **Mitigations**:
+  1. Enforce `action.length <= 200` and `reason.length <= 500` at the MCP tool input schema level (JSON Schema `maxLength`). Reject with a tool error — do not truncate (silent truncation hides the action description from the operator).
+  2. Length check must occur before sanitization (T-HITL-001) and before any write.
+  3. SQLite DDL: `CHECK(length(action) <= 200)` and `CHECK(length(reason) <= 500)` constraints as defense-in-depth.
+  4. Return a structured MCP error on rejection so Claude can escalate to a fallback warning path.
+- **Residual risk**: Low with hard caps enforced at the schema and DB layers.
+- **Status**: UNMITIGATED (E-10 not yet implemented)
+- **Owner**: Engineer (E-10)
 
 ---
 

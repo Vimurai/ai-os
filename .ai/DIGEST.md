@@ -52,3 +52,6 @@
 DIGEST must be accurate or flagged as stale. If stale, run: ai digest
 - 2026-04-21: auto-stamped by Stop hook
 - 2026-04-14: SECURITY.md created — computer-use-mcp threat model (T-CU-001–005), 4 P0 vectors documented with required mitigations; THREAT_MODEL.md created with full trust boundary map and 7 threat entries (.ai/SECURITY.md, .ai/THREAT_MODEL.md)- 2026-04-22: auto-stamped by Stop hook
+- 2026-04-22: auto-stamped by Stop hook
+- 2026-04-14: SECURITY.md updated — approval-mcp (E-10) section added; 5 threats documented (T-HITL-001–005, 3x P0); THREAT_MODEL.md trust boundary map updated; SEC_CLEARED conditional pending implementation
+- 2026-04-24: auto-stamped by Stop hook

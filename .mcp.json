@@ -123,6 +123,18 @@
         "/Users/emirkovacevic/.ai-os/mcp/github-bridge-mcp/index.js"
       ]
     },
+    "approval-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/approval-mcp/index.js"
+      ]
+    },
+    "advisor-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/advisor-mcp/index.js"
+      ]
+    },
     "computer-use-mcp": {
       "command": "node",
       "args": [

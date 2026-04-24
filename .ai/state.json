@@ -209,22 +209,22 @@
     {
       "id": "E-9",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement the `advisor-mcp` server as defined in `.ai/blueprints/interop.md` to provide Claude with an Agent-to-Agent (A2A) RPC bridge to query a headless Gemini instance mid-execution.",
       "created_at": "2026-04-21T21:27:15.778Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-22T20:19:07.248Z",
+      "summary": "Implemented advisor-mcp A2A bridge: ask_architect tool invokes gemini -p with architect.md context pre-loaded, optional domain blueprint, [A2A_RULING] logged to LOG.md, graceful degradation when Gemini unavailable. Registered in registry.json and .mcp.json. 34 tests, 493/493 suite."
     },
     {
       "id": "E-10",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 3,
       "description": "Implement the `approval-mcp` server as defined in `.ai/blueprints/interop.md` to enforce Human-in-the-Loop (HITL) CLI prompts for Tier 3 security operations flagged by safe-exec or trigger-audit.",
       "created_at": "2026-04-21T21:27:15.780Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-24T14:05:57.012Z",
+      "summary": "Implemented approval-mcp HITL gate: request_approval tool with Y/N terminal prompt, ANSI sanitization (T-HITL-001), hardcoded SQLite path ~/.ai-os/approvals.sqlite (T-HITL-002), stdin.isTTY assertion (T-HITL-003), SQLite write before MCP response (T-HITL-004), maxLength 200/500 with rejection (T-HITL-005). 37 tests, 531/531 suite. Tier 3: ARCH_PASS SEC_PASS TESTS_PASS."
     }
   ],
   "stamps": [
@@ -269,6 +269,62 @@
       "task_id": null,
       "timestamp": "2026-04-18T18:37:28.582Z",
       "summary": "Docs audit complete — 0 gaps found in README/CONTRIBUTING vs architect.md. E-4 and E-5 were successful."
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-8",
+      "timestamp": "2026-04-22T14:13:08.428Z",
+      "summary": "E-8 computer-use-mcp — blueprint coverage confirmed, sovereignty boundaries respected, MCP pattern followed correctly"
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-8",
+      "timestamp": "2026-04-22T14:13:14.651Z",
+      "summary": "E-8 computer-use-mcp — no P0 vulns. P1 fixes applied: env spread removed from healthCheck(), shell binaries declared in CAPABILITIES.md. T-CU-001..005 mitigated in code"
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-8",
+      "timestamp": "2026-04-22T14:13:18.585Z",
+      "summary": "E-8 computer-use-mcp — 34/34 tests pass. All 7 tools, 5 security boundaries, error paths, registry/.mcp.json entries covered. Full suite 458/458"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-8",
+      "timestamp": "2026-04-22T14:13:22.238Z",
+      "summary": "E-8 computer-use-mcp Tier 3 review complete — ARCH_PASS SEC_PASS TESTS_PASS. P1 fixes applied: env spread removed, CAPABILITIES.md updated, SECURITY.md stale labels resolved"
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-10",
+      "timestamp": "2026-04-24T14:05:37.834Z",
+      "summary": "E-10 approval-mcp — blueprint coverage confirmed per interop.md §2, MCP pattern followed, no sovereignty violations, single tool correctly scoped"
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-10",
+      "timestamp": "2026-04-24T14:05:42.063Z",
+      "summary": "E-10 approval-mcp — all T-HITL-001..005 mitigations verified in code: ANSI stripped, DB_PATH hardcoded, stdin.isTTY asserted, SQLite write before response, length limits enforced with rejection"
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-10",
+      "timestamp": "2026-04-24T14:05:46.978Z",
+      "summary": "E-10 approval-mcp — 37/37 tests pass. All 5 T-HITL mitigations, input validation, SQLite schema, registry/.mcp.json entries verified. Full suite 531/531."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-10",
+      "timestamp": "2026-04-24T14:05:51.599Z",
+      "summary": "E-10 approval-mcp Tier 3 review — ARCH_PASS SEC_PASS TESTS_PASS. All HITL mitigations enforced: ANSI sanitization, hardcoded SQLite path, TTY assertion, pre-response audit write, length rejection."
     }
   ],
   "deltas": [],

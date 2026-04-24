@@ -78,3 +78,35 @@
 - Delete `src/mcp/computer-use-mcp/` directory and remove its entry from `src/config/registry.json` and `.mcp.json`. Re-run `bash install-ai-os.sh` to sync. vibe-check-mcp (Playwright) remains intact and resumes as the sole visual QA tool.
 
 ---
+
+## D-003 — approval-mcp: No New Dependencies (E-10)
+
+**Date**: 2026-04-24
+**Task**: E-10
+**Decision**: No new npm packages — Node.js built-ins only (confirmed 2026-04-24)
+
+### Why needed
+`approval-mcp` implements the HITL gate for Tier 3 operations. It needs: (1) an interactive terminal prompt for Y/N approval, (2) persistent approval/rejection audit log in SQLite.
+
+### Alternatives considered
+1. **`inquirer` / `prompts` npm packages** — interactive CLI prompts; adds ~500KB. Rejected — `readline` (built-in) covers the Y/N use case with zero footprint.
+2. **`better-sqlite3`** — npm package for SQLite. Rejected — `node:sqlite` (Node.js 22+ built-in, already used by token-budget-mcp) covers the use case with zero new install surface.
+3. **`node:readline` + `node:sqlite` (chosen)** — both are Node.js built-ins; zero new npm dependencies; no install, no CVE surface, no license risk.
+
+### Size / weight
+- Zero net-new npm packages. No increase in `node_modules` footprint.
+
+### Security track record
+- `node:readline`: Node.js core, no CVE surface.
+- `node:sqlite`: Node.js 22+ built-in; same audit surface as the Node.js runtime itself.
+
+### Maintenance status
+- Both modules maintained as part of the Node.js core team release cadence.
+
+### License
+- Node.js built-ins: MIT — compatible.
+
+### Rollback plan
+- Delete `src/mcp/approval-mcp/` and remove from `registry.json` / `.mcp.json`. No npm uninstall required.
+
+---
