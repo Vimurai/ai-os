@@ -106,9 +106,9 @@ assert_status 0 "NON_TTY status returned when not a TTY" \
   grep -q '"NON_TTY"' "$SERVER"
 
 assert_status 0 "gate never auto-approves on TTY failure" \
-  node --input-type=module <<'JS'
+  node --input-type=module - "$SERVER" <<'JS'
 import { readFileSync } from 'fs';
-const src = readFileSync('/Users/emirkovacevic/Documents/develompment/cli_apps/ai-os-v2/src/mcp/approval-mcp/index.js', 'utf8');
+const src = readFileSync(process.argv[2], 'utf8');
 // NON_TTY branch: find the if (!isTTYAvailable()) block and confirm it uses NON_TTY not APPROVED
 const nonTtyIdx = src.indexOf('!isTTYAvailable()');
 if (nonTtyIdx === -1) process.exit(1);
