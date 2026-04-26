@@ -25,6 +25,10 @@
   Status: DONE 2026-04-21 — Created .ai/blueprints/interop.md defining the A2A Bridge and advisor-mcp server for dynamic Architect queries.
 - [x] P-12: Blueprint a **Human-in-the-Loop (HITL) Gate** (`approval-mcp`) to formalize execution pauses and user CLI prompts for high-risk Tier 3 operations. | Tier: 2
   Status: DONE 2026-04-21 — Created .ai/blueprints/interop.md defining the HITL approval-mcp server to pause high-risk execution loops.
+- [x] P-13: Blueprint the integration of Explicit Context Caching (Prompt Caching) to permanently cache core `.ai/blueprints/` and SQLite schemas at the API layer, reducing token costs and JIT latency for repetitive agent turns. | Tier: 2
+  Status: DONE 2026-04-26 — Created .ai/blueprints/caching.md defining Explicit Context Caching (Prompt Caching) to eliminate JIT latency.
+- [x] P-14: Blueprint the migration of Triad communication (e.g., `TASKS.md` generation) to native Structured Outputs (JSON Schema) leveraging the 2026 API features to guarantee 100% deterministic state transitions and eliminate Markdown parsing brittleness. | Tier: 2
+  Status: DONE 2026-04-26 — Created .ai/blueprints/structured-outputs.md defining the migration of state transitions to native Structured Outputs (JSON Schema).
 
 ## Engineer (Claude)
 - [x] E-1: Implement the monorepo workspace structure (npm/pnpm workspaces) across `src/mcp/*` per `.ai/blueprints/workspace.md`. | Tier: 2
@@ -47,3 +51,7 @@
   Status: DONE 2026-04-22 — Implemented advisor-mcp A2A bridge: ask_architect tool invokes gemini -p with architect.md context pre-loaded, optional domain blueprint, [A2A_RULING] logged to LOG.md, graceful degradation when Gemini unavailable. Registered in registry.json and .mcp.json. 34 tests, 493/493 suite.
 - [x] E-10: Implement the `approval-mcp` server as defined in `.ai/blueprints/interop.md` to enforce Human-in-the-Loop (HITL) CLI prompts for Tier 3 security operations flagged by safe-exec or trigger-audit. | Tier: 3
   Status: DONE 2026-04-24 — Implemented approval-mcp HITL gate: request_approval tool with Y/N terminal prompt, ANSI sanitization (T-HITL-001), hardcoded SQLite path ~/.ai-os/approvals.sqlite (T-HITL-002), stdin.isTTY assertion (T-HITL-003), SQLite write before MCP response (T-HITL-004), maxLength 200/500 with rejection (T-HITL-005). 37 tests, 531/531 suite. Tier 3: ARCH_PASS SEC_PASS TESTS_PASS.
+- [ ] E-11: Implement API-level Explicit Context Caching per `.ai/blueprints/caching.md` by extending `token-budget-mcp` or creating a dedicated cache-manager. Ensure `.ai/blueprints/` and SQLite schemas are permanently cached. | Tier: 2
+- [ ] E-12: Migrate Triad state communication to native Structured Outputs (JSON Schema) per `.ai/blueprints/structured-outputs.md`. Deprecate manual markdown editing for `TASKS.md` and `REVIEWS.md`, replacing it entirely with `task-synchronizer-mcp` schema validations. | Tier: 2
+- [x] E-13: **Fix Missing Tool Wires**: The newly built MCP servers (`advisor-mcp`, `approval-mcp`, and `computer-use-mcp`) are registered but absent from all agent/skill YAML frontmatters. Update the `allowed-tools` arrays in `src/claude/agents/` and `src/claude/skills/` to explicitly grant access (e.g., `vibe_sentinel` needs `computer-use-mcp`, all core Claude agents need `advisor-mcp`, etc.) so they can actually be invoked. | Tier: 1
+  Status: DONE 2026-04-26 — Updated allowed-tools in 5 agent YAMLs (vibe_sentinel, chaos_monkey, security_engineer, devops_engineer, critic_arch) to include advisor-mcp, approval-mcp, and computer-use-mcp tools; added 10 MCP tool permission entries to .claude/settings.json

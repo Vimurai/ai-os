@@ -52,7 +52,16 @@
       "mcp__github-bridge-mcp__fetch_assigned_issues",
       "mcp__github-bridge-mcp__get_issue",
       "mcp__github-bridge-mcp__create_tasks_from_issues",
-      "mcp__github-bridge-mcp__get_pr_status"
+      "mcp__github-bridge-mcp__get_pr_status",
+      "mcp__advisor-mcp__ask_architect",
+      "mcp__approval-mcp__request_approval",
+      "mcp__computer-use-mcp__capture_screen",
+      "mcp__computer-use-mcp__left_click",
+      "mcp__computer-use-mcp__right_click",
+      "mcp__computer-use-mcp__double_click",
+      "mcp__computer-use-mcp__type_text",
+      "mcp__computer-use-mcp__key_press",
+      "mcp__computer-use-mcp__health_check"
     ]
   },
   "hooks": {

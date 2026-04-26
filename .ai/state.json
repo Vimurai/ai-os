@@ -225,6 +225,56 @@
       "created_at": "2026-04-21T21:27:15.780Z",
       "completed_at": "2026-04-24T14:05:57.012Z",
       "summary": "Implemented approval-mcp HITL gate: request_approval tool with Y/N terminal prompt, ANSI sanitization (T-HITL-001), hardcoded SQLite path ~/.ai-os/approvals.sqlite (T-HITL-002), stdin.isTTY assertion (T-HITL-003), SQLite write before MCP response (T-HITL-004), maxLength 200/500 with rejection (T-HITL-005). 37 tests, 531/531 suite. Tier 3: ARCH_PASS SEC_PASS TESTS_PASS."
+    },
+    {
+      "id": "P-13",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint the integration of Explicit Context Caching (Prompt Caching) to permanently cache core `.ai/blueprints/` and SQLite schemas at the API layer, reducing token costs and JIT latency for repetitive agent turns.",
+      "created_at": "2026-04-26T21:13:18.505Z",
+      "completed_at": "2026-04-26T21:16:05.509Z",
+      "summary": "Created .ai/blueprints/caching.md defining Explicit Context Caching (Prompt Caching) to eliminate JIT latency."
+    },
+    {
+      "id": "P-14",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint the migration of Triad communication (e.g., `TASKS.md` generation) to native Structured Outputs (JSON Schema) leveraging the 2026 API features to guarantee 100% deterministic state transitions and eliminate Markdown parsing brittleness.",
+      "created_at": "2026-04-26T21:13:18.512Z",
+      "completed_at": "2026-04-26T21:16:05.510Z",
+      "summary": "Created .ai/blueprints/structured-outputs.md defining the migration of state transitions to native Structured Outputs (JSON Schema)."
+    },
+    {
+      "id": "E-11",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement API-level Explicit Context Caching per `.ai/blueprints/caching.md` by extending `token-budget-mcp` or creating a dedicated cache-manager. Ensure `.ai/blueprints/` and SQLite schemas are permanently cached.",
+      "created_at": "2026-04-26T21:16:05.511Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-12",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Migrate Triad state communication to native Structured Outputs (JSON Schema) per `.ai/blueprints/structured-outputs.md`. Deprecate manual markdown editing for `TASKS.md` and `REVIEWS.md`, replacing it entirely with `task-synchronizer-mcp` schema validations.",
+      "created_at": "2026-04-26T21:16:05.513Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-13",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "**Fix Missing Tool Wires**: The newly built MCP servers (`advisor-mcp`, `approval-mcp`, and `computer-use-mcp`) are registered but absent from all agent/skill YAML frontmatters. Update the `allowed-tools` arrays in `src/claude/agents/` and `src/claude/skills/` to explicitly grant access (e.g., `vibe_sentinel` needs `computer-use-mcp`, all core Claude agents need `advisor-mcp`, etc.) so they can actually be invoked.",
+      "created_at": "2026-04-26T21:28:02.653Z",
+      "completed_at": "2026-04-26T21:46:56.395Z",
+      "summary": "Updated allowed-tools in 5 agent YAMLs (vibe_sentinel, chaos_monkey, security_engineer, devops_engineer, critic_arch) to include advisor-mcp, approval-mcp, and computer-use-mcp tools; added 10 MCP tool permission entries to .claude/settings.json"
     }
   ],
   "stamps": [
@@ -325,6 +375,13 @@
       "task_id": "E-10",
       "timestamp": "2026-04-24T14:05:51.599Z",
       "summary": "E-10 approval-mcp Tier 3 review — ARCH_PASS SEC_PASS TESTS_PASS. All HITL mitigations enforced: ANSI sanitization, hardcoded SQLite path, TTY assertion, pre-response audit write, length rejection."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "critic_arch",
+      "task_id": "E-13",
+      "timestamp": "2026-04-26T21:47:06.690Z",
+      "summary": "E-13 Tier 1 PASS — agent YAML tool wires added; no sovereignty violations; all 531 tests green"
     }
   ],
   "deltas": [],

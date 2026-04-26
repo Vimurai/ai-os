@@ -3,7 +3,7 @@ name: critic_arch
 description: Deterministic architecture reviewer. Compares git diff against .ai/architect.md to detect sovereignty violations, orphaned code, and blueprint deviations. Appends [ARCH_PASS] or [ARCH_FAIL] to .ai/REVIEWS.md.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash, mcp__advisor-mcp__ask_architect
 context: fork
 agent: general-purpose
 ---
