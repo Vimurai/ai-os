@@ -244,10 +244,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          x: { type: "number", description: "X coordinate in pixels" },
-          y: { type: "number", description: "Y coordinate in pixels" },
+          x: { type: "integer", minimum: 0, maximum: 10000, description: "X coordinate in pixels (0-10000)" },
+          y: { type: "integer", minimum: 0, maximum: 10000, description: "Y coordinate in pixels (0-10000)" },
         },
         required: ["x", "y"],
+        additionalProperties: false,
       },
     },
     {
@@ -256,10 +257,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          x: { type: "number" },
-          y: { type: "number" },
+          x: { type: "integer", minimum: 0, maximum: 10000 },
+          y: { type: "integer", minimum: 0, maximum: 10000 },
         },
         required: ["x", "y"],
+        additionalProperties: false,
       },
     },
     {
@@ -268,23 +270,26 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          x: { type: "number" },
-          y: { type: "number" },
+          x: { type: "integer", minimum: 0, maximum: 10000 },
+          y: { type: "integer", minimum: 0, maximum: 10000 },
         },
         required: ["x", "y"],
+        additionalProperties: false,
       },
     },
     {
       name: "type_text",
       description:
         "Types text into the sandboxed display via keyboard simulation. " +
-        "Only printable ASCII characters are allowed; all others are stripped.",
+        "Only printable ASCII characters are allowed; all others are stripped. " +
+        "Maximum length: 4096 characters (ARG_MAX safety bound).",
       inputSchema: {
         type: "object",
         properties: {
-          text: { type: "string", description: "Text to type (printable ASCII only)" },
+          text: { type: "string", maxLength: 4096, description: "Text to type (printable ASCII, max 4096 chars)" },
         },
         required: ["text"],
+        additionalProperties: false,
       },
     },
     {
@@ -295,9 +300,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
-          key: { type: "string", description: "Key name or combo (e.g. \"ctrl+c\", \"Return\")" },
+          key: { type: "string", maxLength: 64, description: "Key name or combo (max 64 chars)" },
         },
         required: ["key"],
+        additionalProperties: false,
       },
     },
     {
@@ -312,12 +318,55 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 // ── Tool dispatcher ───────────────────────────────────────────────────────────
 
+// Runtime bounds validators — defence-in-depth against missing/garbage args.
+function _validateCoord(args) {
+  for (const k of ["x", "y"]) {
+    const v = args?.[k];
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+      return `${k} must be a finite number, got ${v === undefined ? "undefined" : typeof v}`;
+    }
+    if (v < 0 || v > 10000) return `${k} out of range [0, 10000]: ${v}`;
+  }
+  return null;
+}
+
+function _validateText(args) {
+  const v = args?.text;
+  if (typeof v !== "string") return "text must be a string";
+  if (v.length > 4096)      return `text exceeds max length 4096 (got ${v.length})`;
+  return null;
+}
+
+function _validateKey(args) {
+  const v = args?.key;
+  if (typeof v !== "string") return "key must be a string";
+  if (v.length === 0)        return "key must not be empty";
+  if (v.length > 64)         return `key exceeds max length 64 (got ${v.length})`;
+  return null;
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const start = Date.now();
 
   try {
     let result;
+
+    // ── Argument validation guard ─────────────────────────────────────────
+    let validationError = null;
+    if (["left_click", "right_click", "double_click"].includes(name)) {
+      validationError = _validateCoord(args);
+    } else if (name === "type_text") {
+      validationError = _validateText(args);
+    } else if (name === "key_press") {
+      validationError = _validateKey(args);
+    }
+    if (validationError) {
+      return {
+        content: [{ type: "text", text: `[VALIDATE_FAIL] ${name}: ${validationError}` }],
+        isError: true,
+      };
+    }
 
     switch (name) {
       case "capture_screen": {

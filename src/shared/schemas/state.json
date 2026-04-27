@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI-OS State Transition Schemas",
+  "description": "Canonical JSON Schema definitions for all Triad state transitions. Agents MUST submit payloads via task-synchronizer-mcp tools — never write TASKS.md or REVIEWS.md directly. Blueprint: .ai/blueprints/structured-outputs.md §2.",
+  "version": "1.0",
+  "schemas": {
+    "task_create": {
+      "type": "object",
+      "description": "Payload for add_task — creates a new E-/P-/T-## task in state.sqlite.",
+      "properties": {
+        "owner":       { "type": "string",  "minLength": 1, "maxLength": 100,  "description": "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+        "description": { "type": "string",  "minLength": 1, "maxLength": 2000, "description": "Human-readable task description" },
+        "tier":        { "type": "integer", "enum": [1, 2, 3],                 "description": "Risk tier (1=low, 2=medium, 3=high)" },
+        "prefix":      { "type": "string",  "enum": ["E", "P", "T"],           "description": "ID prefix: E=Engineer, P=Architect, T=Tester" }
+      },
+      "required": ["owner", "description"],
+      "additionalProperties": false
+    },
+    "task_update": {
+      "type": "object",
+      "description": "Payload for update_task_status — transitions a task's status with an optional completion summary.",
+      "properties": {
+        "id":      { "type": "string", "pattern": "^[EPT]-[0-9]+$", "description": "Task ID (e.g. 'E-11')" },
+        "status":  { "type": "string", "enum": ["OPEN", "BLOCKED", "DONE"],   "description": "New status" },
+        "summary": { "type": "string", "maxLength": 2000,                      "description": "Completion summary (required when status=DONE)" }
+      },
+      "required": ["id", "status"],
+      "additionalProperties": false
+    },
+    "stamp_add": {
+      "type": "object",
+      "description": "Payload for add_stamp — writes an atomic audit stamp to state.sqlite and regenerates REVIEWS.md.",
+      "properties": {
+        "task_id": { "type": "string",                            "description": "Related task ID (e.g. 'E-11'). Optional." },
+        "type":    { "type": "string", "minLength": 1, "maxLength": 64,   "description": "Stamp type (e.g. 'ARCH_PASS', 'SEC_FAIL', 'CRITIC_STAMP')" },
+        "agent":   { "type": "string", "minLength": 1, "maxLength": 128,  "description": "Agent that produced this stamp" },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 1000, "description": "One-line summary of the finding" }
+      },
+      "required": ["type", "agent", "summary"],
+      "additionalProperties": false
+    },
+    "project_update": {
+      "type": "object",
+      "description": "Payload for set_project_focus — updates the Triad's current focus and optional risk tier.",
+      "properties": {
+        "focus":        { "type": "string",  "minLength": 1, "maxLength": 500, "description": "Current focus description" },
+        "current_tier": { "type": "integer", "enum": [1, 2, 3],                "description": "Current risk tier" }
+      },
+      "required": ["focus"],
+      "additionalProperties": false
+    }
+  }
+}

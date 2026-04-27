@@ -110,3 +110,33 @@
 - Delete `src/mcp/approval-mcp/` and remove from `registry.json` / `.mcp.json`. No npm uninstall required.
 
 ---
+
+## D-004 — cache-manager-mcp: Dedicated MCP Server vs. token-budget-mcp Extension
+
+**Date**: 2026-04-27
+**Task**: E-11
+**Decision**: New dedicated `cache-manager-mcp` server (no new npm packages — SDK already hoisted)
+
+### Why needed
+Blueprint `caching.md` §3 specifies that the cache payload (`.ai/blueprints/*.md`, `architect.md`, `state.sqlite` schema, `registry.json`) must be pre-assembled and persisted so agents can include it as a long-lived system prompt prefix — enabling Anthropic's prompt caching to eliminate per-turn JIT read costs.
+
+### Alternatives considered
+1. **Extend `token-budget-mcp`** — token-budget-mcp tracks cost/spend; caching is a separate concern (file I/O, mtime tracking, context assembly). Mixing them violates single-responsibility and would bloat a server already wired into every agent. Rejected.
+2. **Dedicated `cache-manager-mcp` (chosen)** — clean boundary; follows the established pattern of all other AI-OS MCP servers. Allows capability = READ (no WRITE or EXECUTE escalation needed). No new external dependencies. Preferred.
+
+### What it adds
+- `build_cache(project_root?)` — force-rebuilds the System Context blob and persists it with file mtimes.
+- `get_cached_context(project_root?)` — returns cached blob; auto-rebuilds on mtime change or new blueprint file.
+- `invalidate_cache()` — marks cache stale without rebuilding.
+- `get_cache_status()` — observability: age, file count, char/token estimate, tracked mtimes.
+
+### Security properties
+- `DB_PATH` hardcoded to `~/.ai-os/cache.sqlite` — no user-controlled path.
+- `project_root` validated: must be absolute, no `..` traversal, must exist.
+- All file reads use `readFileSync` — no `execSync`, no shell.
+- SQLite schema extracted via `sqlite_master` query (not `.schema` shell command).
+
+### Rollback plan
+- Delete `src/mcp/cache-manager-mcp/` and remove from `registry.json` / `.mcp.json`. No npm uninstall required.
+
+---

@@ -15,3 +15,4 @@
 [TESTS_PASS] 2026-04-24 | E-10 approval-mcp — 37/37 tests pass. All 5 T-HITL mitigations, input validation, SQLite schema, registry/.mcp.json entries verified. Full suite 531/531.
 [CRITIC_STAMP] 2026-04-24 | E-10 approval-mcp Tier 3 review — ARCH_PASS SEC_PASS TESTS_PASS. All HITL mitigations enforced: ANSI sanitization, hardcoded SQLite path, TTY assertion, pre-response audit write, length rejection.
 [CRITIC_STAMP] 2026-04-26 | E-13 Tier 1 PASS — agent YAML tool wires added; no sovereignty violations; all 531 tests green
+[ARCH_AUDIT] 2026-04-26 | Phantom Tool risk identified — multiple MCP tools missing or misnamed in registry.json making them inaccessible.

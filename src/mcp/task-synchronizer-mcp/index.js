@@ -26,6 +26,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId } from "../shared/state-db.js";
+import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 
 // ── SQLite Setup (delegated to state-db.js, P-15) ────────────────────────────
 
@@ -225,6 +226,30 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: { type: "object", properties: {} },
     },
     {
+      name: "validate_payload",
+      description:
+        "Validate a payload against a named AI-OS state transition schema before submitting it. " +
+        "Schemas: task_create, task_update, stamp_add, project_update. " +
+        "Returns SCHEMA_PASS or SCHEMA_FAIL with per-field error details. " +
+        "Use before calling add_task, update_task_status, add_stamp, or set_project_focus to catch type errors early.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          schema_name: {
+            type: "string",
+            enum: ["task_create", "task_update", "stamp_add", "project_update"],
+            description: "Name of the schema to validate against.",
+          },
+          payload: {
+            type: "object",
+            description: "The JSON payload to validate.",
+          },
+        },
+        required: ["schema_name", "payload"],
+        additionalProperties: false,
+      },
+    },
+    {
       name: "mark_deltas_read",
       description: "Marks implementation deltas as read after the Architect has incorporated them into architect.md. Pass specific task_ids to acknowledge selectively, or omit to acknowledge all unread deltas.",
       inputSchema: {
@@ -254,6 +279,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     db = _getDb(aiDir);
   } catch (e) {
     return { content: [{ type: "text", text: `${DB_ERR}: ${e.message}` }], isError: true };
+  }
+
+  // ── Schema validation helper ─────────────────────────────────────────────
+  function _assertSchema(schemaName, payload) {
+    const result = validateNamed(schemaName, payload);
+    if (!result.valid) {
+      return {
+        content: [{
+          type: "text",
+          text: `[SCHEMA_FAIL] '${schemaName}' validation failed:\n` +
+                result.errors.map(e => `  • ${e}`).join("\n") +
+                "\n\nUse validate_payload to inspect the schema before submitting.",
+        }],
+        isError: true,
+      };
+    }
+    return null; // valid
   }
 
   switch (name) {
@@ -313,6 +355,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── add_task ──────────────────────────────────────────────────────────────
     case "add_task": {
+      const _addTaskErr = _assertSchema("task_create", args);
+      if (_addTaskErr) return _addTaskErr;
       const prefix = args.prefix || "E";
       const id     = _nextId(db, prefix);
       const task   = {
@@ -338,6 +382,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── update_task_status ────────────────────────────────────────────────────
     case "update_task_status": {
+      const _updateErr = _assertSchema("task_update", args);
+      if (_updateErr) return _updateErr;
       const row = db.prepare("SELECT id FROM tasks WHERE id = ?").get(args.id);
       if (!row) {
         return { content: [{ type: "text", text: `✗ Task '${args.id}' not found.` }], isError: true };
@@ -356,6 +402,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── add_stamp ─────────────────────────────────────────────────────────────
     case "add_stamp": {
+      const _stampErr = _assertSchema("stamp_add", args);
+      if (_stampErr) return _stampErr;
       db.prepare(
         "INSERT INTO stamps(type, agent, task_id, timestamp, summary) VALUES (?, ?, ?, ?, ?)"
       ).run(args.type, args.agent ?? null, args.task_id ?? null,
@@ -367,6 +415,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── set_project_focus ─────────────────────────────────────────────────────
     case "set_project_focus": {
+      const _focusErr = _assertSchema("project_update", args);
+      if (_focusErr) return _focusErr;
       db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES ('focus', ?)").run(args.focus);
       if (args.current_tier) {
         db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES ('current_tier', ?)").run(String(args.current_tier));
@@ -477,6 +527,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       return {
         content: [{ type: "text", text: `[SYNC_FIXED] Issues detected and auto-resolved:\n${failures.map(f => `  - ${f}`).join("\n")}` }],
+      };
+    }
+
+    // ── validate_payload ──────────────────────────────────────────────────────
+    case "validate_payload": {
+      const schemaName = String(args.schema_name || "").trim();
+      const payload    = args.payload;
+
+      if (!schemaName) {
+        return { content: [{ type: "text", text: "✗ schema_name is required." }], isError: true };
+      }
+      if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+        return { content: [{ type: "text", text: "✗ payload must be a JSON object." }], isError: true };
+      }
+
+      const result = validateNamed(schemaName, payload);
+      if (result.valid) {
+        return {
+          content: [{
+            type: "text",
+            text: `[SCHEMA_PASS] '${schemaName}' — payload is valid.\n` +
+                  `Payload: ${JSON.stringify(payload, null, 2)}`,
+          }],
+        };
+      }
+      return {
+        content: [{
+          type: "text",
+          text: `[SCHEMA_FAIL] '${schemaName}' — ${result.errors.length} error(s):\n` +
+                result.errors.map(e => `  • ${e}`).join("\n"),
+        }],
+        isError: true,
       };
     }
 

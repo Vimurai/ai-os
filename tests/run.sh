@@ -11,6 +11,13 @@ TOTAL_PASS=0
 TOTAL_FAIL=0
 SUITE_RESULTS=()
 
+# Colour control — only emit ANSI escapes when stdout is an interactive TTY.
+if [[ -t 1 ]]; then
+  C_OK="\033[32m"; C_FAIL="\033[31m"; C_RESET="\033[0m"
+else
+  C_OK=""; C_FAIL=""; C_RESET=""
+fi
+
 # ── Discovery (bash 3 compatible) ────────────────────────────────────────────
 SUITES=()
 while IFS= read -r f; do SUITES+=("$f"); done < <(find "$SUITES_DIR" -name "$PATTERN" | sort)
@@ -48,9 +55,9 @@ for suite in "${SUITES[@]}"; do
   TOTAL_FAIL=$(( TOTAL_FAIL + fails ))
 
   if [[ $fails -eq 0 && $suite_exit -eq 0 ]]; then
-    SUITE_RESULTS+=("  \033[32m✓\033[0m $suite_name ($passes passed)")
+    SUITE_RESULTS+=("  ${C_OK}✓${C_RESET} $suite_name ($passes passed)")
   else
-    SUITE_RESULTS+=("  \033[31m✗\033[0m $suite_name ($passes passed, $fails failed)")
+    SUITE_RESULTS+=("  ${C_FAIL}✗${C_RESET} $suite_name ($passes passed, $fails failed)")
   fi
 
   # Always print suite output (suites label themselves)

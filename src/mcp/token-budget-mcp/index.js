@@ -15,7 +15,7 @@
  *
  * Security:
  *   - All DB operations use parameterized queries (no injection vectors).
- *   - execSync forbidden — uses better-sqlite3 synchronous API directly.
+ *   - execSync forbidden — uses node:sqlite (Node 22+ built-in) synchronous API directly.
  *   - DB path fixed to ~/.ai-os/usage.sqlite (no user-controlled path).
  */
 
@@ -179,7 +179,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const lines = [
         `✓ Cost recorded — ${taskId}: ${tokens.toLocaleString()} tokens${usd > 0 ? ` / $${usd.toFixed(4)}` : ""}`,
         `  Session total: ${sessionTokens.toLocaleString()} tokens / $${sessionUsd.toFixed(4)}`,
-        dbOk ? `  Persisted to ${DB_PATH}` : `  ⚠ SQLite unavailable — in-memory only (install node:sqlite)`,
+        dbOk ? `  Persisted to ${DB_PATH}` : `  ⚠ SQLite unavailable — in-memory only (requires Node.js 22+ with node:sqlite)`,
       ];
 
       // Budget warning
@@ -226,7 +226,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           lines.push(`  DB: ${DB_PATH}`);
         } catch { /* ignore */ }
       } else {
-        lines.push("  ⚠ SQLite unavailable — install node:sqlite for persistent tracking.");
+        lines.push("  ⚠ SQLite unavailable — requires Node.js 22+ with node:sqlite for persistent tracking.");
       }
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
@@ -237,7 +237,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const d = getDb();
       if (!d) {
         return {
-          content: [{ type: "text", text: "⚠ SQLite unavailable. Install better-sqlite3 to enable usage reports." }],
+          content: [{ type: "text", text: "⚠ SQLite unavailable. Requires Node.js 22+ with node:sqlite to enable usage reports." }],
         };
       }
 

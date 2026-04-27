@@ -68,6 +68,31 @@ const BLOCK_RULES = [
     message: "Fork bomb detected — BLOCKED",
   },
   {
+    id: "DD_DISK_WIPE",
+    pattern: (tokens, raw) => /\bdd\b.*\bif=\/dev\/(zero|urandom|random)\b.*\bof=\/dev\/(sd[a-z]|nvme|hd[a-z]|disk\d)/i.test(raw),
+    message: "dd writing zeros/random to a raw disk device — BLOCKED (irreversible disk wipe)",
+  },
+  {
+    id: "MKFS",
+    pattern: (tokens, raw) => /\bmkfs\.[a-z0-9]+\b/i.test(raw) || /\bmkfs\s+/i.test(raw),
+    message: "mkfs invocation — BLOCKED (formats a filesystem, irreversible data loss)",
+  },
+  {
+    id: "FIND_DELETE_ROOT",
+    pattern: (tokens, raw) => /\bfind\s+(\/|\/root|\/home|\/etc|\/usr|\/var|\/boot)\b.*-delete\b/i.test(raw),
+    message: "find / -delete on system path — BLOCKED (mass deletion of system files)",
+  },
+  {
+    id: "REDIRECT_TO_SYSTEM_FILE",
+    pattern: (tokens, raw) => />\s*\/etc\/(passwd|shadow|sudoers|hosts)\b/i.test(raw) || />\s*\/dev\/sd[a-z]\b/i.test(raw),
+    message: "Redirect to critical system file — BLOCKED (system corruption / privilege escalation)",
+  },
+  {
+    id: "CHMOD_ROOT",
+    pattern: (tokens, raw) => /\bchmod\s+(-R\s+)?(777|a\+rwx)\s+(\/|\/etc|\/usr|\/var|\/root|\/boot)\b/i.test(raw),
+    message: "chmod 777 on system path — BLOCKED (privilege escalation vector)",
+  },
+  {
     id: "SECRET_IN_COMMAND",
     pattern: (tokens, raw) => !isResearchCmd(raw) && /\b(password|passwd|secret|api.?key|token)(\s*=\s*|\s+)\S{4,}/i.test(normalizeForSecretScan(raw)),
     message: "Plaintext secret in command — BLOCKED (credential exposure risk)",

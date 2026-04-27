@@ -5,14 +5,21 @@
 PASS_COUNT=0
 FAIL_COUNT=0
 
+# Colour control — only emit ANSI escapes when stdout is an interactive TTY.
+if [[ -t 1 ]]; then
+  _C_OK="\033[32m"; _C_FAIL="\033[31m"; _C_RESET="\033[0m"
+else
+  _C_OK=""; _C_FAIL=""; _C_RESET=""
+fi
+
 _pass() {
   PASS_COUNT=$(( PASS_COUNT + 1 ))
-  printf "  \033[32m✓\033[0m %s\n" "$1"
+  printf "  ${_C_OK}✓${_C_RESET} %s\n" "$1"
 }
 
 _fail() {
   FAIL_COUNT=$(( FAIL_COUNT + 1 ))
-  printf "  \033[31m✗\033[0m %s\n" "$1"
+  printf "  ${_C_FAIL}✗${_C_RESET} %s\n" "$1"
 }
 
 # Call at end of each suite to emit machine-readable summary line

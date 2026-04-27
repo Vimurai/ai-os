@@ -144,6 +144,13 @@
         "DISPLAY": ":99",
         "HOME": "/tmp/computer-use-sandbox"
       }
+    },
+    "cache-manager-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/Documents/develompment/cli_apps/ai-os-v2/src/mcp/cache-manager-mcp/index.js"
+      ],
+      "description": "Explicit Context Cache — assembles blueprint files into a prompt-cacheable System Context blob with mtime-based invalidation."
     }
   }
 }

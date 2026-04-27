@@ -81,6 +81,21 @@ export function getDb(aiDir) {
 }
 
 /**
+ * Parse a JSON-encoded `files` column safely. Corrupt rows return [] and
+ * write a single-line warning to stderr instead of crashing readState().
+ */
+function _safeParseFiles(raw) {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    process.stderr.write(`[WARN] state-db: corrupt deltas.files JSON — defaulting to []: ${e.message}\n`);
+    return [];
+  }
+}
+
+/**
  * Reconstruct the canonical state object from SQLite tables.
  */
 export function readState(db) {
@@ -95,7 +110,7 @@ export function readState(db) {
   ).all().map(d => ({
     task_id:    d.task_id,
     summary:    d.summary,
-    files:      d.files ? JSON.parse(d.files) : [],
+    files:      _safeParseFiles(d.files),
     read:       !!d.read,
     created_at: d.created_at,
   }));

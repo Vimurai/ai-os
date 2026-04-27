@@ -33,7 +33,7 @@
       "path": "src/mcp/task-synchronizer-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "verify_markdown_sync", "archive_done_tasks"],
+      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "verify_markdown_sync", "archive_done_tasks", "validate_payload", "mark_deltas_read"],
       "disable-model-invocation": false,
       "_note": "Exclusive State Mutator (P-39): manages .ai/state.json, regenerates TASKS.md and REVIEWS.md as views",
       "_mandate": "v3.1 (P-44): state.json is the exclusive write target. TASKS.md and REVIEWS.md are generated views only. Write tools reject calls when state.json is absent — run: ai migrate-state to seed it."
@@ -173,6 +173,14 @@
       "disable-model-invocation": false,
       "_note": "E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for TestSprite visual QA. Linux: Xvfb DISPLAY=:99. macOS: host display with warning. Decision D-002.",
       "_security": "SEC_CLEARED E-8 2026-04-21 — DISPLAY hardcoded to :99, HOME=/tmp/computer-use-sandbox, keyboard input sanitized, no persistent screenshots. See .ai/SECURITY.md T-CU-001..T-CU-005."
+    },
+    "cache-manager-mcp": {
+      "path": "src/mcp/cache-manager-mcp/index.js",
+      "capability": "READ",
+      "status": "approved",
+      "allowed-tools": ["build_cache", "get_cached_context", "invalidate_cache", "get_cache_status"],
+      "disable-model-invocation": false,
+      "_note": "E-11 Explicit Context Cache: assembles .ai/blueprints/*.md, architect.md, state.sqlite schema, and registry.json into a prompt-cacheable System Context blob. mtime-based invalidation. Cache in ~/.ai-os/cache.sqlite. Blueprint: caching.md."
     }
   }
 }

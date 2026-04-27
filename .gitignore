@@ -3,6 +3,19 @@ src/templates/.mcp.json
 .env.local
 *.key
 *.pem
+
+# Node modules — root and nested workspaces
 /node_modules
+**/node_modules
+
 # Project-scoped Gemini settings contain machine-specific absolute paths
 .gemini/settings.json
+
+# SQLite WAL/SHM sidecar files (must not be committed; can be half-flushed)
+.ai/state.sqlite-shm
+.ai/state.sqlite-wal
+*.sqlite-shm
+*.sqlite-wal
+
+# TestSprite generated artifacts
+testsprite_tests/

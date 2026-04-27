@@ -249,22 +249,22 @@
     {
       "id": "E-11",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement API-level Explicit Context Caching per `.ai/blueprints/caching.md` by extending `token-budget-mcp` or creating a dedicated cache-manager. Ensure `.ai/blueprints/` and SQLite schemas are permanently cached.",
       "created_at": "2026-04-26T21:16:05.511Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-27T20:49:44.301Z",
+      "summary": "Implemented cache-manager-mcp: 4 tools (build_cache, get_cached_context, invalidate_cache, get_cache_status). Assembles architect.md + blueprints/*.md + state.sqlite schema + registry.json into a prompt-cacheable System Context blob. mtime-based invalidation, SQLite persistence at ~/.ai-os/cache.sqlite, path traversal protection, no execSync. 61 tests, 593/593 suite. D-004 written. Blueprint: caching.md."
     },
     {
       "id": "E-12",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Migrate Triad state communication to native Structured Outputs (JSON Schema) per `.ai/blueprints/structured-outputs.md`. Deprecate manual markdown editing for `TASKS.md` and `REVIEWS.md`, replacing it entirely with `task-synchronizer-mcp` schema validations.",
       "created_at": "2026-04-26T21:16:05.513Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-04-27T21:14:08.451Z",
+      "summary": "Implemented Structured Outputs: src/shared/schemas/state.json (4 schemas), src/shared/schema-validator.js (lightweight Draft-07 validator, no new deps), task-synchronizer-mcp extended with validate_payload tool and _assertSchema runtime guards on add_task/update_task_status/add_stamp/set_project_focus. TASKS.md and REVIEWS.md remain generated views. 51 tests, 644/644 suite. Blueprint: structured-outputs.md."
     },
     {
       "id": "E-13",
@@ -275,6 +275,176 @@
       "created_at": "2026-04-26T21:28:02.653Z",
       "completed_at": "2026-04-26T21:46:56.395Z",
       "summary": "Updated allowed-tools in 5 agent YAMLs (vibe_sentinel, chaos_monkey, security_engineer, devops_engineer, critic_arch) to include advisor-mcp, approval-mcp, and computer-use-mcp tools; added 10 MCP tool permission entries to .claude/settings.json"
+    },
+    {
+      "id": "E-14",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "AUDIT-P0: Add SQLite WAL/SHM and global cache files to .gitignore (.ai/state.sqlite-shm, .ai/state.sqlite-wal). Prevents accidental commit of half-flushed WAL state.",
+      "created_at": "2026-04-27T21:23:55.195Z",
+      "completed_at": "2026-04-27T21:35:15.894Z",
+      "summary": ".gitignore extended: **/node_modules, .ai/state.sqlite-shm/wal, *.sqlite-shm/wal, testsprite_tests/."
+    },
+    {
+      "id": "E-15",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "AUDIT-P0: state-db.js singleton ignores aiDir on subsequent calls — silent bug if two consumers in same process pass different aiDir. Key cache by aiDir or assert mismatch.",
+      "created_at": "2026-04-27T21:23:57.359Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-16",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "AUDIT-P0: Add committed .env.example documenting required env var names (empty values) so contributors discover the implicit dependency.",
+      "created_at": "2026-04-27T21:23:59.010Z",
+      "completed_at": "2026-04-27T21:35:17.763Z",
+      "summary": "Added .env.example with documented variable names (ANTHROPIC_API_KEY, GEMINI_API_KEY, TESTSPRITE_API_KEY, CLAUDE_THINKING_BUDGET_TOKENS, GH_TOKEN) — all empty values, gitignored .env unaffected."
+    },
+    {
+      "id": "E-17",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "AUDIT-P1: advisor-mcp env-spread security regression — invokeGemini() spreads ...process.env, leaking host secrets to spawned gemini process. Replace with explicit allowlist (PATH, HOME, GEMINI_THINKING_EFFORT, GEMINI_API_KEY). Same class of bug previously fixed in computer-use-mcp.",
+      "created_at": "2026-04-27T21:24:01.931Z",
+      "completed_at": "2026-04-27T21:35:20.457Z",
+      "summary": "advisor-mcp invokeGemini() — replaced ...process.env spread with explicit allowlist (PATH, HOME, GEMINI_THINKING_EFFORT, optional GEMINI_API_KEY, optional GOOGLE_APPLICATION_CREDENTIALS). Same pattern as computer-use-mcp D-002."
+    },
+    {
+      "id": "E-18",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "AUDIT-P1: Unify structured logging across all 21 MCP servers. Currently only 4/21 emit structured JSON (advisor, approval, cache-manager, computer-use). Extract shared src/shared/logger.js helper and migrate.",
+      "created_at": "2026-04-27T21:24:03.926Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-19",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "AUDIT-P1: computer-use-mcp accepts unbounded coordinates and unvalidated text length. Math.round(NaN)=NaN passed to xdotool fails opaquely; type_text has no length cap (ARG_MAX crash risk). Add inputSchema constraints (integer, min/max) + length cap on text/key.",
+      "created_at": "2026-04-27T21:24:06.956Z",
+      "completed_at": "2026-04-27T21:35:23.179Z",
+      "summary": "computer-use-mcp: inputSchema tightened (integer + min/max + additionalProperties:false on coords; maxLength 4096 on text, 64 on key). Added _validateCoord/_validateText/_validateKey runtime guards in dispatcher returning [VALIDATE_FAIL] on garbage args."
+    },
+    {
+      "id": "E-20",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "AUDIT-P1: Hoist @modelcontextprotocol/sdk version pin to root package.json — child workspaces all use ^1.0.0 caret, allowing minor drift between servers. Pin exact version at root, set children to \"*\".",
+      "created_at": "2026-04-27T21:24:09.640Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-21",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "AUDIT-P1: Untrack committed node_modules. src/mcp/context-invoker-mcp/node_modules/.package-lock.json is in git ls-files. Update .gitignore to **/node_modules and git rm -r --cached the dirs.",
+      "created_at": "2026-04-27T21:24:11.558Z",
+      "completed_at": "2026-04-27T21:35:24.686Z",
+      "summary": "git rm -r --cached src/mcp/context-invoker-mcp/node_modules; .gitignore now matches **/node_modules. node_modules no longer tracked."
+    },
+    {
+      "id": "E-22",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "AUDIT-P2: Wrap unguarded JSON.parse calls. state-db.js:98 (d.files), memory-manager-mcp:43 — corrupt SQLite payload would crash the server. Add safeJsonParse helper that returns null and logs structured warning.",
+      "created_at": "2026-04-27T21:24:14.270Z",
+      "completed_at": "2026-04-27T21:35:26.230Z",
+      "summary": "state-db.js JSON.parse(d.files) wrapped in _safeParseFiles() — returns [] on parse error and emits stderr warning instead of crashing readState()."
+    },
+    {
+      "id": "E-23",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "AUDIT-P2: Extend safe-exec-mcp BLOCK_RULES with chmod 777 /, dd if=/dev/zero of=/dev/sd*, mkfs.*, &gt; /etc/passwd, find / -delete patterns. Currently only catches rm -rf, curl|bash, DROP TABLE, fork bomb.",
+      "created_at": "2026-04-27T21:24:16.875Z",
+      "completed_at": "2026-04-27T21:35:27.657Z",
+      "summary": "safe-exec-mcp BLOCK_RULES extended: DD_DISK_WIPE, MKFS, FIND_DELETE_ROOT, REDIRECT_TO_SYSTEM_FILE, CHMOD_ROOT."
+    },
+    {
+      "id": "E-24",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "AUDIT-P2: token-budget-mcp error messages reference better-sqlite3 but the import is node:sqlite (Node 22+ built-in). Replace \"Install better-sqlite3\" with \"Requires Node.js 22+ with node:sqlite\".",
+      "created_at": "2026-04-27T21:24:19.254Z",
+      "completed_at": "2026-04-27T21:35:29.199Z",
+      "summary": "token-budget-mcp: replaced \"install better-sqlite3\" / \"install node:sqlite\" with \"Requires Node.js 22+ with node:sqlite\". Header comment updated."
+    },
+    {
+      "id": "E-25",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "AUDIT-P2: cache-manager-mcp readSqliteSchema leaks file handle if prepare/all() throws — close() is inside try block, not finally. Wrap in try/finally with sdb?.close() to prevent SHM pinning.",
+      "created_at": "2026-04-27T21:24:21.574Z",
+      "completed_at": "2026-04-27T21:35:31.220Z",
+      "summary": "cache-manager-mcp readSqliteSchema() — moved sdb.close() into finally block (try { sdb?.close() } catch). Prevents SHM pinning on prepare/all() exceptions."
+    },
+    {
+      "id": "E-26",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "AUDIT-P2: Add additionalProperties:false to validate_payload tool inputSchema in task-synchronizer-mcp. Currently silently accepts unknown fields at the wrapper level.",
+      "created_at": "2026-04-27T21:24:23.068Z",
+      "completed_at": "2026-04-27T21:35:32.714Z",
+      "summary": "task-synchronizer-mcp validate_payload tool inputSchema: added additionalProperties:false. Unknown fields at wrapper level now rejected."
+    },
+    {
+      "id": "E-27",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "AUDIT-P2: Replace string-search tests (grep / String.includes against source) with stdio JSON-RPC roundtrip behavioral tests. Current tests broke on cosmetic single/double quote differences. Build a tests/lib/mcp-client.sh helper.",
+      "created_at": "2026-04-27T21:24:25.842Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-28",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "AUDIT-P3: tests/run.sh emits raw ESC[31m escape codes when piped (visible in CI logs). Detect TTY before applying colors or strip on non-TTY output.",
+      "created_at": "2026-04-27T21:24:27.641Z",
+      "completed_at": "2026-04-27T21:35:34.438Z",
+      "summary": "tests/run.sh + tests/lib/assert.sh: ANSI colors only emitted when [[ -t 1 ]] (interactive TTY). Empty strings on non-TTY keep CI logs clean."
+    },
+    {
+      "id": "E-29",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "AUDIT-P3: archive-manager-mcp hardcodes ~/.ai-os/bin/ai path. Add ENOENT fallback or accept ai-bin path arg for users with custom install prefixes.",
+      "created_at": "2026-04-27T21:24:29.713Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "P-15",
+      "owner": "Architect (Gemini)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "AUDIT-STRATEGIC: structured-outputs.md §3 promises bin/ai enforces JSON Schema at API-call level via response_schema/tool_choice — but bin/ai is a bash wrapper with no LLM integration. Either mark §3 as Phase 2 or design the API integration layer.",
+      "created_at": "2026-04-27T21:24:32.608Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [
@@ -382,6 +552,13 @@
       "task_id": "E-13",
       "timestamp": "2026-04-26T21:47:06.690Z",
       "summary": "E-13 Tier 1 PASS — agent YAML tool wires added; no sovereignty violations; all 531 tests green"
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": "",
+      "timestamp": "2026-04-26T22:06:35.552Z",
+      "summary": "Phantom Tool risk identified — multiple MCP tools missing or misnamed in registry.json making them inaccessible."
     }
   ],
   "deltas": [],

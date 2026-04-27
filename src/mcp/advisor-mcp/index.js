@@ -137,15 +137,26 @@ function buildPrompt(query, blueprintContent, blueprintName) {
  * Uses `gemini -p <prompt>` — read-only by construction (no --write flag).
  */
 function invokeGemini(prompt) {
+  // Explicit env allowlist — never spread process.env. Spreading would leak
+  // host secrets (AWS/GCP creds, GitHub tokens, etc.) to the spawned gemini
+  // process. Same security pattern enforced in computer-use-mcp (D-002).
+  const allowedEnv = {
+    PATH: process.env.PATH ?? "",
+    HOME: process.env.HOME ?? "",
+    GEMINI_THINKING_EFFORT: "high",
+  };
+  if (process.env.GEMINI_API_KEY) {
+    allowedEnv.GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  }
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    allowedEnv.GOOGLE_APPLICATION_CREDENTIALS = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  }
+
   const output = execFileSync("gemini", ["-p", prompt], {
     encoding: "utf8",
     timeout: 60_000,
     maxBuffer: 1024 * 1024, // 1MB
-    env: {
-      ...process.env,
-      // Ensure thinking_effort is active (matches .gemini/settings.json)
-      GEMINI_THINKING_EFFORT: "high",
-    },
+    env: allowedEnv,
   });
   return output.trim();
 }
