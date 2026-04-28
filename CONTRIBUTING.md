@@ -32,7 +32,7 @@ All PRs must pass `tests/run.sh` at 100% before merge.
 ```
 src/
   bin/            # ai + ai-exec CLI binaries
-  mcp/            # 17 custom MCP servers (one dir per server)
+  mcp/            # 20 custom MCP servers (one dir per server) + shared/ helpers
   shared/skills/  # Skills available to both Claude and Gemini
   claude/skills/  # Claude-only skills
   gemini/skills/  # Gemini-only skills
