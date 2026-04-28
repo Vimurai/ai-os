@@ -74,6 +74,6 @@
 ## 34. Architectural Fragmentation (Domain Blueprints)
 - **When to apply**: When `architect.md` exceeds ~200 lines, split into Domain Blueprints.
 - **Pattern**: `architect.md` becomes a lightweight index/router (~30 lines). Detailed content moves to `.ai/blueprints/<domain>.md`.
-- **Standard domains**: `core.md`, `security.md`, `agents.md`, `mcp.md`, `workspace.md`, `bootloader.md`, `capabilities.md`, `interop.md`, `caching.md`, `structured-outputs.md` (adapt to project needs).
+- **Standard domains**: `core.md`, `security.md`, `agents.md`, `mcp.md`, `workspace.md`, `bootloader.md`, `capabilities.md`, `interop.md`, `caching.md`, `structured-outputs.md`, `cli-collapse.md` (adapt to project needs).
 - **JIT Protocol**: Agents read the index first, then load only the relevant domain blueprint. Never load all blueprints at once.
 - **Preflight update**: `run_preflight()` points to the index; domain blueprints are loaded on demand.
