@@ -66,4 +66,27 @@ sys.exit(0 if not missing else (sys.stderr.write(f'.mcp.json missing: {sorted(mi
 PY"
 fi
 
+# 5. E-38: Sandbox env propagation. If a registry entry declares an `env`
+#    block, the generated .mcp.json must carry every key/value verbatim.
+#    Catches the D-002 regression where `ai sync` silently strips
+#    computer-use-mcp's DISPLAY/HOME sandbox.
+if [[ -f .mcp.json ]]; then
+  assert_status 0 "registry env blocks propagated to .mcp.json (D-002 sandbox)" \
+    bash -c "python3 - <<'PY'
+import json, sys
+reg = json.load(open('$LOCAL')).get('mcp_servers', {})
+mcp = json.load(open('.mcp.json')).get('mcpServers', {})
+errs = []
+for name, info in reg.items():
+    expected_env = info.get('env')
+    if not isinstance(expected_env, dict) or not expected_env:
+        continue
+    actual_env = (mcp.get(name) or {}).get('env') or {}
+    for k, v in expected_env.items():
+        if actual_env.get(k) != v:
+            errs.append(f'{name}.env.{k}: expected {v!r}, got {actual_env.get(k)!r}')
+sys.exit(0 if not errs else (sys.stderr.write('\n'.join(errs) + '\n') or 1))
+PY"
+fi
+
 assert_summary

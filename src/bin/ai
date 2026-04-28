@@ -78,7 +78,14 @@ if os.path.exists(registry_path):
     for name, info in reg.get("mcp_servers", {}).items():
         if "path" in info:
             abs_path = os.path.join(aios, "mcp", name, "index.js")
-            servers[name] = {"command": "node", "args": [abs_path]}
+            entry = {"command": "node", "args": [abs_path]}
+            # E-38: propagate registry-declared env (e.g. computer-use-mcp
+            # sandbox: DISPLAY=:99, HOME=/tmp/computer-use-sandbox). Without
+            # this, `ai sync` silently strips the sandbox on every run and
+            # regresses D-002.
+            if isinstance(info.get("env"), dict) and info["env"]:
+                entry["env"] = dict(info["env"])
+            servers[name] = entry
 
 # Preserve user-set env values from existing .mcp.json (e.g. real TestSprite API key)
 if os.path.exists(mcp_path):
@@ -313,7 +320,12 @@ if os.path.exists(registry_path):
     for name, info in reg.get("mcp_servers", {}).items():
         if "path" in info:
             abs_path = os.path.join(aios, "mcp", name, "index.js")
-            servers[name] = {"command": "node", "args": [abs_path]}
+            entry = {"command": "node", "args": [abs_path]}
+            # E-38: propagate registry env so sandboxed servers (computer-use-mcp)
+            # keep DISPLAY/HOME across `ai sync` regenerations.
+            if isinstance(info.get("env"), dict) and info["env"]:
+                entry["env"] = dict(info["env"])
+            servers[name] = entry
 
 data = {}
 if os.path.exists(path):
