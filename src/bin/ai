@@ -1276,21 +1276,27 @@ sync_skills_20() {
 _generate_skills_index() {
   # Generate _SKILLS_INDEX.md — name + one-line description for each skill.
   # Agents use this for Level 1 (metadata-only) discovery without loading full SKILL.md content.
+  # E-31: deterministic across locales/filesystems — entries sorted with LC_ALL=C
+  # so the same set of skills always produces byte-identical output. The file
+  # itself is gitignored (regenerated on every `ai sync`), but determinism still
+  # matters for cross-machine consistency and reproducible installs.
   local dir="$1"
   local index_file="${dir}/_SKILLS_INDEX.md"
   {
     echo "# Skills Index (metadata-only — §29 JIT Skill Loading)"
     echo "# Use activate_skill(<name>) to load full content."
     echo ""
-    # Skills 2.0: folder-based
-    for skill_dir in "${dir}"/*/; do
-      [[ -d "$skill_dir" && -f "${skill_dir}SKILL.md" ]] || continue
+    # Skills 2.0: folder-based — collect, sort with LC_ALL=C, then emit
+    local skill_dirs
+    skill_dirs=$(find "${dir}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | LC_ALL=C sort)
+    while IFS= read -r skill_dir; do
+      [[ -n "$skill_dir" && -f "${skill_dir}/SKILL.md" ]] || continue
       local name desc
       name=$(basename "$skill_dir")
       desc=$(python3 -c "
 import re, sys
 try:
-    c = open('${skill_dir}SKILL.md').read()
+    c = open('${skill_dir}/SKILL.md').read()
     m = re.match(r'^---\n(.*?)\n---', c, re.DOTALL)
     if m:
         for line in m.group(1).splitlines():
@@ -1305,10 +1311,12 @@ print('')
       else
         echo "- ${name}"
       fi
-    done
-    # Legacy flat .md files
-    for skill_file in "${dir}"/*.md; do
-      [[ -f "$skill_file" ]] || continue
+    done <<< "$skill_dirs"
+    # Legacy flat .md files — collect, sort with LC_ALL=C, then emit
+    local skill_files
+    skill_files=$(find "${dir}" -mindepth 1 -maxdepth 1 -type f -name '*.md' 2>/dev/null | LC_ALL=C sort)
+    while IFS= read -r skill_file; do
+      [[ -n "$skill_file" && -f "$skill_file" ]] || continue
       local fname
       fname=$(basename "$skill_file" .md)
       [[ "$fname" == "_SKILLS_INDEX" ]] && continue
@@ -1331,7 +1339,7 @@ print('')
       else
         echo "- ${fname}"
       fi
-    done
+    done <<< "$skill_files"
   } > "$index_file"
 }
 

@@ -20,39 +20,11 @@ for server in vibe-check-mcp task-synchronizer-mcp safe-exec-mcp \
 done
 
 # ── 2. Each server registers its expected tools ───────────────────────────────
-
-# vibe-check-mcp: run_vibe_audit, run_chaos_test, get_performance_metrics
-vibe_src=$(cat "${MCP_DIR}/vibe-check-mcp/index.js")
-assert_contains "vibe-check-mcp: run_vibe_audit registered" "run_vibe_audit" "$vibe_src"
-assert_contains "vibe-check-mcp: run_chaos_test registered" "run_chaos_test" "$vibe_src"
-assert_contains "vibe-check-mcp: get_performance_metrics registered" "get_performance_metrics" "$vibe_src"
-
-# task-synchronizer-mcp: sync_tasks, append_tasks
-task_src=$(cat "${MCP_DIR}/task-synchronizer-mcp/index.js")
-assert_contains "task-synchronizer-mcp: sync_tasks registered" "sync_tasks" "$task_src"
-assert_contains "task-synchronizer-mcp: append_tasks registered" "append_tasks" "$task_src"
-
-# safe-exec-mcp: analyze_command
-safe_src=$(cat "${MCP_DIR}/safe-exec-mcp/index.js")
-assert_contains "safe-exec-mcp: analyze_command registered" "analyze_command" "$safe_src"
-
-# blueprint-aligner-mcp: align_diff
-blueprint_src=$(cat "${MCP_DIR}/blueprint-aligner-mcp/index.js")
-assert_contains "blueprint-aligner-mcp: align_diff registered" "align_diff" "$blueprint_src"
-
-# context-guardian-mcp: check_workspace
-guardian_src=$(cat "${MCP_DIR}/context-guardian-mcp/index.js")
-assert_contains "context-guardian-mcp: check_workspace registered" "check_workspace" "$guardian_src"
-
-# risk-analyzer-mcp: classify_risk, get_tier_actions
-risk_src=$(cat "${MCP_DIR}/risk-analyzer-mcp/index.js")
-assert_contains "risk-analyzer-mcp: classify_risk registered" "classify_risk" "$risk_src"
-assert_contains "risk-analyzer-mcp: get_tier_actions registered" "get_tier_actions" "$risk_src"
-
-# context-invoker-mcp: activate_skill, activate_agent
-invoker_src=$(cat "${MCP_DIR}/context-invoker-mcp/index.js")
-assert_contains "context-invoker-mcp: activate_skill registered" "activate_skill" "$invoker_src"
-assert_contains "context-invoker-mcp: activate_agent registered" "activate_agent" "$invoker_src"
+# E-30: replaced 12 grep-against-source assertions (cat $SRC | assert_contains "tool")
+# with behavioral roundtrips in mcp_behavioral_test.sh, which spawns each server
+# and asserts against the real tools/list response. Removes the ghost-assertion
+# class that masked obsolete tool names (sync_tasks, append_tasks) for releases.
+# Tool registration coverage now lives exclusively in mcp_behavioral_test.sh.
 
 # ── 3. Registry lists all 8 custom servers with correct path fields ───────────
 custom_servers=$(python3 -c "

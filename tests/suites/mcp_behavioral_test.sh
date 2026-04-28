@@ -57,6 +57,9 @@ declare -a CASES=(
   "archive-manager-mcp:execute_archive"
   "github-bridge-mcp:check_gh_auth"
   "github-bridge-mcp:fetch_assigned_issues"
+  "vibe-check-mcp:run_vibe_audit"
+  "vibe-check-mcp:run_chaos_test"
+  "vibe-check-mcp:get_performance_metrics"
 )
 
 for row in "${CASES[@]}"; do

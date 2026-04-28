@@ -164,6 +164,54 @@ ARCH_WARN
 
 check_architect_src_comodification
 
+# ── E-33: Registry drift guard ───────────────────────────────────────────────
+# Root cause of 2026-04-27 audit: src/config/registry.json gained a new MCP but
+# ~/.ai-os/config/registry.json was never refreshed, so `ai sync` regenerated
+# .mcp.json from a stale registry and silently dropped the server.
+# Run the targeted drift suite only when registry-relevant files are staged.
+check_registry_sync() {
+  local staged_files
+  staged_files=$(git diff --cached --name-only 2>/dev/null)
+
+  local touches_registry=0
+  while IFS= read -r f; do
+    case "$f" in
+      src/config/registry.json|src/templates/.mcp.json|install-ai-os.sh|src/bin/ai)
+        touches_registry=1
+        ;;
+    esac
+  done <<< "$staged_files"
+
+  [[ "$touches_registry" -eq 0 ]] && return 0
+
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  local suite="${repo_root}/tests/suites/registry_sync_test.sh"
+  [[ -f "$suite" ]] || return 0  # suite missing — nothing to enforce
+
+  local out
+  if ! out=$(bash "$suite" 2>&1); then
+    cat >&2 <<REGISTRY_BLOCK
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: REGISTRY DRIFT — COMMIT BLOCKED                         ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  registry_sync_test.sh failed. The local registry, template .mcp.json,  ║
+║  or installer is out of sync — shipping this commit would reproduce     ║
+║  the 2026-04-27 silent-drop class of regression.                         ║
+║                                                                          ║
+║  Fix: run \`bash install-ai-os.sh\` to refresh ~/.ai-os/config/registry, ║
+║       then re-run \`bash tests/suites/registry_sync_test.sh\` locally.  ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+REGISTRY_BLOCK
+    echo "$out" >&2
+    exit 1
+  fi
+}
+
+check_registry_sync
+
 # ── Gate 2 check ─────────────────────────────────────────────────────────────
 if has_recent_critic_stamp; then
   exit 0

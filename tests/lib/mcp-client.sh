@@ -86,13 +86,19 @@ mcp_call_tool() {
 # Convenience: assert that a tool is listed by name. Exit 0 if present, 1 if not.
 mcp_assert_tool_listed() {
   # $1=server.js  $2=tool_name
+  # Pipes JSON through stdin and passes the tool name via env so embedded
+  # quotes/newlines in rich tool descriptions (vibe-check-mcp) cannot break
+  # the Python parse — fixes the inline-string-literal corruption mode.
   local result
   result=$(mcp_list_tools "$1")
-  python3 -c "
-import json, sys
-data = json.loads('''$result''' or '{}')
-tools = data.get('tools', [])
-names = [t.get('name') for t in tools]
-sys.exit(0 if '$2' in names else 1)
+  printf '%s' "$result" | TOOL="$2" python3 -c "
+import json, os, sys
+raw = sys.stdin.read() or '{}'
+try:
+    data = json.loads(raw)
+except Exception:
+    sys.exit(2)
+names = [t.get('name') for t in data.get('tools', [])]
+sys.exit(0 if os.environ.get('TOOL') in names else 1)
 "
 }
