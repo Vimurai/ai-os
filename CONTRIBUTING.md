@@ -3,7 +3,7 @@
 ## Development Setup
 
 ### Prerequisites
-- **Node.js 20+** — required for all MCP servers
+- **Node.js 22.5+** — required for all MCP servers (uses `node:sqlite` / DatabaseSync)
 - **Python 3.10+** — required for state fallbacks and hooks
 - **sqlite3 CLI** — required for system hooks
 - **Bash/Zsh** — macOS or Linux

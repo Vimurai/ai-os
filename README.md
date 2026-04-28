@@ -42,7 +42,7 @@ State lives in `.ai/state.sqlite` (WAL mode), so two agents in two terminals nev
 | Requirement | Why |
 | :--- | :--- |
 | macOS or Linux (bash/zsh) | The installer and hooks are bash-native. |
-| **Node.js 20+** | Every custom MCP server is an ESM Node module. |
+| **Node.js 22.5+** | Custom MCP servers use `node:sqlite` (DatabaseSync), which is stable from Node 22.5. Node 20 will boot some servers but not the SQLite-backed ones. |
 | **Python 3.10+** | Generates `.mcp.json` from the registry; bash/jq fallback exists. |
 | **sqlite3 CLI** | Used by hooks to read `.ai/state.sqlite`. |
 | Claude Code and/or Gemini CLI | At least one is required to drive the Triad. |

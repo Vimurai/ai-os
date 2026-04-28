@@ -24,8 +24,10 @@ assert_status 0 "local registry parses as JSON" \
 
 # 2. Template .mcp.json must list every path-based MCP from the registry.
 #    (Drift here breaks the python3-missing fallback path in generate_mcp_json.)
-assert_status 0 "template .mcp.json covers every registry MCP" \
-  bash -c "python3 - <<'PY'
+#    Template is gitignored (regenerated locally), so skip if absent (CI/clones).
+if [[ -f "$TEMPLATE" ]]; then
+  assert_status 0 "template .mcp.json covers every registry MCP" \
+    bash -c "python3 - <<'PY'
 import json, sys
 reg = json.load(open('$LOCAL')).get('mcp_servers', {})
 expected = {n for n, info in reg.items() if 'path' in info}
@@ -33,6 +35,9 @@ tmpl = set(json.load(open('$TEMPLATE')).get('mcpServers', {}).keys())
 missing = expected - tmpl
 sys.exit(0 if not missing else (sys.stderr.write(f'missing from template: {sorted(missing)}\n') or 1))
 PY"
+else
+  echo "  ⚠  src/templates/.mcp.json absent (gitignored, regenerated locally) — skipping template drift check"
+fi
 
 # 3. If a global install exists, every local registry MCP must be present.
 if [[ -f "$GLOBAL" ]]; then
