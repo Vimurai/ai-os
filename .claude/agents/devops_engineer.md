@@ -3,7 +3,7 @@ name: devops_engineer
 description: Trigger this when setting up CI/CD pipelines, adding deployment configs, or establishing testing infrastructure. Produces DEVOPS.md with build/test/CI/release commands and observability baseline.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, mcp__advisor-mcp__ask_architect, mcp__approval-mcp__request_approval
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 context: fork
 agent: general-purpose
 ---

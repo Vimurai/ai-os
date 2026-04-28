@@ -61,7 +61,13 @@
       "mcp__computer-use-mcp__double_click",
       "mcp__computer-use-mcp__type_text",
       "mcp__computer-use-mcp__key_press",
-      "mcp__computer-use-mcp__health_check"
+      "mcp__computer-use-mcp__health_check",
+      "mcp__task-synchronizer-mcp__validate_payload",
+      "mcp__task-synchronizer-mcp__mark_deltas_read",
+      "mcp__cache-manager-mcp__build_cache",
+      "mcp__cache-manager-mcp__get_cached_context",
+      "mcp__cache-manager-mcp__invalidate_cache",
+      "mcp__cache-manager-mcp__get_cache_status"
     ]
   },
   "hooks": {

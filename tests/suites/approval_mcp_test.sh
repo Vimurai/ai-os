@@ -180,11 +180,11 @@ assert_status 0 "SQLite CHECK enforces action length as defense-in-depth" \
 echo ""
 echo "  [T-HITL-S08] Observability — structured JSON logging"
 
-assert_status 0 "log() emits timestamp" \
-  grep -q 'timestamp:' "$SERVER"
+assert_status 0 "shared logger imported" \
+  grep -q 'createLogger.*shared/logger' "$SERVER"
 
-assert_status 0 "log() emits service name" \
-  grep -q 'service: SERVICE' "$SERVER"
+assert_status 0 "logger initialised with SERVICE" \
+  grep -q 'createLogger(SERVICE)' "$SERVER"
 
 assert_status 0 "latency_ms tracked" \
   grep -q 'latency_ms' "$SERVER"

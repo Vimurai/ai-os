@@ -23,6 +23,10 @@ import { existsSync, readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { createRequire } from "module";
 import { spawnSync } from "child_process";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("lsp-mcp");
 
 // ── TypeScript Compiler API (optional — graceful fallback if unavailable) ─────
 

@@ -39,6 +39,7 @@ import * as readline from "node:readline";
 import { mkdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { homedir } from "node:os";
+import { createLogger } from "../shared/logger.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -55,18 +56,10 @@ const MAX_ACTION_LENGTH = 200;
 const MAX_REASON_LENGTH = 500;
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+// Shared NDJSON logger; emits one JSON line per call to stderr.
 
-function log(level, tool, message, extras = {}) {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    level,
-    service: SERVICE,
-    tool,
-    message,
-    ...extras,
-  };
-  process.stderr.write(JSON.stringify(entry) + "\n");
-}
+const logger = createLogger(SERVICE);
+const log = (level, tool, message, extras) => logger.log(level, tool, message, extras);
 
 // ── Security helpers ──────────────────────────────────────────────────────────
 

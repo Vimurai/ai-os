@@ -16,6 +16,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { spawnSync } from "child_process";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("blueprint-aligner-mcp");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readFileSafe(p) {

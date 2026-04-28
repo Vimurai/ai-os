@@ -27,6 +27,10 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId } from "../shared/state-db.js";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("task-synchronizer-mcp");
 
 // ── SQLite Setup (delegated to state-db.js, P-15) ────────────────────────────
 
@@ -50,11 +54,11 @@ function _importFromJson(jsonPath, db) {
   try {
     state = JSON.parse(readFileSync(jsonPath, "utf8"));
     if (!state || state.version !== "1.0") {
-      process.stderr.write("[WARN] state.json has unexpected version — skipping migration\n");
+      logger.warn("migrate", "state.json has unexpected version — skipping migration", { version: state.version });
       return;
     }
   } catch {
-    process.stderr.write("[WARN] state.json parse error — skipping migration\n");
+    logger.warn("migrate", "state.json parse error — skipping migration");
     return;
   }
 
@@ -97,7 +101,7 @@ function _importFromJson(jsonPath, db) {
   setMeta.run("digest_stale",        state.digest_stale ? "true" : "false");
   setMeta.run("digest_stale_reason", state.digest_stale_reason ?? "");
 
-  process.stderr.write("[INFO] task-synchronizer-mcp: imported state.json → state.sqlite\n");
+  logger.info("migrate", "imported state.json → state.sqlite");
 }
 
 // ── State helpers delegated to state-db.js (P-15) ────────────────────────────

@@ -200,14 +200,14 @@ done
 echo ""
 echo "  [T-CU-S10] Observability — structured JSON logging"
 
-assert_status 0 "log() emits timestamp field" \
-  grep -q 'timestamp:' "$SERVER"
+assert_status 0 "shared logger imported" \
+  grep -q 'createLogger.*shared/logger' "$SERVER"
 
-assert_status 0 "log() emits level field" \
-  grep -qE '"level"|level,' "$SERVER"
+assert_status 0 "logger exposes log() shim" \
+  grep -q 'logger.log' "$SERVER"
 
-assert_status 0 "log() emits service field" \
-  grep -q 'service: SERVICE' "$SERVER"
+assert_status 0 "logger initialised with SERVICE" \
+  grep -q 'createLogger(SERVICE)' "$SERVER"
 
 assert_status 0 "latency_ms tracked per tool call" \
   grep -q 'latency_ms' "$SERVER"

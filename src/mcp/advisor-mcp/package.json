@@ -1,13 +1,13 @@
 {
   "name": "advisor-mcp",
   "version": "1.0.0",
-  "description": "AI-OS MCP server: A2A RPC bridge — Claude queries Gemini Architect mid-execution for architectural rulings",
+  "description": "AI-OS MCP server: A2A RPC bridge \u2014 Claude queries Gemini Architect mid-execution for architectural rulings",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "*"
   }
 }

@@ -15,6 +15,10 @@ import { createReadStream, readFileSync, writeFileSync, existsSync, mkdirSync } 
 import { createInterface } from "readline";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("archive-manager-mcp");
 
 // Stream-based line/word counter — avoids loading full file into memory (E-153)
 function countFileStats(fpath) {
@@ -162,21 +166,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   if (name === "execute_archive") {
     const cwd = process.cwd();
 
-    // Locate the `ai` binary — prefer global install, fall back to local src
+    // Locate the `ai` binary — env override > PATH lookup > known install prefixes
     const candidatePaths = [
+      process.env.AI_OS_BIN,
       "/usr/local/bin/ai",
       `${process.env.HOME}/.ai-os/bin/ai`,
+      "/opt/homebrew/bin/ai",
+      "/opt/ai-os/bin/ai",
       resolve(cwd, "src/bin/ai"),
-    ];
+    ].filter(Boolean);
 
     let aiBin = null;
     for (const p of candidatePaths) {
       if (existsSync(p)) { aiBin = p; break; }
     }
 
+    // Fallback: PATH lookup via `command -v ai`
+    if (!aiBin) {
+      const which = spawnSync("bash", ["-lc", "command -v ai"], { encoding: "utf8", timeout: 2000 });
+      const found = (which.stdout || "").trim();
+      if (which.status === 0 && found && existsSync(found)) aiBin = found;
+    }
+
     if (!aiBin) {
       return {
-        content: [{ type: "text", text: "✗ `ai` binary not found. Ensure AI-OS is installed (./install-ai-os.sh)." }],
+        content: [{ type: "text", text: "✗ `ai` binary not found. Set AI_OS_BIN, add `ai` to PATH, or run ./install-ai-os.sh." }],
         isError: true,
       };
     }

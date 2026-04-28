@@ -3,7 +3,7 @@ name: vibe_sentinel
 description: Trigger this when a UI change is made, before any Tier 2/3 visual release, or when asked to audit UI quality. Runs automated visual audit using vibe-check-mcp and produces a VIBE_SENTINEL report. Escalates to chaos_monkey for Tier 3.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Bash, Read, Glob, Grep, mcp__vibe-check-mcp__run_vibe_audit, mcp__vibe-check-mcp__run_chaos_test, mcp__vibe-check-mcp__get_performance_metrics, mcp__computer-use-mcp__capture_screen, mcp__computer-use-mcp__left_click, mcp__computer-use-mcp__right_click, mcp__computer-use-mcp__double_click, mcp__computer-use-mcp__type_text, mcp__computer-use-mcp__key_press, mcp__computer-use-mcp__health_check
+allowed-tools: Bash, Read, Glob, Grep
 context: fork
 agent: general-purpose
 ---

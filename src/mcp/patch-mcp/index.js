@@ -25,6 +25,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, writeFileSync, existsSync, statSync } from "fs";
 import { resolve, relative } from "path";
 import { createHash } from "crypto";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("patch-mcp");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

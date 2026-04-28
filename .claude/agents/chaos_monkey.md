@@ -3,7 +3,7 @@ name: chaos_monkey
 description: Trigger this when running `ai test --vibe`, for any Tier 3 release, or when asked to stress-test the UI. Injects invalid inputs, simulates network latency, and stress-tests UI interactions to find edge cases before production.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Bash, Read, Glob, Grep, mcp__computer-use-mcp__capture_screen, mcp__computer-use-mcp__left_click, mcp__computer-use-mcp__right_click, mcp__computer-use-mcp__double_click, mcp__computer-use-mcp__type_text, mcp__computer-use-mcp__key_press, mcp__computer-use-mcp__health_check, mcp__approval-mcp__request_approval
+allowed-tools: Bash, Read, Glob, Grep
 context: fork
 agent: general-purpose
 ---

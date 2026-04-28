@@ -16,6 +16,10 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, ope
 import { resolve } from "path";
 import { spawnSync } from "child_process";
 import { getDb, readState, regenerateViews, withTransaction } from "../shared/state-db.js";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("orchestrator-mcp");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function readSafe(p) {
@@ -36,7 +40,7 @@ function readBoundedLines(p, maxLines) {
       ? lines.slice(0, maxLines).join("\n") + "\n... (truncated)"
       : text;
   } catch (e) {
-    process.stderr.write(`[WARN] readBoundedLines(${p}): ${e.message}\n`);
+    logger.warn("readBoundedLines", "stream read failed", { path: p, error: e.message });
     return "";
   }
 }
@@ -198,7 +202,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               "Then call `mark_deltas_read` via task-synchronizer-mcp to acknowledge."
             );
           }
-        } catch (e) { process.stderr.write(`[WARN] run_preflight SQLite: ${e.message}\n`); }
+        } catch (e) { logger.warn("run_preflight", "SQLite read failed", { error: e.message }); }
       }
 
       // Stamp SESSION.md

@@ -147,11 +147,11 @@ assert_status 0 "falls back to cwd() if .ai/architect.md not found" \
 echo ""
 echo "  [T-A2A-10] Observability — structured JSON logging"
 
-assert_status 0 "log() emits timestamp" \
-  grep -q 'timestamp:' "$SERVER"
+assert_status 0 "shared logger imported" \
+  grep -q 'createLogger.*shared/logger' "$SERVER"
 
-assert_status 0 "log() emits service name" \
-  grep -q 'service: SERVICE' "$SERVER"
+assert_status 0 "logger initialised with SERVICE" \
+  grep -q 'createLogger(SERVICE)' "$SERVER"
 
 assert_status 0 "latency_ms tracked" \
   grep -q 'latency_ms' "$SERVER"

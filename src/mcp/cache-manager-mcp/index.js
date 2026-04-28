@@ -51,6 +51,7 @@ import {
 } from "node:fs";
 import { resolve, join, basename, isAbsolute } from "node:path";
 import { homedir } from "node:os";
+import { createLogger } from "../shared/logger.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -61,19 +62,10 @@ const STORE_DIR = resolve(homedir(), ".ai-os");
 const DB_PATH   = join(STORE_DIR, "cache.sqlite");
 
 // ── Structured logger ─────────────────────────────────────────────────────────
+// Shared NDJSON logger; emits one JSON line per call to stderr.
 
-function log(level, tool, message, extras = {}) {
-  process.stderr.write(
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level,
-      service: SERVICE,
-      tool,
-      message,
-      ...extras,
-    }) + "\n"
-  );
-}
+const logger = createLogger(SERVICE);
+const log = (level, tool, message, extras) => logger.log(level, tool, message, extras);
 
 // ── SQLite setup ──────────────────────────────────────────────────────────────
 

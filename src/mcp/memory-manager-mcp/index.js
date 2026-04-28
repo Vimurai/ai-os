@@ -19,6 +19,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve, join } from "path";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("memory-manager-mcp");
 
 const STORE_DIR  = resolve(process.env.HOME || "~", ".ai-os", "memory");
 const STORE_FILE = join(STORE_DIR, "signatures.json");

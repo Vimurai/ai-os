@@ -30,6 +30,7 @@ import {
 import { execFileSync } from "child_process";
 import { readFileSync, appendFileSync, existsSync } from "fs";
 import { resolve, join } from "path";
+import { createLogger } from "../shared/logger.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -54,18 +55,10 @@ const LOG_MD = join(PROJECT_ROOT, ".ai", "LOG.md");
 const BLUEPRINTS_DIR = join(PROJECT_ROOT, ".ai", "blueprints");
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+// Shared NDJSON logger; emits one JSON line per call to stderr.
 
-function log(level, tool, message, extras = {}) {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    level,
-    service: SERVICE,
-    tool,
-    message,
-    ...extras,
-  };
-  process.stderr.write(JSON.stringify(entry) + "\n");
-}
+const logger = createLogger(SERVICE);
+const log = (level, tool, message, extras) => logger.log(level, tool, message, extras);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

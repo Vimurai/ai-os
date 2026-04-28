@@ -16,6 +16,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { readFileSync, openSync, readSync, closeSync, existsSync, readdirSync } from "fs";
 import { resolve, join, sep } from "path";
 import { homedir } from "os";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("context-invoker-mcp");
 
 // Read only the first 4 KB of a file — sufficient to capture YAML frontmatter (E-154)
 const HEAD_BYTES = 4096;

@@ -35,6 +35,10 @@ import { resolve, relative } from "path";
 import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
 import { getDb } from "../shared/state-db.js";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("propose-patch-mcp");
 
 // ── Patch store (SQLite-backed via state-db.js, P-24) ─────────────────────────
 // Patches are stored in the `patches` table of state.sqlite.

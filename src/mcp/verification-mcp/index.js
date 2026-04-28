@@ -15,6 +15,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, existsSync, readdirSync, statSync } from "fs";
 import { resolve, join } from "path";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("verification-mcp");
 
 // Built-in Claude Code tools that are always valid (not in registry)
 const BUILTIN_TOOLS = new Set([

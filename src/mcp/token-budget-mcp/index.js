@@ -26,6 +26,10 @@ import { mkdirSync, existsSync } from "fs";
 import { resolve, join } from "path";
 import { homedir } from "os";
 import { DatabaseSync } from "node:sqlite";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("token-budget-mcp");
 
 // ── SQLite setup ──────────────────────────────────────────────────────────────
 
@@ -61,7 +65,7 @@ function getDb() {
     db = conn; // only cache after full schema setup succeeds
     return db;
   } catch (e) {
-    process.stderr.write(`[WARN] token-budget-mcp: DB init failed (${e.code || e.message}) — token tracking unavailable\n`);
+    logger.warn("getDb", "DB init failed — token tracking unavailable", { code: e.code, error: e.message });
     return null;
   }
 }

@@ -1,18 +1,17 @@
 # Skills Index (metadata-only — §29 JIT Skill Loading)
 # Use activate_skill(<name>) to load full content.
 
-- ai-task: Use activate_skill with this name after completing any E-## implementation. Marks task DONE via task-synchronizer-mcp, runs run_handover for Architect delta review, and surfaces the next open task.
-- ai-log: Use activate_skill with this name after any significant action not covered by a hook. Appends a structured entry to .ai/LOG.md (RULES §4). Warns if LOG.md ≥ 200 lines.
-- ai-handoff: Use activate_skill with this name before switching between Claude and Gemini. Produces a structured handoff packet in .ai/COMM.md covering completed work, decisions, blueprint divergence, and next actions.
-- ai-debug: Use activate_skill with this name when a test is failing or a bug is being investigated. Enforces structured hypothesis→test→observe loop. Blocks git add until all tests are green.
-- repo-oracle: Use activate_skill with this name before modifying existing code or when asked why something was built a certain way. Queries git log, git blame, LOG.md, and DECISIONS.md for historical context.
-- ai-context-check: Use activate_skill with this name at the start of any large task or proactively every 3 E-## tasks. Checks SESSION.md line count and token estimate via archive-manager-mcp. Recommends ai-compact or /clear if bloated.
 - ai-archive: Use activate_skill with this name ONLY when the user explicitly requests an archive operation. DESTRUCTIVE — moves LOG.md, COMM.md, REVIEWS.md, SESSION.md to .ai/archive/YYYY-MM/ with timestamps and re-initializes from templates. Never invoke autonomously.
 - ai-compact: Use activate_skill with this name when SESSION.md exceeds ~2000 tokens, before a long task, or when asked to compact/distill context. Distills conversation history into "Active Context", archives the raw SESSION.md log, and resets it to a minimal header. Equivalent to running /compact.
+- ai-context-check: Proactively check context health before starting a large task. Wraps archive-manager-mcp check_context_health. Warns before token bloat hits and recommends ai-compact or /clear.
+- ai-debug: Enforce structured hypothesis→test→observe debugging loop for failing tests or bugs. Blocks git add until green. Prevents trial-and-error token burn.
 - ai-digest: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running ai archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
+- ai-handoff: Produce a structured handoff packet for Gemini↔Claude transitions. Reads unread deltas from state, formats blueprint divergence and decisions into .ai/COMM.md. Use before switching agents.
+- ai-log: Append a structured entry to .ai/LOG.md after any significant action. Enforces RULES §4 mandate. Checks if LOG.md exceeds 200 lines and triggers ai-archive warning if so.
 - ai-preflight: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.
 - ai-review: Run a tier-aware critic review before committing. Tier 1 skips review. Tier 2 runs blueprint-aligner only. Tier 3 runs full parallel critics (arch + security + tests) plus security_engineer and UACS verification. Equivalent to `ai review claude [--tier N]`.
 - ai-sync-state: Use activate_skill with this name when handing off work between Gemini and Claude, or when your context may be stale after the other agent modified .ai/ files. Forces explicit re-read of TASKS.md, architect.md, and DIGEST.md from the filesystem, bypassing conversational memory cache.
+- ai-task: Manage AI-OS task lifecycle — mark tasks DONE, run handover, check for next tasks. Use after completing any E-## implementation. Wraps task-synchronizer-mcp and run_handover in one step.
 - ai-test: Use activate_skill with this name when asked to run tests, before committing, or for Tier 3 releases (use --vibe flag). Runs TestSprite for E2E tests or triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey).
 - bug-reproducer: Enforces empirical validation for Tier 2/3 bug fixes. Forces creation of an isolated repro.sh or failing test that proves the bug exists before any source modification is allowed.
 - ci_gate: Gate required before changing any CI/CD pipeline or deployment config. Documents the change, security implications, and rollback plan in .ai/DEVOPS.md before any edits are made.
@@ -21,6 +20,7 @@
 - dependency_gate: Gate required before adding any new major dependency (npm install, pip install, go get, etc.). Documents justification, alternatives, security track record, and license in .ai/DECISIONS.md before installation.
 - obs_baseline: Apply observability standards (structured logging, metrics, tracing, health checks) when implementing new features or setting up DevOps pipelines.
 - release-manager: Handles the sprint release lifecycle — bumps package.json version, aggregates DONE tasks into CHANGELOG.md, creates a signed git tag, and optionally triggers ai archive.
+- repo-oracle: Answer historical questions about the codebase — why something was built, when it changed, who decided it. Guided git log/blame and .ai/LOG.md search. Use before modifying existing code.
 - scope_safety: Enforce filesystem and shell scope boundaries on every file/shell operation. Blocks path traversal, unauthorized writes, and commands not in CAPABILITIES.md. Mandatory — applied automatically to all operations.
 - token-miser: Use activate_skill with this name when context is growing large, before a long session, or when asked to optimize token usage. Applies progressive disclosure, context pruning, and DIGEST-first read order to minimize token cost.
 - trigger-audit: Use activate_skill with this name immediately after the PLAN phase and before the first WRITE operation on any E-## task. Scans staged git diff and task description for keywords that mandate agent/skill dispatches (auth, secrets, new deps, CI, endpoints). Returns a Mandatory Trigger Report checklist. Also invoke mid-task if the implementation deviates from the original plan.

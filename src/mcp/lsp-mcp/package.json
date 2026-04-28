@@ -1,12 +1,14 @@
 {
   "name": "lsp-mcp",
   "version": "1.0.0",
-  "description": "AI-OS Code Intelligence Layer (§23) — TypeScript compiler API wrapper for symbol/type awareness.",
+  "description": "AI-OS Code Intelligence Layer (\u00a723) \u2014 TypeScript compiler API wrapper for symbol/type awareness.",
   "type": "module",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "*",
     "typescript": "^5.0.0"
   }
 }

@@ -26,6 +26,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("github-bridge-mcp");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

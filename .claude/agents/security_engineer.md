@@ -3,7 +3,7 @@ name: security_engineer
 description: Trigger this when adding auth, handling secrets, modifying CAPABILITIES.md, or performing a security review for Tier 3 tasks. Produces SECURITY.md + THREAT_MODEL.md and enforces capability boundaries.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, mcp__advisor-mcp__ask_architect, mcp__approval-mcp__request_approval
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash
 context: fork
 agent: general-purpose
 ---

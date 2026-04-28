@@ -14,6 +14,10 @@ import { readFileSync, existsSync } from "fs";
 import { resolve, relative, extname } from "path";
 import { spawnSync } from "child_process";
 import { getDb } from "../shared/state-db.js";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("context-guardian-mcp");
 
 const server = new Server(
   { name: "context-guardian-mcp", version: "1.0.0" },
@@ -141,7 +145,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
       }
     } catch (e) {
-      process.stderr.write(`[WARN] context-guardian check_workspace SQLite: ${e.message}\n`);
+      logger.warn("check_workspace", "SQLite read failed", { error: e.message });
     }
   }
 

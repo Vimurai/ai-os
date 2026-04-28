@@ -273,14 +273,14 @@ JS
 echo ""
 echo "  [T-CACHE-S10] Observability"
 
-assert_status 0 "log() function defined" \
-  grep -q 'function log' "$SERVER"
+assert_status 0 "shared logger imported" \
+  grep -q 'createLogger.*shared/logger' "$SERVER"
 
-assert_status 0 "log() emits timestamp" \
-  grep -q 'timestamp:' "$SERVER"
+assert_status 0 "logger exposes log() shim" \
+  grep -q 'logger.log' "$SERVER"
 
-assert_status 0 "log() emits service name" \
-  grep -q 'service: SERVICE' "$SERVER"
+assert_status 0 "logger initialised with SERVICE" \
+  grep -q 'createLogger(SERVICE)' "$SERVER"
 
 assert_status 0 "latency_ms tracked" \
   grep -q 'latency_ms' "$SERVER"

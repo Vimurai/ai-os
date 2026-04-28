@@ -36,6 +36,7 @@ import { execSync, execFileSync } from "child_process";
 import { existsSync, mkdirSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { createLogger } from "../shared/logger.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -48,18 +49,10 @@ const SANDBOX_DISPLAY = ":99";
 const SANDBOX_HOME = "/tmp/computer-use-sandbox";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+// Shared NDJSON logger; emits one JSON line per call to stderr.
 
-function log(level, tool, message, extras = {}) {
-  const entry = {
-    timestamp: new Date().toISOString(),
-    level,
-    service: SERVICE,
-    tool,
-    message,
-    ...extras,
-  };
-  process.stderr.write(JSON.stringify(entry) + "\n");
-}
+const logger = createLogger(SERVICE);
+const log = (level, tool, message, extras) => logger.log(level, tool, message, extras);
 
 // ── Security helpers ──────────────────────────────────────────────────────────
 

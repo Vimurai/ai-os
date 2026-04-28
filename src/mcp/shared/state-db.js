@@ -12,20 +12,23 @@ import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { DatabaseSync } from "node:sqlite";
 
-let _db = null;
+const _dbCache = new Map();
 
 /**
- * Open (or return cached) the state.sqlite DatabaseSync instance.
- * Creates schema + WAL on first open. Caller must pass aiDir every time;
- * the cached instance is valid as long as the process lives.
+ * Open (or return cached) the state.sqlite DatabaseSync instance for `aiDir`.
+ * Each distinct aiDir gets its own connection so that multiple consumers
+ * within the same process can address different state stores without
+ * silently sharing the first-opened one. Connections are keyed by the
+ * resolved absolute path.
  */
 export function getDb(aiDir) {
-  if (_db) return _db;
-
   const dbPath = resolve(aiDir, "state.sqlite");
-  _db = new DatabaseSync(dbPath);
-  _db.exec("PRAGMA journal_mode = WAL;");
-  _db.exec(`
+  const cached = _dbCache.get(dbPath);
+  if (cached) return cached;
+
+  const db = new DatabaseSync(dbPath);
+  db.exec("PRAGMA journal_mode = WAL;");
+  db.exec(`
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
       value TEXT
@@ -77,7 +80,8 @@ export function getDb(aiDir) {
     INSERT OR IGNORE INTO project(key, value) VALUES ('focus', NULL);
   `);
 
-  return _db;
+  _dbCache.set(dbPath, db);
+  return db;
 }
 
 /**

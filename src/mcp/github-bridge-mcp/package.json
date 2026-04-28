@@ -1,11 +1,13 @@
 {
   "name": "github-bridge-mcp",
   "version": "1.0.0",
-  "description": "AI-OS GitHub Bridge (§28) — fetch assigned issues via gh CLI and surface them for Architect review cycles.",
+  "description": "AI-OS GitHub Bridge (\u00a728) \u2014 fetch assigned issues via gh CLI and surface them for Architect review cycles.",
   "type": "module",
   "main": "index.js",
-  "scripts": { "start": "node index.js" },
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "*"
   }
 }

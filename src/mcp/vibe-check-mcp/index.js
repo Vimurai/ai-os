@@ -19,6 +19,10 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { chromium } from "@playwright/test";
+import { createLogger } from "../shared/logger.js";
+
+// ── Structured logger (obs_baseline §Logging) ────────────────────────────────
+const logger = createLogger("vibe-check-mcp");
 
 const server = new Server(
   { name: "vibe-check-mcp", version: "1.0.0" },
