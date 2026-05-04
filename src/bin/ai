@@ -8,24 +8,51 @@ usage() {
   cat <<USAGE
 ai — AI-OS v${VERSION}
 
+The shell CLI is a thin bootloader. Operational commands (planning, review,
+testing, archive, digest) now run as prompts inside Claude Code or Gemini CLI.
+See .ai/blueprints/cli-collapse.md for the migration map.
+
 Commands:
-  ai install          Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot; enable agent teams; set up hooks
-  ai init             Create/upgrade .ai/ in current repo (safe, no overwrite)
-  ai onboard          Print the Principal Architect reverse-engineering prompt for existing repos
-  ai update [--force] Print update session prompt (Gate 1: Intent Gate — does not scan/write itself)
-  ai preflight        Print DIGEST-first read order + SESSION stamp template
-  ai review <who> [--tier <1|2|3>]  Print tier-aware critic prompts (auto-detects tier)
-  ai test [--vibe]    Run automated tests (TestSprite) or Vibe/Chaos audit (--vibe)
-  ai mcp-setup        Install npm dependencies for all AI-OS MCP servers
-  ai archive          Move old LOG/COMM/REVIEWS entries to .ai/archive/YYYY-MM/
-  ai digest           Print prompt to regenerate DIGEST.md (run when stale)
-  ai sync             Re-sync agents, skills, bootloaders (CLAUDE.md, GEMINI.md, .mcp.json), and hooks from ~/.ai-os
-  ai sync --github    Fetch assigned GitHub issues → output to terminal for Architect cycle (§28)
-  ai migrate-state [--force]  Seed state.json from TASKS.md; task-synchronizer-mcp auto-imports to state.sqlite on first run
-  ai doctor [--repair] [--compliance]  Diagnose PATH, config, hooks, MCP; --compliance audits agent frontmatter for Ghost Tools
-  ai where            Print install paths
-  ai version          Print version
+  ai install     Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot;
+                 enable agent teams; install hooks
+  ai init        Create/upgrade .ai/ in current repo (safe, no overwrite)
+  ai sync        Re-sync agents, skills, bootloaders (CLAUDE.md, GEMINI.md, .mcp.json)
+                 and hooks from ~/.ai-os into the current project
+  ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28)
+  ai doctor [--repair] [--compliance]
+                 Diagnose PATH, configs, hooks, MCP; --compliance audits agent
+                 frontmatter for Ghost Tools
+  ai uninstall   Remove the global ~/.ai-os install (project .ai/ stays)
+  ai version     Print version
+
+Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
+  update / onboard → Open Gemini, type the planning request directly
+  preflight        → skill: ai-preflight  (auto-runs at session start)
+  digest           → skill: ai-digest
+  archive          → skill: ai-archive
+  review           → skill: ai-review
+  test [--vibe]    → skill: ai-test
+  migrate-state    → mcp__task-synchronizer-mcp__verify_markdown_sync
+  mcp-setup        → cd ~/.ai-os && bash install-ai-os.sh
+  where            → echo \$AIOS  (now stored as ~/.ai-os)
 USAGE
+}
+
+# E-34: Show migration guidance for removed commands. Single source of truth
+# for the deprecation map so usage() and dispatch stay aligned.
+_show_deprecated() {
+  local old_cmd="$1" replacement="$2"
+  cat >&2 <<DEP
+
+[ai-os] "ai ${old_cmd}" was removed (see .ai/blueprints/cli-collapse.md).
+
+Use the agent flow instead:
+  ${replacement}
+
+The shell CLI is now scoped to: install, init, sync, doctor, uninstall.
+Run "ai" for the full command list.
+DEP
+  exit 1
 }
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -531,316 +558,24 @@ do_init() {
   echo "2) Fill in .ai/DIGEST.md — Include Triad Health (Planning/Execution/Testing)"
   echo "3) Define the initial vision in .ai/architect.md (Template provided)"
   echo "4) Fill in .github/copilot-instructions.md (project-specific context)"
-  echo "5) ai update     — start a peer agent session"
+  echo "5) Open Claude Code or Gemini CLI in this repo — the bootloader auto-runs ai-preflight"
   echo ""
-  echo "Triad Workflow:"
-  echo "  Architect (Gemini) → Writes to architect.md / Planning docs"
-  echo "  Engineer (Claude)  → Implements code based on blueprints"
-  echo "  Tester (TestSprite) → Mandatory quality gate via 'ai test'"
+  echo "Triad Workflow (commands now run as agent prompts/skills):"
+  echo "  Architect (Gemini) → Writes to architect.md / blueprints"
+  echo "  Engineer  (Claude) → Implements code based on blueprints"
+  echo "  Tester (TestSprite) → Quality gate via skill: ai-test"
   echo ""
   echo "MCP servers enabled in .mcp.json (filesystem + memory)."
 }
 
-# ── TSRT: Tier classifier (bash-native, no MCP dependency) ──────────────────
-# Reads staged diff, returns 1/2/3 via stdout.
-# Used by do_update, do_review, and the pre-commit hook for gate skipping.
-#
-# Tier 1 — Docs/config only (no logic files):
-#   *.md, *.txt, .gitignore, .ai/**, .claude/**, .gemini/**, *.json (non-src)
-# Tier 2 — Logic change (src/, *.js, *.ts, *.py, *.sh, hooks, mcp):
-#   any file matching LOGIC_RE
-# Tier 3 — High-risk (auth, secrets, deploy, breaking, CI):
-#   any staged file content matching HIGH_RISK_RE
-detect_tier() {
-  local staged_files
-  staged_files=$(git diff --staged --name-only 2>/dev/null)
-
-  # No staged files → default Tier 2 (conservative)
-  [[ -z "$staged_files" ]] && echo "2" && return
-
-  # Tier 3: high-risk keywords in diff content
-  local HIGH_RISK_RE='\b(auth|oauth|secret|api[_-]?key|deploy|production|migration|breaking|password|token)\b'
-  if git diff --staged 2>/dev/null | grep -qiE "$HIGH_RISK_RE"; then
-    echo "3" && return
-  fi
-
-  # Tier 2: any logic file in staged list
-  local LOGIC_RE='\.(js|ts|mjs|cjs|jsx|tsx|py|go|rb|java|sh|bash|zsh)$|^src/|^mcp/|hooks/'
-  while IFS= read -r file; do
-    if [[ "$file" =~ $LOGIC_RE ]]; then
-      echo "2" && return
-    fi
-  done <<< "$staged_files"
-
-  # All files are docs/config → Tier 1
-  echo "1"
-}
-
-# ── Gate 1: Intent Gate ───────────────────────────────────────────────────────
-# Returns: 0 = pass, 1 = vague (hard block), 2 = high-risk (soft block / warning)
-
-do_update() {
-  if [[ ! -d ".ai" ]]; then
-    echo "✗ No .ai/ directory found. Run: ai init"
-    exit 1
-  fi
-
-  # Capture inline intent from CLI args (e.g., ai update "add feature X")
-  local INTENT="${*:-}"
-  local INTENT_BLOCK=""
-  if [[ -n "$INTENT" && "$INTENT" != "--force" ]]; then
-    INTENT_BLOCK="
-INTENT FROM CLI:
-  ${INTENT}
-"
-  fi
-
-  cat <<PROMPT
-━━ AI-OS UPDATE SESSION ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${INTENT_BLOCK}
-ROLE: Principal Architect (Gemini) or Principal Software Engineer (Claude).
-
-TOKEN ECONOMICS — HARD LIMIT: Read at most 6 files. No ls -R, no glob sweeps.
-
-STEP 1 — REFRESH PROJECT STATE (JIT)
-Run the digest_updater agent to refresh .ai/DIGEST.md:
-  activate_agent('digest_updater')
-The agent uses git-based change detection — only reads files changed since
-last DIGEST update. If nothing changed, it exits early (no token burn).
-
-STEP 2 — READ CONTEXT (max 3 files)
-  a. .ai/DIGEST.md    ← refreshed project snapshot
-  b. .ai/TASKS.md     ← open E-## / P-## tasks
-  c. .ai/architect.md ← ONLY if intent requires architectural context
-
-STEP 3 — PROCESS INTENT
-Intent comes from the conversation message above${INTENT_BLOCK:+ (or CLI arg above)}.
-Do NOT look for an UPDATE.md file — it no longer exists.
-
-STEP 4 — UPDATE STATE
-Based on the intent and refreshed DIGEST:
-  • New tasks: mcp__task-synchronizer-mcp__add_task({ prefix, description, tier })
-  • DIGEST is already updated by Step 1 — do not rewrite it manually.
-  • Log changes: append to .ai/LOG.md.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PROMPT
-}
-
-do_onboard() {
-  cat <<'ONBD'
-
-━━ ONBOARDING SYSTEM OVERRIDE (For Existing Codebases) ━━━━━━━━━━━━━━
-Paste this prompt into Claude or Gemini:
-
-"You are the Principal Architect.
-I have just initialized AI-OS v2 in this existing codebase.
-Your task is to reverse-engineer this repository and establish the Triad.
-
-TOKEN ECONOMICS — HARD LIMIT: Read at most 6 files total. Do NOT run ls -R,
-find ., or read every source file. Use targeted reads only.
-
-1. Read README.md and package.json (or equivalent manifest) — 2 files max.
-2. Read the entry point (e.g. src/index.*, src/bin/*) — 1 file.
-3. Grep for key patterns (imports, exports, routes) rather than reading whole dirs.
-4. Populate `.ai/DIGEST.md` with the snapshot (max 50 lines).
-5. Populate `.ai/BRIEF.md` with the system architecture summary.
-6. Draft the first `.ai/architect.md` blueprint.
-
-Do NOT write any application code. Output only `.ai/` documentation."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ONBD
-}
-
-preflight() {
-  if [[ ! -f ".ai/SEED.md" ]]; then
-    echo "Missing .ai/SEED.md — run: ai init"
-    exit 1
-  fi
-  cat <<'PREF'
-
-━━ PREFLIGHT READ ORDER (DIGEST-FIRST) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Always read:
-  1. .ai/DIGEST.md        ← replaces most reads if current
-  2. .ai/TASKS.md         ← your assigned tasks
-  3. .ai/architect.md     ← Blueprint (only if task requires architectural detail)
-
-The absolute source of truth is .ai/.
-Handover protocol (Engineer): Always record execution state back to LOG.md.
-Open only when task touches that domain:
-  • .ai/BRIEF.md (Project Rules & Lore)
-  • .ai/RULES.md (Token Economics & Triad Contract)
-
-SESSION.md is auto-stamped by Stop hook after your session ends.
-Manual stamp only if hook fails.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PREF
-}
 
 
 
-do_digest() {
-  cat <<'DGT'
 
-━━ REGENERATE DIGEST PROMPT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Paste into Claude Code:
 
-"Use the digest_updater agent to regenerate .ai/DIGEST.md.
- TOKEN ECONOMICS: Use JIT reads — grep first, full reads only for changed files.
- Step 1: git log --since=<DIGEST mtime> --name-only -- '.ai/*.md' | sort -u
- Step 2: Read ONLY files listed above. Max 6 files total.
- Keep DIGEST ≤ 60 lines, bullets only. Include Recent changes (last 10)."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DGT
-}
 
-do_archive() {
-  if [[ ! -d ".ai" ]]; then
-    echo "✗ No .ai/ directory found. Run: ai init"
-    exit 1
-  fi
 
-  local ARCHIVE_DIR
-  ARCHIVE_DIR=".ai/archive/$(date '+%Y-%m')"
-  mkdir -p "$ARCHIVE_DIR"
 
-  local SUFFIX
-  SUFFIX=$(date '+%Y%m%d_%H%M')
-
-  local ARCHIVED=0
-
-  # Files to archive (content files that accumulate over time)
-  for fname in LOG.md COMM.md REVIEWS.md SESSION.md; do
-    local src=".ai/${fname}"
-    [[ ! -f "$src" ]] && continue
-
-    # Only archive if non-empty (beyond header line)
-    local content
-    content=$(grep -v '^#' "$src" | grep -v '^$' | head -5 || true)
-    if [[ -z "$content" ]]; then
-      echo "  Skipped ${fname} (empty)"
-      continue
-    fi
-
-    local dst="${ARCHIVE_DIR}/${fname%.md}.${SUFFIX}.md"
-    mv "$src" "$dst"
-    echo "  Archived: ${fname} → ${dst}"
-    ARCHIVED=$((ARCHIVED + 1))
-
-    # Re-initialize from template or with header
-    local T="${AIOS}/templates"
-    if [[ -f "${T}/${fname}" ]]; then
-      cp "${T}/${fname}" "$src"
-    else
-      printf "# %s\n\n" "$fname" > "$src"
-    fi
-    echo "  Re-initialized: ${fname}"
-  done
-
-  if [[ $ARCHIVED -eq 0 ]]; then
-    echo "Nothing to archive — all content files are empty."
-  else
-    echo ""
-    echo "✓ Archive complete → ${ARCHIVE_DIR}"
-    echo "  ${ARCHIVED} file(s) archived and re-initialized."
-    echo ""
-    # E-107: Export project signature to global memory store (§31, silent failure by design)
-    _export_signature_to_global_store
-    # E-56: Auto-trigger digest to document the fresh state
-    echo "[AUTO-ARCHIVE] Regenerating DIGEST.md to reflect fresh state..."
-    do_digest
-  fi
-}
-
-# E-107: Write project signature to ~/.ai-os/memory/signatures.json (§31)
-# Silent failure — project-local context is always prioritized.
-_export_signature_to_global_store() {
-  local MEM_DIR="${AIOS}/memory"
-  local SIG_FILE="${MEM_DIR}/signatures.json"
-  if ! command -v python3 &>/dev/null; then return 0; fi
-
-  # P-45: Extract focus from state.sqlite (SQLite-first); fall back to state.json in Python
-  local _FOCUS=""
-  if [[ -f ".ai/state.sqlite" ]] && command -v sqlite3 &>/dev/null; then
-    _FOCUS=$(sqlite3 ".ai/state.sqlite" "SELECT value FROM project WHERE key='focus'" 2>/dev/null || true)
-  fi
-
-  python3 - "$SIG_FILE" "$MEM_DIR" "$_FOCUS" <<'PY'
-import json, sys, os
-from datetime import datetime, timezone
-
-sig_file = sys.argv[1]
-mem_dir  = sys.argv[2]
-
-try:
-    os.makedirs(mem_dir, exist_ok=True)
-
-    # Build signature from available .ai/ context
-    project_name = os.path.basename(os.getcwd())
-
-    # Extract focus — prefer pre-computed SQLite value, fall back to state.json
-    focus = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else ""
-    if not focus:
-        try:
-            s = json.load(open(".ai/state.json"))
-            focus = s.get("project", {}).get("focus") or ""
-        except Exception:
-            pass
-
-    # Extract summary from DIGEST.md (first 5 non-header, non-empty lines)
-    summary_lines = []
-    try:
-        for line in open(".ai/DIGEST.md"):
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and len(summary_lines) < 5:
-                summary_lines.append(stripped)
-    except Exception:
-        pass
-    summary = " | ".join(summary_lines) if summary_lines else f"{project_name} project"
-
-    # Extract architect version (first # heading from architect.md)
-    architect_v = "unknown"
-    try:
-        for line in open(".ai/architect.md"):
-            if line.startswith("# "):
-                architect_v = line.strip()[2:].strip()
-                break
-    except Exception:
-        pass
-
-    sig = {
-        "project_name": project_name,
-        "tag": focus or project_name,
-        "summary": summary[:300],   # cap at 300 chars — no PII, no secrets
-        "architect_v": architect_v[:100],
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
-
-    # Append to global signatures store
-    sigs = []
-    if os.path.exists(sig_file):
-        try:
-            sigs = json.load(open(sig_file))
-            if not isinstance(sigs, list):
-                sigs = []
-        except Exception:
-            sigs = []
-
-    # Deduplicate: remove older entry for same project (keep latest only)
-    sigs = [s for s in sigs if s.get("project_name") != project_name]
-    sigs.append(sig)
-
-    with open(sig_file, "w") as f:
-        json.dump(sigs, f, indent=2)
-        f.write("\n")
-
-    print(f"[SIGNATURE] Exported {project_name} signature → {sig_file}")
-except Exception as e:
-    # Silent failure per §31 — global store is optional
-    pass
-PY
-}
 
 do_migrate_state() {
   local FORCE="${1:-}"
@@ -1002,269 +737,10 @@ PY
   echo "[MIGRATE-STATE] Migration complete."
   printf "  Tasks seeded to state.json: %s\n" "$TASK_COUNT"
   echo "  state.sqlite: will be created from state.json on first task-synchronizer-mcp call"
-  echo "  Run: ai test to verify"
+  echo "  To verify: open Claude Code or Gemini and run skill: ai-test"
 }
 
-do_review() {
-  local who="${1:-}"
-  if [[ -z "$who" ]]; then
-    echo "Usage: ai review <claude|gemini> [--tier <1|2|3>]"
-    exit 1
-  fi
 
-  # Parse --tier flag (overrides auto-detection)
-  local TIER_OVERRIDE=""
-  local i=2
-  while [[ $i -le $# ]]; do
-    local arg="${!i}"
-    if [[ "$arg" == "--tier" ]]; then
-      i=$((i+1)); TIER_OVERRIDE="${!i}"
-    fi
-    i=$((i+1))
-  done
-
-  # Auto-detect tier from staged diff unless overridden
-  local TIER="${TIER_OVERRIDE}"
-  local TIER_SOURCE=""
-  if [[ -n "$TIER_OVERRIDE" ]]; then
-    TIER_SOURCE="manual --tier override"
-  elif [[ -d ".ai" ]]; then
-    TIER=$(detect_tier 2>/dev/null || echo "2")
-    case "$TIER" in
-      1) TIER_SOURCE="auto-detected: docs/config only (no logic files staged)" ;;
-      3) TIER_SOURCE="auto-detected: high-risk keywords found in staged diff" ;;
-      *) TIER_SOURCE="auto-detected: logic files staged (src/, *.js/ts/py/sh)" ;;
-    esac
-  else
-    TIER="2"
-    TIER_SOURCE="default (not in AI-OS project)"
-  fi
-  TIER="${TIER:-2}"
-
-  echo ""
-  echo "TSRT: Tier ${TIER} [${TIER_SOURCE}]"
-  echo ""
-
-  case "$who" in
-    claude)
-      # Tier 1 — skip review entirely
-      if [[ "$TIER" == "1" ]]; then
-        cat <<'TIER1_REVIEW'
-
-━━ [TIER_1] REVIEW SKIPPED (TSRT) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Tier 1 — docs/config only. Gate 2 will bypass automatically.
-No [CRITIC_STAMP] required.
-
-ACTION: Commit directly — the pre-commit hook will print:
-  [TIER_1] Docs/config only — Gate 2 bypassed
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TIER1_REVIEW
-        return
-      fi
-
-      # Tier 2 — blueprint_aligner only (skip security/vibe/chaos)
-      if [[ "$TIER" == "2" ]]; then
-        cat <<'TIER2_REVIEW'
-
-━━ [TIER_2] REVIEW PROMPT — Claude (Blueprint Aligner) ━━━━━━━━━━━━━
-TSRT: Tier 2 — skipping Security, Vibe, and Chaos agents (token savings).
-Paste this into Claude Code:
-
-"You are the Principal Software Engineer running a Tier 2 review.
-Run blueprint-aligner-mcp to verify pattern consistency:
-
-1. Call blueprint-aligner-mcp → align_diff
-   → Confirm all changes follow existing patterns in architect.md
-   → Flag any [WARN] or [FAIL] deviations
-
-2. Run unit tests: npm test (or equivalent for this project)
-
-3. Record stamp via MCP — do NOT write directly to .ai/REVIEWS.md:
-   mcp__task-synchronizer-mcp__add_stamp({
-     type: 'CRITIC_STAMP',
-     agent: 'blueprint-aligner-mcp',
-     summary: '[TIER_2] <one-line summary>'
-   })
-   This persists to state.sqlite so the stamp survives regenerateViews().
-
-Commit after stamp is written: git commit -m \"[TIER_2] <description>\""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TIER2_REVIEW
-        return
-      fi
-
-      # Tier 3 — full Triad (default for high-risk or explicit --tier 3)
-      cat <<'TIER3_REVIEW'
-
-━━ [TIER_3] REVIEW PROMPT — Claude (Full Triad) ━━━━━━━━━━━━━━━━━━━━
-TSRT: Tier 3 — High Risk. Full Triad required before commit.
-Paste this into Claude Code:
-
-"You are the Principal Software Engineer running a Tier 3 full review.
-Execute ALL of the following IN PARALLEL where possible:
-
-1. security_engineer agent
-   → Threat model the changes. Verify no credential exposure.
-   → Append [SEC_CLEARED] YYYY-MM-DD to .ai/LOG.md if clear.
-
-2. critic_arch (sub-agent)
-   → Review src/ against .ai/architect.md. Flag sovereignty violations.
-
-3. critic_security (sub-agent)
-   → OWASP Top 10, shell injection, env variable leakage, CAPABILITIES.md.
-
-4. critic_tests (sub-agent)
-   → Coverage gaps, untested edge cases, quality gate holes.
-
-5. blueprint-aligner-mcp → align_diff
-   → Verify git diff aligns with blueprint. Return [PASS/FAIL].
-
-After ALL complete:
-  → Invoke review_synthesizer agent — it reads all distributed stamps
-    and writes the final CRITIC_STAMP via MCP (persists to state.sqlite):
-    activate_agent('review_synthesizer')
-  → Do NOT write [CRITIC_STAMP] directly to .ai/REVIEWS.md — use MCP only.
-  → If all clear: append [UACS_VERIFIED] YYYY-MM-DD to .ai/LOG.md
-  → Then run: ai test --vibe (required for Tier 3 release)
-
-Do NOT commit until [UACS_VERIFIED] is in .ai/LOG.md."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TIER3_REVIEW
-      ;;
-    gemini)
-      cat <<'GEMINI_PROMPT'
-
-━━ REVIEW PROMPT — Gemini (Architectural Audit) ━━━━━━━━━━━━━━━━━━━━
-Paste this into Gemini (or gemini -p):
-
-"You are the Principal Architect performing an architectural audit.
-
-1. Read .ai/architect.md (your blueprint — the source of truth).
-2. Read .ai/DIGEST.md (current project snapshot).
-3. Read .ai/TASKS.md (open P-## and E-## tasks).
-4. Review the src/ directory structure.
-
-Evaluate:
-  - Are implemented features aligned with the blueprint?
-  - Are there any orphaned features (built but not in architect.md)?
-  - Are any blueprint sections ambiguous or missing implementation detail?
-  - What are the top 3 architectural risks?
-
-Output a structured audit to .ai/REVIEWS.md with section:
-  [ARCH_AUDIT] YYYY-MM-DD | <findings>"
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-GEMINI_PROMPT
-      ;;
-    *)
-      echo "✗ Unknown reviewer: ${who}. Use 'claude' or 'gemini'."
-      exit 1
-      ;;
-  esac
-}
-
-do_test() {
-  local VIBE=0
-  for arg in "$@"; do [[ "$arg" == "--vibe" ]] && VIBE=1; done
-
-  if [[ $VIBE -eq 1 ]]; then
-    do_vibe_test
-    return
-  fi
-
-  # Prefer local bash harness (P-15 / §22); fall back to TestSprite if absent
-  if [[ -f "tests/run.sh" ]]; then
-    bash tests/run.sh
-    return
-  fi
-
-  echo "Running automated tests via TestSprite..."
-  if ! command -v npx &>/dev/null; then
-    echo "✗ npx not found. Please install Node.js."
-    exit 1
-  fi
-  npx testsprite run
-}
-
-do_vibe_test() {
-  if [[ ! -d ".ai" ]]; then
-    echo "✗ No .ai/ directory found. Run: ai init"
-    exit 1
-  fi
-
-  echo ""
-  echo "━━ AI-OS VIBE TEST (Chaos & UX Stress) ━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-
-  # ── Phase 1: UX Review (Gemini — ux_reviewer agent) ─────────────────────
-  echo "Phase 1: Visual Audit (ux_reviewer)"
-  echo ""
-
-  # Check for Playwright
-  if command -v npx &>/dev/null && npx playwright --version &>/dev/null 2>&1; then
-    echo "  ✓ Playwright detected — running automated visual audit..."
-    echo ""
-    echo "  Paste into Gemini (ux_reviewer agent) for full Vibe Report:"
-  else
-    echo "  ✗ Playwright not installed."
-    echo "    Install: npm install -D @playwright/test && npx playwright install"
-    echo ""
-    echo "  Paste into Gemini (ux_reviewer agent) for manual Vibe Report:"
-  fi
-
-  cat <<'UX_PROMPT'
-
-━━ VIBE PROMPT — Gemini (ux_reviewer) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"You are the UX Reviewer running a Vibe Audit.
-
-1. Start the dev server (check package.json for 'dev' or 'start' script).
-2. For each primary screen/route, check:
-   - Animation smoothness (no jank, < 16ms frame budget)
-   - Cumulative Layout Shift (CLS < 0.1)
-   - Color contrast (WCAG AA: 4.5:1 for text)
-   - Touch targets (≥ 44×44px)
-   - Focus visibility (visible ring on tab)
-3. Run Lighthouse audit: Performance ≥ 80, Accessibility ≥ 90.
-4. Run Rapid-Click stress: click primary CTA 10× rapidly.
-
-Append a [VIBE_REPORT] YYYY-MM-DD | Score: X/10 to .ai/REVIEWS.md.
-Tag [VIBE_BLOCKED] if any P0 issues found."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-UX_PROMPT
-
-  # ── Phase 2: Chaos Monkey (Claude — chaos_monkey agent) ─────────────────
-  echo ""
-  echo "Phase 2: Chaos Stress Test (chaos_monkey)"
-  echo ""
-  echo "  Paste into Claude Code (chaos_monkey agent):"
-
-  cat <<'CHAOS_PROMPT'
-
-━━ CHAOS PROMPT — Claude (chaos_monkey) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"You are the Chaos Monkey running a stress gate audit.
-
-Verify [SEC_CLEARED] in .ai/LOG.md before proceeding (Tier 3 gate).
-
-Run these chaos tests against the local dev environment:
-1. Invalid input injection: empty, oversized (>10KB), special chars (XSS, SQLi, path traversal)
-2. Network latency: simulate 5s delay, connection drop, offline mode
-3. Rapid-click: 20 clicks on primary CTA in < 2s — check race conditions
-4. Concurrent sessions: 3 tabs simultaneously — check state corruption
-5. Resource exhaustion: 50MB file upload, 100 rapid API calls
-
-Append [CHAOS_REPORT] YYYY-MM-DD to .ai/REVIEWS.md.
-Tag [CHAOS_CLEARED] if no P0s found, [CHAOS_BLOCKED] if P0s exist.
-Add the result tag to .ai/LOG.md."
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CHAOS_PROMPT
-
-  echo ""
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Both reports must be in .ai/REVIEWS.md before Tier 3 release."
-  echo "Required stamps: [VIBE_REPORT] + [CHAOS_CLEARED] + [CRITIC_STAMP]"
-  echo ""
-}
 
 sync_skills_20() {
   # Copy Skills 2.0 folder-based skills (skill-name/SKILL.md structure)
@@ -2054,34 +1530,71 @@ for name, info in d.get('mcp_servers', {}).items():
   echo "  Registry: ${REGISTRY}"
 }
 
+# E-34: Remove the global AI-OS install. Project .ai/ directories are
+# untouched; only ~/.ai-os/ (the shared install root) is deleted. PATH and
+# user configs (~/.claude, ~/.gemini) are flagged for manual cleanup since
+# they may contain unrelated user data.
+do_uninstall() {
+  if [[ ! -d "$AIOS" ]]; then
+    echo "✗ ${AIOS} not found — nothing to uninstall."
+    exit 0
+  fi
+
+  cat <<WARN
+About to remove: ${AIOS}
+
+Will be deleted:
+  ${AIOS}/        (bin, mcp/, hooks/, templates/, config/, agents/, skills/)
+
+Will NOT be touched (manual cleanup):
+  ~/.claude/      (your Claude settings + agents — may contain unrelated data)
+  ~/.gemini/      (your Gemini settings + agents — may contain unrelated data)
+  ~/.config/github-copilot/
+  any project's .ai/, .mcp.json, .git/hooks/pre-commit
+  PATH entry in your shell rc (you must remove ~/.ai-os/bin manually)
+
+WARN
+  read -r -p "Type 'uninstall' to confirm: " ANSWER
+  if [[ "$ANSWER" != "uninstall" ]]; then
+    echo "Aborted."
+    exit 1
+  fi
+
+  rm -rf "$AIOS"
+  echo "✓ Removed ${AIOS}"
+  echo ""
+  echo "Manual cleanup steps:"
+  echo "  1. Edit ~/.zshrc or ~/.bashrc and remove:  export PATH=\"\$HOME/.ai-os/bin:\$PATH\""
+  echo "  2. Review ~/.claude/agents/ and ~/.gemini/agents/ for AI-OS-specific files"
+  echo "  3. In each project: \`rm .git/hooks/pre-commit\` if it sources hooks/pre-commit.sh"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 cmd="${1:-}"
 case "$cmd" in
-  install)   install_global ;;
-  init)      do_init ;;
-  onboard)   do_onboard ;;
-  update)    do_update "${@:2}" ;;
-  preflight) preflight ;;
-  digest)    do_digest ;;
-  archive)   do_archive ;;
-  review)    do_review "${@:2}" ;;
-  test)      do_test "${@:2}" ;;
+  # Bootloader / installer surface (the only working commands)
+  install)       install_global ;;
+  init)          do_init ;;
   sync)          do_sync "${@:2}" ;;
-  migrate-state) do_migrate_state "${@:2}" ;;
-  mcp-setup)     do_mcp_setup ;;
   doctor)        doctor "${@:2}" ;;
-  where)
-    echo "AI-OS:     ${AIOS}"
-    echo "bin:       ${AIOS}/bin"
-    echo "templates: ${AIOS}/templates"
-    echo "contracts: ${AIOS}/contracts"
-    echo "claude:    ${AIOS}/claude"
-    echo "gemini:    ${AIOS}/gemini"
-    echo "copilot:   ${AIOS}/copilot"
-    echo "hooks:     ${AIOS}/hooks"
-    ;;
+  uninstall)     do_uninstall ;;
   version|-v|--version) echo "ai-os ${VERSION}" ;;
   ""|help|-h|--help) usage ;;
+
+  # Deprecated user surface — removed, see .ai/blueprints/cli-collapse.md
+  update|onboard) _show_deprecated "$cmd" "Open Gemini CLI and type the planning request as a prompt." ;;
+  preflight)     _show_deprecated "preflight" "skill: ai-preflight  (auto-runs at every session start)" ;;
+  digest)        _show_deprecated "digest" "skill: ai-digest" ;;
+  archive)       _show_deprecated "archive" "skill: ai-archive" ;;
+  review)        _show_deprecated "review" "skill: ai-review" ;;
+  test)          _show_deprecated "test" "skill: ai-test  (use --vibe arg inside the skill for chaos audit)" ;;
+  where)         _show_deprecated "where" "echo \"\$HOME/.ai-os\"  (install root is fixed)" ;;
+
+  # Internal helpers — not in usage(), not user-facing, but reachable for the
+  # init/install paths that call them and for the test suites that exercise them.
+  migrate-state) do_migrate_state "${@:2}" ;;
+  mcp-setup)     do_mcp_setup ;;
+
   *) echo "Unknown command: $cmd"; usage; exit 1 ;;
 esac
