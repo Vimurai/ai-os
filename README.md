@@ -49,6 +49,85 @@ State lives in `.ai/state.sqlite` (WAL mode), so two agents in two terminals nev
 
 Optional: `gh` for GitHub issue ingestion, `xdotool` + `Xvfb` on Linux for `computer-use-mcp`.
 
+**Strongly recommended: `tmux`** — see [Recommended Workflow](#recommended-workflow--tmux-split-panes) below. The Triad is designed to run with Gemini CLI and Claude Code side-by-side; tmux makes that ergonomic without juggling terminal tabs.
+
+---
+
+## Recommended Workflow — tmux Split Panes
+
+The `ai` shell CLI is a thin bootloader (install / init / sync / doctor / uninstall). Everything else — planning, review, testing, archive, digest — runs as a prompt or skill *inside* Claude Code or Gemini CLI. The intended UX is to keep both agents open in adjacent panes so you can hand work back and forth without context-switching tabs.
+
+### Prerequisite
+
+```bash
+# macOS
+brew install tmux
+
+# Debian/Ubuntu
+sudo apt install tmux
+```
+
+A subscription / install for **Claude Code** and/or **Gemini CLI** is also required — at least one of them is what drives the Triad.
+
+### Layout
+
+```
+┌─────────────────────────┬─────────────────────────┐
+│  Architect (Gemini CLI) │  Engineer (Claude Code) │
+│                         │                         │
+│  - blueprints           │  - implements E-## tasks│
+│  - P-## tasks           │  - runs skills          │
+│  - DIGEST refresh       │  - tests / commits      │
+├─────────────────────────┴─────────────────────────┤
+│  Bash terminal — `ai sync`, `ai doctor`, git ops  │
+└───────────────────────────────────────────────────┘
+```
+
+### `~/.tmux.conf` snippet
+
+Drop this into `~/.tmux.conf` (or merge with your existing config) to get a one-command Triad layout:
+
+```tmux
+# AI-OS Triad layout — bound to prefix + T
+bind-key T split-window -h \; \
+           split-window -v \; \
+           select-pane -t 0 \; \
+           send-keys 'gemini' C-m \; \
+           select-pane -t 1 \; \
+           send-keys 'claude' C-m \; \
+           select-pane -t 2
+
+# Sane defaults for split panes
+set -g mouse on
+set -g pane-border-status top
+set -g pane-border-format ' #{pane_index}: #{pane_current_command} '
+```
+
+### Starting a session
+
+```bash
+cd /path/to/your-project
+tmux new-session -s ai-os
+# Inside tmux: press your prefix (default Ctrl-b) then T
+# Pane 0 (top-left)  → Gemini CLI  (Architect)
+# Pane 1 (top-right) → Claude Code (Engineer)
+# Pane 2 (bottom)    → bash for `ai *` and git
+```
+
+If you don't use the keybinding, you can also start the layout manually:
+
+```bash
+tmux new-session -s ai-os -n triad \; \
+  send-keys 'gemini' C-m \; \
+  split-window -h \; send-keys 'claude' C-m \; \
+  split-window -v -t 0 \; \
+  select-pane -t 2
+```
+
+The bottom pane is plain bash — that's where you run `ai sync` after pulling, `ai doctor` when something feels off, and git commands. The two agent panes are where the actual engineering happens via prompts and skills.
+
+> Non-tmux users: the workflow still works. Just open three terminals — one for each role — and switch between them however your terminal handles it. tmux is recommended, not required.
+
 ---
 
 ## Onboarding — First Time Install
@@ -74,32 +153,32 @@ ai init                       # scaffolds .ai/, .claude/, .gemini/, .mcp.json
 #   .ai/BRIEF.md       — product goals & non-goals
 #   .ai/DIGEST.md      — one-paragraph snapshot
 #   .ai/architect.md   — system vision (the Architect will expand this)
-ai update "describe the first feature you want"
 ```
+Open Gemini CLI in the repo and prompt it directly: *"Plan the first feature: <intent>"*. The Architect writes blueprints + P-## tasks.
 
 **B. Existing codebase**
 ```bash
 cd my-existing-repo
 ai init                       # safe — only writes files that don't exist
-ai onboard                    # prints the reverse-engineering prompt
-# Paste that prompt into Gemini CLI; it will populate .ai/DIGEST.md,
-# .ai/BRIEF.md, and seed architect.md from your real code.
 ```
+Open Gemini CLI and prompt: *"Reverse-engineer this repository — populate `.ai/DIGEST.md`, `.ai/BRIEF.md`, and seed `.ai/architect.md` from the real code. Read at most 6 files."*
 
 ### 3. First development loop
 ```bash
-# Architect (Gemini CLI):
-ai update "Plan a /metrics endpoint with auth and rate-limiting"
-# → Gemini writes .ai/blueprints/, adds P-## tasks to .ai/TASKS.md
+# Bottom pane — confirm setup:
+ai doctor
 
-# Engineer (Claude Code):
-# Just open Claude in the repo. The CLAUDE.md bootloader auto-runs ai-preflight.
-# Then ask:
-"Implement the open E-## tasks."
+# Top-left pane (Gemini CLI / Architect):
+#   Prompt: "Plan a /metrics endpoint with auth and rate-limiting."
+#   → Gemini writes .ai/blueprints/, adds P-## tasks to .ai/TASKS.md
 
-# Validation, before commit:
-ai test                       # TestSprite E2E
-ai review claude              # tier-aware critic dispatch
+# Top-right pane (Claude Code / Engineer):
+#   The CLAUDE.md bootloader auto-runs the ai-preflight skill.
+#   Prompt: "Implement the open E-## tasks."
+#   When done, run: skill: ai-review  → tier-aware critic dispatch
+#                   skill: ai-test     → TestSprite E2E (use --vibe for chaos)
+
+# Bottom pane — commit:
 git commit                    # pre-commit hook enforces Gate 2
 ```
 
@@ -139,29 +218,29 @@ If `ai sync` reports schema migrations or new mandatory fields, run `ai migrate-
 ## Daily Workflow — Professional Project Development
 
 ```
-  Architect (Gemini)        Engineer (Claude)        Tester (TestSprite/Critics)
+  Architect (Gemini CLI)    Engineer (Claude Code)    Tester (TestSprite/Critics)
         │                         │                          │
-   ai update                 ai-preflight (auto)        ai test
-   blueprints,               read DIGEST + TASKS        ai test --vibe
-   P-## tasks                                           ai review claude --tier N
+   prompt: plan X            ai-preflight (auto)        skill: ai-test
+   skill: blueprint-writer   read DIGEST + TASKS        skill: ai-test --vibe
+   → P-## tasks              skill: ai-review --tier N
         │                         │                          │
         └────────► .ai/state.sqlite (single source of truth) ◄────────┘
                               │
                        git commit (Gate 2)
                               │
-                         ai archive   (weekly hygiene)
-                         ai digest    (when stale)
+                         skill: ai-archive   (weekly hygiene)
+                         skill: ai-digest    (when stale)
 ```
 
 ### The five phases
 
-| Phase | Owner | Command(s) | What happens |
+| Phase | Owner | How | What happens |
 | :--- | :--- | :--- | :--- |
-| **1. Plan** | Architect (Gemini) | `ai update "<intent>"` | Refreshes DIGEST, reads TASKS, writes blueprint + `P-##` tasks. |
-| **2. Implement** | Engineer (Claude) | open Claude Code; bootloader runs `skill: ai-preflight` | Engineer reads `E-##` tasks, edits code under `src/` and `tests/`. |
-| **3. Validate** | Tester | `ai test` (E2E) and/or `ai test --vibe` (UX + chaos) | TestSprite runs E2E; vibe/chaos critics audit UI; results stamp `REVIEWS.md`. |
-| **4. Review** | Engineer | `ai review claude` (auto-detects tier) | Dispatches `critic_arch`, `critic_security`, `critic_tests` in parallel for Tier 3. |
-| **5. Commit** | Engineer | `git commit` (pre-commit hook enforces Gate 2) | Hook checks Ghost Tools, frontmatter, `[SEC_CLEARED]` for Tier 3. |
+| **1. Plan** | Architect (Gemini) | Prompt the Architect with the intent, e.g. *"Plan a /metrics endpoint with auth"*. Architect uses `blueprint-writer` + `task-planner` skills. | Refreshes DIGEST, reads TASKS, writes blueprint + `P-##` tasks. |
+| **2. Implement** | Engineer (Claude) | Open Claude Code; bootloader auto-runs `skill: ai-preflight`. | Engineer reads `E-##` tasks, edits code under `src/` and `tests/`. |
+| **3. Validate** | Tester | Inside Claude Code: `skill: ai-test` (or with --vibe for UX + chaos). | TestSprite runs E2E; vibe/chaos critics audit UI; results stamp `REVIEWS.md`. |
+| **4. Review** | Engineer | Inside Claude Code: `skill: ai-review` (auto-detects tier). | Dispatches `critic_arch`, `critic_security`, `critic_tests` in parallel for Tier 3. |
+| **5. Commit** | Engineer | `git commit` from the bottom tmux pane (pre-commit hook enforces Gate 2). | Hook checks Ghost Tools, frontmatter, `[SEC_CLEARED]` for Tier 3. |
 
 ### Mid-task triggers (Claude side)
 The bootloader fires these automatically when it detects matching diffs:
@@ -175,57 +254,62 @@ The bootloader fires these automatically when it detects matching diffs:
 | existing code | `repo-oracle` | Surfaces history before edits |
 
 ### Hand-off between agents
-```bash
+```text
 # Engineer → Architect (escalate a design question):
-skill: "ai-handoff"           # produces .ai/COMM.md packet
+skill: ai-handoff             # produces .ai/COMM.md packet, then switch tmux pane
 
 # Architect → Engineer:
-ai update "approve P-43 and add E-## breakdown"
-# Engineer's next preflight will surface the unread delta automatically
+# In the Gemini pane, prompt: "Approve P-43 and add E-## breakdown."
+# Engineer's next preflight in the Claude pane will surface the unread delta automatically.
 ```
 
 ---
 
 ## Command Reference
 
+The shell `ai` CLI is now a thin bootloader. Operational commands run as prompts and skills inside the agent CLIs (see the migration map under `ai` for what moved where).
+
 ```text
-ai install            Install configs to ~/.gemini, ~/.claude, ~/.config/github-copilot;
-                      enable agent teams; install hooks. Run after install-ai-os.sh.
-ai init               Create or upgrade .ai/ in current repo (idempotent — never overwrites).
-ai onboard            Print the reverse-engineering prompt for existing repos.
-ai update [intent]    Print the planning-session prompt (Gate 1: Intent Gate).
-ai preflight          Print the DIGEST-first read order + SESSION stamp template.
-ai review <who> [--tier N]
-                      Tier-aware critic dispatch. Auto-detects tier from staged diff.
-ai test [--vibe]      Run TestSprite E2E (default) or the Vibe/Chaos audit (--vibe).
-ai mcp-setup          npm install for all MCP servers under ~/.ai-os/mcp/.
-ai archive            Move old LOG/COMM/REVIEWS entries to .ai/archive/YYYY-MM/.
-ai digest             Print the prompt to regenerate .ai/DIGEST.md.
-ai sync               Re-sync agents, skills, bootloaders, .mcp.json, and hooks
-                      from ~/.ai-os into the current project.
-ai sync --github      Fetch assigned GitHub issues for the Architect cycle (§28).
-ai migrate-state [--force]
-                      Seed state.json from TASKS.md; SQLite imports on first MCP run.
+ai install     Install configs to ~/.gemini, ~/.claude, ~/.config/github-copilot;
+               enable agent teams; install hooks. Run after install-ai-os.sh.
+ai init        Create or upgrade .ai/ in current repo (idempotent — never overwrites).
+ai sync        Re-sync agents, skills, bootloaders, .mcp.json, and hooks
+               from ~/.ai-os into the current project.
+ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28).
 ai doctor [--repair] [--compliance]
-                      Diagnose PATH, configs, hooks, MCP. --compliance runs the
-                      §32 frontmatter audit (Ghost Tool detection).
-ai where              Print install paths.
-ai version            Print version.
+               Diagnose PATH, configs, hooks, MCP. --compliance runs the
+               §32 frontmatter audit (Ghost Tool detection).
+ai uninstall   Remove the global ~/.ai-os install (project .ai/ stays).
+ai version     Print version.
 ```
 
-### Picking the right command
+Removed in the v3.x cli-collapse — use the agent skill instead:
 
-| Situation | Run |
+| Removed shell command | Replacement |
+| :--- | :--- |
+| `ai update`, `ai onboard` | Open Gemini CLI and prompt the Architect directly |
+| `ai preflight` | `skill: ai-preflight` (auto-runs at every Claude session start) |
+| `ai digest` | `skill: ai-digest` |
+| `ai archive` | `skill: ai-archive` |
+| `ai review` | `skill: ai-review` |
+| `ai test` / `ai test --vibe` | `skill: ai-test` (use `--vibe` arg for chaos audit) |
+| `ai migrate-state` | `mcp__task-synchronizer-mcp__verify_markdown_sync` |
+| `ai mcp-setup` | `cd ~/.ai-os && bash install-ai-os.sh` |
+| `ai where` | `echo $HOME/.ai-os` |
+
+### Picking the right path
+
+| Situation | What to do |
 | :--- | :--- |
 | First time on this machine | `bash install-ai-os.sh` then `ai install` |
-| New repo, want the Triad | `ai init` |
-| Existing repo, want the Triad | `ai init` then `ai onboard` |
+| New repo, want the Triad | `ai init`, then prompt Gemini to plan the first feature |
+| Existing repo, want the Triad | `ai init`, then prompt Gemini to reverse-engineer the codebase |
 | Pulled a newer AI-OS version | `bash install-ai-os.sh && ai sync` (in each project) |
-| Starting a feature | `ai update "<intent>"` (Architect) |
-| Need to know what to work on | `ai preflight` or `skill: ai-preflight` |
-| About to commit | `ai test && ai review claude` |
-| Context feels heavy / DIGEST stale | `ai digest` |
-| `LOG.md` over 200 lines | `ai archive` |
+| Starting a feature | Prompt Gemini in the Architect pane |
+| Need to know what to work on | `skill: ai-preflight` (auto-fires on session start) |
+| About to commit | `skill: ai-test` then `skill: ai-review` in Claude |
+| Context feels heavy / DIGEST stale | `skill: ai-digest` |
+| `LOG.md` over 200 lines | `skill: ai-archive` |
 | Something broke | `ai doctor --repair` |
 | Auditing skill/agent frontmatter | `ai doctor --compliance` |
 
@@ -309,7 +393,7 @@ ai version            Print version.
 | Pre-commit hook missing | `.git/hooks/pre-commit` exists? | `ai init` re-installs it. |
 | State drift across machines | Did you run `ai sync` after `install-ai-os.sh`? | `ai migrate-state --force` re-seeds. |
 | Ghost Tool errors at commit | `ai doctor --compliance` | Fix `allowed-tools` in the offending skill/agent frontmatter. |
-| DIGEST feels stale | `ai digest` and follow the prompt | Or run `skill: ai-digest` inside Claude. |
+| DIGEST feels stale | Run `skill: ai-digest` inside Claude or Gemini | Regenerates `.ai/DIGEST.md` from current state. |
 
 ---
 

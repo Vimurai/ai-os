@@ -509,12 +509,12 @@
     {
       "id": "E-36",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Update `README.md`, `CONTRIBUTING.md`, and docs to strongly recommend the tmux split-pane workflow (Gemini/Claude/Bash) including a `~/.tmux.conf` snippet, per `.ai/blueprints/cli-collapse.md`.",
       "created_at": "2026-04-28T13:18:44.072Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-05-05T11:47:53.974Z",
+      "summary": "Added Recommended Workflow — tmux Split Panes section to README (with three-pane diagram, ~/.tmux.conf snippet binding prefix+T to spawn Gemini/Claude/bash layout, and a manual `tmux new-session` invocation). Updated Onboarding, Daily Workflow diagram, Five Phases table, Command Reference (now lists only install/init/sync/doctor/uninstall/version + a removed-commands migration map), Picking-the-right-path table, and Troubleshooting to use skill: ai-* invocation everywhere. CONTRIBUTING.md gained a tmux pointer in dev setup and replaced the `ai mcp-setup` instruction with `bash install-ai-os.sh + ai sync`. Tests: 689/689 PASS."
     },
     {
       "id": "P-16",
@@ -715,6 +715,13 @@
       "task_id": null,
       "timestamp": "2026-05-05T11:38:11.133Z",
       "summary": "[TIER_1] E-35 — Removed broken `ai *` references across 6 templates, 6 toml command descriptions, 3 agents, 6 SKILL.md files, both global bootloaders. CAPABILITIES.md no longer permits `ai test` shell.exec. 689/689 tests PASS. No code changes."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "orchestrator-mcp",
+      "task_id": null,
+      "timestamp": "2026-05-05T11:48:00.993Z",
+      "summary": "[TIER_1] E-36 — README + CONTRIBUTING updated for tmux workflow + post-CLI-collapse skill flow. Docs only. 689/689 tests PASS."
     }
   ],
   "deltas": [],

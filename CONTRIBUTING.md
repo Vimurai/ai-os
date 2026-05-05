@@ -17,6 +17,9 @@ source ~/.zshrc
 ai doctor   # verify all MCP servers are healthy
 ```
 
+### Recommended dev environment — tmux
+Contributors are strongly encouraged to develop with `brew install tmux` (or apt) and the three-pane layout described in the [README](README.md#recommended-workflow--tmux-split-panes): Architect (Gemini CLI) ⬌ Engineer (Claude Code) ⬌ Bash. The Triad is designed for concurrent agent work — tmux keeps the Architect's blueprint pane visible while the Engineer is implementing in the next pane, which makes hand-offs cheap and reduces stale-context bugs.
+
 ### Run the test suite
 ```bash
 bash tests/run.sh         # full suite (should be 100% green)
@@ -132,7 +135,11 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 ```
 
-After adding a server, run `ai mcp-setup` to register it in `.mcp.json`.
+After adding a server, re-run the global installer to refresh the registry:
+```bash
+cd ~/.ai-os && bash install-ai-os.sh
+```
+Then run `ai sync` in any project to regenerate `.mcp.json`. (The previous `ai mcp-setup` shell command was removed in E-34; the install script does the same npm setup plus refreshes the global registry.)
 
 ---
 
