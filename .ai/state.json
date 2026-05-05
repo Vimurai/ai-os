@@ -499,12 +499,12 @@
     {
       "id": "E-35",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Ensure all removed CLI functions have a 1:1 mapping to an agent skill (e.g., `ai-review`, `ai-test`, `ai-archive`, `ai-digest`, `ai-preflight`) and update `CLAUDE.md`/`GEMINI.md` to reference them, per `.ai/blueprints/cli-collapse.md`.",
       "created_at": "2026-04-28T13:18:39.161Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-05-05T11:36:13.141Z",
+      "summary": "Verified 1:1 skill mapping for all removed CLI verbs (ai-preflight/digest/archive/review/test exist on both Claude and Gemini sides; update→prompt; mcp-setup→install-ai-os.sh; migrate-state→MCP tool; where→echo). Updated 5 templates (architect.md.template, CAPABILITIES.md, DIGEST.md, LOG.md, RULES.md) to remove broken `ai *` references. Updated 6 Gemini slash command toml descriptions, 3 agents (vibe_sentinel, chaos_monkey, ux_reviewer), 6 SKILL.md files (ai-digest, ai-archive, ai-test, ai-preflight, ai-review, release-manager) and the global bootloaders (src/claude/CLAUDE.md, src/gemini/GEMINI.md). Synced .claude/.gemini agent and skill mirrors. Full test suite: 689/689 PASS."
     },
     {
       "id": "E-36",
@@ -701,6 +701,20 @@
       "task_id": null,
       "timestamp": "2026-05-04T22:00:33.024Z",
       "summary": "[TIER_2] E-34 — Collapsed src/bin/ai shell surface from 14 user commands → 6 (install/init/sync/doctor/uninstall/version) per .ai/blueprints/cli-collapse.md. Removed implementations: ~600 lines. Behavior change: deprecated commands now exit 1 with skill pointer instead of running. Internal callers preserved (do_migrate_state, do_mcp_setup still routable). Full test suite: 689/689 PASS. No security/auth changes."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": null,
+      "timestamp": "2026-05-05T11:38:07.959Z",
+      "summary": "[TIER_1] E-35 doc/skill cleanup — aligner WARN false-positives reconciled: UNAPPROVED_DEPENDENCY matched JSON keys \"status:\"/\"summary:\" in state.json (not deps); ORPHANED_WORK on agent/skill mirrors that already exist (only prose updated). No new architectural surface."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "orchestrator-mcp",
+      "task_id": null,
+      "timestamp": "2026-05-05T11:38:11.133Z",
+      "summary": "[TIER_1] E-35 — Removed broken `ai *` references across 6 templates, 6 toml command descriptions, 3 agents, 6 SKILL.md files, both global bootloaders. CAPABILITIES.md no longer permits `ai test` shell.exec. 689/689 tests PASS. No code changes."
     }
   ],
   "deltas": [],

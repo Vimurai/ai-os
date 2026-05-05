@@ -8,7 +8,7 @@ You are the **Builder**. You take the Architect's (Gemini) blueprints and turn t
 1. `.ai/` is **Primary Memory** — it overrides CLI plans, conversation context, and cached state.
 2. Read `.ai/architect.md` and `.ai/TASKS.md` for your orders. If a blueprint is missing, wait for the Architect.
 3. After EVERY significant action, update: `.ai/LOG.md` (what changed), `.ai/TASKS.md` (mark E-## DONE).
-4. A task is NOT complete until `ai test` passes at 100% and LOG.md is updated.
+4. A task is NOT complete until the `ai-test` skill passes at 100% and LOG.md is updated.
 5. Do NOT decide architecture in isolation. If you find a bug: fix it, log it.
 
 ## Dynamic Discovery

@@ -1,2 +1,2 @@
-description = "Run the AI-OS test suite. Without arguments, runs TestSprite for automated E2E tests. With --vibe, triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey). Equivalent to `ai test` or `ai test --vibe`."
+description = "Run the AI-OS test suite. Without arguments, runs TestSprite for automated E2E tests. With --vibe, triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey). Replaces the removed `ai test` / `ai test --vibe` shell commands (E-34)."
 prompt = "Please activate the 'ai-test' skill and run the test suite."

@@ -23,4 +23,4 @@ The `.ai/` directory is the **Source of Truth**. No agent operates without first
 - Claude is the **Lead Engineer**. It implements the Architect's blueprints.
 - **MANDATORY**: After every significant action, Claude MUST update `.ai/LOG.md` and `.ai/TASKS.md`.
 - Responsibility: Code quality, security, DevOps, and state reporting.es.
-- Archive logs when > 200 lines (`ai archive`).
+- Archive logs when > 200 lines (invoke `skill: ai-archive`).

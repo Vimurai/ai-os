@@ -53,7 +53,7 @@ Generated: YYYY-MM-DD | Projects indexed: N
 ```
 
 ## Memory Palace Maintenance
-After each project reaches a stable state (`ai archive` run), index it:
+After each project reaches a stable state (`skill: ai-archive` run), index it:
 - Extract successful patterns into a local `~/.ai-os/memory-palace.md` cache.
 - Prune entries older than 12 months with no reuse.
 

@@ -103,7 +103,7 @@ Do NOT respond manually when a skill/agent exists for the task.
 
 | Condition detected                                                          | Auto-invoke agent         |
 | :-------------------------------------------------------------------------- | :------------------------ |
-| UI/UX changes need validation, or `ai test --vibe` requested               | `ux_reviewer`             |
+| UI/UX changes need validation, or `skill: ai-test --vibe` requested        | `ux_reviewer`             |
 | New project initialized (`ai init`), or Memory Palace is stale             | `memory_curator`          |
 | Follow-up Gemini-domain tasks needed after planning session                | `gemini_tasks`            |
 | DIGEST.md is stale after major design changes                              | `digest_updater`          |

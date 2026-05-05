@@ -1,2 +1,2 @@
-description = "Execute the standard AI-OS preflight sequence at the start of any session. Reads the DIGEST-first file order and stamps SESSION.md. Use at the beginning of every Gemini session in an AI-OS project. Equivalent to `ai preflight`."
+description = "Execute the standard AI-OS preflight sequence at the start of any session. Reads the DIGEST-first file order and stamps SESSION.md. Use at the beginning of every Gemini session in an AI-OS project. Replaces the removed `ai preflight` shell command (E-34)."
 prompt = "Please activate the 'ai-preflight' skill and run the session bootstrap sequence."

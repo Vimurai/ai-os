@@ -1,6 +1,6 @@
 ---
 name: ai-review
-description: Run a tier-aware critic review before committing. Tier 1 skips review. Tier 2 runs blueprint-aligner only. Tier 3 runs full parallel critics (arch + security + tests) plus security_engineer and UACS verification. Equivalent to `ai review claude [--tier N]`.
+description: Run a tier-aware critic review before committing. Tier 1 skips review. Tier 2 runs blueprint-aligner only. Tier 3 runs full parallel critics (arch + security + tests) plus security_engineer and UACS verification. Replaces the removed `ai review claude` shell command (E-34).
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash
@@ -112,6 +112,6 @@ If all gates clear, `review_synthesizer` also appends to `.ai/LOG.md`:
 [UACS_VERIFIED] YYYY-MM-DD | Tier 3 review complete — all gates passed
 ```
 
-Then run: `ai test --vibe` (mandatory for Tier 3 before commit).
+Then run: `skill: ai-test` with --vibe (mandatory for Tier 3 before commit).
 
 Commit: `git commit -m "[TIER_3] <description>"`

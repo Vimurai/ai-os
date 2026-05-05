@@ -32,18 +32,16 @@ If workspace is DIRTY: resolve all open tasks first. Do NOT archive.
 
 ## Archive Steps
 
-```bash
-ai archive
-```
+This skill performs the archive operation directly (the previous `ai archive`
+shell command was removed in E-34). Steps:
 
-This command:
-1. Scans `.ai/` for non-empty content files: `LOG.md`, `COMM.md`, `REVIEWS.md`, `SESSION.md`
-2. Moves each to `.ai/archive/YYYY-MM/<name>.YYYYMMDD_HHMM.md`
-3. Re-creates files from `~/.ai-os/templates/` (or with a header if no template exists)
+1. Scan `.ai/` for non-empty content files: `LOG.md`, `COMM.md`, `REVIEWS.md`, `SESSION.md`
+2. Move each to `.ai/archive/YYYY-MM/<name>.YYYYMMDD_HHMM.md`
+3. Re-create files from `~/.ai-os/templates/` (or with a header if no template exists)
 
 ## After Archiving
 
-1. Run `ai digest` to regenerate `DIGEST.md` from the clean state.
+1. Run `skill: ai-digest` to regenerate `DIGEST.md` from the clean state.
 2. Verify `.ai/LOG.md` now contains only the new header.
 3. Note the archive in the new `LOG.md`:
    ```

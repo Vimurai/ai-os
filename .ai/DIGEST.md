@@ -54,3 +54,4 @@
 
 ---
 DIGEST must be accurate or flagged as stale. If stale, run: ai digest
+- 2026-05-05: auto-stamped by Stop hook

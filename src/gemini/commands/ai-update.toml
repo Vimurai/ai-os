@@ -1,2 +1,2 @@
-description = "Start a new Gemini Architect session. Reads DIGEST.md and TASKS.md, classifies intent as Tier1/2/3, and generates P-## task entries or architectural blueprints via add_task MCP. Equivalent to `ai update`."
+description = "Start a new Gemini Architect session. Reads DIGEST.md and TASKS.md, classifies intent as Tier1/2/3, and generates P-## task entries or architectural blueprints via add_task MCP. Replaces the removed `ai update` shell command (E-34)."
 prompt = "Run preflight first (skill: ai-preflight), then proceed with the Architect update session: read DIGEST.md, check open P-## tasks, and use add_task to create any new blueprint tasks needed."
