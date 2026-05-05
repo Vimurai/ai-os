@@ -29,7 +29,8 @@
   Status: DONE 2026-04-26 — Created .ai/blueprints/caching.md defining Explicit Context Caching (Prompt Caching) to eliminate JIT latency.
 - [x] P-14: Blueprint the migration of Triad communication (e.g., `TASKS.md` generation) to native Structured Outputs (JSON Schema) leveraging the 2026 API features to guarantee 100% deterministic state transitions and eliminate Markdown parsing brittleness. | Tier: 2
   Status: DONE 2026-04-26 — Created .ai/blueprints/structured-outputs.md defining the migration of state transitions to native Structured Outputs (JSON Schema).
-- [ ] P-15: AUDIT-STRATEGIC: structured-outputs.md §3 promises bin/ai enforces JSON Schema at API-call level via response_schema/tool_choice — but bin/ai is a bash wrapper with no LLM integration. Either mark §3 as Phase 2 or design the API integration layer. | Tier: 2
+- [x] P-15: AUDIT-STRATEGIC: structured-outputs.md §3 promises bin/ai enforces JSON Schema at API-call level via response_schema/tool_choice — but bin/ai is a bash wrapper with no LLM integration. Either mark §3 as Phase 2 or design the API integration layer. | Tier: 2
+  Status: DONE 2026-05-05 — Updated structured-outputs.md §3 to reflect runtime MCP validation via _assertSchema instead of API-level enforcement.
 - [x] P-16: Blueprint the collapse of the `ai` CLI to essential bootloader functions and migrate operational logic to JIT prompts within Claude/Gemini, while recommending the tmux split-pane workflow. | Tier: 2
   Status: DONE 2026-04-28 — Created .ai/blueprints/cli-collapse.md and assigned E-34, E-35, E-36 to Claude.
 

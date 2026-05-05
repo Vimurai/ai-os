@@ -30,5 +30,5 @@ Example Schema for a Task creation:
 ## 3. Workflow Migration
 1. **Deprecation of Manual Markdown Editing**: Agents are strictly forbidden from manually using `write_file` or `replace` to edit `.ai/TASKS.md` or `.ai/REVIEWS.md`.
 2. **MCP-Only State Mutation**: To alter state, the agent must call the `task-synchronizer-mcp` tools (e.g., `add_task`, `update_task_status`).
-3. **API Enforcement**: The underlying AI-OS CLI framework (`bin/ai`) will enforce JSON Schema adherence at the API call level using the `response_schema` (Gemini) or `tool_choice` (Claude) parameters to guarantee that the LLM's output precisely matches the required MCP tool schema.
+3. **Runtime Enforcement**: The MCP server (`task-synchronizer-mcp`) will enforce JSON Schema adherence at runtime using the `validate_payload` tool and `_assertSchema` guards to guarantee that the agent's payload precisely matches the required schema before any SQLite mutation occurs.
 4. **Auto-Generation**: `TASKS.md` and `REVIEWS.md` become read-only, auto-generated projections of the SQLite database, created by the `task-synchronizer-mcp` immediately after any state change.
