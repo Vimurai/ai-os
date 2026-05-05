@@ -89,13 +89,15 @@ Drop this into `~/.tmux.conf` (or merge with your existing config) to get a one-
 
 ```tmux
 # AI-OS Triad layout — bound to prefix + T
-bind-key T split-window -h \; \
-           split-window -v \; \
+# Produces:  pane 0 top-left (Gemini), pane 2 top-right (Claude), pane 1 bottom (bash)
+bind-key T split-window -v -p 30 \; \
+           select-pane -t 0 \; \
+           split-window -h \; \
            select-pane -t 0 \; \
            send-keys 'gemini' C-m \; \
-           select-pane -t 1 \; \
+           select-pane -t 2 \; \
            send-keys 'claude' C-m \; \
-           select-pane -t 2
+           select-pane -t 1
 
 # Sane defaults for split panes
 set -g mouse on
@@ -110,18 +112,23 @@ cd /path/to/your-project
 tmux new-session -s ai-os
 # Inside tmux: press your prefix (default Ctrl-b) then T
 # Pane 0 (top-left)  → Gemini CLI  (Architect)
-# Pane 1 (top-right) → Claude Code (Engineer)
-# Pane 2 (bottom)    → bash for `ai *` and git
+# Pane 2 (top-right) → Claude Code (Engineer)
+# Pane 1 (bottom)    → bash for `ai *` and git
 ```
 
 If you don't use the keybinding, you can also start the layout manually:
 
 ```bash
 tmux new-session -s ai-os -n triad \; \
+  split-window -v -p 30 \; \
+  select-pane -t 0 \; \
+  split-window -h \; \
+  select-pane -t 0 \; \
   send-keys 'gemini' C-m \; \
-  split-window -h \; send-keys 'claude' C-m \; \
-  split-window -v -t 0 \; \
-  select-pane -t 2
+  select-pane -t 2 \; \
+  send-keys 'claude' C-m \; \
+  select-pane -t 1
+# Pane 0 (top-left) → Gemini  | Pane 2 (top-right) → Claude  | Pane 1 (bottom) → bash
 ```
 
 The bottom pane is plain bash — that's where you run `ai sync` after pulling, `ai doctor` when something feels off, and git commands. The two agent panes are where the actual engineering happens via prompts and skills.

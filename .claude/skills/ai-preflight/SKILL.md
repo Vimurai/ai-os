@@ -13,7 +13,7 @@ agent: default
 ## Dynamic Context Injection
 Project root: !pwd
 AI-OS project: !test -d .ai && echo "YES — .ai/ found" || echo "NO — run: ai init"
-DIGEST freshness: !head -2 .ai/DIGEST.md 2>/dev/null || echo "(DIGEST.md missing — run skill: ai-digest)"
+DIGEST freshness: !head -2 .ai/DIGEST.md 2>/dev/null || echo "(DIGEST.md missing — run: ai digest)"
 Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | head -5 || echo "(none)"
 
 ## Preflight Read Order (DIGEST-First)

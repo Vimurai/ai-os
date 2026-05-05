@@ -1,6 +1,6 @@
 ---
 name: release-manager
-description: Handles the sprint release lifecycle — bumps package.json version, aggregates DONE tasks into CHANGELOG.md, creates a signed git tag, and optionally triggers skill: ai-archive.
+description: Handles the sprint release lifecycle — bumps package.json version, aggregates DONE tasks into CHANGELOG.md, creates a signed git tag, and optionally triggers ai archive.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Edit, Bash, Glob, Grep
@@ -106,11 +106,15 @@ Confirm the tag: `git tag --list "v<version>"`
 
 ## Step 7 — Optional Archive
 
-If `.ai/` logs are bloated (LOG.md > 200 lines), invoke the archive skill:
+If `.ai/` logs are bloated (LOG.md > 200 lines):
+```bash
+ai archive
 ```
-skill: "ai-archive"
+
+Or invoke the archive skill:
 ```
-(The previous `ai archive` shell command was removed in E-34.)
+activate_skill({ skill_name: "ai-archive" })
+```
 
 ## Step 8 — Report
 
