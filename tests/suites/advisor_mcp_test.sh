@@ -19,25 +19,21 @@ echo "  [T-A2A-01] File structure"
 assert_status 0 "index.js exists" test -f "$SERVER"
 assert_status 0 "package.json exists" test -f "${REPO_ROOT}/src/mcp/advisor-mcp/package.json"
 
-# ── T-A2A-02: Single tool declared ──────────────────────────────────────────
+# ── T-A2A-02: Single tool declared (E-37: behavioral roundtrip) ─────────────
 echo ""
 echo "  [T-A2A-02] Tool declaration"
 
-assert_status 0 "ask_architect tool declared" \
-  grep -q '"ask_architect"' "$SERVER"
+# Source the behavioral helper alongside the source-level assertions.
+source "${SCRIPT_DIR}/../lib/mcp-client.sh"
 
-assert_status 0 "query parameter required" \
-  grep -q '"query"' "$SERVER"
+assert_status 0 "ask_architect advertised in tools/list" \
+  mcp_assert_tool_listed "$SERVER" "ask_architect"
 
-assert_status 0 "blueprint parameter optional" \
-  node -e "
-import { readFileSync } from 'fs';
-const src = readFileSync('$SERVER', 'utf8');
-// blueprint should NOT be in required array
-const reqMatch = src.match(/required.*\[([^\]]+)\]/);
-if (!reqMatch) process.exit(1);
-if (reqMatch[0].includes('blueprint')) process.exit(1);
-"
+assert_status 0 "query parameter required (inputSchema.required)" \
+  mcp_assert_tool_param_required "$SERVER" "ask_architect" "query"
+
+assert_status 1 "blueprint parameter optional (NOT in inputSchema.required)" \
+  mcp_assert_tool_param_required "$SERVER" "ask_architect" "blueprint"
 
 # ── T-A2A-03: Read-only constraint — no write flags in Gemini invocation ─────
 echo ""

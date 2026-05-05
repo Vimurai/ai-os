@@ -19,27 +19,20 @@ echo "  [T-HITL-S01] File structure"
 assert_status 0 "index.js exists" test -f "$SERVER"
 assert_status 0 "package.json exists" test -f "${REPO_ROOT}/src/mcp/approval-mcp/package.json"
 
-# ── T-HITL-S02: Single tool declared ─────────────────────────────────────────
+# ── T-HITL-S02: Tool declaration (E-37: behavioral roundtrip) ────────────────
 echo ""
 echo "  [T-HITL-S02] Tool declaration"
 
-assert_status 0 "request_approval tool declared" \
-  grep -q '"request_approval"' "$SERVER"
+source "${SCRIPT_DIR}/../lib/mcp-client.sh"
 
-assert_status 0 "action parameter required" \
-  grep -q '"action"' "$SERVER"
+assert_status 0 "request_approval advertised in tools/list" \
+  mcp_assert_tool_listed "$SERVER" "request_approval"
 
-assert_status 0 "reason parameter required" \
-  grep -q '"reason"' "$SERVER"
+assert_status 0 "action parameter required (inputSchema.required)" \
+  mcp_assert_tool_param_required "$SERVER" "request_approval" "action"
 
-assert_status 0 "both action and reason in required array" \
-  node --input-type=module <<JS
-import { readFileSync } from 'fs';
-const src = readFileSync('$SERVER', 'utf8');
-const m = src.match(/required.*?\[([^\]]+)\]/s);
-if (!m) process.exit(1);
-if (!m[0].includes('"action"') || !m[0].includes('"reason"')) process.exit(1);
-JS
+assert_status 0 "reason parameter required (inputSchema.required)" \
+  mcp_assert_tool_param_required "$SERVER" "request_approval" "reason"
 
 # ── T-HITL-S03: ANSI sanitization (T-HITL-001) ───────────────────────────────
 echo ""

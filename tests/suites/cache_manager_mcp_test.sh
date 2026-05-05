@@ -33,22 +33,22 @@ const p = JSON.parse(readFileSync('${REPO_ROOT}/src/mcp/cache-manager-mcp/packag
 if (!p.dependencies?.['@modelcontextprotocol/sdk']) process.exit(1);
 JS
 
-# ── T-CACHE-S02: Tool declarations ───────────────────────────────────────────
+# ── T-CACHE-S02: Tool declarations (E-37: behavioral roundtrip) ──────────────
 echo ""
 echo "  [T-CACHE-S02] Tool declarations"
 
-assert_status 0 "build_cache tool declared" \
-  grep -q '"build_cache"' "$SERVER"
+source "${SCRIPT_DIR}/../lib/mcp-client.sh"
 
-assert_status 0 "get_cached_context tool declared" \
-  grep -q '"get_cached_context"' "$SERVER"
+# Behavioral: each tool must appear in the live tools/list response.
+for tool in build_cache get_cached_context invalidate_cache get_cache_status; do
+  assert_status 0 "${tool} advertised in tools/list" \
+    mcp_assert_tool_listed "$SERVER" "$tool"
+done
 
-assert_status 0 "invalidate_cache tool declared" \
-  grep -q '"invalidate_cache"' "$SERVER"
-
-assert_status 0 "get_cache_status tool declared" \
-  grep -q '"get_cache_status"' "$SERVER"
-
+# Internal-handler check: keep as source-grep — there's no protocol surface
+# that proves a switch case exists; what we need to know is that the tool
+# name maps to a handler. tools/list advertising it but never handling a
+# tools/call is the failure mode this catches.
 assert_status 0 "all 4 tools handled in switch" \
   node --input-type=module <<JS
 import { readFileSync } from 'fs';

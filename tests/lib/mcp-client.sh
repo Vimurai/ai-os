@@ -102,3 +102,25 @@ names = [t.get('name') for t in data.get('tools', [])]
 sys.exit(0 if os.environ.get('TOOL') in names else 1)
 "
 }
+
+# E-37: assert that a tool's inputSchema lists a parameter as required.
+# Replaces source-grep assertions like grep -q '"action"' "$SERVER" which were
+# false-positive prone (matched comments / unrelated string literals).
+# Args: $1=server.js  $2=tool_name  $3=param_name
+mcp_assert_tool_param_required() {
+  local result
+  result=$(mcp_list_tools "$1")
+  printf '%s' "$result" | TOOL="$2" PARAM="$3" python3 -c "
+import json, os, sys
+raw = sys.stdin.read() or '{}'
+try:
+    data = json.loads(raw)
+except Exception:
+    sys.exit(2)
+tool = next((t for t in data.get('tools', []) if t.get('name') == os.environ.get('TOOL')), None)
+if tool is None:
+    sys.exit(3)  # tool not advertised
+required = (tool.get('inputSchema') or {}).get('required') or []
+sys.exit(0 if os.environ.get('PARAM') in required else 1)
+"
+}
