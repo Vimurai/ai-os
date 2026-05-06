@@ -140,3 +140,29 @@ Blueprint `caching.md` §3 specifies that the cache payload (`.ai/blueprints/*.m
 - Delete `src/mcp/cache-manager-mcp/` and remove from `registry.json` / `.mcp.json`. No npm uninstall required.
 
 ---
+
+## D-005 — Call-by-Reference Git Hooks via Execution Stubs
+
+**Date**: 2026-05-05
+**Task**: P-20
+**Decision**: Replace copy-by-value hook installation with dynamic execution stubs that source `~/.ai-os/hooks/`.
+
+### Why needed
+The existing hook installation copied the global `~/.ai-os/hooks/pre-commit.sh` script into the project's `.git/hooks/pre-commit`. This resulted in split-brain drift: when the canonical global script updated, local projects were left running an outdated version unless `ai init` was manually re-run. This caused stale quality gates to silently pass.
+
+### Alternatives considered
+1. **Force symlinks (`ln -s`)** — requires specific OS permissions on some filesystems (e.g., Windows) and breaks if the target path format changes. Rejected.
+2. **`ai sync` full copy** — requires `ai sync` to mutate the `.git/hooks` directory explicitly, taking overhead on every sync. Prone to local manual edits being lost without warning. Rejected.
+3. **Execution Stub (chosen)** — generating a minimal bash wrapper that simply executes the global path. Reliable across UNIX environments, trivially updatable, and gracefully handles custom chained hooks without mutating the canonical source.
+
+### Constraints driving this decision
+- **Consistency**: All projects on a single machine must enforce the exact same pre-commit quality gate logic (Gate 2).
+
+### Impact
+- Unlocks: E-41 (Implementing the stub generator and auto-upgrader).
+- Risk if wrong: If `~/.ai-os/hooks/` is corrupted or missing, all local commits in stubbed repositories could fail or bypass the gate depending on the stub's error handling.
+
+### Rollback
+Delete `.git/hooks/pre-commit` in the local repository and recommit without the gate.
+
+---

@@ -24,12 +24,12 @@
 - **Context & Memory Strategy (JIT)**: Avoids monolithic token consumption. Domain blueprints and skills are loaded Just-In-Time (JIT) as metadata first, expanding to full content only when needed.
 
 ## 5. Data Models & API Contracts (MCP Nervous System)
+> [!IMPORTANT]
+> The full MCP Nervous System (21+ servers) has been decoupled to prevent documentation drift.
+> **See `.ai/blueprints/mcp.md` for the complete registry of MCP servers.**
+
 - **task-synchronizer-mcp**: The central nervous system for ACID state coordination via SQLite.
 - **context-invoker-mcp**: The JIT engine for dynamically loading skills and agent personas to conserve tokens.
-- **blueprint-aligner-mcp**: Prevents "Plan Drift" by diffing execution work against the Architect's declared rules.
-- **safe-exec-mcp**: A UACS-compliant safety gate that blocks destructive shell commands and plaintext secrets.
-- **vibe-check-mcp**: Headless Playwright integration for screenshots, Cumulative Layout Shift (CLS) measurements, and UI accessibility audits.
-- **patch-mcp**: High-performance, concurrent file editing with MD5 optimistic locking and fuzzy fallbacks.
 
 ## 6. Error Handling & Security
 - **Failure Modes**: Bounded streams and iterative scanning are used for large diffs and logs to prevent OOM errors.
@@ -74,6 +74,6 @@
 ## 34. Architectural Fragmentation (Domain Blueprints)
 - **When to apply**: When `architect.md` exceeds ~200 lines, split into Domain Blueprints.
 - **Pattern**: `architect.md` becomes a lightweight index/router (~30 lines). Detailed content moves to `.ai/blueprints/<domain>.md`.
-- **Standard domains**: `core.md`, `security.md`, `agents.md`, `mcp.md`, `workspace.md`, `bootloader.md`, `capabilities.md`, `interop.md`, `caching.md`, `structured-outputs.md`, `cli-collapse.md` (adapt to project needs).
+- **Standard domains**: `core.md`, `security.md`, `agents.md`, `mcp.md`, `workspace.md`, `bootloader.md`, `capabilities.md`, `interop.md`, `caching.md`, `structured-outputs.md`, `cli-collapse.md`, `git-hooks.md` (adapt to project needs).
 - **JIT Protocol**: Agents read the index first, then load only the relevant domain blueprint. Never load all blueprints at once.
 - **Preflight update**: `run_preflight()` points to the index; domain blueprints are loaded on demand.
