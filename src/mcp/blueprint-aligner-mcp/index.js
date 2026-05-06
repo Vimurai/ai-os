@@ -298,16 +298,78 @@ function validateBlueprint(content) {
 // ── Alignment rules ───────────────────────────────────────────────────────────
 // Each rule checks the diff for a violation of the System Philosophy.
 
+// E-42: Recognise UACS authorship stamps that authorise architect-owned-file
+// edits. Triggered by either:
+//   • a state.json stamp of type GEMINI_AUTHORED or ARCHITECT_HANDOFF dated
+//     within the last 24h, or
+//   • a [GEMINI_AUTHORED] / [ARCHITECT_HANDOFF] marker in the last 20 lines
+//     of .ai/LOG.md.
+// Returns null when no stamp is found, otherwise a short reason string used
+// to downgrade GEMINI_FILE_MODIFIED to WARN.
+function detectArchitectHandoffStamp(cwd) {
+  const STAMP_TYPES = /^(GEMINI_AUTHORED|ARCHITECT_HANDOFF)$/i;
+  const LOG_MARKER  = /\[(GEMINI_AUTHORED|ARCHITECT_HANDOFF)\]/i;
+  const WINDOW_MS   = 24 * 60 * 60 * 1000;
+
+  // 1. state.json stamps (authoritative)
+  try {
+    const statePath = resolve(cwd, ".ai/state.json");
+    if (existsSync(statePath)) {
+      const state = JSON.parse(readFileSafe(statePath));
+      const stamps = Array.isArray(state.stamps) ? state.stamps : [];
+      const now = Date.now();
+      for (let i = stamps.length - 1; i >= 0; i--) {
+        const s = stamps[i];
+        if (!s || !STAMP_TYPES.test(String(s.type || ""))) continue;
+        const ts = Date.parse(s.timestamp || "");
+        if (Number.isFinite(ts) && now - ts <= WINDOW_MS) {
+          return `state.json stamp [${s.type}] at ${s.timestamp}`;
+        }
+      }
+    }
+  } catch { /* fall through to log scan */ }
+
+  // 2. LOG.md tail (advisory)
+  try {
+    const log = readFileSafe(resolve(cwd, ".ai/LOG.md"));
+    if (log) {
+      const tail = log.split("\n").slice(-20).join("\n");
+      const m = tail.match(LOG_MARKER);
+      if (m) return `LOG.md marker ${m[0]} (last 20 lines)`;
+    }
+  } catch { /* ignore */ }
+
+  return null;
+}
+
 const ALIGNMENT_RULES = [
   {
     id: "GEMINI_FILE_MODIFIED",
     severity: "FAIL",
-    check: (diff) => {
+    // Severity may be downgraded to WARN when an authorship stamp is present.
+    check: (diff, cwd) => {
       const geminiFiles = [".ai/architect.md", ".ai/BRIEF.md"];
-      return geminiFiles.filter((f) => diff.includes(`a/${f}`) || diff.includes(`b/${f}`));
+      const violations = geminiFiles.filter(
+        (f) => diff.includes(`a/${f}`) || diff.includes(`b/${f}`)
+      );
+      if (violations.length === 0) return [];
+      const stamp = detectArchitectHandoffStamp(cwd);
+      if (stamp) {
+        // Annotate the violation list so the message renderer surfaces the
+        // stamp and the rule.severityOverride downgrades to WARN.
+        violations.__handoffStamp = stamp;
+      }
+      return violations;
     },
-    message: (violations) =>
-      `Claude modified Architect-owned files: ${violations.join(", ")} — Domain Sovereignty violation (§12)`,
+    severityOverride: (violations) =>
+      violations.__handoffStamp ? "WARN" : null,
+    message: (violations) => {
+      const stamp = violations.__handoffStamp;
+      if (stamp) {
+        return `Architect-owned files modified (${violations.join(", ")}) — handoff authorised by ${stamp}. Verify the change matches the stamped intent.`;
+      }
+      return `Claude modified Architect-owned files: ${violations.join(", ")} — Domain Sovereignty violation (§12). If this is a Gemini handoff, record [GEMINI_AUTHORED] / [ARCHITECT_HANDOFF] in state.json stamps or .ai/LOG.md.`;
+    },
   },
   {
     id: "HARDCODED_SECRET",
@@ -324,9 +386,28 @@ const ALIGNMENT_RULES = [
     id: "CAPABILITIES_BYPASS",
     severity: "FAIL",
     check: (diff) => {
-      // Adding ../ path traversal or explicit /etc /root paths in source
-      const traversalPattern = /^\+[^+].*(\.\.\/|\/etc\/|\/root\/|\/home\/\w+\/\.)/gm;
-      const matches = [...diff.matchAll(traversalPattern)].map((m) => m[0].trim().slice(0, 80));
+      // Flag ../ path traversal or explicit /etc /root /home paths in code.
+      // E-42: whitelist canonical ESM/CJS sibling imports — they are the only
+      // way Node workspaces share helpers across src/mcp/<server>/ → src/mcp/
+      // shared/ and have appeared in every diff since E-18 / D-005. The
+      // whitelist is bounded to module-specifier syntax; literal traversal
+      // (cat ../../../etc/passwd, fs.readFile("../etc/...")) still fails.
+      //
+      // Scan line-by-line so each candidate line can be tested against the
+      // module-specifier whitelist in full. matchAll on a multiline pattern
+      // would truncate the match at the captured group and hide the closing
+      // quote, defeating the whitelist.
+      const traversalLineRe   = /^\+[^+].*(?:\.\.\/|\/etc\/|\/root\/|\/home\/\w+\/\.)/;
+      // Module-specifier form: from "../...", from '../...',
+      //                        require("../..."), require('../...'),
+      //                        import("../..."), import('../...')
+      const moduleSpecifierRe = /(?:from|require|import)\s*\(?\s*(["'])\.\.\/[^"']*\1/;
+      const matches = [];
+      for (const line of diff.split("\n")) {
+        if (!traversalLineRe.test(line)) continue;
+        if (moduleSpecifierRe.test(line)) continue; // canonical ESM/CJS — skip
+        matches.push(line.trim().slice(0, 80));
+      }
       return matches;
     },
     message: (violations) =>
@@ -503,7 +584,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const violations = rule.check(diff, cwd);
     if (violations.length > 0) {
       const entry = { id: rule.id, message: rule.message(violations) };
-      if (rule.severity === "FAIL") failures.push(entry);
+      // E-42: rules may downgrade FAIL → WARN when an authorship stamp is
+      // present (architect.md handoff). The override is opt-in per rule.
+      const effective =
+        (typeof rule.severityOverride === "function" && rule.severityOverride(violations)) ||
+        rule.severity;
+      if (effective === "FAIL") failures.push(entry);
       else warnings.push(entry);
     }
   }

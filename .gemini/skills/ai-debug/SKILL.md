@@ -1,14 +1,14 @@
 ---
 name: ai-debug
-description: Enforce structured hypothesis→test→observe debugging loop for failing tests or bugs. Blocks git add until green. Prevents trial-and-error token burn.
+description: Enforce structured hypothesis→test→observe debugging loop for failing tests or bugs. Blocks git add until green. 3-cycle TASK_BUDGET — escalates to Architect via advisor-mcp on BUDGET_EXHAUSTED. Prevents trial-and-error token burn.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Bash, Grep, Glob
+allowed-tools: Read, Bash, Grep, Glob, mcp__advisor-mcp__ask_architect
 context: default
 agent: default
 ---
 
-# AI-Debug — Empirical Debugging Protocol
+# AI-Debug — Empirical Debugging Protocol (E-43 Task Budget)
 
 ## Dynamic Context Injection
 Failing tests: !bash tests/run.sh 2>&1 | grep "✗" | head -10 || echo "(no failures)"
@@ -25,17 +25,45 @@ If tests are failing, you are in **LOCKED** state:
 - Do NOT make multiple changes simultaneously
 - Do NOT move to a new task
 
-## Debugging Cycle (repeat until green)
+## TASK_BUDGET (E-43, mandatory)
+
+You operate under a **strict 3-cycle budget** per failing assertion. The budget exists to bound token consumption and force escalation rather than thrash through endless trial-and-error.
+
+### Budget State
+
+Maintain this state across cycles in your active context:
+
+```json
+{
+  "task_id": "<E-##>",
+  "failing_test": "<suite>::<assertion>",
+  "iterations": 0,
+  "status": "OPEN | BUDGET_EXHAUSTED",
+  "hypotheses": []
+}
+```
+
+Increment `iterations` at the start of each Cycle Step 1. The hypothesis you state is appended to `hypotheses[]`. Hypotheses must be **distinct** between cycles — repeating the same hypothesis with cosmetic edits does not advance the budget.
+
+### Budget Limits
+
+- **Max iterations:** 3
+- **Override:** the user can raise the cap by setting `AI_DEBUG_BUDGET=<n>` in `.claude/settings.json` env (per workflow-optimizations.md §Rollback Plan).
+- **At iteration == 3 with the same assertion still failing → status = `BUDGET_EXHAUSTED`** → halt the loop and run the Escalation block below. Do not start a 4th cycle.
+
+## Debugging Cycle (repeat up to TASK_BUDGET)
 
 ### Cycle Step 1 — State the Hypothesis
 
-Before touching any file, state in one sentence:
-> "I believe the failure is caused by X because Y."
+Before touching any file, increment `iterations` and state in one sentence:
+> "Iteration N/3: I believe the failure is caused by X because Y."
 
 If you cannot state a hypothesis, run the failing test in isolation first:
 ```bash
 bash tests/suites/<failing_suite>.sh 2>&1
 ```
+
+If your hypothesis matches one already in `hypotheses[]`, the budget does not advance — synthesise a genuinely new theory before continuing.
 
 ### Cycle Step 2 — Find the Minimum Reproduction
 
@@ -60,14 +88,39 @@ bash tests/run.sh 2>&1 | tail -5
 ```
 
 If green → UNLOCKED. Proceed to `skill: "ai-task"` then `skill: "commit-crafter"`.
-If still failing → return to Cycle Step 1 with updated hypothesis.
+If still failing → return to Cycle Step 1 with a **new** hypothesis, provided `iterations < 3`. Otherwise → Escalation.
 
-## Escalation
+## Escalation — BUDGET_EXHAUSTED (mandatory)
 
-If the same test fails after 3 cycles with different hypotheses:
-1. Check if the test itself is wrong (use `skill: "bug-reproducer"` to validate)
-2. Check git blame to see when the failure was introduced: `git log --oneline --follow -p <file> | head -40`
-3. Report to user with full reproduction steps before continuing
+When `iterations == 3` and the assertion is still red:
+
+1. **Mark state:** `status = "BUDGET_EXHAUSTED"`, `escalation_required = true`.
+2. **Format an A2A query** capturing the failure and every hypothesis tried:
+   ```
+   Task: <E-##>
+   Failing test: <suite>::<assertion>
+   Tried hypotheses:
+     1. <h1> — outcome: <how it failed>
+     2. <h2> — outcome: <how it failed>
+     3. <h3> — outcome: <how it failed>
+   Code under test: <file_path>:<line>
+   Test expectation: <copy of assertion>
+   Observed behaviour: <copy of error>
+   Question for Architect: <specific blocker, e.g. "Is this assertion correct
+     given the blueprint, or is the implementation contract wrong?">
+   ```
+3. **Invoke the Advisor:**
+   ```
+   mcp__advisor-mcp__ask_architect({
+     query: "<the formatted query above>",
+     domain: "debugging"
+   })
+   ```
+4. **Halt:** Do NOT start a 4th cycle. Wait for the [A2A_RULING] response, integrate the architect's guidance, then either:
+   - resume with a fresh budget if the architect identifies a concrete next step, OR
+   - report to the user with the architect's ruling and pause for human input.
+
+The escalation is **not optional** — burning more cycles past the budget without consulting the architect is the exact failure mode TASK_BUDGET exists to prevent.
 
 ## What NOT to Do
 
@@ -75,3 +128,5 @@ If the same test fails after 3 cycles with different hypotheses:
 - Do NOT make more than one logical change per cycle
 - Do NOT read files that aren't implicated by the failing assertion
 - Do NOT silence test failures with `|| true` or similar
+- Do NOT skip Escalation by mentally restarting the iteration count
+- Do NOT call `ask_architect` before iteration 3 — the budget exists so the Architect is consulted only after Claude has genuinely tried

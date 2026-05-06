@@ -47,7 +47,7 @@ The AI-OS ecosystem divides cognitive labor across specialized agents and dynami
 - **`critic_security`**: Deterministic security auditor (OWASP/secrets).
 - **`task_validator`**: Validates P-## dependency chains to prevent circular loops.
 - **`identity_guardian`**: Audits handling of PII and user data.
-- **`security_engineer`**: Produces `SECURITY.md` and enforces capability boundaries.
+- **`security_engineer`**: Produces `SECURITY.md`, enforces capability boundaries, and (E-44) runs active OWASP Top 10 pen-test payloads inside `code-execution-mcp` for any new input boundary.
 - **`critic_arch`**: Architecture reviewer comparing git diff against `architect.md`.
 - **`review_synthesizer`**: Aggregates audit stamps into a Release Readiness Report.
 - **`decision_recorder`**: Parses `LOG.md` and chat context for D-### decisions.

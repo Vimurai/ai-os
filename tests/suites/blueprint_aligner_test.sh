@@ -115,6 +115,158 @@ test_traversal_pattern "safe relative path not detected" \
   '+  const file = "./config/settings.json"' \
   'nomatch'
 
+# ── CAPABILITIES_BYPASS — E-42 ESM/CJS module-specifier whitelist ─────────────
+# The aligner rule now post-filters traversal hits: any line whose ../ appears
+# inside import/from/require/dynamic-import quoted module specifier is allowed
+# (canonical Node sibling import per D-005 / E-18). Real path traversal must
+# still trigger.
+test_bypass_rule() {
+  local label="$1" input="$2" expect="$3"
+  local result
+  result=$(node -e "
+const diff = $(printf '%s' "$input" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))');
+const traversalLineRe   = /^\+[^+].*(?:\.\.\/|\/etc\/|\/root\/|\/home\/\w+\/\.)/;
+const moduleSpecifierRe = /(?:from|require|import)\s*\(?\s*([\"'])\.\.\/[^\"']*\1/;
+const matches = [];
+for (const line of diff.split('\n')) {
+  if (!traversalLineRe.test(line)) continue;
+  if (moduleSpecifierRe.test(line)) continue;
+  matches.push(line);
+}
+process.stdout.write(matches.length > 0 ? 'flag' : 'allow');
+" 2>/dev/null || echo "error")
+  if [[ "$result" == "$expect" ]]; then
+    _pass "$label"
+  else
+    _fail "$label (expected $expect, got $result)"
+  fi
+}
+
+# Whitelisted ESM/CJS sibling imports — must be allowed.
+test_bypass_rule "ESM static import allowed" \
+  '+import { createLogger } from "../shared/logger.js";' \
+  'allow'
+
+test_bypass_rule "ESM static import single-quoted allowed" \
+  "+import x from '../shared/util.js';" \
+  'allow'
+
+test_bypass_rule "ESM dynamic import allowed" \
+  '+const m = await import("../helpers/foo.js");' \
+  'allow'
+
+test_bypass_rule "CommonJS require allowed" \
+  '+const x = require("../shared/util.js");' \
+  'allow'
+
+test_bypass_rule "named-export re-export allowed" \
+  '+export { foo } from "../shared/foo.js";' \
+  'allow'
+
+# Real traversal — must still trigger.
+test_bypass_rule "literal cat ../../../etc/passwd flagged" \
+  '+exec("cat ../../../etc/passwd")' \
+  'flag'
+
+test_bypass_rule "string-concat traversal still flagged" \
+  '+const p = base + "../../etc/shadow";' \
+  'flag'
+
+test_bypass_rule "/etc absolute path still flagged" \
+  '+readFile("/etc/shadow")' \
+  'flag'
+
+test_bypass_rule "fs.readFile with ../ still flagged (no quotes around ../)" \
+  '+fs.readFileSync(`${root}/../secret`)' \
+  'flag'
+
+# ── GEMINI_FILE_MODIFIED — E-42 UACS handoff stamp gate ──────────────────────
+# When the diff modifies architect.md or BRIEF.md, the rule fires FAIL by
+# default. If state.json or LOG.md carries a recent GEMINI_AUTHORED /
+# ARCHITECT_HANDOFF stamp, severity downgrades to WARN.
+test_handoff_stamp() {
+  local label="$1" sandbox="$2" expect="$3"
+  local result
+  result=$(node -e "
+const fs = require('node:fs');
+const path = require('node:path');
+const cwd = process.argv[1];
+const STAMP_TYPES = /^(GEMINI_AUTHORED|ARCHITECT_HANDOFF)\$/i;
+const LOG_MARKER  = /\[(GEMINI_AUTHORED|ARCHITECT_HANDOFF)\]/i;
+const WINDOW_MS   = 24 * 60 * 60 * 1000;
+function readSafe(p) { try { return fs.existsSync(p) ? fs.readFileSync(p,'utf8') : ''; } catch { return ''; } }
+function detect(cwd) {
+  try {
+    const sp = path.resolve(cwd, '.ai/state.json');
+    if (fs.existsSync(sp)) {
+      const state = JSON.parse(readSafe(sp));
+      const stamps = Array.isArray(state.stamps) ? state.stamps : [];
+      const now = Date.now();
+      for (let i = stamps.length - 1; i >= 0; i--) {
+        const s = stamps[i];
+        if (!s || !STAMP_TYPES.test(String(s.type||''))) continue;
+        const ts = Date.parse(s.timestamp||'');
+        if (Number.isFinite(ts) && now-ts <= WINDOW_MS) return 'state:'+s.type;
+      }
+    }
+  } catch {}
+  try {
+    const log = readSafe(path.resolve(cwd, '.ai/LOG.md'));
+    if (log) {
+      const tail = log.split('\\n').slice(-20).join('\\n');
+      const m = tail.match(LOG_MARKER);
+      if (m) return 'log:'+m[1];
+    }
+  } catch {}
+  return 'none';
+}
+process.stdout.write(detect(cwd));
+" "$sandbox" 2>/dev/null || echo "error")
+  if [[ "$result" == "$expect" ]]; then
+    _pass "$label"
+  else
+    _fail "$label (expected $expect, got $result)"
+  fi
+}
+
+SBOX="$(mktemp -d -t aios-aligner-XXXXXX)"
+mkdir -p "${SBOX}/.ai"
+
+# No state.json, no LOG.md → no stamp → FAIL severity preserved.
+test_handoff_stamp "no stamp present" "$SBOX" "none"
+
+# Recent state.json stamp → detected.
+NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cat > "${SBOX}/.ai/state.json" <<JSON
+{"tasks":[],"stamps":[{"type":"GEMINI_AUTHORED","timestamp":"${NOW_ISO}","summary":"P-17 architect.md edit"}]}
+JSON
+test_handoff_stamp "recent GEMINI_AUTHORED stamp detected" "$SBOX" "state:GEMINI_AUTHORED"
+
+# Stale stamp (>24h old) → not detected.
+OLD_ISO="$(date -u -v-2d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+cat > "${SBOX}/.ai/state.json" <<JSON
+{"tasks":[],"stamps":[{"type":"GEMINI_AUTHORED","timestamp":"${OLD_ISO}","summary":"old"}]}
+JSON
+test_handoff_stamp "stale (>24h) stamp not detected" "$SBOX" "none"
+
+# LOG.md marker fallback → detected.
+rm -f "${SBOX}/.ai/state.json"
+{
+  for i in $(seq 1 10); do echo "filler line $i"; done
+  echo "[GEMINI_AUTHORED] 2026-05-06 P-17 architect.md edit"
+} > "${SBOX}/.ai/LOG.md"
+test_handoff_stamp "LOG.md marker detected" "$SBOX" "log:GEMINI_AUTHORED"
+
+# LOG.md marker outside last-20-line window → not detected.
+{
+  for i in $(seq 1 30); do echo "noise $i"; done
+  echo "[GEMINI_AUTHORED] way back"
+  for i in $(seq 1 30); do echo "filler $i"; done
+} > "${SBOX}/.ai/LOG.md"
+test_handoff_stamp "LOG.md marker outside last-20 ignored" "$SBOX" "none"
+
+rm -rf "$SBOX"
+
 # ── validate_blueprint_section (E-83 / P-41 §28) ────────────────────────────
 ALIGNER="${REPO_ROOT}/src/mcp/blueprint-aligner-mcp/index.js"
 
