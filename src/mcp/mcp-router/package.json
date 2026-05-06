@@ -1,0 +1,13 @@
+{
+  "name": "mcp-router",
+  "version": "1.0.0",
+  "description": "AI-OS MCP Router/Proxy (E-40) — progressive tool discovery: agents activate a domain (State/Code/Safety/Intelligence/Quality/Interop/Caching) and proxy_call forwards JSON-RPC to the underlying MCP server. Mitigates 23-server schema bloat.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "*"
+  }
+}

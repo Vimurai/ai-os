@@ -1,0 +1,13 @@
+{
+  "name": "code-execution-mcp",
+  "version": "1.0.0",
+  "description": "AI-OS Sandboxed Code Execution (E-39) — ephemeral Docker REPL for Python and Node. Fail-closed when Docker is unavailable. Network/host/resource isolated per .ai/blueprints/code-execution.md.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "*"
+  }
+}

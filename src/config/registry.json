@@ -185,6 +185,24 @@
       "allowed-tools": ["build_cache", "get_cached_context", "invalidate_cache", "get_cache_status"],
       "disable-model-invocation": false,
       "_note": "E-11 Explicit Context Cache: assembles .ai/blueprints/*.md, architect.md, state.sqlite schema, and registry.json into a prompt-cacheable System Context blob. mtime-based invalidation. Cache in ~/.ai-os/cache.sqlite. Blueprint: caching.md."
+    },
+    "mcp-router": {
+      "path": "src/mcp/mcp-router/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["list_domains", "activate_domain", "proxy_call"],
+      "disable-model-invocation": false,
+      "_note": "E-40 MCP Router/Proxy: progressive tool discovery — list_domains/activate_domain expose only the active category's servers; proxy_call forwards JSON-RPC over stdio. Mitigates 23-server schema bloat. Blueprint: mcp-router.md.",
+      "_security": "RBAC mirror — proxy_call rejects targets outside the active domain or absent from registry allowed-tools. Targets spawned with explicit env allowlist (PATH, HOME) plus registry-declared env block (e.g. computer-use-mcp DISPLAY/HOME). No shell, no eval. Cannot bypass project .claude/settings.json permissions."
+    },
+    "code-execution-mcp": {
+      "path": "src/mcp/code-execution-mcp/index.js",
+      "capability": "EXECUTE",
+      "status": "approved",
+      "allowed-tools": ["execute_code"],
+      "disable-model-invocation": false,
+      "_note": "E-39 Sandboxed Code Execution: ephemeral Docker REPL for Python (python:3.12-slim) and Node (node:22-alpine). Fail-closed [SANDBOX_UNAVAILABLE] when Docker daemon is missing. Blueprint: code-execution.md.",
+      "_security": "Network=none, --read-only root FS, no volume mounts, --memory=512m --cpus=0.5 --pids-limit=64, --user=65534:65534 (nobody), --cap-drop=ALL, --security-opt=no-new-privileges, tmpfs /tmp size-capped (64m, noexec). Wall-clock timeout enforced by parent (SIGKILL on overrun). stdout/stderr capped at 4096 chars. Code length capped at 16384 chars. Language whitelist {python, typescript}. No bare-metal fallback — sandbox is the only execution path."
     }
   }
 }

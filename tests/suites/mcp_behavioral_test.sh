@@ -60,6 +60,10 @@ declare -a CASES=(
   "vibe-check-mcp:run_vibe_audit"
   "vibe-check-mcp:run_chaos_test"
   "vibe-check-mcp:get_performance_metrics"
+  "mcp-router:list_domains"
+  "mcp-router:activate_domain"
+  "mcp-router:proxy_call"
+  "code-execution-mcp:execute_code"
 )
 
 for row in "${CASES[@]}"; do

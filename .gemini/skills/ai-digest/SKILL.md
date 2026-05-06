@@ -1,6 +1,6 @@
 ---
 name: ai-digest
-description: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running ai archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
+description: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running skill: ai-archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob
@@ -18,7 +18,7 @@ Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | wc -l | tr -d ' '
 ## When to Run
 - DIGEST is flagged as stale (> 3 days old, or last entry doesn't match recent changes)
 - After a major sprint with many file changes
-- After running `ai archive` (clean state needs new snapshot)
+- After running `skill: ai-archive` (clean state needs new snapshot)
 - After parallel critic review adds content to `REVIEWS.md`
 
 ## Preflight — Read Everything

@@ -416,6 +416,92 @@ install_global() {
   echo "  Run 'ai init' inside any project to scaffold .ai/, .claude/, and .gemini/."
 }
 
+# Marker emitted in every AI-OS execution stub. Anything containing this line
+# is recognised as a current-format stub by _is_aios_stub / the do_sync
+# upgrader. Legacy copies of pre-commit.sh do NOT carry it.
+AIOS_STUB_MARKER="# AI-OS Execution Stub (E-41)"
+
+# Returns 0 when $1 is an AI-OS execution stub (current format), 1 otherwise.
+# Callers that want to distinguish "legacy AI-OS copy" from "third-party hook"
+# should also test for the canonical "AI-OS Gate 2" / "TASKS.md Auto-Sync"
+# headers that appear inside the original copied scripts.
+_is_aios_stub() {
+  local f="$1"
+  [[ -f "$f" ]] && grep -qF "$AIOS_STUB_MARKER" "$f" 2>/dev/null
+}
+
+# Writes a pre-commit execution stub. Fails closed: if the canonical hook is
+# absent at commit time the stub aborts the commit (Gate 2 must always run).
+_write_pre_commit_stub() {
+  local dst="$1" backup="${2:-}"
+  cat > "$dst" <<STUB
+#!/usr/bin/env bash
+${AIOS_STUB_MARKER} — Gate 2 pre-commit
+# This file is a thin redirector. The canonical script lives at
+# \$HOME/.ai-os/hooks/pre-commit.sh and is always upgraded by 'ai sync'.
+set -uo pipefail
+
+CANONICAL="\$HOME/.ai-os/hooks/pre-commit.sh"
+STUB
+
+  if [[ -n "$backup" ]]; then
+    cat >> "$dst" <<STUB
+# E-41: chained execution — call the user's pre-AI-OS hook first.
+USER_HOOK="\$(dirname "\$0")/${backup##*/}"
+if [[ -x "\$USER_HOOK" ]]; then
+  bash "\$USER_HOOK" "\$@" || exit \$?
+fi
+
+STUB
+  fi
+
+  cat >> "$dst" <<'STUB'
+if [[ ! -f "$CANONICAL" ]]; then
+  echo "[AI-OS] pre-commit canonical missing: $CANONICAL — run: bash install-ai-os.sh" >&2
+  exit 1   # fail closed (Gate 2 contract)
+fi
+exec bash "$CANONICAL" "$@"
+STUB
+  chmod +x "$dst"
+}
+
+# Writes a post-commit execution stub. Fails open: post-commit work is
+# advisory (TASKS.md auto-sync), so a missing canonical must not break a
+# successful commit.
+_write_post_commit_stub() {
+  local dst="$1" backup="${2:-}"
+  cat > "$dst" <<STUB
+#!/usr/bin/env bash
+${AIOS_STUB_MARKER} — TASKS.md Auto-Sync post-commit
+# This file is a thin redirector. The canonical script lives at
+# \$HOME/.ai-os/hooks/post-commit.sh and is always upgraded by 'ai sync'.
+set -uo pipefail
+
+CANONICAL="\$HOME/.ai-os/hooks/post-commit.sh"
+STUB
+
+  if [[ -n "$backup" ]]; then
+    cat >> "$dst" <<STUB
+# E-41: chained execution — call the user's pre-AI-OS hook first (advisory).
+USER_HOOK="\$(dirname "\$0")/${backup##*/}"
+if [[ -x "\$USER_HOOK" ]]; then
+  bash "\$USER_HOOK" "\$@" || true
+fi
+
+STUB
+  fi
+
+  cat >> "$dst" <<'STUB'
+if [[ ! -f "$CANONICAL" ]]; then
+  echo "[AI-OS] post-commit canonical missing: $CANONICAL (skipping TASK-SYNC)" >&2
+  exit 0   # fail open (post-commit is advisory)
+fi
+bash "$CANONICAL" "$@" || true
+exit 0
+STUB
+  chmod +x "$dst"
+}
+
 install_git_hooks() {
   local GIT_HOOKS_DIR
   GIT_HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
@@ -433,31 +519,26 @@ install_git_hooks() {
   fi
 
   if [[ -f "$HOOK_DST" ]]; then
-    # Check if it's already the AI-OS hook
-    if grep -q "AI-OS Gate 2" "$HOOK_DST" 2>/dev/null; then
-      echo "  ✓ pre-commit hook already installed (Gate 2)"
-      return
+    if _is_aios_stub "$HOOK_DST"; then
+      echo "  ✓ pre-commit stub already installed (Gate 2)"
+    elif grep -q "AI-OS Gate 2" "$HOOK_DST" 2>/dev/null; then
+      # Legacy copy — upgrade in place to a stub.
+      _write_pre_commit_stub "$HOOK_DST"
+      echo "  ✓ Upgraded legacy pre-commit copy → execution stub (Gate 2)"
     else
-      # Preserve existing hook — chain it
+      # Preserve existing third-party hook; chain it through the stub.
       local BACKUP="${HOOK_DST}.pre-aios"
       mv "$HOOK_DST" "$BACKUP"
       echo "  ✓ Backed up existing pre-commit hook → pre-commit.pre-aios"
-      # Write wrapper that calls both
-      cat > "$HOOK_DST" <<WRAPPER
-#!/usr/bin/env bash
-# AI-OS pre-commit wrapper — calls original hook then AI-OS Gate 2
-bash "\$(dirname "\$0")/pre-commit.pre-aios" || exit 1
-bash "${HOOK_SRC}" || exit 1
-WRAPPER
+      _write_pre_commit_stub "$HOOK_DST" "$BACKUP"
+      echo "  ✓ Installed Gate 2 stub (chained → pre-commit.pre-aios) → ${HOOK_DST}"
     fi
   else
-    cp "$HOOK_SRC" "$HOOK_DST"
+    _write_pre_commit_stub "$HOOK_DST"
+    echo "  ✓ Installed Gate 2 (Quality Gate) pre-commit stub → ${HOOK_DST}"
   fi
 
-  chmod +x "$HOOK_DST"
-  echo "  ✓ Installed Gate 2 (Quality Gate) pre-commit hook → ${HOOK_DST}"
-
-  # E-55: Install post-commit hook (TASKS.md auto-sync)
+  # E-55: Install post-commit hook (TASKS.md auto-sync) — same stub model.
   local PC_SRC="${AIOS}/hooks/post-commit.sh"
   local PC_DST="${GIT_HOOKS_DIR}/post-commit"
 
@@ -467,27 +548,48 @@ WRAPPER
   fi
 
   if [[ -f "$PC_DST" ]]; then
-    if grep -q "AI-OS.*TASK-SYNC\|TASKS.md Auto-Sync" "$PC_DST" 2>/dev/null; then
-      echo "  ✓ post-commit hook already installed (TASK-SYNC)"
-      return
+    if _is_aios_stub "$PC_DST"; then
+      echo "  ✓ post-commit stub already installed (TASK-SYNC)"
+    elif grep -q "AI-OS.*TASK-SYNC\|TASKS.md Auto-Sync" "$PC_DST" 2>/dev/null; then
+      _write_post_commit_stub "$PC_DST"
+      echo "  ✓ Upgraded legacy post-commit copy → execution stub (TASK-SYNC)"
     else
-      # Chain with existing hook
       local PC_BACKUP="${PC_DST}.pre-aios"
       mv "$PC_DST" "$PC_BACKUP"
       echo "  ✓ Backed up existing post-commit hook → post-commit.pre-aios"
-      cat > "$PC_DST" <<WRAPPER
-#!/usr/bin/env bash
-# AI-OS post-commit wrapper — calls original hook then AI-OS TASK-SYNC
-bash "\$(dirname "\$0")/post-commit.pre-aios" || true
-bash "${PC_SRC}" || true
-WRAPPER
+      _write_post_commit_stub "$PC_DST" "$PC_BACKUP"
+      echo "  ✓ Installed TASK-SYNC stub (chained → post-commit.pre-aios) → ${PC_DST}"
     fi
   else
-    cp "$PC_SRC" "$PC_DST"
+    _write_post_commit_stub "$PC_DST"
+    echo "  ✓ Installed TASK-SYNC post-commit stub → ${PC_DST}"
+  fi
+}
+
+# E-41: Idempotent in-place upgrade of legacy copied hooks to the stub model.
+# Called from do_sync; walks .git/hooks/{pre,post}-commit and rewrites any
+# legacy AI-OS copy (no stub marker, has Gate 2 / TASK-SYNC headers) to a
+# fresh stub. Skips third-party hooks (no AI-OS markers at all) so user
+# tooling is never silently overwritten.
+_upgrade_legacy_git_hooks() {
+  local git_dir
+  git_dir="$(git rev-parse --git-dir 2>/dev/null)" || return 0
+  [[ -d "${git_dir}/hooks" ]] || return 0
+  local HOOKS_DIR="${git_dir}/hooks"
+
+  local pc="${HOOKS_DIR}/pre-commit"
+  if [[ -f "$pc" ]] && ! _is_aios_stub "$pc" \
+       && grep -q "AI-OS Gate 2" "$pc" 2>/dev/null; then
+    _write_pre_commit_stub "$pc"
+    echo "  ✓ Upgraded .git/hooks/pre-commit → stub (E-41)"
   fi
 
-  chmod +x "$PC_DST"
-  echo "  ✓ Installed TASK-SYNC post-commit hook → ${PC_DST}"
+  local poc="${HOOKS_DIR}/post-commit"
+  if [[ -f "$poc" ]] && ! _is_aios_stub "$poc" \
+       && grep -qE "AI-OS.*TASK-SYNC|TASKS.md Auto-Sync" "$poc" 2>/dev/null; then
+    _write_post_commit_stub "$poc"
+    echo "  ✓ Upgraded .git/hooks/post-commit → stub (E-41)"
+  fi
 }
 
 # E-114: Query global memory store for similar projects during ai init (§31 advisory hint)
@@ -944,6 +1046,10 @@ do_sync() {
   cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
   chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
   echo "  Hooks synced"
+
+  # E-41: upgrade any legacy copied .git/hooks/* to the stub model so the
+  # canonical AI-OS hooks always run (no copy-by-value drift).
+  _upgrade_legacy_git_hooks
 
   echo "Done."
 }

@@ -14,7 +14,7 @@ agent: default
 Test framework: !cat package.json 2>/dev/null | grep -E '"(test|dev|start)"' | head -5 || echo "(no package.json)"
 Open tasks requiring tests: !grep -n "E-[0-9]" .ai/TASKS.md 2>/dev/null | grep -v "\[x\]" | head -5 || echo "(all tasks complete)"
 
-## Standard Test Run (`ai test`)
+## Standard Test Run
 
 Run the full TestSprite suite:
 
@@ -28,7 +28,7 @@ Gate: All tests must pass at 100% before any commit. If a test fails, you are **
 
 ---
 
-## Vibe & Chaos Audit (`ai test --vibe`)
+## Vibe & Chaos Audit (--vibe flag)
 
 Trigger this when the user requests `--vibe` or for any **Tier 3** release.
 
@@ -58,4 +58,4 @@ Use the `chaos_monkey` agent to:
 All three must exist in `.ai/REVIEWS.md` before committing:
 - `[VIBE_REPORT]` (≤ 7 days old)
 - `[CHAOS_CLEARED]`
-- `[CRITIC_STAMP]` (from `ai review`)
+- `[CRITIC_STAMP]` (from `skill: ai-review`)

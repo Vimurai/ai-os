@@ -150,6 +150,18 @@
       "args": [
         "/Users/emirkovacevic/.ai-os/mcp/cache-manager-mcp/index.js"
       ]
+    },
+    "mcp-router": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/mcp-router/index.js"
+      ]
+    },
+    "code-execution-mcp": {
+      "command": "node",
+      "args": [
+        "/Users/emirkovacevic/.ai-os/mcp/code-execution-mcp/index.js"
+      ]
     }
   }
 }

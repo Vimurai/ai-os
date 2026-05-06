@@ -1,19 +1,19 @@
-# DIGEST — AI-OS v2 (Updated: 2026-05-05)
+# DIGEST — AI-OS v2 (Updated: 2026-05-06)
 
 ## Product
-- Autonomous operating system for AI agents (Claude Code + Gemini CLI) with ACID-compliant SQLite state, strict RBAC, JIT context loading, Explicit Context Caching, Structured Outputs, and a collapsed bootloader CLI.
+- Autonomous operating system for AI agents (Claude Code + Gemini CLI) with ACID-compliant SQLite state, strict RBAC, JIT context loading, Explicit Context Caching, Structured Outputs, sandboxed code execution, dynamic MCP routing, and a collapsed bootloader CLI.
 
 ## Stack
-- Node.js 22+ (MCP servers, node:sqlite built-in), Python 3.10+ (fallbacks), SQLite3 (state), Bash (CI/tests/install), npm workspaces (monorepo)
+- Node.js 22+ (MCP servers, node:sqlite built-in), Python 3.10+ (fallbacks), SQLite3 (state), Bash (CI/tests/install), Docker (code-execution sandbox), npm workspaces (monorepo)
 
 ## Triad Health
-- Architect (Gemini): IDLE — last task P-16 (CLI collapse blueprint, 2026-04-28); P-15 closed 2026-05-05 (structured-outputs §3 reframed as runtime MCP _assertSchema validation)
-- Engineer (Claude): IDLE — all 54 tasks DONE; CLI-collapse trio (E-34/E-35/E-36) and audit-followup E-37 closed 2026-05-05
-- Tester (TestSprite): PASS — 688/688 baseline post-E-37 conversion; behavioral mcp_behavioral_test.sh 40/40, registry_sync_test.sh 5/5
+- Architect (Gemini): IDLE — last task P-20 (git-hooks call-by-reference stub blueprint, 2026-05-05)
+- Engineer (Claude): IDLE — all 56 tasks DONE; latest E-41 (git-hook stub model, 2026-05-06)
+- Tester (TestSprite): PASS — 799/799 baseline post-E-41; behavioral mcp_behavioral_test.sh extended; new git_hooks_stub_test.sh 28/28; verify_compliance 63/63 clean
 
 ## Current Focus
 - (none) — state.json focus is null; awaiting next P-## from Architect or new audit cycle
-- Followups still queued informally: hooks/pre-commit.sh canonical-vs-local drift (Tier 1 bypass + SQLite stamp lookup uncommitted, flagged 2026-04-28)
+- Open ALIGN_FAIL (2026-05-06): aligner flagged architect.md edit + "../" pattern + orphan warnings on .claude/agents during E-41 commit prep — pre-existing false positives per Tier 3 disposition (Gemini-authored P-17/P-20; canonical ESM sibling import). Manual reconciliation recorded in REVIEWS.md.
 
 ## Key Decisions
 - D-001: npm workspaces at root; @modelcontextprotocol/sdk pinned exactly to 1.27.1, children "*" (E-20)
@@ -22,14 +22,19 @@
 - D-004: cache-manager-mcp assembles architect.md + blueprints/*.md + state.sqlite schema; mtime invalidation
 - D-005: structured logging unified — src/mcp/shared/logger.js (NDJSON to stderr) across all 21 MCP servers (E-18)
 - D-006: `ai` CLI collapsed to bootloader-only (install/init/sync/doctor/uninstall/version); operational verbs migrated to skills; tmux split-pane is the recommended workflow (E-34/E-35/E-36)
-- D-007: Test gate is behavioral-first — tool registration via mcp_assert_tool_listed / mcp_assert_tool_param_required over stdio JSON-RPC; source-grep retained only for security anti-pattern checks with no protocol surface (E-37)
+- D-007: Test gate is behavioral-first — tool registration via mcp_assert_tool_listed / mcp_assert_tool_param_required over stdio JSON-RPC; source-grep retained only for security anti-pattern checks (E-37)
+- D-008: code-execution-mcp sandbox — fail-closed Docker boundary (network=none, read-only, cap-drop=ALL, --user=65534, tmpfs noexec/nosuid, pids-limit=64, mem 512m, no docker.sock leak); no bare-metal fallback (E-39)
+- D-009: mcp-router progressive tool discovery + JSON-RPC stdio proxy with active-domain gate + registry allowed-tools mirror (RBAC defense-in-depth) (E-40)
+- D-010: git hooks installed as 12-13 line execution stubs (call-by-reference to ~/.ai-os/hooks/); fail-closed pre-commit, fail-open post-commit; `ai sync` auto-upgrades legacy copy-mode hooks (E-41)
 
 ## Known Risks
-- Local .git/hooks/pre-commit drifted from canonical hooks/pre-commit.sh (Tier 1 bypass + SQLite stamp lookup uncommitted) — flagged 2026-04-28, still open
-- computer-use-mcp Linux-only (Xvfb + DISPLAY=:99); macOS/Windows unsupported
-- structured-outputs.md is Phase 1 (runtime MCP validation only) — full API-level enforcement deferred to Phase 2 if/when bin/ai gains an LLM integration layer
+- Persistent ALIGN_FAIL false positives — aligner cannot infer authorship of architect.md edits (Gemini-owned blueprints), and literal-matches "../" on canonical ESM sibling imports. Manual disposition required per Tier 3 commit (recurring 2026-05-05 / 2026-05-06).
+- computer-use-mcp Linux-only (Xvfb + DISPLAY=:99); macOS/Windows unsupported.
+- code-execution-mcp depends on Docker daemon — fail-closed when unavailable; no bare-metal fallback by design.
+- structured-outputs.md is Phase 1 (runtime MCP _assertSchema only); full API-level enforcement deferred to Phase 2 if/when bin/ai gains LLM integration.
+- Local .git/hooks/pre-commit historically drifted from canonical (Tier 1 bypass + SQLite stamp lookup) — partly mitigated by E-41 stub model + auto-upgrade on `ai sync`; verify on next sprint.
 
-## MCP Servers (23 registered in .mcp.json)
+## MCP Servers (24 registered in .mcp.json)
 - State: task-synchronizer-mcp, orchestrator-mcp, archive-manager-mcp, memory, memory-manager-mcp
 - Code: filesystem, lsp-mcp, patch-mcp, propose-patch-mcp
 - Safety: safe-exec-mcp (BLOCK_RULES extended E-23), context-guardian-mcp, risk-analyzer-mcp, verification-mcp
@@ -37,18 +42,20 @@
 - Quality: TestSprite, vibe-check-mcp, computer-use-mcp (sandbox env enforced E-38)
 - Interop: advisor-mcp (A2A bridge to Gemini, env allowlisted E-17), approval-mcp (HITL Tier 3)
 - Caching: cache-manager-mcp (Explicit Context Cache, finally-close fix E-25)
+- Compute: code-execution-mcp (Docker sandbox, fail-closed E-39)
+- Routing: mcp-router (progressive discovery + RBAC mirror E-40)
 
 ## Recent Changes (last 10)
-- 2026-05-05: P-15 structured-outputs.md §3 reframed — runtime MCP _assertSchema validation, API-level enforcement deferred to Phase 2 (Gemini)
-- 2026-05-05: E-37 behavioral conversion of remaining tool-registration grep assertions across 3 suites; mcp_assert_tool_param_required helper added (688/688 PASS)
+- 2026-05-06: E-41 git-hook execution-stub model — install_git_hooks emits 12-13 line stubs forwarding to ~/.ai-os/hooks; do_sync auto-upgrades legacy copies; new git_hooks_stub_test.sh (28/28); 799/799 PASS
+- 2026-05-05: P-20 git-hooks.md blueprint — call-by-reference stub model to seal canonical-vs-local drift (Gemini)
+- 2026-05-05: E-40 mcp-router server — list_domains/activate_domain/proxy_call; Compute domain wired; 724/724 → 771/771 PASS with E-39
+- 2026-05-05: E-39 code-execution-mcp Tier 3 — fail-closed Docker sandbox; ARCH_PASS SEC_PASS SEC_CLEARED TESTS_PASS CRITIC_STAMP UACS_VERIFIED
+- 2026-05-05: P-17/P-18/P-19 (Gemini) — architect.md §5 collapsed to delegate to mcp.md; blueprinted code-execution.md + mcp-router.md
+- 2026-05-05: P-15 (Gemini) — structured-outputs.md §3 reframed as runtime MCP _assertSchema validation (API-level deferred to Phase 2)
+- 2026-05-05: E-37 behavioral conversion — mcp_assert_tool_param_required helper added; 3 suites migrated; 688/688 PASS
 - 2026-05-05: E-36 README/CONTRIBUTING — tmux split-pane workflow + post-collapse skill flow documented
 - 2026-05-05: E-35 1:1 skill mapping — removed broken `ai *` refs across 5 templates, 6 toml descs, 3 agents, 6 SKILLs, both bootloaders
 - 2026-05-04: E-34 src/bin/ai collapsed 2087→~1535 lines; 8 user verbs deprecated to skill pointers; 689/689 PASS
-- 2026-04-28: E-38 computer-use-mcp sandbox env carried in registry.json + propagated by `ai sync` + registry_sync_test.sh asserts contract
-- 2026-04-28: E-33 hooks/pre-commit.sh check_registry_sync — gates registry/.mcp.json/install drift
-- 2026-04-28: E-32 .gemini/skills/ shared skills (ai-context-check/debug/handoff/log) backfilled into tracked tree
-- 2026-04-28: E-31 _SKILLS_INDEX.md gitignored + deterministic generator (LC_ALL=C sort)
-- 2026-04-28: E-30 mcp_integration_test.sh source-grep block (12) → behavioral roundtrips; vibe-check-mcp coverage added
 
 ---
 DIGEST must be accurate or flagged as stale. If stale, run: skill: ai-digest

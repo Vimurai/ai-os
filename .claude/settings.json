@@ -67,7 +67,11 @@
       "mcp__cache-manager-mcp__build_cache",
       "mcp__cache-manager-mcp__get_cached_context",
       "mcp__cache-manager-mcp__invalidate_cache",
-      "mcp__cache-manager-mcp__get_cache_status"
+      "mcp__cache-manager-mcp__get_cache_status",
+      "mcp__mcp-router__list_domains",
+      "mcp__mcp-router__activate_domain",
+      "mcp__mcp-router__proxy_call",
+      "mcp__code-execution-mcp__execute_code"
     ]
   },
   "hooks": {
