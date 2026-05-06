@@ -259,14 +259,20 @@ if (!Array.isArray(tools) || tools.length !== expected.length) process.exit(1);
 for (const t of expected) if (!tools.includes(t)) process.exit(1);
 JS
 
-assert_status 0 "mcp-router in src/templates/.mcp.json" \
-  node --input-type=module <<JS
+# src/templates/.mcp.json is gitignored (regenerated locally by `ai sync`).
+# Skip the template assertion when the file is absent — CI/clones never have it.
+if [[ -f "${REPO_ROOT}/src/templates/.mcp.json" ]]; then
+  assert_status 0 "mcp-router in src/templates/.mcp.json" \
+    node --input-type=module <<JS
 import { readFileSync } from 'fs';
 const m = JSON.parse(readFileSync('${REPO_ROOT}/src/templates/.mcp.json', 'utf8'));
 if (!m.mcpServers['mcp-router']) process.exit(1);
 const args = m.mcpServers['mcp-router'].args || [];
 if (!args.some(a => a.includes('mcp-router') && a.endsWith('index.js'))) process.exit(1);
 JS
+else
+  echo "  ⚠  src/templates/.mcp.json absent (gitignored) — skipping template wiring check"
+fi
 
 # ── T-ROUTER-S09: Security invariants (source-grep — no protocol surface) ─────
 echo ""

@@ -224,13 +224,19 @@ const t = r.mcp_servers['code-execution-mcp']['allowed-tools'];
 if (!Array.isArray(t) || t.length !== 1 || t[0] !== 'execute_code') process.exit(1);
 JS
 
-assert_status 0 "code-execution-mcp in src/templates/.mcp.json" \
-  node --input-type=module <<JS
+# src/templates/.mcp.json is gitignored (regenerated locally by `ai sync`).
+# Skip the template assertion when the file is absent — CI/clones never have it.
+if [[ -f "${REPO_ROOT}/src/templates/.mcp.json" ]]; then
+  assert_status 0 "code-execution-mcp in src/templates/.mcp.json" \
+    node --input-type=module <<JS
 import { readFileSync } from 'fs';
 const m = JSON.parse(readFileSync('${REPO_ROOT}/src/templates/.mcp.json', 'utf8'));
 const e = m.mcpServers['code-execution-mcp'];
 if (!e || !(e.args || []).some(a => a.includes('code-execution-mcp') && a.endsWith('index.js'))) process.exit(1);
 JS
+else
+  echo "  ⚠  src/templates/.mcp.json absent (gitignored) — skipping template wiring check"
+fi
 
 # ── T-CODEX-S07: End-to-end (gated on Docker daemon) ──────────────────────────
 echo ""
