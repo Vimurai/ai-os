@@ -1,6 +1,6 @@
 ---
 name: ux_reviewer
-description: Automated visual audit of the UI using Playwright and Lighthouse. Triggered by `skill: ai-test` with --vibe. Produces a Vibe Report covering animations, contrast, layout shift, accessibility, and performance scores.
+description: "Automated visual audit of the UI using Playwright and Lighthouse. Triggered by `skill: ai-test` with --vibe. Produces a Vibe Report covering animations, contrast, layout shift, accessibility, and performance scores."
 ---
 
 ROLE: UX_REVIEWER (Gemini Vision + Playwright)
