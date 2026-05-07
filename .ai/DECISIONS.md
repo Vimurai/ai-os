@@ -1,12 +1,18 @@
+---
+type: decisions
+tags: [decisions, architecture, dependencies]
+status: active
+---
+
 # DECISIONS (Append-only — architectural and dependency decisions)
 
 ---
 
-## D-001 — npm/pnpm Workspace Monorepo for src/mcp/*
+## [[D-001]] — npm/pnpm Workspace Monorepo for src/mcp/*
 
 **Date**: 2026-04-14
-**Task**: E-1
-**Decision**: npm workspaces (confirmed — matches blueprint workspace.md §2)
+**Task**: [[E-1]]
+**Decision**: npm workspaces (confirmed — matches blueprint [[workspace.md]] §2)
 
 ### Why needed
 16 MCP servers in `src/mcp/` each carry their own `node_modules/`. Every server independently installs `@modelcontextprotocol/sdk` (and in some cases `zod`, `typescript`, `shell-quote`, `@playwright/test`). This creates 16x duplication, version drift risk, and a fragmented upgrade surface. An npm/pnpm workspace at the project root hoists shared deps to a single location and enforces a unified version resolution.
@@ -41,14 +47,14 @@
 
 ---
 
-## D-002 — computer-use-mcp: New MCP Server for Native Computer Use (E-8)
+## [[D-002]] — computer-use-mcp: New MCP Server for Native Computer Use ([[E-8]])
 
 **Date**: 2026-04-21
-**Task**: E-8
+**Task**: [[E-8]]
 **Decision**: computer-use-mcp (confirmed 2026-04-21)
 
 ### Why needed
-`vibe-check-mcp` uses Playwright (DOM/headless Chrome scraping) for visual QA. This approach misses native UI elements, OS-level dialogs, and non-web surfaces. The blueprint (`.ai/blueprints/capabilities.md` §2) mandates augmenting vibe-check-mcp with native OS-level Computer Use capabilities so TestSprite can visually assert UI state without DOM coupling — aligning with Project Mariner / Claude Computer Use.
+`vibe-check-mcp` uses Playwright (DOM/headless Chrome scraping) for visual QA. This approach misses native UI elements, OS-level dialogs, and non-web surfaces. The blueprint ([[capabilities.md]] §2) mandates augmenting vibe-check-mcp with native OS-level Computer Use capabilities so TestSprite can visually assert UI state without DOM coupling — aligning with Project Mariner / Claude Computer Use.
 
 ### Alternatives considered
 1. **Extend Playwright** — DOM scraping; can't interact with native OS windows, Electron chrome, or non-web surfaces. Rejected.
@@ -79,10 +85,10 @@
 
 ---
 
-## D-003 — approval-mcp: No New Dependencies (E-10)
+## [[D-003]] — approval-mcp: No New Dependencies ([[E-10]])
 
 **Date**: 2026-04-24
-**Task**: E-10
+**Task**: [[E-10]]
 **Decision**: No new npm packages — Node.js built-ins only (confirmed 2026-04-24)
 
 ### Why needed
@@ -111,14 +117,14 @@
 
 ---
 
-## D-004 — cache-manager-mcp: Dedicated MCP Server vs. token-budget-mcp Extension
+## [[D-004]] — cache-manager-mcp: Dedicated MCP Server vs. token-budget-mcp Extension
 
 **Date**: 2026-04-27
-**Task**: E-11
+**Task**: [[E-11]]
 **Decision**: New dedicated `cache-manager-mcp` server (no new npm packages — SDK already hoisted)
 
 ### Why needed
-Blueprint `caching.md` §3 specifies that the cache payload (`.ai/blueprints/*.md`, `architect.md`, `state.sqlite` schema, `registry.json`) must be pre-assembled and persisted so agents can include it as a long-lived system prompt prefix — enabling Anthropic's prompt caching to eliminate per-turn JIT read costs.
+Blueprint [[caching.md]] §3 specifies that the cache payload (`.ai/blueprints/*.md`, `architect.md`, `state.sqlite` schema, `registry.json`) must be pre-assembled and persisted so agents can include it as a long-lived system prompt prefix — enabling Anthropic's prompt caching to eliminate per-turn JIT read costs.
 
 ### Alternatives considered
 1. **Extend `token-budget-mcp`** — token-budget-mcp tracks cost/spend; caching is a separate concern (file I/O, mtime tracking, context assembly). Mixing them violates single-responsibility and would bloat a server already wired into every agent. Rejected.
@@ -141,10 +147,10 @@ Blueprint `caching.md` §3 specifies that the cache payload (`.ai/blueprints/*.m
 
 ---
 
-## D-005 — Call-by-Reference Git Hooks via Execution Stubs
+## [[D-005]] — Call-by-Reference Git Hooks via Execution Stubs
 
 **Date**: 2026-05-05
-**Task**: P-20
+**Task**: [[P-20]]
 **Decision**: Replace copy-by-value hook installation with dynamic execution stubs that source `~/.ai-os/hooks/`.
 
 ### Why needed
@@ -159,7 +165,7 @@ The existing hook installation copied the global `~/.ai-os/hooks/pre-commit.sh` 
 - **Consistency**: All projects on a single machine must enforce the exact same pre-commit quality gate logic (Gate 2).
 
 ### Impact
-- Unlocks: E-41 (Implementing the stub generator and auto-upgrader).
+- Unlocks: [[E-41]] (Implementing the stub generator and auto-upgrader).
 - Risk if wrong: If `~/.ai-os/hooks/` is corrupted or missing, all local commits in stubbed repositories could fail or bypass the gate depending on the stub's error handling.
 
 ### Rollback
