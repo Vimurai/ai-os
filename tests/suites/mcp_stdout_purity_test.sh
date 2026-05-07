@@ -160,9 +160,11 @@ echo "  [T-MPG-S11] Current repository's src/mcp/ is already clean"
 
 # Run the checker against a synthetic stage that adds every existing
 # src/mcp/**/*.js. If the repo has drifted, this is the canary.
+# Prune nested node_modules (vendor JS contains console.log and would
+# create false positives on CI where `npm ci` populates the workspaces).
 reset_index
 ( cd "$SANDBOX"
-  for f in $(cd "$REPO_ROOT" && find src/mcp -type f \( -name '*.js' -o -name '*.mjs' \) | head -40); do
+  for f in $(cd "$REPO_ROOT" && find src/mcp -type d -name node_modules -prune -o -type f \( -name '*.js' -o -name '*.mjs' \) -print | head -40); do
     rel="$f"
     mkdir -p "$(dirname "$rel")"
     cp "${REPO_ROOT}/${rel}" "$rel"
