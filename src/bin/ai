@@ -248,6 +248,11 @@ if os.path.exists(path):
 # Enable agent teams
 env = data.setdefault("env", {})
 env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+# E-50: Restore native terminal scrollback for tmux users by disabling
+# Claude Code's TUI alternate-screen mode. Per claude-obsidian-optimizations
+# §"Terminal Emancipation" + §Rollback: revert this if specific OSes show
+# rendering bugs.
+env.setdefault("CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN", "1")
 
 # Permissions: scoped Gemini CLI + registry-driven MCP tools
 perms = data.setdefault("permissions", {})
@@ -369,10 +374,24 @@ data["mcpServers"] = servers
 # E-45: pin gemini-3.1-pro and the May 2026 'steps' Interactions API schema.
 # Honour an explicit env override (GEMINI_MODEL) so the rollback path
 # documented in may-2026-upgrades.md works without re-editing the registry.
+#
+# Gemini CLI v0.40+ rejects a bare string for `model`: "Expected object,
+# received string". The setting must be an object with at least a `name`
+# key. We migrate any pre-existing string value in place so users don't
+# have to manually fix .gemini/settings.json.
 default_model = os.environ.get("GEMINI_MODEL") or gemini_cfg.get("default_model")
 api_schema    = gemini_cfg.get("interactions_api_schema")
-if default_model and not data.get("model"):
-    data["model"] = default_model
+if default_model:
+    existing = data.get("model")
+    if existing is None:
+        data["model"] = {"name": default_model}
+    elif isinstance(existing, str):
+        # Legacy string shape — migrate to the object form, preserving the
+        # user's chosen value.
+        data["model"] = {"name": existing}
+    elif isinstance(existing, dict) and not existing.get("name"):
+        existing["name"] = default_model
+    # else: well-formed object with explicit name — leave alone (user override).
 if api_schema and not data.get("interactions_api_schema"):
     data["interactions_api_schema"] = api_schema
 

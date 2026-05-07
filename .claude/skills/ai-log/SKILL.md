@@ -1,6 +1,6 @@
 ---
 name: ai-log
-description: Append a structured entry to .ai/LOG.md after any significant action. Enforces RULES §4 mandate. Checks if LOG.md exceeds 200 lines and triggers ai-archive warning if so.
+description: "Append a structured entry to .ai/LOG.md after any significant action. Enforces RULES §4 mandate. Captures CLAUDE_CODE_SESSION_ID for cryptographic audit traceability (E-49). Wraps task IDs in Obsidian [[wikilinks]] (E-51). Checks if LOG.md exceeds 200 lines and triggers ai-archive warning if so."
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Edit
@@ -13,6 +13,7 @@ agent: default
 ## Dynamic Context Injection
 Log line count: !wc -l < .ai/LOG.md 2>/dev/null || echo "0"
 Last 3 entries: !tail -3 .ai/LOG.md 2>/dev/null || echo "(empty)"
+Session id: !printf '%s' "${CLAUDE_CODE_SESSION_ID:-(unset)}"
 
 ## Role
 
@@ -27,29 +28,44 @@ You are the **Log Keeper**. Your job is to append one structured entry to `.ai/L
 
 ## Step 1 — Compose the Entry
 
-Format:
+Format (E-49 + E-51):
 ```
-YYYY-MM-DD | <Actor> | <Task-ID or action> | <one-line summary of what happened>
+YYYY-MM-DD | <Actor> | [[<Task-ID>]] or action | <one-line summary> | session=<CLAUDE_CODE_SESSION_ID|none>
 ```
 
 Rules:
 - Actor: `Claude` (Engineer) or `Gemini` (Architect)
-- Task-ID: use `E-##` or `P-##` if tied to a task; otherwise use the action name (e.g. `dependency_gate`, `ci_gate`, `hotfix`)
-- Summary: what changed and why — not how. Max 120 characters.
+- Task-ID: when tied to a task, wrap as an Obsidian wikilink — `[[E-##]]` /
+  `[[P-##]]` / `[[D-###]]` (E-51 — enables backlinks in Obsidian graph). For
+  non-task actions use the bare action name (e.g. `dependency_gate`,
+  `ci_gate`, `hotfix`).
+- Summary: what changed and why — not how. Max 120 characters. Reference
+  related notes the same way: `[[blueprint-name.md]]`, `[[D-012]]`.
+- **Session:** read `$CLAUDE_CODE_SESSION_ID` from the environment. If unset or empty, write `session=none`. Otherwise, write the value verbatim — but only if it matches the regex `[A-Za-z0-9-]{1,64}`. If it doesn't (untrusted input), write `session=invalid`.
 - Never duplicate an entry already in LOG.md for the same action.
 
 Examples:
 ```
-2026-04-14 | Claude | E-1 | Added root package.json with npm workspaces; sdk hoisted to root
-2026-04-14 | Claude | dependency_gate | Approved @modelcontextprotocol/sdk upgrade to ^1.1.0 — no CVEs
-2026-04-14 | Gemini | P-4 | Designed workspace blueprint in .ai/blueprints/workspace.md
+2026-04-14 | Claude | [[E-1]]   | Added root package.json with npm workspaces; sdk hoisted to root | session=01J9X2A1Z3
+2026-04-14 | Claude | dependency_gate | Approved @modelcontextprotocol/sdk upgrade to ^1.1.0 — no CVEs | session=none
+2026-04-14 | Gemini | [[P-4]]   | Designed workspace blueprint in [[workspace.md]] | session=01J9X2A1Z3
 ```
 
 ## Step 2 — Append to LOG.md
 
-Use Edit or Bash append — never overwrite:
+Use Edit or Bash append — never overwrite. The recommended idiom captures the
+session id once and validates it before composing the line:
+
 ```bash
-echo "YYYY-MM-DD | Actor | Task | Summary" >> .ai/LOG.md
+sid="${CLAUDE_CODE_SESSION_ID:-}"
+if [[ -z "$sid" ]]; then
+  tag="session=none"
+elif [[ "$sid" =~ ^[A-Za-z0-9-]{1,64}$ ]]; then
+  tag="session=${sid}"
+else
+  tag="session=invalid"
+fi
+echo "$(date -u +%Y-%m-%d) | Actor | Task | Summary | ${tag}" >> .ai/LOG.md
 ```
 
 ## Step 3 — Check Archive Threshold

@@ -94,6 +94,22 @@ function isTTYAvailable() {
 
 let db = null;
 
+// E-49: Session-traceability sanitiser. CLAUDE_CODE_SESSION_ID is treated
+// as untrusted input from the environment per claude-obsidian-optimizations
+// §Security. We accept only [A-Za-z0-9-] and cap the length at 64 — long
+// enough for a UUIDv4 (36) plus a generous prefix, short enough to preclude
+// pathological payloads. Anything else collapses to NULL so the audit trail
+// never carries a hostile string.
+const SESSION_ID_MAX_LENGTH = 64;
+const SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+function captureSessionId() {
+  const raw = process.env.CLAUDE_CODE_SESSION_ID;
+  if (!raw || typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > SESSION_ID_MAX_LENGTH) return null;
+  return SESSION_ID_RE.test(trimmed) ? trimmed : null;
+}
+
 function getDb() {
   if (db) return db;
   mkdirSync(STORE_DIR, { recursive: true, mode: 0o700 });
@@ -110,20 +126,36 @@ function getDb() {
       resolved_at  TEXT   NOT NULL DEFAULT (datetime('now','utc'))
     );
   `);
+
+  // E-49: idempotent schema migration. ALTER TABLE … ADD COLUMN errors if
+  // the column already exists, so probe pragma_table_info first.
+  const cols = conn
+    .prepare("SELECT name FROM pragma_table_info('approvals')")
+    .all()
+    .map((r) => r.name);
+  if (!cols.includes("session_id")) {
+    conn.exec(
+      `ALTER TABLE approvals ADD COLUMN session_id TEXT
+         CHECK(session_id IS NULL OR length(session_id) <= ${SESSION_ID_MAX_LENGTH})`
+    );
+  }
+
   db = conn;
   return db;
 }
 
 /**
  * T-HITL-004: Write approval record to SQLite BEFORE returning the MCP response.
+ * E-49: Captures sanitised CLAUDE_CODE_SESSION_ID from the environment so
+ * every audit row links back to the originating Claude Code session.
  * Returns the inserted row ID.
  */
 function recordDecision(action, reason, status) {
   const conn = getDb();
   const stmt = conn.prepare(
-    "INSERT INTO approvals (action, reason, status) VALUES (?, ?, ?)"
+    "INSERT INTO approvals (action, reason, status, session_id) VALUES (?, ?, ?, ?)"
   );
-  const result = stmt.run(action, reason, status);
+  const result = stmt.run(action, reason, status, captureSessionId());
   return result.lastInsertRowid;
 }
 

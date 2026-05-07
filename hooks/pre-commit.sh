@@ -212,6 +212,45 @@ REGISTRY_BLOCK
 
 check_registry_sync
 
+# ── E-48: MCP Stdout Purity Gate ─────────────────────────────────────────────
+# Forbids newly added console.log / console.info calls under src/mcp/. Those
+# calls would corrupt the JSON-RPC stdout stream MCP clients parse.
+# console.error / stderr writes are permitted (shared NDJSON logger).
+check_mcp_stdout_purity() {
+  local staged_files
+  staged_files=$(git diff --cached --name-only --diff-filter=AM 2>/dev/null)
+  echo "$staged_files" | grep -qE '^src/mcp/.*\.(js|mjs|cjs|ts)$' || return 0
+
+  local repo_root checker
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  checker="${repo_root}/tests/lib/mcp_purity_check.sh"
+  [[ -f "$checker" ]] || return 0  # checker missing — nothing to enforce
+
+  local out
+  if ! out=$(bash "$checker" 2>&1); then
+    cat >&2 <<MCP_PURITY_BLOCK
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: MCP STDOUT PURITY — COMMIT BLOCKED                      ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  Newly added console.log / console.info found in src/mcp/.              ║
+║  MCP servers must keep stdout reserved for JSON-RPC traffic; logging    ║
+║  belongs on stderr via the shared NDJSON logger.                        ║
+║                                                                          ║
+║  Fix: replace with                                                       ║
+║      import { createLogger } from "../shared/logger.js";                ║
+║      const log = createLogger("my-mcp");                                ║
+║      log.info("tool", "message", { extras });                           ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+MCP_PURITY_BLOCK
+    echo "$out" >&2
+    exit 1
+  fi
+}
+
+check_mcp_stdout_purity
+
 # ── Gate 2 check ─────────────────────────────────────────────────────────────
 if has_recent_critic_stamp; then
   exit 0

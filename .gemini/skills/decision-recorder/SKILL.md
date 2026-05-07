@@ -1,6 +1,6 @@
 ---
 name: decision-recorder
-description: Capture architectural decisions into .ai/DECISIONS.md as D-### entries. Covers design choices, trade-offs, rejected alternatives, and the constraints driving each decision. Invoke after any major architectural choice.
+description: "Capture architectural decisions into .ai/DECISIONS.md as D-### entries. Covers design choices, trade-offs, rejected alternatives, and the constraints driving each decision. Emits Obsidian-compatible [[wikilinks]] for related blueprints/decisions/tasks (E-51). Invoke after any major architectural choice."
 disable-model-invocation: false
 user-invocable: true
 context: default
@@ -36,9 +36,22 @@ Extract from context:
 
 Read `.ai/DECISIONS.md` and count existing `## D-###` entries. Increment by 1.
 
-## Step 3 — Write the Entry
+## Step 3 — Write the Entry (E-51 — Obsidian Vault Memory)
 
-Append to `.ai/DECISIONS.md`:
+DECISIONS.md as a whole carries a single YAML frontmatter block at the top of
+the file. If it's missing, add it before appending the new D-### entry:
+
+```yaml
+---
+type: decisions
+tags: [decisions, architecture]
+---
+```
+
+Then append a D-### entry. **Every reference to another `.ai/` file, decision,
+or task MUST be expressed as an Obsidian [[wikilink]]** — never bare markdown
+links or plain paths. This lets the Obsidian graph render backlinks
+automatically and lets `memory_curator` index the relations.
 
 ```markdown
 ---
@@ -46,7 +59,8 @@ Append to `.ai/DECISIONS.md`:
 ## D-### — <Short title of the decision>
 
 **Date**: YYYY-MM-DD
-**Task**: P-## (or E-## if Claude-originated)
+**Task**: [[P-##]] (or [[E-##]] if Claude-originated)
+**Blueprint**: [[<filename>.md]]
 **Decision**: <One sentence — what was chosen>
 
 ### Why needed
@@ -61,11 +75,12 @@ Append to `.ai/DECISIONS.md`:
 - <Security / performance / compliance / timeline constraint>
 
 ### Impact
-- Unlocks: <P-## or E-## tasks now unblocked>
+- Unlocks: [[E-##]], [[P-##]] (the tasks now unblocked)
 - Risk if wrong: <what breaks if this decision turns out to be wrong>
+- Supersedes: [[D-###]] (when applicable)
 
 ### Rollback
-<How to reverse this decision if needed>
+<How to reverse this decision if needed — link any [[runbook.md]] / [[blueprint.md]] involved>
 
 ---
 ```
@@ -81,3 +96,4 @@ Report:
 - Do NOT leave "Alternatives considered" empty — if no alternatives were considered, that itself is worth noting
 - Do NOT overwrite existing D-### entries — DECISIONS.md is append-only
 - Do NOT write D-### for implementation details — those belong in LOG.md
+- Do NOT use bare links / paths for cross-refs — use `[[D-012]]`, `[[E-49]]`, `[[interop.md]]` (E-51 Obsidian Vault Memory)

@@ -90,9 +90,30 @@ ensure_path_line() {
   fi
 }
 
+# E-50: restore native terminal scrollback for tmux users by disabling
+# Claude Code's TUI alternate-screen mode at the shell level. This ensures
+# `claude` invoked outside an AI-OS project still inherits the flag. Per
+# claude-obsidian-optimizations §Rollback: comment the export out if a
+# specific OS shows rendering bugs.
+ensure_env_line() {
+  local rc="$1" var="$2" value="$3"
+  local line="export ${var}=\"${value}\""
+  [[ -f "$rc" ]] || touch "$rc"
+  # Match on the variable name so re-runs don't append duplicates even if
+  # the value has been edited.
+  if ! grep -qE "^export[[:space:]]+${var}=" "$rc" 2>/dev/null; then
+    printf "%s\n" "$line" >> "$rc"
+    echo "✓ Added ${var} to ${rc}"
+  fi
+}
+
 ensure_path_line "${HOME}/.zprofile"
 ensure_path_line "${HOME}/.zshrc"
 ensure_path_line "${HOME}/.bashrc"
+
+ensure_env_line "${HOME}/.zprofile" "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" "1"
+ensure_env_line "${HOME}/.zshrc"    "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" "1"
+ensure_env_line "${HOME}/.bashrc"   "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" "1"
 
 # ── 4) Install global configs + hooks + fix settings.json ────────────────────
 
