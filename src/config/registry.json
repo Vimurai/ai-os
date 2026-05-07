@@ -1,6 +1,12 @@
 {
   "version": "2.0",
   "comment": "AI-OS v2 MCP Server Registry. All servers must be listed here before they can be used with WRITE or EXECUTE permissions.",
+  "gemini": {
+    "default_model": "gemini-3.1-pro",
+    "interactions_api_schema": "steps",
+    "_note": "E-45: gemini-2.x series shuts down 2026-06-01. The Interactions API switched the request payload key from 'outputs' to 'steps' on 2026-05-20. bin/ai writes default_model into .gemini/settings.json on init/sync; user values are preserved. Override via env GEMINI_MODEL or by editing .gemini/settings.json after sync.",
+    "_rollback": "Per may-2026-upgrades.md §Rollback Plan: set GEMINI_MODEL=gemini-2.5-pro (while still available) if 3.1-pro shows prompt drift."
+  },
   "mcp_servers": {
     "filesystem": {
       "package": "@modelcontextprotocol/server-filesystem",

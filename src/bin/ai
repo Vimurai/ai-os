@@ -341,6 +341,7 @@ servers = {
 }
 
 # Registry-driven custom servers (same source of truth as generate_mcp_json)
+gemini_cfg = {}
 if os.path.exists(registry_path):
     with open(registry_path) as f:
         reg = json.load(f)
@@ -353,6 +354,7 @@ if os.path.exists(registry_path):
             if isinstance(info.get("env"), dict) and info["env"]:
                 entry["env"] = dict(info["env"])
             servers[name] = entry
+    gemini_cfg = reg.get("gemini") or {}
 
 data = {}
 if os.path.exists(path):
@@ -363,6 +365,16 @@ if os.path.exists(path):
         print(f"WARN: {path} is not valid JSON ({e}). Recreating.")
 
 data["mcpServers"] = servers
+
+# E-45: pin gemini-3.1-pro and the May 2026 'steps' Interactions API schema.
+# Honour an explicit env override (GEMINI_MODEL) so the rollback path
+# documented in may-2026-upgrades.md works without re-editing the registry.
+default_model = os.environ.get("GEMINI_MODEL") or gemini_cfg.get("default_model")
+api_schema    = gemini_cfg.get("interactions_api_schema")
+if default_model and not data.get("model"):
+    data["model"] = default_model
+if api_schema and not data.get("interactions_api_schema"):
+    data["interactions_api_schema"] = api_schema
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)

@@ -1,5 +1,10 @@
 # GEMINI.md — Project Bootloader
 
+## Model Mandate (E-45, May 2026)
+- **Required model:** `gemini-3.1-pro`. The 2.x series shuts down 2026-06-01.
+- **Interactions API schema:** payloads MUST use the `steps` array (the prior `outputs` shape was retired 2026-05-20).
+- The model + schema are pinned in `src/config/registry.json` under `gemini.default_model` / `gemini.interactions_api_schema` and propagated into `.gemini/settings.json` by `ai init` and `ai sync`. To roll back per `.ai/blueprints/may-2026-upgrades.md` §Rollback, set `GEMINI_MODEL=gemini-2.5-pro` (while still available) before running `ai sync`.
+
 ## Session Start (MANDATORY)
 At the start of EVERY session, read `.ai/` files before anything else:
 ```
