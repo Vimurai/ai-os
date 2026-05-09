@@ -205,6 +205,16 @@
       "created_at": "2026-05-09T20:45:52.794Z",
       "completed_at": "2026-05-09T20:45:58.827Z",
       "summary": "Blueprint Node.js SQLite WAL checkpoint strategy."
+    },
+    {
+      "id": "E-59",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "CI hotfix on E-58: extend _wal_checkpoint_state_db() locator chain in src/bin/ai with a ${SELF_DIR}/../shared/wal-flusher.mjs candidate (derived from BASH_SOURCE[0]) so sqlite_wal_checkpoint_test.sh T-WAL-S04 finds the script when sourced from a temp cwd in CI (where ~/.ai-os is empty).",
+      "created_at": "2026-05-09T22:07:46.385Z",
+      "completed_at": "2026-05-09T22:07:57.483Z",
+      "summary": "CI hotfix (Tier 1). _wal_checkpoint_state_db() in src/bin/ai now resolves wal-flusher.mjs via a SELF_DIR-derived path (third candidate, between cwd-relative and ${AIOS}/shared). Root cause: sqlite_wal_checkpoint_test.sh T-WAL-S04 sources bin/ai inside a mktemp SBOX where neither `src/shared/wal-flusher.mjs` (cwd-relative) nor `${AIOS}/shared/wal-flusher.mjs` (=~/.ai-os, unpopulated in CI) exists, so the helper printed \"wal-flusher.mjs not found\" instead of \"WAL checkpoint complete\". Fix uses BASH_SOURCE[0] of the function to derive `${SELF_DIR}/../shared/wal-flusher.mjs`, which resolves the dev-tree script regardless of cwd or install state. SBOX repro under simulated empty AIOS now emits the success line and exits 0. Local: 1123/1123 PASS, sqlite_wal_checkpoint_test.sh 13/13. Files: src/bin/ai (+6 lines, locator chain only). Commit: f4d54bf, pushed to origin/master, fresh CI run 25612953667 in flight."
     }
   ],
   "stamps": [
@@ -650,7 +660,19 @@
       "summary": "[TIER_2] E-55 + E-56 + E-57 + E-58 sprint — Blueprint aligned (post-introspector). 1123/1123 tests PASS (+26: wal_flusher_node 14, sqlite_wal_checkpoint +2, blueprint_aligner +10). E-57: src/shared/wal-flusher.mjs (110 lines, node:sqlite, no shell-out, validated db-path, structured NDJSON errors, ~60ms boot). E-58: bin/ai _wal_checkpoint_state_db now invokes node script via locator chain (repo → ${AIOS}/shared/), retires sqlite3 CLI dependency. E-55: parseDiffByFile + isMarkdownFile/isJsonFile/traversalOutsideBackticks introspectors in blueprint-aligner-mcp; CAPABILITIES_BYPASS skips .md/.json files and backtick-wrapped paths; UNAPPROVED_DEPENDENCY scoped to package.json. E-56: isTestHelperFile whitelists tests/{suites,lib}/*.sh sibling imports. No new deps/auth/secrets/breaking changes. MCP stdout purity clean."
     }
   ],
-  "deltas": [],
-  "digest_stale": false,
-  "digest_stale_reason": null
+  "deltas": [
+    {
+      "task_id": "E-59",
+      "summary": "E-59: CI hotfix (Tier 1). _wal_checkpoint_state_db() in src/bin/ai now resolves wal-flusher.mjs via a SELF_DIR-derived path (third candidate, between cwd-relative and ${AIOS}/shared). Root cause: sqlite_wal_checkpoint_test.sh T-WAL-S04 sources bin/ai inside a mktemp SBOX where neither `src/shared/wal-flusher.mjs` (cwd-relative) nor `${AIOS}/shared/wal-flusher.mjs` (=~/.ai-os, unpopulated in CI) exists, so the helper printed \"wal-flusher.mjs not found\" instead of \"WAL checkpoint complete\". Fix uses BASH_SOURCE[0] of the function to derive `${SELF_DIR}/../shared/wal-flusher.mjs`, which resolves the dev-tree script regardless of cwd or install state. SBOX repro under simulated empty AIOS now emits the success line and exits 0. Local: 1123/1123 PASS, sqlite_wal_checkpoint_test.sh 13/13. Files: src/bin/ai (+6 lines, locator chain only). Commit: f4d54bf, pushed to origin/master, fresh CI run 25612953667 in flight. | Files: .ai/DIGEST.md, .ai/TASKS.md, .ai/state.json",
+      "files": [
+        ".ai/DIGEST.md",
+        ".ai/TASKS.md",
+        ".ai/state.json"
+      ],
+      "read": false,
+      "created_at": "2026-05-09 22:07:57"
+    }
+  ],
+  "digest_stale": true,
+  "digest_stale_reason": "E-59 marked DONE — CI hotfix (Tier 1). _wal_checkpoint_state_db() in src/bin/ai now resolves wal-flusher.mjs via a SELF_DIR-derived path (third candidate, between cwd-relative and ${AIOS}/shared). Root cause: sqlite_wal_checkpoint_test.sh T-WAL-S04 sources bin/ai inside a mktemp SBOX where neither `src/shared/wal-flusher.mjs` (cwd-relative) nor `${AIOS}/shared/wal-flusher.mjs` (=~/.ai-os, unpopulated in CI) exists, so the helper printed \"wal-flusher.mjs not found\" instead of \"WAL checkpoint complete\". Fix uses BASH_SOURCE[0] of the function to derive `${SELF_DIR}/../shared/wal-flusher.mjs`, which resolves the dev-tree script regardless of cwd or install state. SBOX repro under simulated empty AIOS now emits the success line and exits 0. Local: 1123/1123 PASS, sqlite_wal_checkpoint_test.sh 13/13. Files: src/bin/ai (+6 lines, locator chain only). Commit: f4d54bf, pushed to origin/master, fresh CI run 25612953667 in flight."
 }
