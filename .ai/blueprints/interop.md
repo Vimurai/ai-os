@@ -35,5 +35,5 @@ While AI-OS aims for autonomous execution, Tier 3 operations (e.g., executing st
   5. If the user selects 'N', the MCP tool returns a `{ status: "REJECTED" }` payload, and Claude must abort the current `E-##` task and mark it `BLOCKED`.
 
 ### Security Constraints
-- `approval-mcp` cannot be bypassed by setting `disable-model-invocation: true`. It is a hard-coded gate.
-- All approvals and rejections are permanently recorded in `.ai/state.sqlite` with a timestamp for OASF compliance.
+- **Bypass Resistance**: Real bypass-resistance is enforced by asserting `stdin.isTTY` (preventing headless non-interactive approvals) and utilizing a hardcoded database path (`~/.ai-os/approvals.sqlite`).
+- **Audit Trail**: All approvals and rejections are permanently recorded in `~/.ai-os/approvals.sqlite` with a timestamp and the exact `CLAUDE_CODE_SESSION_ID` for perfect OASF compliance.

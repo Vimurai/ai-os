@@ -2,7 +2,7 @@
 # alternate_screen_env_test.sh — Tests for E-50 terminal optimisation.
 #
 # Verifies CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 propagates through both
-# injection points called out in claude-obsidian-optimizations.md:
+# injection points called out in claude-code-optimizations.md:
 #   • src/bin/ai _configure_project_claude_settings → .claude/settings.json env
 #   • install-ai-os.sh → user shell rc files (.zprofile / .zshrc / .bashrc)
 # without clobbering pre-existing user values.

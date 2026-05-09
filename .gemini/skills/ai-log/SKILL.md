@@ -1,6 +1,6 @@
 ---
 name: ai-log
-description: "Append a structured entry to .ai/LOG.md after any significant action. Enforces RULES §4 mandate. Captures CLAUDE_CODE_SESSION_ID for cryptographic audit traceability (E-49). Wraps task IDs in Obsidian [[wikilinks]] (E-51). Checks if LOG.md exceeds 200 lines and triggers ai-archive warning if so."
+description: "Append a structured entry to .ai/LOG.md after any significant action. Enforces RULES §4 mandate. Captures CLAUDE_CODE_SESSION_ID for cryptographic audit traceability (E-49). Checks if LOG.md exceeds 200 lines and triggers ai-archive warning if so."
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Edit
@@ -28,27 +28,23 @@ You are the **Log Keeper**. Your job is to append one structured entry to `.ai/L
 
 ## Step 1 — Compose the Entry
 
-Format (E-49 + E-51):
+Format (E-49):
 ```
-YYYY-MM-DD | <Actor> | [[<Task-ID>]] or action | <one-line summary> | session=<CLAUDE_CODE_SESSION_ID|none>
+YYYY-MM-DD | <Actor> | <Task-ID or action> | <one-line summary> | session=<CLAUDE_CODE_SESSION_ID|none>
 ```
 
 Rules:
 - Actor: `Claude` (Engineer) or `Gemini` (Architect)
-- Task-ID: when tied to a task, wrap as an Obsidian wikilink — `[[E-##]]` /
-  `[[P-##]]` / `[[D-###]]` (E-51 — enables backlinks in Obsidian graph). For
-  non-task actions use the bare action name (e.g. `dependency_gate`,
-  `ci_gate`, `hotfix`).
-- Summary: what changed and why — not how. Max 120 characters. Reference
-  related notes the same way: `[[blueprint-name.md]]`, `[[D-012]]`.
+- Task-ID: when tied to a task, use the bare ID (e.g. `E-##`, `P-##`, `D-###`). For non-task actions use the bare action name (e.g. `dependency_gate`, `ci_gate`, `hotfix`).
+- Summary: what changed and why — not how. Max 120 characters.
 - **Session:** read `$CLAUDE_CODE_SESSION_ID` from the environment. If unset or empty, write `session=none`. Otherwise, write the value verbatim — but only if it matches the regex `[A-Za-z0-9-]{1,64}`. If it doesn't (untrusted input), write `session=invalid`.
 - Never duplicate an entry already in LOG.md for the same action.
 
 Examples:
 ```
-2026-04-14 | Claude | [[E-1]]   | Added root package.json with npm workspaces; sdk hoisted to root | session=01J9X2A1Z3
+2026-04-14 | Claude | E-1   | Added root package.json with npm workspaces; sdk hoisted to root | session=01J9X2A1Z3
 2026-04-14 | Claude | dependency_gate | Approved @modelcontextprotocol/sdk upgrade to ^1.1.0 — no CVEs | session=none
-2026-04-14 | Gemini | [[P-4]]   | Designed workspace blueprint in [[workspace.md]] | session=01J9X2A1Z3
+2026-04-14 | Gemini | P-4   | Designed workspace blueprint in workspace.md | session=01J9X2A1Z3
 ```
 
 ## Step 2 — Append to LOG.md

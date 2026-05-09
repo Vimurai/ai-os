@@ -95,7 +95,7 @@ function isTTYAvailable() {
 let db = null;
 
 // E-49: Session-traceability sanitiser. CLAUDE_CODE_SESSION_ID is treated
-// as untrusted input from the environment per claude-obsidian-optimizations
+// as untrusted input from the environment per claude-code-optimizations.md
 // §Security. We accept only [A-Za-z0-9-] and cap the length at 64 — long
 // enough for a UUIDv4 (36) plus a generous prefix, short enough to preclude
 // pathological payloads. Anything else collapses to NULL so the audit trail

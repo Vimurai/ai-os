@@ -35,6 +35,10 @@ if command -v rsync &>/dev/null; then
   rsync -a --delete "${REPO_DIR}/src/config/"     "${AIOS}/config/"
   rsync -a          "${REPO_DIR}/src/mcp/"        "${AIOS}/mcp/"
   rsync -a          "${REPO_DIR}/hooks/"           "${AIOS}/hooks/"
+  # E-52: ship the MCP doc generator so `ai sync` can regenerate mcp.md.
+  if [[ -d "${REPO_DIR}/scripts" ]]; then
+    rsync -a --delete "${REPO_DIR}/scripts/"       "${AIOS}/scripts/"
+  fi
 else
   cp -rf "${REPO_DIR}/src/contracts/"  "${AIOS}/contracts/"
   cp -rf "${REPO_DIR}/src/templates/"  "${AIOS}/templates/"
@@ -46,6 +50,10 @@ else
   cp -rf "${REPO_DIR}/src/config/"     "${AIOS}/config/"
   cp -rf "${REPO_DIR}/src/mcp/"        "${AIOS}/mcp/"
   cp -rf "${REPO_DIR}/hooks/"          "${AIOS}/hooks/"
+  # E-52: ship the MCP doc generator so `ai sync` can regenerate mcp.md.
+  if [[ -d "${REPO_DIR}/scripts" ]]; then
+    cp -rf "${REPO_DIR}/scripts/"      "${AIOS}/scripts/"
+  fi
 fi
 
 chmod +x "${AIOS}/bin/ai"

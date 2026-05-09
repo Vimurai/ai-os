@@ -64,6 +64,53 @@ ensure_file_if_missing() {
   fi
 }
 
+# E-52: Regenerate .ai/blueprints/mcp.md from registry.json + DOMAINS map.
+# Locates the generator first in the in-repo scripts/ (development mode),
+# falling back to ~/.ai-os/scripts/ (installed mode). Fail-open: missing
+# node, missing script, or generator error never blocks sync.
+_regenerate_mcp_docs() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "  ⚠ node not found — skipping mcp.md regeneration" >&2
+    return 0
+  fi
+  local SCRIPT=""
+  for candidate in \
+      "scripts/generate_mcp_docs.mjs" \
+      "${AIOS}/scripts/generate_mcp_docs.mjs"; do
+    if [[ -f "$candidate" ]]; then
+      SCRIPT="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$SCRIPT" ]]; then
+    echo "  ⚠ generate_mcp_docs.mjs not found — skipping mcp.md regeneration" >&2
+    return 0
+  fi
+  if node "$SCRIPT" 2>/dev/null; then
+    echo "  ✓ .ai/blueprints/mcp.md regenerated from registry.json"
+  else
+    echo "  ⚠ mcp.md regeneration failed — registry may be malformed (sync continues)" >&2
+  fi
+}
+
+# E-53: Flush .ai/state.sqlite WAL back to the main DB so .sqlite-wal cannot
+# grow without bound (drift-resolution-2026.md §State Singularity). Path is
+# hardcoded — never accepts user input. Fail-open: a missing sqlite3 CLI or
+# busy DB does not block sync/doctor.
+_wal_checkpoint_state_db() {
+  local DB=".ai/state.sqlite"
+  [[ -f "$DB" ]] || return 0
+  if ! command -v sqlite3 >/dev/null 2>&1; then
+    echo "  ⚠ sqlite3 CLI not found — skipping WAL checkpoint" >&2
+    return 0
+  fi
+  if sqlite3 "$DB" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1; then
+    echo "  ✓ WAL checkpoint complete (.ai/state.sqlite-wal flushed)"
+  else
+    echo "  ⚠ WAL checkpoint failed — DB may be busy; will retry on next sync" >&2
+  fi
+}
+
 # Generates .mcp.json with absolute paths to ~/.ai-os/mcp/<server>/index.js
 # Uses registry.json as source of truth. Preserves user-set env values.
 generate_mcp_json() {
@@ -1082,6 +1129,13 @@ do_sync() {
   # canonical AI-OS hooks always run (no copy-by-value drift).
   _upgrade_legacy_git_hooks
 
+  # E-52: regenerate .ai/blueprints/mcp.md from registry.json so the doc
+  # cannot drift from the registered MCP server set.
+  _regenerate_mcp_docs
+
+  # E-53: flush state.sqlite WAL to prevent unbounded growth.
+  _wal_checkpoint_state_db
+
   echo "Done."
 }
 
@@ -1123,6 +1177,12 @@ doctor() {
   echo ""
 
   if [[ -d ".ai" ]]; then
+    # E-53: flush state.sqlite WAL during diagnostics so doctor surfaces a
+    # truthful WAL size and prevents bloat from accumulating between syncs.
+    echo "SQLite WAL:"
+    _wal_checkpoint_state_db
+    echo ""
+
     echo "Project-Scoped (.claude/ / .gemini/):"
     for agent_dir in ".claude" ".gemini"; do
       local scope_label="${agent_dir}"
@@ -1707,6 +1767,12 @@ WARN
 }
 
 # ── dispatch ──────────────────────────────────────────────────────────────────
+
+# E-53: only run the dispatch when bin/ai is executed as a script. Sourcing
+# the file (e.g. from test suites) loads the helpers without invoking usage().
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
 
 cmd="${1:-}"
 case "$cmd" in

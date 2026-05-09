@@ -73,3 +73,4 @@
 
 ---
 DIGEST must be accurate or flagged as stale. If stale, run: skill: ai-digest
+- 2026-05-08: auto-stamped by Stop hook

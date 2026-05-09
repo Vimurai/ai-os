@@ -45,6 +45,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { createLogger } from "../shared/logger.js";
+import { DOMAINS } from "../shared/mcp-domains.mjs";
 
 const SERVICE = "mcp-router";
 const VERSION = "1.0.0";
@@ -54,60 +55,9 @@ const log = (level, tool, message, extras) =>
   logger.log(level, tool, message, extras);
 
 // ── Domain Registry (curated category → servers) ──────────────────────────────
-// Keep in sync with .ai/DIGEST.md "MCP Servers" section. Servers not listed
-// here are still reachable by name once their domain is activated, but they
-// won't surface in list_domains output.
-
-const DOMAINS = {
-  State: {
-    description: "State and task management — TASKS.md, state.json, archives, semantic memory.",
-    servers: [
-      "task-synchronizer-mcp",
-      "orchestrator-mcp",
-      "archive-manager-mcp",
-      "memory",
-      "memory-manager-mcp",
-    ],
-  },
-  Code: {
-    description: "Code intelligence and editing — filesystem, LSP, atomic patching.",
-    servers: ["filesystem", "lsp-mcp", "patch-mcp", "propose-patch-mcp"],
-  },
-  Safety: {
-    description: "Pre-execution safety gates — command analysis, scope checks, risk classification, agent verification.",
-    servers: [
-      "safe-exec-mcp",
-      "context-guardian-mcp",
-      "risk-analyzer-mcp",
-      "verification-mcp",
-    ],
-  },
-  Intelligence: {
-    description: "Skill/agent loading, blueprint alignment, GitHub bridge, token budgeting.",
-    servers: [
-      "context-invoker-mcp",
-      "blueprint-aligner-mcp",
-      "github-bridge-mcp",
-      "token-budget-mcp",
-    ],
-  },
-  Quality: {
-    description: "Test generation, visual audit, OS-level computer use.",
-    servers: ["TestSprite", "vibe-check-mcp", "computer-use-mcp"],
-  },
-  Interop: {
-    description: "A2A bridge to Gemini and HITL approval gate.",
-    servers: ["advisor-mcp", "approval-mcp"],
-  },
-  Caching: {
-    description: "Explicit Context Cache for blueprint-heavy prompts.",
-    servers: ["cache-manager-mcp"],
-  },
-  Compute: {
-    description: "Sandboxed code execution — ephemeral Docker REPL for Python and Node.",
-    servers: ["code-execution-mcp"],
-  },
-};
+// Source of truth: src/mcp/shared/mcp-domains.js (E-52). Both this router and
+// scripts/generate_mcp_docs.js import from there so DOMAINS cannot drift
+// between the routing surface and the auto-generated mcp.md blueprint.
 
 // ── Project root and registry ─────────────────────────────────────────────────
 

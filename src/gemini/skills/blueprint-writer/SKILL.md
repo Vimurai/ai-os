@@ -1,6 +1,6 @@
 ---
 name: blueprint-writer
-description: "Enforce blueprint structure before writing to .ai/blueprints/. Validates required sections (Core Concept, Data Model, API Contracts, Security, Rollback Plan, 3+ components). Emits Obsidian-compatible YAML frontmatter (E-51) and [[wikilinks]] so .ai/ becomes a navigable knowledge graph. Blocks lazy blueprints."
+description: Enforce blueprint structure before writing to .ai/blueprints/. Validates required sections (Core Concept, Data Model, API Contracts, Security, Rollback Plan, 3+ components) before any write. Blocks lazy blueprints.
 disable-model-invocation: false
 user-invocable: true
 context: default
@@ -52,44 +52,9 @@ If ANY section is missing or contains boilerplate → **STOP**. Fill it before p
 
 Minimum length check: blueprint must be ≥ 20 lines. Shorter = lazy.
 
-## Step 3 — Write to Disk (E-51 — Obsidian Vault Memory)
+## Step 3 — Write to Disk
 
-Every blueprint MUST start with YAML frontmatter so the `.ai/` tree behaves
-like an Obsidian vault — one canonical metadata header per note enables the
-graph view, tag filters, and `memory_curator`'s metadata-aware retrieval.
-
-Required frontmatter shape (no other keys are mandatory; add as needed):
-
-```yaml
----
-type: blueprint
-tier: 1 | 2 | 3
-tags: [<domain>, <subsystem>, <stack-tag>]
-status: draft | active | superseded
----
-```
-
-Cross-references inside the body MUST use Obsidian `[[wikilinks]]` instead
-of bare paths or markdown links. Apply to:
-- Related blueprints: `[[mcp-router.md]]`
-- Decision records: `[[D-012]]`
-- Tasks: `[[E-49]]`, `[[P-23]]`
-
-Example header:
-
-```markdown
----
-type: blueprint
-tier: 2
-tags: [architecture, mcp, safety]
-status: active
----
-# Blueprint: My Domain
-Refers to: [[interop.md]], decision [[D-012]], unblocks [[E-49]].
-```
-
-Only after frontmatter + body validate:
-
+Only after validation passes:
 ```
 Write to: .ai/blueprints/<domain>.md
 ```
@@ -116,5 +81,3 @@ Report:
 - Do NOT leave Security or Rollback Plan empty
 - Do NOT write "TBD" or "TODO" in any required section — fill it or ask the user
 - Do NOT write source code in the blueprint (pseudo-code in Data Model is permitted)
-- Do NOT use bare markdown links (`[label](file.md)`) for `.ai/` cross-references — use `[[file.md]]` so Obsidian renders backlinks (E-51)
-- Do NOT skip the YAML frontmatter — `memory_curator` indexes on `tags` and `type`

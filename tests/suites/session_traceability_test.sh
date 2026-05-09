@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # session_traceability_test.sh — Tests for E-49 Session Traceability.
 #
-# Verifies the contract demanded by claude-obsidian-optimizations.md
+# Verifies the contract demanded by claude-code-optimizations.md
 # §"Session Audit Enhancer" + §Security:
 #   • approval-mcp adds session_id TEXT column with idempotent migration.
 #   • CLAUDE_CODE_SESSION_ID is sanitised: [A-Za-z0-9-]{1,64} only.

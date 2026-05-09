@@ -1,13 +1,12 @@
-# Blueprint: Claude Code & Obsidian Memory Optimizations
+# Blueprint: Claude Code Optimizations
 
 ## Goal & Architecture
-To solidify the AI-OS v2 Triad by resolving terminal workflow friction, guaranteeing MCP JSON-RPC stream purity, ensuring perfect audit traceability across sessions, and elevating the `.ai/` directory into an Obsidian-compatible Knowledge Graph for superior human-AI interface navigation.
+To solidify the AI-OS v2 Triad by resolving terminal workflow friction, guaranteeing MCP JSON-RPC stream purity, and ensuring perfect audit traceability across sessions.
 
 ## Core Concept
 1. **MCP Stream Purity:** A static enforcement boundary ensuring `src/mcp/` servers never leak non-protocol data (like `console.log`) to stdout, capitalizing on Claude Code's recent leak fix.
 2. **Session Tracing:** Utilizing the new `CLAUDE_CODE_SESSION_ID` environment variable to cryptographically link `.ai/LOG.md` entries and `approval-mcp` database records to the exact execution session.
 3. **Terminal Emancipation:** Injecting `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` into the bootloader to restore native terminal scrollback for tmux users.
-4. **Obsidian Vault Memory:** Upgrading all documentation skills (`blueprint-writer`, `decision-recorder`) to emit Obsidian-compatible bidirectional links (`[[doc_name]]`) and YAML frontmatter, creating a seamless visual graph of decisions and architecture.
 
 ## Components
 1. **MCP Purity Gate (CI/CD & Pre-commit)**
@@ -16,8 +15,6 @@ To solidify the AI-OS v2 Triad by resolving terminal workflow friction, guarante
    - **Responsibility:** Captures `CLAUDE_CODE_SESSION_ID` from the environment. `ai-log` appends it to `LOG.md` entries. `approval-mcp` logs it as a new column in `approvals.sqlite`.
 3. **Bootloader Configurator (`bin/ai`)**
    - **Responsibility:** Injects `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` into the Claude subprocess environment to disable the TUI alternate screen.
-4. **Obsidian Memory Standard (`.gemini/skills/`)**
-   - **Responsibility:** Replaces plain-text file references with `[[filename.md]]` in all generated `.ai/` files. Injects standard YAML frontmatter (`--- \n tags: [] \n ---`) to enable native Obsidian graph generation and metadata filtering for `memory_curator`.
 
 ## Data Model
 ```json
@@ -26,16 +23,6 @@ To solidify the AI-OS v2 Triad by resolving terminal workflow friction, guarante
   "table": "approvals",
   "new_column": "session_id TEXT" // Captures CLAUDE_CODE_SESSION_ID
 }
-```
-```markdown
-// Obsidian-compatible Blueprint Header Example
----
-type: blueprint
-tier: 2
-tags: [architecture, mcp, safety]
----
-# Blueprint: ...
-Refers to: [[interop.md]], Decision [[D-012]]
 ```
 
 ## API / Interface Contracts
@@ -52,10 +39,8 @@ Refers to: [[interop.md]], Decision [[D-012]]
 
 ## Rollback Plan
 - If `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` causes terminal rendering bugs on specific OSes, revert the environment variable injection.
-- If Obsidian linking confuses Claude's internal parsing, revert the skill instructions to standard Markdown paths.
 
 ## E-## Task Breakdown
-- **E-48:** Implement MCP Stdout Purity Gate: Add a pre-commit lint rule to ban `console.log` and `console.info` in `src/mcp/**` per `claude-obsidian-optimizations.md`. | Tier: 2
-- **E-49:** Implement Session Traceability: Update `approval-mcp` SQLite schema and `ai-log` to capture and record `CLAUDE_CODE_SESSION_ID` per `claude-obsidian-optimizations.md`. | Tier: 2
-- **E-50:** Terminal Optimization: Inject `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` into `bin/ai` and `install-ai-os.sh` per `claude-obsidian-optimizations.md`. | Tier: 1
-- **E-51:** Implement Obsidian Vault Memory: Update `blueprint-writer`, `decision-recorder`, and `ai-log` skills to use YAML frontmatter and `[[wikilinks]]` per `claude-obsidian-optimizations.md`. | Tier: 2
+- **E-48:** Implement MCP Stdout Purity Gate: Add a pre-commit lint rule to ban `console.log` and `console.info` in `src/mcp/**` per `claude-code-optimizations.md`. | Tier: 2
+- **E-49:** Implement Session Traceability: Update `approval-mcp` SQLite schema and `ai-log` to capture and record `CLAUDE_CODE_SESSION_ID` per `claude-code-optimizations.md`. | Tier: 2
+- **E-50:** Terminal Optimization: Inject `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1` into `bin/ai` and `install-ai-os.sh` per `claude-code-optimizations.md`. | Tier: 1
