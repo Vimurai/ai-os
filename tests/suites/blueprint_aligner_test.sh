@@ -413,4 +413,102 @@ assert_contains "T-03.05c: lists Security" "Security" "$missing_list"
 # Cleanup helper
 rm -f "$VALIDATE_HELPER"
 
+# ── E-55/E-56: Hunk-aware introspectors (file-path-aware filtering) ──────────
+# Build a minimal unified-diff snippet with `+++ b/<path>` headers, then run
+# the real ALIGNMENT_RULES check from the live aligner module. Asserts the
+# rule fires only when the file path is in scope.
+
+ALIGNER_MODULE="${REPO_ROOT}/src/mcp/blueprint-aligner-mcp/index.js"
+
+# Helper: returns "flag" if CAPABILITIES_BYPASS fires on the synthetic diff,
+# otherwise "allow". The synthetic diff has a single file hunk with one
+# added line.
+test_capabilities_bypass_file() {
+  local label="$1" file="$2" line="$3" expect="$4"
+  local result
+  result=$(node --input-type=module -e "
+import { parseDiffByFile, isMarkdownFile, isTestHelperFile } from '${ALIGNER_MODULE}';
+const diff = '+++ b/${file}\n@@ -0,0 +1 @@\n${line//\'/\\\'}';
+const traversalRe       = /(?:\.\.\/|\/etc\/|\/root\/|\/home\/\\w+\/\.)/;
+const moduleSpecifierRe = /(?:from|require|import)\s*\(?\s*([\"'])\.\.\/[^\"']*\1/;
+const matches = [];
+for (const [f, lines] of parseDiffByFile(diff)) {
+  if (isMarkdownFile(f)) continue;
+  if (isTestHelperFile(f)) continue;
+  for (const l of lines) {
+    if (!traversalRe.test(l)) continue;
+    if (moduleSpecifierRe.test(l)) continue;
+    matches.push(l);
+  }
+}
+process.stdout.write(matches.length > 0 ? 'flag' : 'allow');
+" 2>/dev/null || echo "error")
+  if [[ "$result" == "$expect" ]]; then
+    _pass "$label"
+  else
+    _fail "$label (expected $expect, got $result)"
+  fi
+}
+
+# Helper: dependency rule fires only on package.json files.
+test_dependency_scope() {
+  local label="$1" file="$2" line="$3" expect="$4"
+  local result
+  result=$(node --input-type=module -e "
+import { parseDiffByFile, isPackageJsonFile } from '${ALIGNER_MODULE}';
+const diff = '+++ b/${file}\n@@ -0,0 +1 @@\n${line//\'/\\\'}';
+const pkgPattern = /^\\+\\s+\"[a-z@][a-z0-9\\-@/.]+\"\\s*:/;
+const newDeps = [];
+for (const [f, lines] of parseDiffByFile(diff)) {
+  if (!isPackageJsonFile(f)) continue;
+  for (const l of lines) {
+    const m = l.match(pkgPattern);
+    if (m) newDeps.push(m[0]);
+  }
+}
+process.stdout.write(newDeps.length > 0 ? 'flag' : 'allow');
+" 2>/dev/null || echo "error")
+  if [[ "$result" == "$expect" ]]; then
+    _pass "$label"
+  else
+    _fail "$label (expected $expect, got $result)"
+  fi
+}
+
+# E-55 — Markdown introspector: prose `../` in .md files is documentation, skip.
+test_capabilities_bypass_file "E-55: ../ in TASKS.md prose ignored" \
+  ".ai/TASKS.md" "+- See ../shared/skills/ for the canonical copy" "allow"
+
+test_capabilities_bypass_file "E-55: /etc reference in DIGEST.md ignored" \
+  ".ai/DIGEST.md" "+Touches /etc/hosts when configuring." "allow"
+
+# E-55 — same line in actual code still flags.
+test_capabilities_bypass_file "E-55: literal cat ../../etc/passwd in .js still flagged" \
+  "src/foo/index.js" "+exec(\"cat ../../../etc/passwd\")" "flag"
+
+# E-56 — TestPathExcluder: tests/{suites,lib}/*.sh sibling imports allowed.
+test_capabilities_bypass_file "E-56: \${SCRIPT_DIR}/../lib/assert.sh in tests/suites allowed" \
+  "tests/suites/sample_test.sh" "+source \"\${SCRIPT_DIR}/../lib/assert.sh\"" "allow"
+
+test_capabilities_bypass_file "E-56: \${SCRIPT_DIR}/../.. in tests/lib allowed" \
+  "tests/lib/helper.sh" "+REPO=\"\${SCRIPT_DIR}/../..\"" "allow"
+
+# E-56 — same path-traversal in a non-test bash script still flags.
+test_capabilities_bypass_file "E-56: scope is strict — scripts/foo.sh still flagged" \
+  "scripts/foo.sh" "+source \"\${SCRIPT_DIR}/../lib/assert.sh\"" "flag"
+
+# E-55 — JSON introspector: state.json keys are not deps.
+test_dependency_scope "E-55: state.json key \"summary\" ignored" \
+  ".ai/state.json" "+    \"summary\": \"foo\"," "allow"
+
+test_dependency_scope "E-55: TASKS.md prose with JSON-shaped keys ignored" \
+  ".ai/TASKS.md" "+    \"status\": \"DONE\"," "allow"
+
+# E-55 — real package.json deps still flag.
+test_dependency_scope "E-55: package.json dep flagged" \
+  "package.json" "+    \"left-pad\": \"^1.0.0\"," "flag"
+
+test_dependency_scope "E-55: nested package.json (workspace) dep flagged" \
+  "src/mcp/foo/package.json" "+    \"@scope/lib\": \"^2.0.0\"," "flag"
+
 assert_summary

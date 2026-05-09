@@ -135,6 +135,76 @@
       "created_at": "2026-05-08T20:42:35.169Z",
       "completed_at": "2026-05-08T20:59:18.735Z",
       "summary": "Reverted E-51 Obsidian Vault Memory mandate. Restored 7 SKILL.md files (src/.claude/.gemini mirrors of ai-log/blueprint-writer/decision-recorder) to pre-E-51 standard markdown format; preserved E-49 session=<id> contract in ai-log surgically. Deleted tests/suites/obsidian_vault_memory_test.sh. Updated 3 comment refs from claude-obsidian-optimizations.md to claude-code-optimizations.md. Tests: 1069/1069 PASS."
+    },
+    {
+      "id": "E-55",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement Markdown and JSON prose introspection in blueprint-aligner-mcp to filter false positives per aligner-hardening.md.",
+      "created_at": "2026-05-09T20:45:45.461Z",
+      "completed_at": "2026-05-09T21:02:48.828Z",
+      "summary": "Markdown/JSON prose introspection in blueprint-aligner-mcp (Tier 2). Added parseDiffByFile() helper that walks unified diff and groups + lines by destination file path (parsed from `+++ b/<path>` headers). Refactored CAPABILITIES_BYPASS check to skip lines whose file ends in .md (markdown introspector — `../` in TASKS.md / DIGEST.md prose is documentation). Refactored UNAPPROVED_DEPENDENCY check to only fire on package.json / **/package.json files (JSON introspector — state.json keys like \"summary\"/\"status\" no longer flagged as deps). Exported helpers (parseDiffByFile, isMarkdownFile, isPackageJsonFile) for unit testing. Added 7 new test cases to tests/suites/blueprint_aligner_test.sh covering markdown skip, JSON-prose skip, real code/package.json still flag. Tests: 1123/1123 PASS."
+    },
+    {
+      "id": "E-56",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement TestPathExcluder whitelist rule for tests/ sibling imports in blueprint-aligner-mcp per aligner-hardening.md.",
+      "created_at": "2026-05-09T20:45:45.468Z",
+      "completed_at": "2026-05-09T21:02:52.284Z",
+      "summary": "TestPathExcluder for tests/ sibling imports (Tier 2). Added isTestHelperFile() helper matching ^tests/(suites|lib)/[^/]+\\.sh$ — uses the shared parseDiffByFile() infrastructure introduced in E-55. CAPABILITIES_BYPASS check now skips lines from tests/suites/*.sh and tests/lib/*.sh (whitelists ${SCRIPT_DIR}/../lib/assert.sh and ${SCRIPT_DIR}/../.. canonical bash sibling-import patterns). Scope is strict: scripts/foo.sh outside tests/ still flags. 3 new test cases added to tests/suites/blueprint_aligner_test.sh. Tests: 1123/1123 PASS."
+    },
+    {
+      "id": "E-57",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Create src/shared/wal-flusher.mjs using node:sqlite to execute the TRUNCATE pragma per wal-checkpoint-node.md.",
+      "created_at": "2026-05-09T20:45:45.483Z",
+      "completed_at": "2026-05-09T20:57:51.905Z",
+      "summary": "wal-flusher.mjs (Tier 1). Stateless node:sqlite helper at src/shared/wal-flusher.mjs that runs PRAGMA wal_checkpoint(TRUNCATE) on a validated db-path. Validation: required arg, no NUL bytes, .sqlite extension, exists, regular file. Errors emit structured NDJSON to stderr (service=wal-flusher). No child_process/spawn/exec — pure node:sqlite (Node 22+ core). Boot ~60ms. Mirrored to ~/.ai-os/shared/wal-flusher.mjs. New tests/suites/wal_flusher_node_test.sh (14 assertions). Tests: 1113/1113 PASS."
+    },
+    {
+      "id": "E-58",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update src/bin/ai to invoke wal-flusher.mjs node script instead of sqlite3 bash binary per wal-checkpoint-node.md.",
+      "created_at": "2026-05-09T20:45:45.485Z",
+      "completed_at": "2026-05-09T20:57:56.166Z",
+      "summary": "bin/ai → wal-flusher.mjs (Tier 1). _wal_checkpoint_state_db() in src/bin/ai now invokes `node src/shared/wal-flusher.mjs .ai/state.sqlite` instead of the bash sqlite3 binary. Locator chain: in-repo src/shared/wal-flusher.mjs → ${AIOS}/shared/wal-flusher.mjs (installer already copies src/shared/). Fail-open guard now on `command -v node` (sqlite3 dependency retired). Updated tests/suites/sqlite_wal_checkpoint_test.sh — replaced sqlite3-availability assertion with node-availability + locator-chain + node-script-invocation. Tests: 1113/1113 PASS."
+    },
+    {
+      "id": "P-35",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Author .ai/blueprints/_INDEX.md to map domain features.",
+      "created_at": "2026-05-09T20:45:52.776Z",
+      "completed_at": "2026-05-09T20:45:58.812Z",
+      "summary": "Author .ai/blueprints/_INDEX.md to map domain features."
+    },
+    {
+      "id": "P-36",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint Phase 2 hardenings for blueprint-aligner-mcp to introspect markdown/JSON.",
+      "created_at": "2026-05-09T20:45:52.786Z",
+      "completed_at": "2026-05-09T20:45:58.823Z",
+      "summary": "Blueprint Phase 2 hardenings for blueprint-aligner-mcp to introspect markdown/JSON."
+    },
+    {
+      "id": "P-37",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Blueprint Node.js SQLite WAL checkpoint strategy.",
+      "created_at": "2026-05-09T20:45:52.794Z",
+      "completed_at": "2026-05-09T20:45:58.827Z",
+      "summary": "Blueprint Node.js SQLite WAL checkpoint strategy."
     }
   ],
   "stamps": [
@@ -557,6 +627,27 @@
       "task_id": null,
       "timestamp": "2026-05-08T21:28:54.637Z",
       "summary": "[TIER_2] E-52 + E-53 + E-54 sprint — Blueprint aligned. 1097/1097 tests PASS (+28: mcp_doc_sync 17, sqlite_wal_checkpoint 11). E-52: scripts/generate_mcp_docs.mjs (208 lines, fail-open, locator chain) + DOMAINS extracted to src/mcp/shared/mcp-domains.mjs (single source of truth shared with mcp-router); installer ships scripts/; mcp.md byte-identical with --check. E-53: _wal_checkpoint_state_db hardcoded .ai/state.sqlite path, sqlite3 fail-open, wired into do_sync()+doctor(); BASH_SOURCE dispatch guard. E-54: 7 SKILL.md restored to pre-E-51 markdown (preserved E-49 session=<id> contract); deleted obsidian_vault_memory_test.sh (170 lines). MCP stdout purity clean. No new deps/auth/secrets/breaking changes. NOTE: P-33 drift — TASKS.md says _INDEX.md created but file absent (Architect-owned)."
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": null,
+      "timestamp": "2026-05-09T20:35:42.896Z",
+      "summary": "Deep review completed: System healthy, but _INDEX.md drift identified (P-33 incomplete) and recurring aligner false positives remain a top risk."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": null,
+      "timestamp": "2026-05-09T21:10:41.133Z",
+      "summary": "[TIER_2] E-55/E-56/E-57/E-58 sprint — aligner clean (0 flagged) on staged diff using post-E-55 introspectors. Verified via fresh node import to bypass cached MCP server. New introspectors retire the recurring false-positive class: markdown files, JSON files, tests/{suites,lib}/*.sh paths, and inline-backtick code spans now skipped for CAPABILITIES_BYPASS. UNAPPROVED_DEPENDENCY scoped to package.json. NO_LOG_UPDATE warning carried over (LOG.md is gitignored — auto-archived)."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "ai-review",
+      "task_id": null,
+      "timestamp": "2026-05-09T21:10:49.061Z",
+      "summary": "[TIER_2] E-55 + E-56 + E-57 + E-58 sprint — Blueprint aligned (post-introspector). 1123/1123 tests PASS (+26: wal_flusher_node 14, sqlite_wal_checkpoint +2, blueprint_aligner +10). E-57: src/shared/wal-flusher.mjs (110 lines, node:sqlite, no shell-out, validated db-path, structured NDJSON errors, ~60ms boot). E-58: bin/ai _wal_checkpoint_state_db now invokes node script via locator chain (repo → ${AIOS}/shared/), retires sqlite3 CLI dependency. E-55: parseDiffByFile + isMarkdownFile/isJsonFile/traversalOutsideBackticks introspectors in blueprint-aligner-mcp; CAPABILITIES_BYPASS skips .md/.json files and backtick-wrapped paths; UNAPPROVED_DEPENDENCY scoped to package.json. E-56: isTestHelperFile whitelists tests/{suites,lib}/*.sh sibling imports. No new deps/auth/secrets/breaking changes. MCP stdout purity clean."
     }
   ],
   "deltas": [],

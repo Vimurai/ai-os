@@ -34,13 +34,22 @@ assert_status 0 "helper hardcodes DB=.ai/state.sqlite" \
 assert_status 1 "helper does not accept positional DB arg" \
   grep -qE '_wal_checkpoint_state_db\(\) \{\s*local DB="\$\{?1' "$BIN_AI"
 
-# Helper executes the documented PRAGMA.
-assert_status 0 "helper calls PRAGMA wal_checkpoint(TRUNCATE)" \
-  grep -qE 'PRAGMA wal_checkpoint\(TRUNCATE\)' "$BIN_AI"
+# E-58: helper now delegates the PRAGMA to the node:sqlite-backed
+# wal-flusher.mjs script, so the bash side only needs to call node + the
+# script path. The PRAGMA itself lives in src/shared/wal-flusher.mjs.
+assert_status 0 "helper invokes wal-flusher.mjs via node" \
+  grep -qE 'node "\$SCRIPT" "\$DB"' "$BIN_AI"
 
-# Fail-open: helper checks for sqlite3 availability before calling it.
-assert_status 0 "helper guards on sqlite3 availability (fail-open)" \
-  grep -qE 'command -v sqlite3' "$BIN_AI"
+assert_status 0 "wal-flusher.mjs calls PRAGMA wal_checkpoint(TRUNCATE)" \
+  grep -qE 'PRAGMA wal_checkpoint\(TRUNCATE\)' "${REPO_ROOT}/src/shared/wal-flusher.mjs"
+
+# Fail-open: helper checks for node availability before calling it.
+assert_status 0 "helper guards on node availability (fail-open)" \
+  grep -qE 'command -v node' "$BIN_AI"
+
+# Locator chain: prefer in-repo script, fall back to ~/.ai-os/shared/.
+assert_status 0 "helper falls back to ~/.ai-os/shared/wal-flusher.mjs" \
+  grep -qE '\$\{AIOS\}/shared/wal-flusher\.mjs' "$BIN_AI"
 
 # ── T-WAL-S02: do_sync() and doctor() both call the helper ───────────────────
 echo ""
@@ -107,16 +116,16 @@ else
   rm -rf "$SBOX"
 fi
 
-# ── T-WAL-S05: fail-open when sqlite3 missing ────────────────────────────────
+# ── T-WAL-S05: fail-open when node missing (E-58 — was sqlite3 in E-53) ─────
 echo ""
-echo "  [T-WAL-S05] fail-open: missing sqlite3 CLI returns 0"
+echo "  [T-WAL-S05] fail-open: missing node binary returns 0"
 
 SBOX2="$(mktemp -d)"
 mkdir -p "$SBOX2/.ai"
 : > "$SBOX2/.ai/state.sqlite"
 
 EMPTY_PATH="$(mktemp -d)"
-assert_status 0 "helper exits 0 when sqlite3 is not on PATH" \
+assert_status 0 "helper exits 0 when node is not on PATH" \
   bash -c "
     set +e
     cd '$SBOX2'

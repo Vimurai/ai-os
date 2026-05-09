@@ -93,18 +93,35 @@ _regenerate_mcp_docs() {
   fi
 }
 
-# E-53: Flush .ai/state.sqlite WAL back to the main DB so .sqlite-wal cannot
-# grow without bound (drift-resolution-2026.md §State Singularity). Path is
-# hardcoded — never accepts user input. Fail-open: a missing sqlite3 CLI or
-# busy DB does not block sync/doctor.
+# E-53/E-58: Flush .ai/state.sqlite WAL via the node:sqlite-backed
+# wal-flusher.mjs helper (drift-resolution-2026.md §State Singularity +
+# wal-checkpoint-node.md). Path is hardcoded — the node script also
+# enforces .sqlite extension + existence + regular-file invariants. Node
+# 22+ ships node:sqlite as a core module so the previous fail-open path
+# on dev boxes without the sqlite3 CLI is gone; only a missing `node`
+# binary itself can short-circuit, which is treated fail-open since it
+# would mean nothing in this CLI works anyway.
 _wal_checkpoint_state_db() {
   local DB=".ai/state.sqlite"
   [[ -f "$DB" ]] || return 0
-  if ! command -v sqlite3 >/dev/null 2>&1; then
-    echo "  ⚠ sqlite3 CLI not found — skipping WAL checkpoint" >&2
+  if ! command -v node >/dev/null 2>&1; then
+    echo "  ⚠ node not found — skipping WAL checkpoint" >&2
     return 0
   fi
-  if sqlite3 "$DB" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1; then
+  local SCRIPT=""
+  for candidate in \
+      "src/shared/wal-flusher.mjs" \
+      "${AIOS}/shared/wal-flusher.mjs"; do
+    if [[ -f "$candidate" ]]; then
+      SCRIPT="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$SCRIPT" ]]; then
+    echo "  ⚠ wal-flusher.mjs not found — skipping WAL checkpoint" >&2
+    return 0
+  fi
+  if node "$SCRIPT" "$DB" 2>/dev/null; then
     echo "  ✓ WAL checkpoint complete (.ai/state.sqlite-wal flushed)"
   else
     echo "  ⚠ WAL checkpoint failed — DB may be busy; will retry on next sync" >&2

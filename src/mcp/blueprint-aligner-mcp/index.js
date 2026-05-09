@@ -26,6 +26,78 @@ function readFileSafe(p) {
   try { return existsSync(p) ? readFileSync(p, "utf8") : ""; } catch { return ""; }
 }
 
+// E-55/E-56: hunk-aware preprocessing. Walk a unified diff and group its
+// added (`+`) lines by destination file path, parsed from `+++ b/<path>`
+// headers. Lines that arrive before the first such header are discarded —
+// they cannot be attributed to a file and should not trigger rules. This
+// is the substrate the file-path-aware introspectors below need.
+export function parseDiffByFile(diff) {
+  const byFile = new Map();
+  let currentFile = null;
+  for (const line of diff.split("\n")) {
+    const fileHeader = line.match(/^\+\+\+ b\/(.+)$/);
+    if (fileHeader) {
+      currentFile = fileHeader[1];
+      continue;
+    }
+    // `---` / `diff --git` / `@@` markers reset nothing; just skip.
+    if (line.startsWith("---") || line.startsWith("diff ") || line.startsWith("@@")) {
+      continue;
+    }
+    if (!currentFile) continue;
+    // Real `+` body lines, not the `+++ b/...` header (already consumed).
+    if (line.startsWith("+") && !line.startsWith("++")) {
+      let bucket = byFile.get(currentFile);
+      if (!bucket) { bucket = []; byFile.set(currentFile, bucket); }
+      bucket.push(line);
+    }
+  }
+  return byFile;
+}
+
+// E-55: Markdown introspector. `../` inside markdown documentation prose
+// (e.g. references in TASKS.md or blueprints) is not executable code and
+// must not trigger CAPABILITIES_BYPASS.
+export function isMarkdownFile(filePath) {
+  return typeof filePath === "string" && filePath.endsWith(".md");
+}
+
+// E-55: JSON introspector. The dependency rule must only fire on
+// package.json — JSON keys in state.json (`"summary":`, `"status":`) are
+// state metadata, not npm deps.
+export function isPackageJsonFile(filePath) {
+  return filePath === "package.json" || /(^|\/)package\.json$/.test(filePath || "");
+}
+
+// E-55: JSON files are structured data, schema-validated where it matters
+// (state.json via task-synchronizer-mcp). Path-like substrings inside JSON
+// string values (`"summary": "...refers to ../foo..."`) are metadata, not
+// executable commands. CAPABILITIES_BYPASS uses this to skip the whole file.
+export function isJsonFile(filePath) {
+  return typeof filePath === "string" && filePath.endsWith(".json");
+}
+
+// E-55: Inline-backtick code-span detector. Markdown and JSDoc comments
+// both wrap code references in single backticks (e.g. `../shared/util.js`,
+// `${SCRIPT_DIR}/../lib/assert.sh`). Splitting on the backtick character
+// gives alternating outside/inside segments — the even-indexed segments
+// are outside any code span. If the forbidden pattern appears only inside
+// code spans, the line is documentation, not executable code.
+export function traversalOutsideBackticks(line, traversalRe) {
+  const parts = line.split("`");
+  for (let i = 0; i < parts.length; i += 2) {
+    if (traversalRe.test(parts[i])) return true;
+  }
+  return false;
+}
+
+// E-56: Test path excluder. Bash test helpers in tests/{suites,lib}/*.sh
+// legitimately use `${SCRIPT_DIR}/../lib/assert.sh` style sibling imports;
+// these are not capability bypasses.
+export function isTestHelperFile(filePath) {
+  return /^tests\/(suites|lib)\/[^/]+\.sh$/.test(filePath || "");
+}
+
 const server = new Server(
   { name: "blueprint-aligner-mcp", version: "1.0.0" },
   { capabilities: { tools: {} } }
@@ -387,26 +459,30 @@ const ALIGNMENT_RULES = [
     severity: "FAIL",
     check: (diff) => {
       // Flag ../ path traversal or explicit /etc /root /home paths in code.
-      // E-42: whitelist canonical ESM/CJS sibling imports — they are the only
-      // way Node workspaces share helpers across src/mcp/<server>/ → src/mcp/
-      // shared/ and have appeared in every diff since E-18 / D-005. The
-      // whitelist is bounded to module-specifier syntax; literal traversal
-      // (cat ../../../etc/passwd, fs.readFile("../etc/...")) still fails.
-      //
-      // Scan line-by-line so each candidate line can be tested against the
-      // module-specifier whitelist in full. matchAll on a multiline pattern
-      // would truncate the match at the captured group and hide the closing
-      // quote, defeating the whitelist.
-      const traversalLineRe   = /^\+[^+].*(?:\.\.\/|\/etc\/|\/root\/|\/home\/\w+\/\.)/;
-      // Module-specifier form: from "../...", from '../...',
-      //                        require("../..."), require('../...'),
-      //                        import("../..."), import('../...')
+      // E-42: whitelist canonical ESM/CJS sibling imports — module-specifier
+      // form `from "../..."`, `require("../...")`, `import("../...")`.
+      // E-55: skip markdown files (prose mentions of `../` are documentation).
+      // E-56: skip bash test helpers in tests/{suites,lib}/*.sh — sibling
+      //       imports like `${SCRIPT_DIR}/../lib/assert.sh` are canonical.
+      // Literal traversal in code (`cat ../../../etc/passwd`, `fs.readFile("/etc/shadow")`)
+      // still fires.
+      const traversalRe       = /(?:\.\.\/|\/etc\/|\/root\/|\/home\/\w+\/\.)/;
       const moduleSpecifierRe = /(?:from|require|import)\s*\(?\s*(["'])\.\.\/[^"']*\1/;
+      const byFile = parseDiffByFile(diff);
       const matches = [];
-      for (const line of diff.split("\n")) {
-        if (!traversalLineRe.test(line)) continue;
-        if (moduleSpecifierRe.test(line)) continue; // canonical ESM/CJS — skip
-        matches.push(line.trim().slice(0, 80));
+      for (const [file, lines] of byFile) {
+        if (isMarkdownFile(file)) continue;       // E-55: markdown introspector
+        if (isJsonFile(file)) continue;           // E-55: JSON value strings are metadata
+        if (isTestHelperFile(file)) continue;     // E-56: test path excluder
+        for (const line of lines) {
+          if (!traversalRe.test(line)) continue;
+          if (moduleSpecifierRe.test(line)) continue; // E-42 ESM/CJS whitelist
+          // E-55: skip when the only hit is inside a backtick code span
+          // (JSDoc/markdown inline code reference). If the line still has
+          // the pattern OUTSIDE the backticks, it's real code — flag it.
+          if (!traversalOutsideBackticks(line, traversalRe)) continue;
+          matches.push(line.trim().slice(0, 80));
+        }
       }
       return matches;
     },
@@ -417,12 +493,22 @@ const ALIGNMENT_RULES = [
     id: "UNAPPROVED_DEPENDENCY",
     severity: "WARN",
     check: (diff) => {
-      // New dependency added to package.json without DECISIONS.md entry
-      const pkgPattern = /^\+\s+"[a-z@][a-z0-9\-@/.]+"\s*:/gm;
-      const newDeps = [...diff.matchAll(pkgPattern)].map((m) => m[0].trim());
+      // E-55: only fire on package.json — earlier versions matched JSON keys
+      // anywhere in the diff (state.json `"summary":`, TASKS.md JSON-prose),
+      // producing a recurring false-positive class.
+      const pkgPattern = /^\+\s+"[a-z@][a-z0-9\-@/.]+"\s*:/;
+      const byFile = parseDiffByFile(diff);
+      const newDeps = [];
+      for (const [file, lines] of byFile) {
+        if (!isPackageJsonFile(file)) continue;
+        for (const line of lines) {
+          const m = line.match(pkgPattern);
+          if (m) newDeps.push(m[0].trim());
+        }
+      }
       if (newDeps.length === 0) return [];
-      // Check if DECISIONS.md is also modified in this diff
-      if (diff.includes("DECISIONS.md")) return []; // Decision recorded — OK
+      // DECISIONS.md update in the same diff acts as the dependency gate.
+      if (diff.includes("DECISIONS.md")) return [];
       return newDeps.slice(0, 3);
     },
     message: (violations) =>
