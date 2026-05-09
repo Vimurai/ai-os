@@ -108,9 +108,15 @@ _wal_checkpoint_state_db() {
     echo "  ⚠ node not found — skipping WAL checkpoint" >&2
     return 0
   fi
+  # Locator chain: cwd-relative dev tree → bin/ai-relative dev tree (works
+  # when cwd is not the repo root, e.g. during sourced tests) → installed
+  # mirror under ${AIOS}/shared/.
+  local SELF_DIR
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
   local SCRIPT=""
   for candidate in \
       "src/shared/wal-flusher.mjs" \
+      "${SELF_DIR}/../shared/wal-flusher.mjs" \
       "${AIOS}/shared/wal-flusher.mjs"; do
     if [[ -f "$candidate" ]]; then
       SCRIPT="$candidate"
