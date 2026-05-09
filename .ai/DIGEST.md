@@ -1,18 +1,18 @@
 # DIGEST — AI-OS v2 (Updated: 2026-05-09)
 
 ## Product
-- Autonomous operating system for AI agents (Claude Code + Gemini CLI) with ACID-compliant SQLite state, strict RBAC, JIT context loading, Explicit Context Caching, Structured Outputs, sandboxed code execution, dynamic MCP routing, multimodal memory palace, auto-generated MCP registry docs, and a collapsed bootloader CLI.
+- Autonomous operating system for AI agents (Claude Code + Gemini CLI) with ACID-compliant SQLite state, strict RBAC, JIT context loading, Explicit Context Caching, Structured Outputs, sandboxed code execution, dynamic MCP routing, multimodal memory palace, auto-generated MCP registry docs, pure-node WAL checkpointing, and a collapsed bootloader CLI.
 
 ## Stack
-- Node.js 22+ (MCP servers, node:sqlite built-in), Python 3.10+ (fallbacks), SQLite3 + WAL (state, periodic TRUNCATE checkpoint), Bash (CI/tests/install), Docker (code-execution sandbox), npm workspaces (monorepo), Gemini 3.1 Pro (Architect, mandated 2026-05-07), Gemini Embedding 2 (memory palace), Claude Opus 4.7 (Engineer).
+- Node.js 22+ (MCP servers, node:sqlite built-in), Python 3.10+ (fallbacks), SQLite3 + WAL (state, post-sync TRUNCATE checkpoint via node:sqlite), Bash (CI/tests/install), Docker (code-execution sandbox), npm workspaces (monorepo), Gemini 3.1 Pro (Architect, mandated 2026-05-07), Gemini Embedding 2 (memory palace), Claude Opus 4.7 (Engineer).
 
 ## Triad Health
-- Architect (Gemini): IDLE — last batch P-31..P-34 (drift-resolution-2026.md, MCP doc sync + WAL strategy + Obsidian _INDEX + Interop reconciliation, 2026-05-08). All 34 P-## tasks DONE.
-- Engineer (Claude): IDLE — all 54 E-## tasks DONE; latest E-52 (MCP Registry Auto-Generation: scripts/generate_mcp_docs.mjs wired into `ai sync`).
-- Tester (TestSprite): PASS — 1097/1097 baseline post-E-52 (was 1080 post-E-53 / 1069 post-E-54); behavioral mcp_behavioral_test.sh stable; verify_compliance clean.
+- Architect (Gemini): IDLE — last batch P-35/P-36/P-37 (blueprints/_INDEX.md, aligner Phase 2 hardenings, Node WAL checkpoint strategy, 2026-05-09). All 37 P-## tasks DONE.
+- Engineer (Claude): IDLE — all 58 E-## tasks DONE; latest E-55/E-56/E-57/E-58 (aligner markdown+JSON+test introspectors, node:sqlite wal-flusher, bin/ai migration off sqlite3 CLI).
+- Tester (TestSprite): PASS — 1123/1123 baseline post-E-58; behavioral mcp_behavioral_test.sh stable; verify_compliance clean; aligner now PASS on staged diff (recurring false-positive class retired).
 
 ## Current Focus
-- (none) — Drift-Resolution sprint (P-31..P-34 → E-52/E-53/E-54) shipped 2026-05-08; awaiting next P-## from Architect.
+- (none) — Aligner Hardening + Node WAL sprint (P-35..P-37 → E-55..E-58) shipped 2026-05-09; awaiting next P-## from Architect.
 - state.json focus likely still reads prior sprint label — will clear on next handover.
 
 ## Key Decisions
@@ -37,11 +37,13 @@
 - D-019: Terminal Optimisation — CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 written to .claude/settings.json on `ai sync` (setdefault, preserves user override) and exported by install-ai-os.sh into ~/.zprofile/.zshrc/.bashrc via idempotent ensure_env_line helper (E-50)
 - D-020 (RETIRED via D-023): Obsidian Vault Memory mandate — frontmatter + [[wikilinks]] in blueprint-writer/decision-recorder/ai-log (E-51) reverted by E-54 on 2026-05-08 per architect ruling D-023; ai-log retains the E-49 session= contract surgically.
 - D-021: MCP Registry Single-Source-of-Truth — `.ai/blueprints/mcp.md` is auto-generated from `src/config/registry.json` + `src/mcp/shared/mcp-domains.mjs` by `scripts/generate_mcp_docs.mjs`; wired into `bin/ai do_sync()` (locator chain, fail-open) and shipped via install-ai-os.sh; mcp_doc_sync_test.sh enforces byte-identical CI gate; mcp-router imports DOMAINS from the same shared module (E-52)
-- D-022: SQLite WAL Flush — `_wal_checkpoint_state_db()` runs `PRAGMA wal_checkpoint(TRUNCATE)` against `.ai/state.sqlite` from both `do_sync()` and `doctor()` in `bin/ai`; hardcoded path, command -v sqlite3 fail-open, BASH_SOURCE dispatch guard for sourceability (E-53)
+- D-022 (SUPERSEDED by D-024): Bash sqlite3 PRAGMA wal_checkpoint(TRUNCATE) hook in bin/ai do_sync()+doctor() (E-53). Replaced by node:sqlite implementation E-57/E-58.
 - D-023: Obsidian Vault formatting retired — Architect ruling 2026-05-08 ditches frontmatter + wikilinks mandate in skills (D-020 reversal); standard markdown restored across 7 SKILL.md mirrors via E-54
+- D-024: Pure-node WAL checkpoint — `src/shared/wal-flusher.mjs` (node:sqlite, validated db-path, structured NDJSON errors, no shell-out, ~60ms boot) invoked from bin/ai `_wal_checkpoint_state_db()`; sqlite3 CLI dependency retired; locator chain repo→${AIOS}/shared/; fail-open on `command -v node` (E-57/E-58)
+- D-025: Aligner Phase 2 introspectors — `parseDiffByFile` groups + lines by destination file; CAPABILITIES_BYPASS skips .md/.json files, backtick-wrapped paths, and tests/{suites,lib}/*.sh sibling-import scripts; UNAPPROVED_DEPENDENCY scoped to package.json only; retires the recurring markdown-prose / JSON-key / test-helper-import false-positive class (E-55/E-56)
 
 ## Known Risks
-- Persistent ALIGN_FAIL false-positive class (markdown prose "../" in TASKS.md, JSON keys flagged as deps, ORPHANED_WORK on .claude/.gemini sync mirrors). E-42 retired the ESM-import + UACS-stamp slice; markdown/JSON-prose introspection still pending.
+- ALIGN_FAIL false-positive class retired by E-55/E-56 introspectors (markdown/JSON/test-helper paths now skipped); aligner now PASS on staged diffs. NO_LOG_UPDATE warning persists by design (LOG.md is gitignored / auto-archived).
 - computer-use-mcp Linux-only (Xvfb + DISPLAY=:99); macOS/Windows unsupported.
 - code-execution-mcp depends on Docker daemon — fail-closed when unavailable; no bare-metal fallback by design (D-008).
 - structured-outputs.md is Phase 1 (runtime MCP _assertSchema only); full API-level enforcement deferred to Phase 2 if/when bin/ai gains LLM integration.
@@ -50,13 +52,14 @@
 - Memory-palace embeddings cap (LRU 500) and serial-request 429 backoff are conservative; revisit quotas if multi-project rollout begins.
 - E-50 alternate-screen pin may cause rendering glitches on specific terminal emulators; rollback path documented (comment out env line).
 - Auto-generated mcp.md (E-52) drifts if a contributor edits it manually instead of registry.json — CI byte-identical gate catches at commit time, but pre-commit is fail-open if node missing.
-- WAL checkpoint (E-53) is fail-open when sqlite3 CLI absent; bloat can recur silently on dev boxes without sqlite3 installed.
+- WAL checkpoint (E-57/E-58) requires Node 22+ (node:sqlite) on dev boxes; fail-open if `node` missing — bloat can recur silently in degraded environments.
+- BRIEF.md is still skeletal (template-only) — product framing relies entirely on architect.md §1.
 
 ## MCP Servers (25 registered in .mcp.json)
 - State: task-synchronizer-mcp, orchestrator-mcp, archive-manager-mcp, memory, memory-manager-mcp
 - Code: filesystem, lsp-mcp, patch-mcp, propose-patch-mcp
 - Safety: safe-exec-mcp, context-guardian-mcp, risk-analyzer-mcp, verification-mcp
-- Intelligence: context-invoker-mcp, blueprint-aligner-mcp (Context Engine E-42), github-bridge-mcp, token-budget-mcp
+- Intelligence: context-invoker-mcp, blueprint-aligner-mcp (Context Engine E-42 + Phase 2 introspectors E-55/E-56), github-bridge-mcp, token-budget-mcp
 - Quality: TestSprite, vibe-check-mcp, computer-use-mcp (sandbox env enforced E-38)
 - Interop: advisor-mcp (A2A bridge to Gemini), approval-mcp (HITL Tier 3, session-id audit E-49)
 - Caching: cache-manager-mcp (Explicit Context Cache, finally-close fix E-25)
@@ -64,17 +67,16 @@
 - Routing: mcp-router (progressive discovery + RBAC mirror E-40; DOMAINS imported from shared module E-52)
 
 ## Recent Changes (last 10)
-- 2026-05-08: E-52 MCP Registry Auto-Generation — scripts/generate_mcp_docs.mjs reads registry.json + mcp-domains.mjs, emits domain-grouped .ai/blueprints/mcp.md; wired into bin/ai do_sync() with fail-open guards; install-ai-os ships scripts/; +17 assertions; 1097/1097 PASS
-- 2026-05-08: E-53 SQLite WAL Flush Hook — _wal_checkpoint_state_db() runs PRAGMA wal_checkpoint(TRUNCATE) from do_sync()+doctor() in bin/ai; hardcoded path, fail-open, BASH_SOURCE dispatch guard; +11 assertions; 1080/1080 PASS
-- 2026-05-08: E-54 Revert Obsidian Vault Memory — restored 7 SKILL.md mirrors to pre-E-51 markdown, preserved E-49 session=<id> contract in ai-log, deleted obsidian_vault_memory_test.sh; 1069/1069 PASS
-- 2026-05-08: D-023 (Gemini ruling) — ditched Obsidian Vault integration; revert to standard markdown
-- 2026-05-08: P-31/P-32/P-33/P-34 (Gemini) — drift-resolution-2026.md (MCP Registry Sync, Interop reconciliation, blueprints/_INDEX.md hub, WAL strategy ruling)
-- 2026-05-07: Archive sweep — LOG/REVIEWS/SESSION/COMM rotated to .ai/archive/2026-05/ (post-E-51 cleanup; second sweep on 2026-05-09)
-- 2026-05-07: E-51 Obsidian Vault Memory — frontmatter + [[wikilinks]] mandate (LATER REVERTED by E-54)
-- 2026-05-07: E-49 Session Traceability — approval-mcp session_id col + ai-log session=<id> contract; +26 assertions; 1065/1065 PASS
-- 2026-05-07: E-48 MCP Stdout Purity Gate — pre-commit lint bans console.log/info in src/mcp/**; +16 assertions; 1039/1039 PASS
-- 2026-05-07: E-50 Terminal Optimisation — CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 via setdefault + ensure_env_line; +14 assertions
+- 2026-05-09: E-58 bin/ai → wal-flusher.mjs — `_wal_checkpoint_state_db()` invokes `node src/shared/wal-flusher.mjs` instead of bash sqlite3; locator chain repo→${AIOS}/shared/; fail-open on `command -v node`; sqlite3 dependency retired; 1113/1113 PASS
+- 2026-05-09: E-57 wal-flusher.mjs — stateless node:sqlite helper at src/shared/wal-flusher.mjs; validated db-path (NUL-safe, .sqlite ext, exists, regular file); NDJSON errors; mirrored to ~/.ai-os/shared/; +14 assertions
+- 2026-05-09: E-56 TestPathExcluder — `isTestHelperFile()` whitelists tests/{suites,lib}/*.sh sibling-import patterns in CAPABILITIES_BYPASS; +3 cases in blueprint_aligner_test.sh
+- 2026-05-09: E-55 markdown/JSON prose introspection — `parseDiffByFile`, `isMarkdownFile`, `isJsonFile`, `traversalOutsideBackticks` introspectors; CAPABILITIES_BYPASS skips .md/.json + backtick code spans; UNAPPROVED_DEPENDENCY scoped to package.json; +7 cases; retires recurring false-positive class
+- 2026-05-09: P-35/P-36/P-37 (Gemini) — _INDEX.md authored, aligner Phase 2 hardening blueprint (aligner-hardening.md), Node WAL strategy blueprint (wal-checkpoint-node.md)
+- 2026-05-09: Archive sweep — LOG/REVIEWS/SESSION/COMM rotated to .ai/archive/2026-05/*.20260509_2117.md
+- 2026-05-08: E-52 MCP Registry Auto-Generation — scripts/generate_mcp_docs.mjs reads registry.json + mcp-domains.mjs, emits domain-grouped .ai/blueprints/mcp.md; wired into bin/ai do_sync(); install-ai-os ships scripts/; +17 assertions; 1097/1097 PASS
+- 2026-05-08: E-53 SQLite WAL Flush Hook (bash) — superseded by E-57/E-58 next day
+- 2026-05-08: E-54 Revert Obsidian Vault Memory — restored 7 SKILL.md mirrors to pre-E-51 markdown, preserved E-49 session=<id> contract, deleted obsidian_vault_memory_test.sh
+- 2026-05-08: P-31..P-34 (Gemini) — drift-resolution-2026.md (MCP Registry Sync, Interop reconciliation, blueprints/_INDEX.md hub, WAL strategy ruling)
 
 ---
 DIGEST must be accurate or flagged as stale. If stale, run: skill: ai-digest
-- 2026-05-09: auto-stamped by Stop hook
