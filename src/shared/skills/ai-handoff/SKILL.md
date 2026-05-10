@@ -3,7 +3,7 @@ name: ai-handoff
 description: Produce a structured handoff packet for Gemini↔Claude transitions. Reads unread deltas from state, formats blueprint divergence and decisions into .ai/COMM.md. Use before switching agents.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Bash, Edit, mcp__task-synchronizer-mcp__get_state, mcp__task-synchronizer-mcp__mark_deltas_read
+allowed-tools: Read, Bash, Edit, mcp__task-synchronizer-mcp__get_state, mcp__task-synchronizer-mcp__mark_deltas_read, mcp__task-synchronizer-mcp__verify_markdown_sync
 context: default
 agent: default
 ---
@@ -23,6 +23,26 @@ You are the **Handoff Coordinator**. Your job is to produce a clear, structured 
 - Claude → Gemini: after completing E-## work, before asking Gemini to review or plan next
 - Gemini → Claude: after writing new blueprints or P-## tasks, before Claude starts implementing
 - Any time context may be stale between agents
+
+## Step 0 — Verify state is consistent before packaging the handoff
+
+Never hand off an inconsistent state to the receiving agent. Run:
+
+```
+mcp__task-synchronizer-mcp__verify_markdown_sync()
+```
+
+- `[SYNC_PASS]` — continue to Step 1.
+- `[SYNC_FAIL]` — the anomalies almost always mean a task was implemented
+  but never marked `DONE`. Resolve every `is [x] but OPEN in state` /
+  `is [ ] but DONE in state` anomaly **first** — either mark the task
+  `DONE` via `update_task_status` (if the work is genuinely complete) or
+  flip the checkbox back to `[ ]` in your COMM.md narrative (if the
+  receiving agent should pick it up).
+
+Rationale: COMM.md is the receiving agent's source of truth for "what
+just happened." If state and markdown disagree, the next agent will plan
+against a fiction. Catch it here.
 
 ## Step 1 — Gather Handoff Data
 

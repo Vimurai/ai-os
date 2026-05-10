@@ -499,39 +499,101 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── verify_markdown_sync ──────────────────────────────────────────────────
     case "verify_markdown_sync": {
-      const failures = [];
+      // Per blueprint state-sync-validation.md (E-60): cross-reference
+      // TASKS.md checkboxes against state.sqlite per task. Catch the case
+      // where the engineer ships a feature but forgets to mark the task
+      // DONE — the count-only check would miss this when totals match.
+      const anomalies = [];
+      const autoFixes = [];
+      const tasksPath   = resolve(aiDir, "TASKS.md");
+      const reviewsPath = resolve(aiDir, "REVIEWS.md");
 
-      const tasksPath = resolve(aiDir, "TASKS.md");
       if (existsSync(tasksPath)) {
-        const tasksContent    = readFileSync(tasksPath, "utf8");
-        const mdTaskCount     = (tasksContent.match(/^- \[/gm) || []).length;
-        const stateTaskCount  = db.prepare("SELECT COUNT(*) as n FROM tasks").get().n;
-        if (Math.abs(mdTaskCount - stateTaskCount) > 2) {
-          failures.push(`TASKS.md has ${mdTaskCount} tasks but state has ${stateTaskCount} — regenerating`);
-          _regenerateViews(aiDir, db);
-        }
+        const tasksContent = readFileSync(tasksPath, "utf8");
+
         if (!tasksContent.startsWith("# TASKS (Generated from state.json)")) {
-          failures.push("TASKS.md does not start with generated header — may have been hand-edited");
+          anomalies.push("TASKS.md does not start with generated header — may have been hand-edited");
+        }
+
+        // Match: `- [x] E-54: ...` or `- [ ] P-27: ...`
+        const lineRe  = /^- \[([ xX])\] ([A-Z]+-\d+):/gm;
+        const mdTasks = new Map();   // id → 'DONE' | 'OPEN'
+        let m;
+        while ((m = lineRe.exec(tasksContent)) !== null) {
+          mdTasks.set(m[2], m[1].trim().toLowerCase() === "x" ? "DONE" : "OPEN");
+        }
+
+        const dbTasks = new Map(
+          db.prepare("SELECT id, status FROM tasks").all().map(t => [t.id, t.status])
+        );
+
+        // Drift type 1: in TASKS.md, missing from state
+        // Drift type 2: checkbox disagrees with state status
+        for (const [id, mdStatus] of mdTasks) {
+          if (!dbTasks.has(id)) {
+            anomalies.push(`${id} appears in TASKS.md (${mdStatus === "DONE" ? "[x]" : "[ ]"}) but is missing from state`);
+            continue;
+          }
+          const dbStatus = dbTasks.get(id);
+          if (mdStatus === "DONE" && dbStatus !== "DONE") {
+            anomalies.push(`${id} is [x] in TASKS.md but ${dbStatus} in state`);
+          } else if (mdStatus === "OPEN" && dbStatus === "DONE") {
+            anomalies.push(`${id} is [ ] in TASKS.md but DONE in state`);
+          }
+        }
+
+        // Drift type 3: in state, missing from TASKS.md
+        for (const id of dbTasks.keys()) {
+          if (!mdTasks.has(id)) {
+            anomalies.push(`${id} exists in state but is missing from TASKS.md`);
+          }
         }
       }
 
-      const reviewsPath  = resolve(aiDir, "REVIEWS.md");
-      const stampCount   = db.prepare("SELECT COUNT(*) as n FROM stamps").get().n;
+      // REVIEWS.md count-level safety net (auto-fix on stamp drift).
+      const stampCount = db.prepare("SELECT COUNT(*) as n FROM stamps").get().n;
       if (existsSync(reviewsPath) && stampCount > 0) {
         const reviewsContent = readFileSync(reviewsPath, "utf8");
         const mdStampCount   = (reviewsContent.match(/^\[[\w_]+\]/gm) || []).length;
         if (mdStampCount < stampCount) {
-          failures.push(`REVIEWS.md has ${mdStampCount} stamps but state has ${stampCount} — regenerating`);
+          autoFixes.push(`REVIEWS.md had ${mdStampCount} stamps but state has ${stampCount} — regenerated`);
           _regenerateViews(aiDir, db);
         }
       }
 
-      if (failures.length === 0) {
-        return { content: [{ type: "text", text: "[SYNC_PASS] TASKS.md and REVIEWS.md are in sync with state." }] };
+      // Auto-regenerate TASKS.md when rows are missing from one side or
+      // the other (anomalies still surface so the agent knows what was
+      // fixed). Checkbox-mismatch anomalies are intentionally NOT
+      // auto-fixed — they signal the engineer forgot to call
+      // update_task_status, which is human/agent-decision territory.
+      const hasMarkdownDrift = anomalies.some(a =>
+        /missing from TASKS\.md|missing from state/.test(a)
+      );
+      if (hasMarkdownDrift) {
+        _regenerateViews(aiDir, db);
+        autoFixes.push("TASKS.md regenerated from state to resolve missing-row drift");
       }
-      return {
-        content: [{ type: "text", text: `[SYNC_FIXED] Issues detected and auto-resolved:\n${failures.map(f => `  - ${f}`).join("\n")}` }],
-      };
+
+      const status = anomalies.length === 0 ? "PASS" : "FAIL";
+      const lines  = [`[SYNC_${status}] TASKS.md and REVIEWS.md vs state.sqlite`];
+
+      if (anomalies.length > 0) {
+        lines.push(`Anomalies (${anomalies.length}):`);
+        anomalies.forEach(a => lines.push(`  • ${a}`));
+      }
+      if (autoFixes.length > 0) {
+        lines.push(`Auto-fixes:`);
+        autoFixes.forEach(a => lines.push(`  • ${a}`));
+      }
+      if (anomalies.length === 0 && autoFixes.length === 0) {
+        lines[0] = "[SYNC_PASS] TASKS.md and REVIEWS.md are in sync with state.";
+      }
+
+      // Structured tail for programmatic consumers (skills, CI, hooks).
+      lines.push("");
+      lines.push(`__SYNC_RESULT__ ${JSON.stringify({ status, anomalies, auto_fixes: autoFixes })}`);
+
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     // ── validate_payload ──────────────────────────────────────────────────────
