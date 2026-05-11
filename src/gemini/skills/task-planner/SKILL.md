@@ -69,7 +69,33 @@ Read current TASKS.md and increment:
 
 Never reuse a completed task ID.
 
-## Step 4 — Write to TASKS.md
+## Step 4 — Classify the Workspace (E-64 — Framework Routing)
+
+Before writing the task, decide *where* it belongs. AI-OS framework changes
+must not pollute downstream project queues (the misclassification class
+captured in `.ai/blueprints/task-routing.md`).
+
+A task is **framework-level** (`is_framework_task: true`) if any of the
+following is true:
+
+- It mutates files under `~/.ai-os/` or any path inside the canonical
+  `ai-os-v2/src/**` clone (MCP servers, shared skills, agents, scripts,
+  installer, hooks, registry, schemas).
+- It edits `.ai/blueprints/*.md` *for the framework itself* — i.e. the
+  blueprint sits inside the AI-OS clone, not the consuming project.
+- The task description names a framework component without a project-
+  specific feature (e.g. "Update task-synchronizer-mcp", "Fix bin/ai
+  locator chain", "Add new skill to shared/skills").
+
+A task is **project-level** (`is_framework_task` omitted/false) if it
+touches `<project>/src/**`, application code, or anything outside the
+framework clone — even if it imports an AI-OS skill or MCP.
+
+**Ambiguous?** Default to project-level and note the ambiguity in the
+description. Mis-routing a project task into the framework workspace is a
+worse failure than the reverse (it pollutes the source-of-truth).
+
+## Step 5 — Write to TASKS.md
 
 Format:
 ```markdown
@@ -79,20 +105,28 @@ Format:
 
 Append under the correct section (`## Engineer (Claude)` or `## Architect (Gemini)`).
 
-Also call:
+Also call `add_task` with the routing flag set per Step 4:
 ```
 mcp__task-synchronizer-mcp__add_task({
-  id: "E-##",
-  description: "...",
-  tier: N,
-  status: "OPEN"
+  owner:             "Engineer (Claude)",
+  description:       "...",
+  tier:              N,
+  prefix:            "E",
+  is_framework_task: true   // ← omit or set false for project-level work
 })
 ```
 
-## Step 5 — Confirm
+When `is_framework_task: true`, the MCP redirects the row into
+`$AIOS_WORKSPACE/.ai/state.sqlite` instead of the local `.ai/`. If the env
+is unset or invalid the call returns `[WORKSPACE_NOT_FOUND]` — do not
+retry without the flag; surface the error so the user can re-run
+`install-ai-os.sh` from the framework clone.
+
+## Step 6 — Confirm
 
 Report:
-> "N tasks written to TASKS.md: [E-## list]. All passed quality gate."
+> "N tasks written to TASKS.md: [E-## list]. All passed quality gate.
+>  Framework-routed: [E-## list, or 'none']."
 
 ## What NOT to Do
 
@@ -100,3 +134,7 @@ Report:
 - Do NOT write E-## tasks without a blueprint reference
 - Do NOT write tasks in passive voice ("should be done", "needs to be")
 - Do NOT skip the circular dependency check for chains > 2 hops
+- Do NOT file framework-level tasks (changes to `~/.ai-os/` or
+  `ai-os-v2/src/**`) into a downstream project's queue — set
+  `is_framework_task: true` per Step 4 so the MCP routes them to the
+  canonical AI-OS clone.

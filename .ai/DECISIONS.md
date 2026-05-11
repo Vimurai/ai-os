@@ -172,3 +172,54 @@ The existing hook installation copied the global `~/.ai-os/hooks/pre-commit.sh` 
 Delete `.git/hooks/pre-commit` in the local repository and recommit without the gate.
 
 ---
+
+## [[D-006]] — Hybrid Env Var + MCP Routing for Framework Tasks
+
+**Date**: 2026-05-10
+**Task**: [[P-38]]
+**Decision**: Route framework-level tasks via `task-synchronizer-mcp` using `$AIOS_WORKSPACE` and `is_framework_task` payload flag.
+
+### Why needed
+AI-OS framework development requires routing tasks to the global repository (`ai-os-v2`) even when a developer identifies an issue while working inside a local project workspace. A mechanism was needed to map `~/.ai-os/` path intents to the correct `TASKS.md`.
+
+### Alternatives considered
+1. **Skill-Level CWD Switch** — The `task-planner` skill instructs the agent to `cd` into the framework directory before writing. Brittle, breaks agent context loop. Rejected.
+2. **Global Spooling** — Write to `~/.ai-os/framework_tasks.sqlite` and manually sync later. High friction, requires explicit sync step. Rejected.
+3. **Hybrid Env Var + MCP (Chosen)** — The `task-planner` tags the payload; the MCP router checks `$AIOS_WORKSPACE` and overrides the SQLite/Markdown paths transparently. Keeps agent logic simple and execution deterministic.
+
+### Constraints driving this decision
+- **Developer UX**: The agent should seamlessly record framework tasks without the developer switching projects manually.
+
+### Impact
+- Unlocks: E-62, E-63, E-64 (Framework Task Routing Implementation).
+- Risk if wrong: If `$AIOS_WORKSPACE` path resolution fails, tasks may corrupt local state or throw errors.
+
+### Rollback
+Set `AIOS_WORKSPACE_DISABLE=1` to force all tasks into the local project.
+
+---
+
+## [[D-007]] — JIT Aggregation for Incident Tracker
+
+**Date**: 2026-05-10
+**Task**: [[P-38]]
+**Decision**: Aggregate `incidents.ndjson` Just-In-Time (JIT) during `ai-preflight` to propose recurrent incident P-## tasks.
+
+### Why needed
+We need to track and resolve recurrent errors across the Triad. A system must autonomously identify high-frequency incidents and draft P-## tasks for the Architect without causing token bloat.
+
+### Alternatives considered
+1. **Background Aggregator Agent** — A cron job or background daemon analyzes the NDJSON periodically. Adds operational overhead and requires a persistent background process. Rejected.
+2. **JIT Aggregation (Preflight/Sync)** — Hook into the existing `ai-preflight` phase. Extremely lightweight, surfaces issues exactly when the developer and Architect are ready to start a session. Chosen.
+
+### Constraints driving this decision
+- **Performance**: Must parse quickly (<50ms) to not slow down the bootloader.
+
+### Impact
+- Unlocks: E-65, E-66, E-67 (Incident Tracker Implementation).
+- Risk if wrong: If the log bloats, the preflight hook could slow down session start.
+
+### Rollback
+Toggle `AI_INCIDENT_TRACKER_DISABLE=1` env variable or manually delete `incidents.ndjson`.
+
+---

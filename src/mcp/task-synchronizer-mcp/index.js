@@ -142,6 +142,48 @@ function _archiveDoneTasks(aiDir, db) {
 const STATE_MISSING_ERR = "✗ state.sqlite not found — run: ai init";
 const DB_ERR = "✗ state.sqlite could not be opened";
 
+// ── E-63: Framework workspace routing (task-routing.md) ──────────────────────
+// When add_task receives is_framework_task: true, redirect persistence to the
+// canonical AI-OS clone (process.env.AIOS_WORKSPACE) instead of the local
+// project's .ai/. Honours AIOS_WORKSPACE_DISABLE=1 as an emergency override
+// (rollback-plan.md): forces local persistence when cross-workspace writes
+// misbehave. Returns either a string aiDir or an error envelope ready to
+// return from the request handler.
+function _resolveFrameworkAiDir() {
+  if (process.env.AIOS_WORKSPACE_DISABLE === "1") {
+    return {
+      error: "[WORKSPACE_DISABLED] AIOS_WORKSPACE_DISABLE=1 — cross-workspace " +
+             "writes are temporarily off. Either unset the variable or omit " +
+             "is_framework_task and let the task land in the local .ai/.",
+    };
+  }
+  const ws = (process.env.AIOS_WORKSPACE || "").trim();
+  if (!ws) {
+    return {
+      error: "[WORKSPACE_NOT_FOUND] is_framework_task=true but AIOS_WORKSPACE " +
+             "is unset. Re-run install-ai-os.sh from your AI-OS clone or " +
+             "export AIOS_WORKSPACE=/path/to/ai-os-v2 manually.",
+    };
+  }
+  // Defence-in-depth path validation (task-routing.md §Security):
+  // - must be absolute (no relative-path traversal at the env layer)
+  // - must contain a real .ai/ directory (the only thing we'll write to)
+  if (!ws.startsWith("/")) {
+    return {
+      error: `[WORKSPACE_NOT_FOUND] AIOS_WORKSPACE='${ws}' is not absolute. ` +
+             `Cross-workspace writes require an absolute path.`,
+    };
+  }
+  const candidate = resolve(ws, ".ai");
+  if (!existsSync(candidate)) {
+    return {
+      error: `[WORKSPACE_NOT_FOUND] AIOS_WORKSPACE='${ws}' has no .ai/ directory. ` +
+             `Run 'ai init' inside the framework clone before routing framework tasks.`,
+    };
+  }
+  return { aiDir: candidate };
+}
+
 // ── Server ────────────────────────────────────────────────────────────────────
 
 const server = new Server(
@@ -166,14 +208,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: "add_task",
-      description: "Adds a new task to state with auto-assigned ID. Returns the new task.",
+      description: "Adds a new task to state with auto-assigned ID. Returns the new task. Set is_framework_task: true (E-63) to route the task to the canonical AI-OS clone at $AIOS_WORKSPACE instead of the local project's .ai/.",
       inputSchema: {
         type: "object",
         properties: {
-          owner:       { type: "string", description: "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
-          description: { type: "string", description: "Task description" },
-          tier:        { type: "number", description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
-          prefix:      { type: "string", description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },
+          owner:             { type: "string",  description: "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+          description:       { type: "string",  description: "Task description" },
+          tier:              { type: "number",  description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
+          prefix:            { type: "string",  description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },
+          is_framework_task: { type: "boolean", description: "If true, persist into $AIOS_WORKSPACE/.ai (canonical AI-OS clone) instead of local .ai/. Errors with [WORKSPACE_NOT_FOUND] when AIOS_WORKSPACE is unset/invalid. (E-63)", default: false },
         },
         required: ["owner", "description"],
       },
@@ -361,8 +404,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "add_task": {
       const _addTaskErr = _assertSchema("task_create", args);
       if (_addTaskErr) return _addTaskErr;
+
+      // E-63: Resolve persistence target — local .ai/ or framework workspace
+      // when is_framework_task is set. Each framework write opens its own DB
+      // handle; the local `db` opened above is irrelevant in that branch.
+      let targetAiDir = aiDir;
+      let targetDb    = db;
+      if (args.is_framework_task === true) {
+        const fw = _resolveFrameworkAiDir();
+        if (fw.error) {
+          return { content: [{ type: "text", text: `✗ ${fw.error}` }], isError: true };
+        }
+        // Refuse to silently mirror a framework write back into the same .ai/
+        // the request originated in — that would defeat the routing entirely
+        // and we'd rather fail loudly than create the "appears to work" trap.
+        if (fw.aiDir === aiDir) {
+          // Same workspace — fall through with the existing handle, no-op routing.
+          logger.info("add_task", "is_framework_task=true but workspace matches local .ai/", { aiDir });
+        } else {
+          targetAiDir = fw.aiDir;
+          try {
+            targetDb = _getDb(targetAiDir);
+          } catch (e) {
+            return {
+              content: [{ type: "text", text: `✗ [WORKSPACE_NOT_FOUND] could not open framework state.sqlite at ${targetAiDir}: ${e.message}` }],
+              isError: true,
+            };
+          }
+        }
+      }
+
       const prefix = args.prefix || "E";
-      const id     = _nextId(db, prefix);
+      const id     = _nextId(targetDb, prefix);
       const task   = {
         id,
         owner:        args.owner,
@@ -374,14 +447,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         summary:      null,
       };
 
-      db.prepare(`
+      targetDb.prepare(`
         INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(task.id, task.owner, task.status, task.tier, task.description,
               task.created_at, task.completed_at, task.summary);
 
-      _regenerateViews(aiDir, db);
-      return { content: [{ type: "text", text: `✓ Added ${id}: ${args.description}\n${JSON.stringify(task, null, 2)}` }] };
+      _regenerateViews(targetAiDir, targetDb);
+      const routeSuffix = targetAiDir === aiDir ? "" : ` (routed to framework workspace ${targetAiDir})`;
+      return { content: [{ type: "text", text: `✓ Added ${id}: ${args.description}${routeSuffix}\n${JSON.stringify(task, null, 2)}` }] };
     }
 
     // ── update_task_status ────────────────────────────────────────────────────

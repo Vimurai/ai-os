@@ -3,7 +3,7 @@ name: ai-preflight
 description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Glob
+allowed-tools: Read, Glob, mcp__task-synchronizer-mcp__verify_markdown_sync
 context: default
 agent: default
 ---
@@ -30,6 +30,24 @@ Only use `filesystem.read` on `.ai/architect.md` *after* preflight, and ONLY IF 
 
 ### 3. Read `.ai/TASKS.md` ← YOUR ASSIGNMENTS
 Assigned tasks (E-## for Claude, P-## for Gemini). Always read.
+
+### 4. Verify markdown ↔ state sync ← FAILSAFE (E-60, blueprint state-sync-validation)
+
+Before trusting TASKS.md, verify the file actually agrees with state.sqlite:
+
+```
+mcp__task-synchronizer-mcp__verify_markdown_sync()
+```
+
+- `[SYNC_PASS]` — proceed normally.
+- `[SYNC_FAIL]` — read the listed anomalies. The most common failure is a
+  task you completed last session that you forgot to mark `DONE`. If you
+  see `E-N is [x] in TASKS.md but OPEN in state`, that's almost certainly
+  the case — fix it via `update_task_status({id: "E-N", status: "DONE"})`
+  before claiming any work is "done" in the new session.
+- The MCP auto-regenerates the markdown when rows are missing from one
+  side, so you usually need to act only on `is [x] but OPEN` /
+  `is [ ] but DONE` anomalies.
 
 ### 5. Check Implementation Deltas ← FEEDBACK LOOP (P-42 §29)
 If `.ai/state.json` exists, check for unread implementation deltas:

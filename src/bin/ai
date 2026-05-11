@@ -134,6 +134,25 @@ _wal_checkpoint_state_db() {
   fi
 }
 
+# E-62: Resolve canonical AI-OS framework clone path. Order:
+#   1. $AIOS_WORKSPACE if already exported (interactive shell, just-installed)
+#   2. ${AIOS}/config/aios-workspace.txt (persisted by install-ai-os.sh)
+#   3. empty string (no opinion — task-synchronizer-mcp will refuse cross-
+#      workspace writes and fall back to local .ai/ per task-routing.md)
+# Pure read — never validates path traversal here; consumers enforce.
+_resolve_aios_workspace() {
+  if [[ -n "${AIOS_WORKSPACE:-}" ]]; then
+    printf "%s" "${AIOS_WORKSPACE}"
+    return 0
+  fi
+  local persisted="${AIOS}/config/aios-workspace.txt"
+  if [[ -f "$persisted" ]]; then
+    head -n 1 "$persisted" 2>/dev/null | tr -d '\n'
+    return 0
+  fi
+  printf ""
+}
+
 # Generates .mcp.json with absolute paths to ~/.ai-os/mcp/<server>/index.js
 # Uses registry.json as source of truth. Preserves user-set env values.
 generate_mcp_json() {
@@ -300,7 +319,12 @@ _configure_project_claude_settings() {
   local TARGET_DIR="${1:-.claude}"
   local REGISTRY="${AIOS}/config/registry.json"
   mkdir -p "$TARGET_DIR"
-  python3 - "$TARGET_DIR" "$REGISTRY" <<'PY'
+  # E-62: pass resolved AIOS_WORKSPACE through to the python heredoc via env
+  # so the framework clone path can be propagated into project settings.json
+  # without changing the heredoc's positional-arg contract.
+  local AIOS_WORKSPACE_VALUE
+  AIOS_WORKSPACE_VALUE="$(_resolve_aios_workspace)"
+  AIOS_WORKSPACE="${AIOS_WORKSPACE_VALUE}" python3 - "$TARGET_DIR" "$REGISTRY" <<'PY'
 import json, os, sys
 
 target_dir = sys.argv[1]
@@ -323,6 +347,14 @@ env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
 # §"Terminal Emancipation" + §Rollback: revert this if specific OSes show
 # rendering bugs.
 env.setdefault("CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN", "1")
+# E-62: Propagate AIOS_WORKSPACE so Claude (and tools spawned by it) can
+# route framework-level tasks to the canonical ai-os-v2 clone regardless
+# of which project tree the user is currently working in. Empty string
+# means install-ai-os.sh hasn't run yet — leave the key absent so a stale
+# value from an earlier install doesn't linger.
+_aios_ws = os.environ.get("AIOS_WORKSPACE", "")
+if _aios_ws:
+    env.setdefault("AIOS_WORKSPACE", _aios_ws)
 
 # Permissions: scoped Gemini CLI + registry-driven MCP tools
 perms = data.setdefault("permissions", {})

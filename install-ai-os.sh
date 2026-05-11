@@ -59,6 +59,15 @@ fi
 chmod +x "${AIOS}/bin/ai"
 chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
 
+# E-62: Persist canonical AI-OS clone path so bin/ai can recover the
+# framework workspace without relying on shell env (e.g. when invoked
+# from a non-interactive process). Pure path persistence — no path
+# traversal validation here; consumers (task-synchronizer-mcp) enforce
+# their own invariants per task-routing.md §Security.
+mkdir -p "${AIOS}/config"
+printf "%s\n" "${REPO_DIR}" > "${AIOS}/config/aios-workspace.txt"
+echo "✓ Recorded AIOS_WORKSPACE=${REPO_DIR}"
+
 echo "✓ Files copied to ${AIOS}"
 
 # ── 2) Remove orphaned files from installed dirs (dynamic — no hardcoded list) ─
@@ -122,6 +131,14 @@ ensure_path_line "${HOME}/.bashrc"
 ensure_env_line "${HOME}/.zprofile" "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" "1"
 ensure_env_line "${HOME}/.zshrc"    "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" "1"
 ensure_env_line "${HOME}/.bashrc"   "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN" "1"
+
+# E-62: Export AIOS_WORKSPACE so the task-planner skill + task-synchronizer-mcp
+# can route framework-level work (changes to ~/.ai-os/ or ai-os-v2/src/**)
+# directly to this canonical clone, regardless of which project shell the
+# user is in. Per task-routing.md: existing user value is preserved.
+ensure_env_line "${HOME}/.zprofile" "AIOS_WORKSPACE" "${REPO_DIR}"
+ensure_env_line "${HOME}/.zshrc"    "AIOS_WORKSPACE" "${REPO_DIR}"
+ensure_env_line "${HOME}/.bashrc"   "AIOS_WORKSPACE" "${REPO_DIR}"
 
 # ── 4) Install global configs + hooks + fix settings.json ────────────────────
 
