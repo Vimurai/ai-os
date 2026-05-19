@@ -44,35 +44,36 @@ No `[CRITIC_STAMP]` required for Tier 1.
 
 ---
 
-## Tier 2 — Blueprint Aligner Only
+## Tier 2 — Blueprint Aligner + Clean-Code (parallel)
 
-Run `blueprint-aligner-mcp`:
+Spawn both critics in parallel — they review independent surfaces (blueprint
+alignment vs. code shape) and stamp their own verdicts. `review_synthesizer`
+or the human operator weighs both before committing.
+
 ```
-align_diff()   ← compares staged diff vs architect.md
+Agent("Run blueprint-aligner-mcp align_diff(). Use mcp__task-synchronizer-mcp__add_stamp with type ALIGN_PASS or ALIGN_FAIL to record the result.")
+Agent("Run the critic_clean_code agent (E-81). Use mcp__task-synchronizer-mcp__add_stamp with type CLEAN_PASS, CLEAN_WARN, or CLEAN_FAIL to record the result.")
 ```
 
-If PASS: record via MCP — do NOT write directly to `.ai/REVIEWS.md`:
+Expected stamps after both complete:
+- `[ALIGN_PASS/FAIL]` — from `blueprint-aligner-mcp`
+- `[CLEAN_PASS/WARN/FAIL]` — from `critic_clean_code.md` (E-81 — invokes E-80 standards-checker)
+
+Pass gate (all required for [CRITIC_STAMP]):
+- ALIGN must be `PASS`
+- CLEAN must NOT be `FAIL` (a `CLEAN_WARN` is acceptable for Tier 2)
+
+If both clear, record the synthesis stamp:
 ```
-mcp__task-synchronizer-mcp__add_stamp({
-  type: "ALIGN_PASS",
-  agent: "blueprint-aligner-mcp",
-  summary: "[TIER_2] Blueprint aligned — no deviations"
-})
 mcp__task-synchronizer-mcp__add_stamp({
   type: "CRITIC_STAMP",
-  agent: "blueprint-aligner-mcp",
-  summary: "[TIER_2] Blueprint aligned — no deviations"
+  agent: "ai-review-tier2",
+  summary: "[TIER_2] Blueprint aligned + clean-code gate clear — <N warnings ignored>"
 })
 ```
 
-If FAIL: record via MCP:
-```
-mcp__task-synchronizer-mcp__add_stamp({
-  type: "ALIGN_FAIL",
-  agent: "blueprint-aligner-mcp",
-  summary: "[TIER_2] <deviation summary> — COMMIT BLOCKED"
-})
-```
+If either fails, the failing critic's stamp is the COMMIT BLOCKED signal —
+do not write a passing CRITIC_STAMP.
 
 Commit (only after PASS): `git commit -m "[TIER_2] <description>"`
 
@@ -86,6 +87,7 @@ Spawn all critics in parallel using the `Agent` tool. Each critic is a **materia
 Agent("Run the critic_arch agent. Use mcp__task-synchronizer-mcp__add_stamp with type ARCH_PASS or ARCH_FAIL to record the result.")
 Agent("Run the critic_security agent. Use mcp__task-synchronizer-mcp__add_stamp with type SEC_PASS or SEC_FAIL to record the result.")
 Agent("Run the critic_tests agent. Use mcp__task-synchronizer-mcp__add_stamp with type TESTS_PASS or TESTS_FAIL to record the result.")
+Agent("Run the critic_clean_code agent (E-81). Use mcp__task-synchronizer-mcp__add_stamp with type CLEAN_PASS, CLEAN_WARN, or CLEAN_FAIL to record the result.")
 Agent("Run blueprint-aligner-mcp align_diff(). Use mcp__task-synchronizer-mcp__add_stamp with type ALIGN_PASS or ALIGN_FAIL to record the result.")
 Agent("Run the security_engineer agent. Use mcp__task-synchronizer-mcp__add_stamp with type SEC_CLEARED to record the result.")
 ```
@@ -94,6 +96,7 @@ Expected stamps after all complete:
 - `[ARCH_PASS/FAIL]` — from `critic_arch.md`
 - `[SEC_PASS/FAIL]` — from `critic_security.md`
 - `[TESTS_PASS/FAIL]` — from `critic_tests.md`
+- `[CLEAN_PASS/WARN/FAIL]` — from `critic_clean_code.md` (E-81 — runs E-80 standards-checker)
 - `[ALIGN_PASS/FAIL]` — from `blueprint-aligner-mcp`
 - `[SEC_CLEARED]` — from `security_engineer.md`
 

@@ -251,6 +251,84 @@ MCP_PURITY_BLOCK
 
 check_mcp_stdout_purity
 
+# ── E-82: Engineering-Standards Gate ────────────────────────────────────────
+# Invokes the E-80 standards-checker CLI against the staged diff. The CLI
+# encapsulates every rule (file size, mcp stdout purity, secrets, tmp-cruft,
+# kebab-case naming, shared-helper reuse) defined in src/shared/standards.json.
+#
+# Honors the blueprint §Rollback Plan escape hatch: AI_OS_SKIP_STANDARDS=1
+# bypasses the gate (the CLI itself also handles this; we short-circuit
+# here to skip the subprocess fork entirely).
+#
+# Per blueprint §Execution Constraints: this gate runs in <200ms on a
+# typical commit; the CLI emits its own perf-warn to stderr if exceeded.
+check_standards_gate() {
+  # Rollback flag — silent skip (CLI prints its own STANDARDS_SKIPPED notice
+  # when invoked with the flag, but we don't need to spawn the subprocess
+  # at all if it's set).
+  if [[ "${AI_OS_SKIP_STANDARDS:-0}" == "1" ]]; then
+    return 0
+  fi
+
+  # Node 22+ baseline (mirrors E-69 installer guard). If absent, skip the
+  # gate rather than break commits — degrade gracefully.
+  if ! command -v node >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local repo_root
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+  [[ -n "$repo_root" ]] || return 0
+
+  # Locator chain (mirrors E-58 / E-65 / E-75 patterns): in-tree → installed.
+  local cli=""
+  if [[ -f "${repo_root}/scripts/standards.mjs" ]]; then
+    cli="${repo_root}/scripts/standards.mjs"
+  elif [[ -f "${HOME}/.ai-os/scripts/standards.mjs" ]]; then
+    cli="${HOME}/.ai-os/scripts/standards.mjs"
+  else
+    # Pre-E-80 install: gate not yet wired. Skip rather than fail.
+    return 0
+  fi
+
+  # Run the CLI from the repo root so its `--staged` git query resolves
+  # against the actual project.
+  local out rc
+  out=$(cd "$repo_root" && node "$cli" check --staged 2>&1)
+  rc=$?
+
+  if [[ $rc -eq 0 ]]; then
+    return 0
+  fi
+
+  cat >&2 <<'STANDARDS_BLOCK'
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║  AI-OS GATE 2: ENGINEERING-STANDARDS — COMMIT BLOCKED                  ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  scripts/standards.mjs flagged one or more error-severity violations    ║
+║  in the staged diff. The full report follows.                            ║
+║                                                                          ║
+║  Common fixes:                                                           ║
+║    • Split files over 1000 lines into focused modules under src/shared/ ║
+║    • Replace console.log/info in src/mcp/** with the shared NDJSON      ║
+║      logger (src/mcp/shared/logger.js).                                 ║
+║    • Remove .tmp / .bak / .swp / .orig editor cruft before staging.    ║
+║    • Rename files to kebab-case / camelCase / PascalCase (no            ║
+║      Mixed_Snake) for ESM resolver safety.                              ║
+║    • Strip leaked secret patterns (AWS / Stripe / Slack / GitHub PATs / ║
+║      PRIVATE KEY blocks).                                                ║
+║                                                                          ║
+║  Rollback (last resort): re-run with AI_OS_SKIP_STANDARDS=1.            ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+STANDARDS_BLOCK
+  echo "$out" >&2
+  exit 1
+}
+
+check_standards_gate
+
 # ── Gate 2 check ─────────────────────────────────────────────────────────────
 if has_recent_critic_stamp; then
   exit 0
