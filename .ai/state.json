@@ -3,7 +3,7 @@
   "project": {
     "current_tier": 2,
     "release_verdict": null,
-    "focus": "Reverting Obsidian integration, resolving architectural drift, and implementing the Claude Code stream purity fixes."
+    "focus": "Implementing High-Volume SEO Keyword Multiplier strategy per blueprint."
   },
   "tasks": [
     {
@@ -415,6 +415,66 @@
       "created_at": "2026-05-18T18:00:25.401Z",
       "completed_at": "2026-05-18T22:25:11.884Z",
       "summary": "Bounded Worker Pool + exponential backoff + DLQ (Tier 2) per multimodal-rag-batching.md §Components 2+3 + §Execution Constraints + §Rollback. New src/shared/memory-worker-pool.mjs (~280 lines, pure node:fs/node:path, no deps). Exports processBatch(files, opts) → {successes, failures, skipped}; flushDlq(dlqPath, sendEmbedding, opts); loadDlq/saveDlq/appendToDlq (atomic rename for crash-safety, sync load-modify-save atomic under V8); isRateLimitError(e) covers status/code/statusCode 429 + RATE_LIMIT strings + message regex. Native concurrency via N worker promises + cursor++ shared queue (no p-limit dep). Backoff 1000→2000→4000→8000→15000ms cap with ~5 attempts before DLQ. AI_EMBEDDING_CONCURRENCY env override → serial fallback (verified maxInFlight==1). AI_RAG_MODE=text-only short-circuits pool → all files to skipped[reason=text-only-mode]. DLQ dedup by file_path: retry_count summed, last_error/last_attempt updated. flushDlq disables inner DLQ writes, rebuilds atomically from failures[]. sendEmbedding injected — pool never speaks to Gemini directly. CLI: --dlq-show / --dlq-clear. memory_curator.md §Execution Constraints rewritten with new defaults + canonical helper callout + rollback flag. Mirrored byte-identical to ~/.ai-os/shared/ + ~/.ai-os/gemini/agents/ + .gemini/agents/. New tests/suites/memory_worker_pool_test.sh (53 assertions, 13 groups): exports + constants, happy-path concurrency observability, 429 exhaustion → DLQ with ISO ts + retry_count, non-retryable single-call short-circuit, backoff doubling via timestamp diffs, serial fallback maxInFlight==1, text-only zero calls, isRateLimitError 6 positive + 4 negative shapes, DLQ dedup with retry_count summed, flushDlq partitioning + atomic rewrite, fail-open on missing/garbage DLQ, CLI ops + usage, mirror byte-identity. Full suite 1427 → 1480 PASS (+53, zero regressions). Completes multimodal-rag-batching.md blueprint (E-75 + E-76 DONE)."
+    },
+    {
+      "id": "E-77",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the Keyword-Multiplier-Manager in src/gemini/agents/seo_manager.md. | Tier: 2 per .ai/blueprints/seo-keyword-multiplier.md",
+      "created_at": "2026-05-19T09:31:47.868Z",
+      "completed_at": "2026-05-19T09:44:29.726Z",
+      "summary": "Keyword-Multiplier-Manager agent (Tier 2) per seo-keyword-multiplier.md §Components 1 + §API. New src/gemini/agents/seo_manager.md — orchestrates expansion of a keyword seed into exactly 20 distinct content-variation task requests via task-synchronizer-mcp::add_task. Implements multiplyKeyword(term) -> variation_ids[]. Enumerates 20 canonical approach-types in fixed order (listicle/how-to/case-study/comparison/ultimate/tutorial/roundup/data-backed/pros-cons/expert/review/trends/mistakes/faq/checklist/explainer/pricing/alternatives/personal/predictions). Anti-drift §Forbidden: NO content generation (E-78), NO state tracking (E-79), NO emission past MAX_VARIATIONS_PER_SEED=20. Security: input validation rejects empty/>256-char/shell-metachar terms with [INVALID_KEYWORD_TERM] tag — term treated as untrusted user input. Encodes KeywordSeed implicitly via \"SEO variation: <term> [<approach_type>]\" description prefix until E-79 ships dedicated schema. Honours §Execution Constraints: add_task in batches of 3, 20-cap hard, <10s wall-clock budget else [SEO_MANAGER_SLOW] warn. Rollback documented via update_task_status sweep on prefix-matched cohort. Frontmatter description double-quoted (E-49/E-65 colon-parse guard). Mirrored byte-identical to .gemini/agents/ + ~/.ai-os/gemini/agents/. New tests/suites/seo_manager_test.sh (44 assertions, 10 groups): frontmatter integrity, blueprint contract surface, exactly-20 distinct slugs, anti-drift mandates with E-78/E-79 references, verbatim 3/20/120s constraint numbers, add_task wiring (tier:2 + canonical prefix + variation_ids return), untrusted-input handling, rollback section, mirror byte-identity. Full suite 1479 → 1523 PASS (+44, zero regressions). Unblocks E-78 + E-79."
+    },
+    {
+      "id": "E-78",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Create the SEO-Content-Generator agent logic to support variation-types. | Tier: 2 per .ai/blueprints/seo-keyword-multiplier.md",
+      "created_at": "2026-05-19T09:31:49.748Z",
+      "completed_at": "2026-05-19T09:56:51.354Z",
+      "summary": "SEO-Content-Generator agent (Tier 2) per seo-keyword-multiplier.md §Components 2 + §API. New src/gemini/agents/seo_content_generator.md implements generateVariation(seed_id, type) -> variation_blob{status, content_md, metadata}. Anti-drift: NOT orchestrator (E-77), NOT state tracker (E-79), NOT publisher — generates ONE variation per invocation. Taxonomy single-sourced from E-77 (test cross-references every slug). Step 2 per-approach templates (word-count + H2 count + mandatory sections) for all 20 approach-types. Step 3 LLM generation with backoff matching E-76 worker-pool (1000ms→15000ms cap on 429s → RATE_LIMITED_EXHAUSTED). Wall-clock 120s/variation → BUDGET_EXCEEDED. Step 4 duplicate-content gate (SHA-256 normalized + 5-shingle Jaccard >0.7 vs sibling cohort via description-prefix get_state) → DUPLICATE_REJECTED. Step 5 identity_guardian + critic_security gates → REVIEW_BLOCKED (rejected body archived to .ai/memory/seo-rejects/<sha>.md). Step 6 QA against existing seo_content_checklist skill → qa_failures[] in metadata. Step 7 persists via add_stamp(type=SEO_VARIATION_GENERATED, sha256=<h>). Defence-in-depth refuses generation #21. Full envelope: OFFLINE/UNKNOWN_APPROACH_TYPE/INVALID_SEED_ID/RATE_LIMITED_EXHAUSTED/BUDGET_EXCEEDED/DUPLICATE_REJECTED/REVIEW_BLOCKED. Rollback via stamp deletion + git restore + reject-archive recovery. Frontmatter colon-parse guard. Mirrored to .gemini/ + ~/.ai-os/gemini/. New tests/suites/seo_content_generator_test.sh (51 assertions, 11 groups): frontmatter integrity, blueprint contract, 20-slug cross-reference vs manager, anti-drift mandates, verbatim 120s/3/1000-15000ms + 20-cap, three security gates with all status codes, QA + add_stamp wiring, rollback, mirror byte-identity. Full suite 1523 → 1574 PASS (+51, zero regressions). Unblocks E-79."
+    },
+    {
+      "id": "E-79",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Develop the Multi-Variation-State-Tracker in task-synchronizer-mcp. | Tier: 2 per .ai/blueprints/seo-keyword-multiplier.md",
+      "created_at": "2026-05-19T09:31:51.233Z",
+      "completed_at": "2026-05-19T10:51:44.755Z",
+      "summary": "Multi-Variation-State-Tracker (Tier 2) per seo-keyword-multiplier.md §Components 3. New src/shared/seo-approach-types.mjs (frozen SEO_APPROACH_TYPES[20] + Set + MAX_VARIATIONS_PER_SEED=20 — single source of truth). state-db.js gains keyword_seeds + content_variations tables (CHECKs + FK ON DELETE CASCADE + indices) — idempotent CREATE IF NOT EXISTS preserves pre-E-79 rows. Added nextKeywordSeedId (KS-N) + nextContentVariationId (CV-N) in separate namespaces. 4 new MCP tools: add_keyword_seed (rejects empty/>256/shell-metachar/range with INVALID_KEYWORD_TERM/INVALID_TARGET_VOLUME), add_content_variation (KS-N format + 20-canonical slug + seed existence + (seed_id,approach_type) uniqueness + 20-cap defence-in-depth via 5 distinct error tags), report_performance (JSON merge-patch + 3 negative envelopes), get_seed_cohort (returns {seed, variations[] with parsed metrics, counts:{total,remaining,published}}). Cloud sync hook does NOT fire — managed-agents Data-Privacy contract covers only tasks. Mirrored to ~/.ai-os/. New tests/suites/multi_variation_state_tracker_test.sh (64 assertions, 15 groups) covering source contract + frozen-20 cross-reference vs seo_manager.md + schema bootstrap with regression guard + tools/list + happy paths + every negative envelope + KS-1-to-20-fill + report_performance merge across 2 calls + get_seed_cohort full envelope + idempotent re-open + add_task/update_task_status regression smoke + 3 mirror byte-identity. Full suite 1574 → 1638 PASS (+64, zero regressions). Completes seo-keyword-multiplier blueprint (E-77 + E-78 + E-79)."
+    },
+    {
+      "id": "E-80",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Create src/shared/standards.json and implement the standards-checker CLI utility. | Tier: 2 per .ai/blueprints/engineering-standards.md",
+      "created_at": "2026-05-19T10:51:25.420Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-81",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Develop the critic_clean_code persona and integrate it into the ai-review flow. | Tier: 2 per .ai/blueprints/engineering-standards.md",
+      "created_at": "2026-05-19T10:51:26.904Z",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "id": "E-82",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Update hooks/pre-commit.sh to enforce the new standards gate. | Tier: 2 per .ai/blueprints/engineering-standards.md",
+      "created_at": "2026-05-19T10:51:28.599Z",
+      "completed_at": null,
+      "summary": null
     }
   ],
   "stamps": [
@@ -886,6 +946,20 @@
       "task_id": "E-76",
       "timestamp": "2026-05-19T09:11:11.312Z",
       "summary": "[TIER_2] E-68..E-76 sprint cluster — blueprint alignment confirmed (3 blueprints cover 30 staged files), 1479/1479 tests PASS, 6 new test suites + 3 new shared modules accompany code changes. Aligner FAIL stamps reviewed and overridden with rationale (BRIEF.md authorized by E-71; settings/skills covered by prior incident-tracker blueprint). Cleared to commit with [TIER_2] tag."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-79",
+      "timestamp": "2026-05-19T10:57:49.110Z",
+      "summary": "[TIER_2] E-77/E-78/E-79 SEO Keyword Multiplier — align_diff returned WARN (orphaned-work signal for SEO agent files), confirmed false-positive: align_diff only reads architect.md, but .ai/blueprints/seo-keyword-multiplier.md explicitly names src/gemini/agents/seo_manager.md (line 43) and seo_content_generator.md (E-78). Blueprint data model + 20-variation cap + API contracts (multiplyKeyword, reportPerformance) all implemented as specified. Data-Privacy contract honored (no cloud sync on SEO mutations). .gemini ↔ src/gemini mirrors identical."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "ai-review (Tier 2)",
+      "task_id": "E-79",
+      "timestamp": "2026-05-19T10:57:53.221Z",
+      "summary": "[TIER_2] E-77/E-78/E-79 SEO Keyword Multiplier cluster — risk-analyzer classified Tier 2 (99% conf); blueprint-aligner WARN→PASS (orphaned-work false-positive cleared); 1638/1638 tests PASS; schema bump idempotent with CHECK/FK CASCADE/indices; input validation present (length, shell metachars, target_volume bounds, KS-/CV- ID regex, approach-type set membership, 20-cap defence-in-depth); separate KS-/CV- ID namespace prevents collision with E-/P-/T- task ids. SAFE TO COMMIT."
     }
   ],
   "deltas": [
@@ -925,8 +999,32 @@
       ],
       "read": true,
       "created_at": "2026-05-10 19:44:49"
+    },
+    {
+      "task_id": "E-77",
+      "summary": "E-77: E-77 Keyword-Multiplier-Manager (Tier 2) — new src/gemini/agents/seo_manager.md (160 lines) + 44-assertion test suite; 1523/1523 PASS; unblocks E-78 (SEO-Content-Generator) + E-79 (Multi-Variation-State-Tracker). | Files: .ai/TASKS.md, .ai/state.json, .mcp.json",
+      "files": [
+        ".ai/TASKS.md",
+        ".ai/state.json",
+        ".mcp.json"
+      ],
+      "read": false,
+      "created_at": "2026-05-19 09:44:16"
+    },
+    {
+      "task_id": "E-79",
+      "summary": "E-79: E-79 Multi-Variation-State-Tracker (Tier 2) — new seo-approach-types.mjs + state-db.js schema bump (2 tables + FK + indices) + 4 new MCP tools (add_keyword_seed/add_content_variation/report_performance/get_seed_cohort) + 64-assertion test suite; 1638/1638 PASS; seo-keyword-multiplier blueprint complete. | Files: .ai/TASKS.md, .ai/state.json, .mcp.json, src/mcp/shared/state-db.js, src/mcp/task-synchronizer-mcp/index.js",
+      "files": [
+        ".ai/TASKS.md",
+        ".ai/state.json",
+        ".mcp.json",
+        "src/mcp/shared/state-db.js",
+        "src/mcp/task-synchronizer-mcp/index.js"
+      ],
+      "read": false,
+      "created_at": "2026-05-19 10:51:33"
     }
   ],
   "digest_stale": true,
-  "digest_stale_reason": "E-61 marked DONE — Wire verify_markdown_sync into ai-preflight + ai-handoff skills (Tier 1). src/shared/skills/ai-preflight/SKILL.md gains \"Step 4 — Verify markdown↔state sync\" between Step 3 (TASKS.md) and Step 5 (deltas) with explicit guidance on resolving each anomaly class. src/shared/skills/ai-handoff/SKILL.md gains \"Step 0 — Verify state is consistent before packaging\" with rationale (next agent plans against COMM.md, fiction here propagates downstream). Both skills add `mcp__task-synchronizer-mcp__verify_markdown_sync` to allowed-tools frontmatter. Mirrored to ~/.ai-os/shared/skills/ai-preflight/SKILL.md and ~/.ai-os/shared/skills/ai-handoff/SKILL.md. Registry already permits the tool (no change needed). Files: src/shared/skills/ai-preflight/SKILL.md (+18 lines), src/shared/skills/ai-handoff/SKILL.md (+17 lines), 2 ~/.ai-os mirrors. Tests: 1139/1139 PASS (no test added — wiring is documentation-only and covered by skill/agent end-to-end behavior)."
+  "digest_stale_reason": "E-79 marked DONE — E-79 Multi-Variation-State-Tracker (Tier 2) — new seo-approach-types.mjs + state-db.js schema bump (2 tables + FK + indices) + 4 new MCP tools (add_keyword_seed/add_content_variation/report_performance/get_seed_cohort) + 64-assertion test suite; 1638/1638 PASS; seo-keyword-multiplier blueprint complete."
 }

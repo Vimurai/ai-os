@@ -72,6 +72,34 @@ export function getDb(aiDir) {
       created_at   TEXT NOT NULL,
       status       TEXT NOT NULL DEFAULT 'pending'
     );
+    -- E-79: Multi-Variation-State-Tracker tables for the SEO
+    -- Keyword-Multiplier (.ai/blueprints/seo-keyword-multiplier.md
+    -- §Data Model). Idempotent — CREATE IF NOT EXISTS preserves any
+    -- pre-existing rows on schema reopen.
+    CREATE TABLE IF NOT EXISTS keyword_seeds (
+      id            TEXT PRIMARY KEY,
+      term          TEXT NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'OPEN'
+                      CHECK(status IN ('OPEN','IN_PROGRESS','COMPLETED','ARCHIVED')),
+      target_volume INTEGER NOT NULL DEFAULT 20
+                      CHECK(target_volume > 0 AND target_volume <= 20),
+      created_at    TEXT NOT NULL,
+      completed_at  TEXT
+    );
+    CREATE TABLE IF NOT EXISTS content_variations (
+      id                  TEXT PRIMARY KEY,
+      seed_id             TEXT NOT NULL,
+      approach_type       TEXT NOT NULL,
+      content_blob        TEXT,
+      performance_metrics TEXT,
+      published_at        TEXT,
+      created_at          TEXT NOT NULL,
+      FOREIGN KEY (seed_id) REFERENCES keyword_seeds(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_variations_seed
+      ON content_variations(seed_id);
+    CREATE INDEX IF NOT EXISTS idx_variations_approach
+      ON content_variations(seed_id, approach_type);
     INSERT OR IGNORE INTO meta(key, value) VALUES ('version', '1.0');
     INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale', 'false');
     INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale_reason', '');
@@ -213,4 +241,25 @@ export function nextId(db, prefix) {
   const rows = db.prepare("SELECT id FROM tasks WHERE id LIKE ?").all(`${prefix}-%`);
   const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
   return `${prefix}-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+}
+
+/**
+ * E-79: next sequential KeywordSeed id (`KS-N`). Separate namespace from
+ * the task-id sequence so seeds and tasks never collide.
+ */
+export function nextKeywordSeedId(db) {
+  const rows = db.prepare("SELECT id FROM keyword_seeds WHERE id LIKE ?").all("KS-%");
+  const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
+  return `KS-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+}
+
+/**
+ * E-79: next sequential ContentVariation id (`CV-N`). Distinct from
+ * E-/P-/T- task ids — variations are tracked by their seed cohort and
+ * approach_type, not as Engineer/Architect/Tester work items.
+ */
+export function nextContentVariationId(db) {
+  const rows = db.prepare("SELECT id FROM content_variations WHERE id LIKE ?").all("CV-%");
+  const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
+  return `CV-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
 }

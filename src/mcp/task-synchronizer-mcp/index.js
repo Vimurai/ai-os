@@ -25,7 +25,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextKeywordSeedId as _nextKeywordSeedId, nextContentVariationId as _nextContentVariationId } from "../shared/state-db.js";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
 // E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
@@ -33,6 +33,9 @@ import { createLogger } from "../shared/logger.js";
 // syncToCloud() which short-circuits to {status:"DISABLED"} when
 // AI_MANAGED_AGENTS_ENABLE is unset. Local MCP behaviour is unchanged off.
 import { syncToCloud as _syncToCloud } from "../../shared/managed-agents-client.mjs";
+// E-79: Multi-Variation-State-Tracker — canonical SEO approach-type slug
+// list. Used to validate ContentVariation.approach_type on add_content_variation.
+import { SEO_APPROACH_TYPES, SEO_APPROACH_TYPES_SET, MAX_VARIATIONS_PER_SEED, isValidApproachType as _isValidApproachType } from "../../shared/seo-approach-types.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("task-synchronizer-mcp");
@@ -341,6 +344,60 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             description: "Task IDs whose deltas to acknowledge (e.g. ['E-78', 'E-79']). Omit to acknowledge all unread.",
           },
         },
+      },
+    },
+    // ── E-79: Multi-Variation-State-Tracker tools ─────────────────────────────
+    // Backing tables (keyword_seeds, content_variations) live in state-db.js.
+    // Wired here per .ai/blueprints/seo-keyword-multiplier.md §Components 3
+    // + §API. Cloud sync hook does NOT fire from these — the managed-agents
+    // projection contract (E-73 §Data Privacy) covers only tasks, not
+    // SEO state.
+    {
+      name: "add_keyword_seed",
+      description: "Register a new KeywordSeed (E-79). Returns an auto-assigned KS-N id. Use this once at the start of a multiplyKeyword(term) expansion in src/gemini/agents/seo_manager.md; the SEO-Content-Generator (E-78) then attaches up to 20 ContentVariations to it.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          term:          { type: "string", description: "The keyword seed term (1..256 chars, no shell metachars)" },
+          target_volume: { type: "number", description: "Target number of variations to generate (1..20, default 20)", default: 20 },
+        },
+        required: ["term"],
+      },
+    },
+    {
+      name: "add_content_variation",
+      description: "Register a ContentVariation against an existing KeywordSeed (E-79). Refuses approach_type values outside the 20-canonical set defined in src/shared/seo-approach-types.mjs. Refuses to create variation #21 for a given seed_id (defence-in-depth on blueprint §Execution Constraints/Generation Limits).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          seed_id:       { type: "string", description: "KeywordSeed id (e.g. 'KS-1')" },
+          approach_type: { type: "string", description: "One of the 20 canonical slugs (listicle, how-to-guide, …, future-predictions)" },
+          content_blob:  { type: "string", description: "Optional inline markdown body, or a relative repo path if content lives on disk" },
+        },
+        required: ["seed_id", "approach_type"],
+      },
+    },
+    {
+      name: "report_performance",
+      description: "Update a ContentVariation.performance_metrics with new SEO metrics (E-79 reportPerformance API). Merges supplied keys into the existing JSON object — pass only the fields that changed.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          variation_id: { type: "string", description: "ContentVariation id (e.g. 'CV-1')" },
+          metrics:      { type: "object", description: "JSON merge patch — e.g. { clicks: 120, impressions: 4500, ctr: 0.027, position: 8.4 }" },
+        },
+        required: ["variation_id", "metrics"],
+      },
+    },
+    {
+      name: "get_seed_cohort",
+      description: "Return a KeywordSeed plus every ContentVariation attached to it (E-79). Used by the SEO-Content-Generator (E-78) Step 4 duplicate-content gate and by the Architect to audit a seed's progress toward the 20-variation target.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          seed_id: { type: "string", description: "KeywordSeed id (e.g. 'KS-1')" },
+        },
+        required: ["seed_id"],
       },
     },
   ],
@@ -766,6 +823,163 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           text: marked > 0
             ? `✓ Acknowledged ${marked} delta(s) for ${scope}.`
             : `⚠ No unread deltas found${taskIds ? ` for ${scope}` : ""}.`,
+        }],
+      };
+    }
+
+    // ── E-79 Multi-Variation-State-Tracker handlers ───────────────────────────
+    // All four operate on the local aiDir's state.sqlite only (no framework
+    // routing — SEO state is project-scoped). No cloud sync fires from these
+    // mutations per E-73 Data-Privacy contract (only tasks cross the boundary).
+
+    case "add_keyword_seed": {
+      const term = typeof args.term === "string" ? args.term.trim() : "";
+      if (term.length === 0 || term.length > 256) {
+        return { content: [{ type: "text", text: "✗ [INVALID_KEYWORD_TERM] term must be 1..256 chars" }], isError: true };
+      }
+      // Reject shell metacharacters (mirrors seo_manager.md Preflight #3).
+      if (/[;&|`$()<>\n\r]/.test(term)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_KEYWORD_TERM] term contains shell metacharacters" }], isError: true };
+      }
+      const targetVolume = Number.isFinite(args.target_volume) ? Math.floor(args.target_volume) : 20;
+      if (targetVolume < 1 || targetVolume > MAX_VARIATIONS_PER_SEED) {
+        return { content: [{ type: "text", text: `✗ [INVALID_TARGET_VOLUME] must be 1..${MAX_VARIATIONS_PER_SEED}` }], isError: true };
+      }
+      const id = _nextKeywordSeedId(db);
+      const createdAt = new Date().toISOString();
+      db.prepare(
+        "INSERT INTO keyword_seeds(id, term, status, target_volume, created_at, completed_at) VALUES (?, ?, ?, ?, ?, NULL)"
+      ).run(id, term, "OPEN", targetVolume, createdAt);
+      return {
+        content: [{
+          type: "text",
+          text: `✓ Added KeywordSeed ${id}: "${term}" (target_volume=${targetVolume})\n` +
+                JSON.stringify({ id, term, status: "OPEN", target_volume: targetVolume, created_at: createdAt }, null, 2),
+        }],
+      };
+    }
+
+    case "add_content_variation": {
+      const seedId = String(args.seed_id || "").trim();
+      const approach = String(args.approach_type || "").trim();
+      if (!/^KS-\d+$/.test(seedId)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format KS-N" }], isError: true };
+      }
+      if (!_isValidApproachType(approach)) {
+        return {
+          content: [{
+            type: "text",
+            text: `✗ [UNKNOWN_APPROACH_TYPE] '${approach}' is not in the 20-canonical set. Valid: ${SEO_APPROACH_TYPES.join(", ")}`,
+          }],
+          isError: true,
+        };
+      }
+      const seedRow = db.prepare("SELECT id FROM keyword_seeds WHERE id = ?").get(seedId);
+      if (!seedRow) {
+        return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] KeywordSeed '${seedId}' does not exist. Call add_keyword_seed first.` }], isError: true };
+      }
+      // Defence-in-depth: enforce the 20-cap at the storage layer even if
+      // upstream (seo_manager E-77) miscounts. Blueprint §Execution
+      // Constraints/Generation Limits is hard.
+      const sibCount = db.prepare(
+        "SELECT COUNT(*) as n FROM content_variations WHERE seed_id = ?"
+      ).get(seedId).n;
+      if (sibCount >= MAX_VARIATIONS_PER_SEED) {
+        return { content: [{ type: "text", text: `✗ [VARIATION_CAP_REACHED] seed ${seedId} already has ${sibCount}/${MAX_VARIATIONS_PER_SEED} variations` }], isError: true };
+      }
+      // Refuse duplicate (seed_id, approach_type) — the 20 canonical types
+      // are each unique within a seed. The blueprint says "20 unique
+      // article structures" — uniqueness includes the structure label.
+      const dup = db.prepare(
+        "SELECT id FROM content_variations WHERE seed_id = ? AND approach_type = ?"
+      ).get(seedId, approach);
+      if (dup) {
+        return { content: [{ type: "text", text: `✗ [APPROACH_ALREADY_USED] ${seedId} already has approach '${approach}' (variation ${dup.id})` }], isError: true };
+      }
+
+      const id = _nextContentVariationId(db);
+      const createdAt = new Date().toISOString();
+      const blob = typeof args.content_blob === "string" ? args.content_blob : null;
+      db.prepare(
+        "INSERT INTO content_variations(id, seed_id, approach_type, content_blob, performance_metrics, published_at, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)"
+      ).run(id, seedId, approach, blob, createdAt);
+
+      return {
+        content: [{
+          type: "text",
+          text: `✓ Added ContentVariation ${id} for ${seedId} [${approach}]\n` +
+                JSON.stringify({ id, seed_id: seedId, approach_type: approach, created_at: createdAt }, null, 2),
+        }],
+      };
+    }
+
+    case "report_performance": {
+      const vid = String(args.variation_id || "").trim();
+      if (!/^CV-\d+$/.test(vid)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_VARIATION_ID] expected format CV-N" }], isError: true };
+      }
+      if (!args.metrics || typeof args.metrics !== "object" || Array.isArray(args.metrics)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_METRICS] metrics must be a JSON object" }], isError: true };
+      }
+      const row = db.prepare(
+        "SELECT id, performance_metrics FROM content_variations WHERE id = ?"
+      ).get(vid);
+      if (!row) {
+        return { content: [{ type: "text", text: `✗ [VARIATION_NOT_FOUND] ${vid}` }], isError: true };
+      }
+      // Merge-patch semantics: existing JSON + supplied keys; new keys
+      // overwrite. Mirrors the JSON merge contract documented in the tool's
+      // inputSchema description.
+      let existing = {};
+      if (row.performance_metrics) {
+        try { existing = JSON.parse(row.performance_metrics); } catch { existing = {}; }
+      }
+      const merged = { ...existing, ...args.metrics };
+      db.prepare(
+        "UPDATE content_variations SET performance_metrics = ? WHERE id = ?"
+      ).run(JSON.stringify(merged), vid);
+      return {
+        content: [{
+          type: "text",
+          text: `✓ Updated ${vid} performance_metrics\n` + JSON.stringify(merged, null, 2),
+        }],
+      };
+    }
+
+    case "get_seed_cohort": {
+      const seedId = String(args.seed_id || "").trim();
+      if (!/^KS-\d+$/.test(seedId)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format KS-N" }], isError: true };
+      }
+      const seed = db.prepare(
+        "SELECT id, term, status, target_volume, created_at, completed_at FROM keyword_seeds WHERE id = ?"
+      ).get(seedId);
+      if (!seed) {
+        return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] ${seedId}` }], isError: true };
+      }
+      const variations = db.prepare(
+        "SELECT id, approach_type, content_blob, performance_metrics, published_at, created_at FROM content_variations WHERE seed_id = ? ORDER BY id"
+      ).all(seedId).map((v) => ({
+        id:                  v.id,
+        approach_type:       v.approach_type,
+        content_blob:        v.content_blob,
+        performance_metrics: v.performance_metrics ? JSON.parse(v.performance_metrics) : null,
+        published_at:        v.published_at,
+        created_at:          v.created_at,
+      }));
+      const remaining = Math.max(0, seed.target_volume - variations.length);
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            seed,
+            variations,
+            counts: {
+              total:     variations.length,
+              remaining,
+              published: variations.filter((v) => v.published_at != null).length,
+            },
+          }, null, 2),
         }],
       };
     }

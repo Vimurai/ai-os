@@ -7,12 +7,12 @@
 - Node.js 22+ (MCP servers, node:sqlite, node:fs ESM helpers, fetch), Python 3.10+ fallbacks, SQLite3 + WAL (TRUNCATE checkpoint via pure-node wal-flusher), Bash (CI/tests/install), Docker (code-execution sandbox), npm workspaces, Gemini Embedding 2 (memory palace), Managed Agents 2026-04-01 (steps schema, live client feature-flagged).
 
 ## Triad Health
-- Architect (Gemini): IDLE — last batch P-39/P-40 (managed-agents-state-reconciliation + multimodal-rag-batching, 2026-05-18). 40/40 P-## DONE.
-- Engineer (Claude): IDLE — all 76 E-## DONE; last sprint E-73..E-76 closed 2026-05-18. (E-77 stray was test pollution from pre-fix E-74 harness leaking AIOS_WORKSPACE; row purged + harness patched on 2026-05-19.)
-- Tester (TestSprite): PASS — 1479/1479 baseline post-E-76; state-projector + sync-hook + batch-scanner + worker-pool/DLQ all green.
+- Architect (Gemini): IDLE — last batch P-39/P-40 (managed-agents + multimodal-rag), plus seo-keyword-multiplier.md + engineering-standards.md blueprints dropped 2026-05-19. 40/40 P-## DONE.
+- Engineer (Claude): IDLE — all 79 historical E-## DONE; today shipped E-77/E-78/E-79 (SEO keyword-multiplier blueprint: seo_manager + seo_content_generator agents + task-synchronizer-mcp schema bump). 3 new OPEN: E-80/E-81/E-82 (engineering-standards blueprint, Tier 2).
+- Tester (TestSprite): PASS — 1638/1638 baseline post-E-79; SEO multi-variation state tracker, content-generator, manager agents all green.
 
 ## Current Focus
-- (none) — both Tier 2 blueprints shipped (managed-agents-state-reconciliation + multimodal-rag-batching). Awaiting next P-## from Architect.
+- Engineering-standards blueprint sprint (E-80/E-81/E-82) — automated quality-control layer for architectural drift prevention: standards.json + standards-checker CLI (E-80), critic_clean_code persona (E-81), pre-commit gate (E-82). All Tier 2.
 - state.json focus still reads pre-E-54 label ("Reverting Obsidian integration...") — will clear on next handover.
 
 ## UX / SEO / Frontend
@@ -28,6 +28,7 @@
 - D-029: BRIEF.md substantive — replaced template with concrete product brief.
 - D-030: Managed Agents state reconciliation — projectState() + debounced syncToCloud() in managed-agents-client.mjs; sync hook fires from task-synchronizer-mcp add_task/update_task_status only (per managed-agents-state-reconciliation.md).
 - D-031: Multimodal RAG batch pipeline — memory-batch-scanner.mjs (7-gate SHA-256 cache + .gitignore + [NO_RAG] exclusion) + memory-worker-pool.mjs (bounded concurrency, exponential backoff, DLQ in .ai/memory/dlq.json).
+- D-032: SEO Keyword Multiplier — 20-slug canonical taxonomy frozen in src/shared/seo-approach-types.mjs (single source of truth for seo_manager + seo_content_generator agents); state-db.js adds keyword_seeds + content_variations tables with FK ON DELETE CASCADE; task-synchronizer-mcp exposes 4 new tools (add_keyword_seed, add_content_variation, report_performance, get_seed_cohort). Cloud sync hook does NOT fire on these mutations — Data-Privacy contract covers only tasks.
 
 ## Known Risks
 - ALIGN_FAIL recurring false-positive class retired by E-55/E-56 introspectors; NO_LOG_UPDATE warning persists by design.
@@ -52,6 +53,10 @@
 - Routing: mcp-router
 
 ## Recent Changes (last 10)
+- 2026-05-19: E-79 Multi-Variation-State-Tracker — task-synchronizer-mcp schema bump (keyword_seeds + content_variations) + 4 new tools + 64-assertion test suite
+- 2026-05-19: E-78 SEO-Content-Generator agent — variation-template table + duplicate-content gate + identity_guardian/critic_security wiring
+- 2026-05-19: E-77 Keyword-Multiplier-Manager agent — 20-canonical approach-type taxonomy + multiplyKeyword(term) orchestration contract
+- 2026-05-19: P-41/P-42 (Gemini, inferred) engineering-standards.md + seo-keyword-multiplier.md blueprints dropped
 - 2026-05-18: E-76 Bounded worker pool + DLQ (src/shared/memory-worker-pool.mjs) — multimodal-rag blueprint complete
 - 2026-05-18: E-75 Batch scanner with SHA-256 cache + [NO_RAG] exclusion (src/shared/memory-batch-scanner.mjs)
 - 2026-05-18: E-74 Sync hook wired into task-synchronizer-mcp (add_task/update_task_status only)
