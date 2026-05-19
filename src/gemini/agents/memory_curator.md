@@ -29,9 +29,26 @@ For each DIGEST.md found, also read:
 - `.ai/DECISIONS.md` (D-### entries — key architectural choices)
 - `.ai/ARCH.md` if exists (module structure)
 
-## Step 2 — Multimodal Discovery (E-46)
+## Step 2 — Multimodal Discovery (E-46, E-75)
 
-For each project root, also scan for visual artefacts the team is willing to share with the Memory Palace:
+**Canonical implementation (E-75 Batch Scanner):** prefer the shared helper
+over hand-rolled `find` pipelines when scanning a project for media:
+
+```bash
+# Locator chain — mirrors E-58 / E-65:
+#   1. <PROJECT>/src/shared/memory-batch-scanner.mjs (dev tree)
+#   2. ~/.ai-os/shared/memory-batch-scanner.mjs       (installed mirror)
+node "${AIOS}/shared/memory-batch-scanner.mjs" --scan "$PROJECT"
+```
+
+The helper enforces every gate listed in this step (path-rule, sensitive-name
+regex, batched `git check-ignore`, `[NO_RAG]` sidecar + inline SVG marker,
+5 MB cap, SHA-256 dedup against `~/.ai-os/memory-palace.embeddings.json`)
+and returns a `{ eligible, skipped }` envelope with **basenames only** in
+`skipped` — never full paths, per the privacy mandate below.
+
+Pre-E-75 inline scan (kept for transparency; the canonical helper is the
+single source of truth going forward):
 ```bash
 find "$PROJECT" \( -name "*.png" -o -name "*.svg" -o -name "*.pdf" \) \
   -size -5242881c \                       # ≤ 5 MB per may-2026-upgrades §Resource Bounds
@@ -142,10 +159,22 @@ not through SEED.md (mockups don't fit the seed budget).
     2. An explicit `ai sync --memory` flag (interactive opt-in).
     3. A monthly cron cooked by the user.
   Never block `ai init` on this work.
-- **Concurrency:** at most one Embedding 2 request in flight per project to
-  respect quota and keep retries simple.
-- **Quota awareness:** if Gemini returns 429, exponential backoff capped at
-  3 attempts; remaining files defer to the next run.
+- **Concurrency (E-76):** bounded worker pool with default 3 in-flight
+  embedding requests. Override via `AI_EMBEDDING_CONCURRENCY` env var
+  (set to `1` to fall back to fully serial dispatch).
+- **Quota awareness (E-76):** 429s trigger exponential backoff
+  (1000ms → 15000ms cap). Once exhausted, the file lands in
+  `.ai/memory/dlq.json`. Each sync cycle should call `flushDlq()`
+  before processing new files so transient failures don't stall the
+  Memory Palace.
+- **Canonical implementation:** the bounded pool + DLQ live in
+  `src/shared/memory-worker-pool.mjs` (E-76). Ops controls:
+  ```bash
+  node "${AIOS}/shared/memory-worker-pool.mjs" --dlq-show .ai/memory/dlq.json
+  node "${AIOS}/shared/memory-worker-pool.mjs" --dlq-clear .ai/memory/dlq.json
+  ```
+- **Rollback:** `AI_RAG_MODE=text-only` short-circuits the pool entirely
+  (every file routes to `skipped[]` with reason `text-only-mode`).
 
 ## After Writing
 Append to .ai/LOG.md:

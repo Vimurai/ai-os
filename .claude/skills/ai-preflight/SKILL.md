@@ -3,7 +3,7 @@ name: ai-preflight
 description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Glob, mcp__task-synchronizer-mcp__verify_markdown_sync
+allowed-tools: Read, Glob, Bash, mcp__task-synchronizer-mcp__verify_markdown_sync
 context: default
 agent: default
 ---
@@ -15,6 +15,7 @@ Project root: !pwd
 AI-OS project: !test -d .ai && echo "YES — .ai/ found" || echo "NO — run: ai init"
 DIGEST freshness: !head -2 .ai/DIGEST.md 2>/dev/null || echo "(DIGEST.md missing — run skill: ai-digest)"
 Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | head -5 || echo "(none)"
+Incident status: !for c in src/shared/incident-aggregate.mjs "${HOME}/.ai-os/shared/incident-aggregate.mjs"; do [ -f "$c" ] && node "$c" 2>/dev/null | head -1 && break; done 2>/dev/null || echo "(aggregator unavailable)"
 
 ## Preflight Read Order (DIGEST-First)
 
@@ -62,6 +63,54 @@ If unread deltas exist, display them prominently:
 ```
 After reading, mark them as read (set `"read": true`) so they don't repeat.
 **Architect**: If a delta shows divergence from your blueprint, update `architect.md` to reflect reality.
+
+### 6. Run the Incident Aggregator ← AUTO-IMPROVEMENT (E-66/E-67, blueprint incident-tracker)
+
+After the sync check, run the JIT aggregator to surface recurring
+unpredictable events captured by the `ai-incident` skill (E-65). The
+aggregator reads `~/.ai-os/incidents.ndjson`, groups records by
+`stack_signature`, and reports counts. Budget: <50ms — the helper does a
+single linear pass.
+
+**Locator chain** (mirrors E-58 / E-65 fail-open patterns):
+1. `src/shared/incident-aggregate.mjs` (in-repo dev tree)
+2. `${HOME}/.ai-os/shared/incident-aggregate.mjs` (installed mirror)
+
+**Invocation** (run silently, parse the JSON):
+```bash
+node "${AGGREGATOR}" 2>/dev/null || echo '{"status":"AGGREGATOR_UNAVAILABLE"}'
+```
+
+**Output handling** — branch on the `status` field:
+
+- `OK` / `NO_INCIDENTS` / `DISABLED` / `AGGREGATOR_UNAVAILABLE` — silent.
+  No-op; continue to the next step.
+- `THRESHOLD_REACHED` — emit an inline context block to the agent. Use
+  the format below verbatim so the Architect (Gemini) can recognise the
+  signal in the next handoff:
+
+  ```
+  [INCIDENT_THRESHOLD_REACHED] N distinct signature(s) at or above the
+  threshold (>=3 occurrences). Recurring failures the framework should
+  address — please draft a P-## blueprint per .ai/blueprints/incident-tracker.md
+  before continuing implementation work.
+
+  Top recurring signatures:
+    - <stack_signature> (count=N, agents=[...], types=[...])
+      sample: "<sanitised one-line message>"
+    - …
+
+  Suggested next step: switch to Gemini and ask for a blueprint that
+  resolves the highest-count signature first.
+  ```
+
+  This is **prompting**, not **doing** — the Engineer must not draft
+  P-## tasks (anti-drift §35). The block is the explicit handoff cue
+  for the Architect.
+
+**Rollback**: set `AI_INCIDENT_TRACKER_DISABLE=1` to short-circuit the
+aggregator (it returns `status: "DISABLED"`). Manual deletion of
+`~/.ai-os/incidents.ndjson` is safe and stateless.
 
 ### Open Only When Task Touches That Domain
 - `.ai/BRIEF.md` — Project rules & lore (read if onboarding or task touches product goals)

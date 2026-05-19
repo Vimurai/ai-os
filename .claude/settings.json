@@ -2,7 +2,8 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_THINKING_BUDGET_TOKENS": "0",
-    "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1"
+    "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1",
+    "AIOS_WORKSPACE": "/Users/emirkovacevic/Documents/develompment/cli_apps/ai-os-v2"
   },
   "permissions": {
     "allow": [

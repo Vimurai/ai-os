@@ -305,6 +305,116 @@
       "created_at": "2026-05-10T20:23:31.647Z",
       "completed_at": "2026-05-10T20:23:49.204Z",
       "summary": "Blueprinted Framework Task Routing Policy (D-006) and Incident Tracker JIT Aggregation (D-007) and registered 6 E-tasks."
+    },
+    {
+      "id": "E-68",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update `verification-mcp` to support tool name aliasing (e.g., `Bash` -> `run_shell_command`) to resolve the Ghost Tool compliance failure per `.ai/blueprints/system-hardening-phase3.md`.",
+      "created_at": "2026-05-17T20:23:55.174Z",
+      "completed_at": "2026-05-17T20:49:24.159Z",
+      "summary": "Tool Alias Normalizer (Tier 2) per system-hardening-phase3.md §Components §1. src/mcp/verification-mcp/index.js gains TOOL_ALIASES frozen map (Bash↔run_shell_command, Grep↔grep_search, Read↔read_file, Write↔write_file, Edit↔replace, Glob↔glob, WebFetch↔web_fetch, WebSearch↔google_web_search) + ALIAS_VALUES reverse-lookup Set; isToolAvailable() now consults ALIAS_VALUES so Gemini-canonical names no longer trigger Ghost Tool violations. Added normaliseToolName() helper for downstream consumers. Pure O(1) lookup — 100k iterations in 4.72ms (budget: <5ms per call). Mirrored byte-identical to ~/.ai-os/mcp/verification-mcp/index.js. New tests/suites/tool_alias_normalizer_test.sh (18 assertions: static contract, behavioural Gemini-canonical PASS, mixed Claude+Gemini PASS, genuine ghost still FAIL, performance budget, mirror byte-identity). Existing verification_test.sh: 22/22 PASS (no regression). Full suite: 1228 → 1292 PASS."
+    },
+    {
+      "id": "E-69",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update `install-ai-os.sh` to enforce a strict `node` availability check (fail-closed) before installation per `.ai/blueprints/system-hardening-phase3.md`.",
+      "created_at": "2026-05-17T20:23:55.185Z",
+      "completed_at": "2026-05-17T20:49:30.226Z",
+      "summary": "Fail-closed Node.js check in install-ai-os.sh (Tier 2) per system-hardening-phase3.md §Components §2 + §Security. Added pre-copy guard immediately after `set -euo pipefail` and REPO_DIR/AIOS resolution: `command -v node` probe + Node 22+ major-version parse (rejects v0.0.0, non-numeric, <22). Exits 1 with diagnostic stderr naming the affected helpers (wal-flusher.mjs, generate_mcp_docs.mjs, incident-append.mjs, incident-aggregate.mjs) before any rsync/cp/ensure_env_line runs. AI_OS_SKIP_NODE_CHECK=1 escape hatch documented for CI packaging-only flows. Test order-invariant: asserts guard line number < first `mkdir -p ${AIOS}` line. New tests/suites/installer_node_check_test.sh (13 assertions: static contract, behavioural absent-node + Node-18-stub fail-closed via PATH=/usr/bin:/bin sandbox, no-files-copied invariant, escape-hatch grammar). Full suite: 1292/1292 PASS."
+    },
+    {
+      "id": "E-70",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement Managed Agents live API wiring with `AI_MANAGED_AGENTS_ENABLE` feature flag and `steps` schema migration per `.ai/blueprints/system-hardening-phase3.md`.",
+      "created_at": "2026-05-17T20:23:55.187Z",
+      "completed_at": "2026-05-17T20:49:40.706Z",
+      "summary": "Managed Agents live API client (Tier 2) per system-hardening-phase3.md §Components §3 + §Security. New src/shared/managed-agents-client.mjs (pure Node 22+ fetch, no SDK pin, ESM): exports isEnabled/sendSteps/migrateLegacyToSteps/diagnostics. AI_MANAGED_AGENTS_ENABLE=1 gates every entry point (default OFF → status:DISABLED no-op for trivial rollback). AI_MANAGED_AGENT_KEY env-only — validated by length [16,256] + charset [A-Za-z0-9_\\\\-.], held in closure, NEVER logged (structured stderr logger redacts via SENSITIVE_KEY_RE mirror of E-47/E-65). Schema migration: legacy `outputs[]` → `steps[]` with string/{text}/{text,tool_calls} cases, idempotent on pre-migrated payloads. URL allowlist: https-only protocol + hostname charset validation against DEFAULT_HOST or AI_MANAGED_AGENT_HOST. Structured envelope return: DISABLED|MISSING_KEY|INVALID_PAYLOAD|NETWORK_ERROR|HTTP_ERROR|OK — never throws on transport failure. CLI smoke: `node managed-agents-client.mjs --status` and `--send <agentId> <json>`. Mirrored byte-identical to ~/.ai-os/shared/managed-agents-client.mjs. New tests/suites/managed_agents_client_test.sh (33 assertions: feature-flag fail-closed in 2 cases, key validation in 4 cases, schema migration in 5 shapes, payload validation in 4 invalid cases, host allowlist, end-to-end NETWORK_ERROR envelope on unresolvable host, key-leak-guard on stderr in both env and payload paths, mirror byte-identity, blueprint contract surface). Full suite: 1292/1292 PASS."
+    },
+    {
+      "id": "E-71",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Expand `.ai/BRIEF.md` from a template into a substantive product summary, reflecting the AI-OS autonomous agent triad framework per `.ai/blueprints/system-hardening-phase3.md`.",
+      "created_at": "2026-05-17T20:23:55.189Z",
+      "completed_at": "2026-05-17T20:49:46.254Z",
+      "summary": "Expanded .ai/BRIEF.md (Tier 1) per system-hardening-phase3.md §Components §4. Replaced 48-line skeletal template with 56-line substantive product brief covering: Product Summary (what/who/problem — autonomous OS for AI coding agents with Triad coordination), Goals (auditability, token economy, fail-closed safety, drop-in installer), Non-goals (not a trainer, not a fork, not multi-tenant), Constraints (security/performance/compliance/deployment with concrete bounds — preflight <200ms, WAL <100ms, aggregator <50ms for 100 records), UX/SEO/Frontend Notes (CLI-first, no GUI), Architecture Notes (module layout, data model, integration points), Security/DevOps Notes (threat model, secrets via env-only, pre-commit hooks, NDJSON observability). Reduces Architect over-reliance on full architect.md reads during JIT ai-preflight. No new tests required (Tier 1 documentation-only). Full suite: 1292/1292 PASS."
+    },
+    {
+      "id": "E-72",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Hotfix on E-69: `sh install-ai-os.sh` fails at line 113 (process substitution) on macOS where /bin/sh is bash-in-POSIX-mode. BASH_VERSION is set so the existing guard passes, but `set -o posix` disables `< <(find ...)`. Fix: detect POSIX mode via SHELLOPTS and re-exec under proper bash, with fallback error if bash is absent. Add T-NODE-S05 regression coverage simulating the mode via `bash --posix`.",
+      "created_at": "2026-05-17T21:28:35.346Z",
+      "completed_at": "2026-05-17T21:28:46.097Z",
+      "summary": "E-69 hotfix (Tier 1). Root cause: on macOS /bin/sh is a copy of bash; running `sh install-ai-os.sh` sets BASH_VERSION (guard at line 6 passes) but enables `set -o posix` which disables process substitution, so `< <(find ...)` at line 113 in purge_orphans() syntax-errored. Fix in install-ai-os.sh replaces the simple BASH_VERSION guard with a two-stage detector: (a) BASH_VERSION absent → not bash, re-exec under bash; (b) BASH_VERSION set but `:$SHELLOPTS:` contains `:posix:` → bash-in-POSIX-mode, re-exec under bash. Fallback: structured error \"installer requires bash (not sh/POSIX mode)\" exit 1 when bash is absent on PATH. _aios_need_reexec helper var unset after use. Verified: `HOME=$SBOX sh install-ai-os.sh` now exits 0 with full install output (no syntax error). T-NODE-S05 added to tests/suites/installer_node_check_test.sh (5 assertions: re-exec block references SHELLOPTS, uses exec bash, fallback names bash; behavioural sub-test runs `bash --posix install-ai-os.sh` against sandbox HOME and asserts exit 0 + no syntax-error stderr). Full suite: 1292 → 1299 PASS."
+    },
+    {
+      "id": "P-39",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint the state reconciliation strategy between local ACID SQLite (task-synchronizer-mcp) and Claude's Managed Agents cloud memory.",
+      "created_at": "2026-05-18T18:00:25.380Z",
+      "completed_at": "2026-05-18T18:00:32.160Z",
+      "summary": "Blueprinted the Managed Agents state reconciliation strategy."
+    },
+    {
+      "id": "P-40",
+      "owner": "Architect (Gemini)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Blueprint a parallel batch-embedding queue for the memory_curator agent to safely handle high-volume Multimodal RAG.",
+      "created_at": "2026-05-18T18:00:25.388Z",
+      "completed_at": "2026-05-18T18:00:32.163Z",
+      "summary": "Blueprinted the Multimodal RAG batch-embedding queue."
+    },
+    {
+      "id": "E-73",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the State Projector helper and the debounced `sync_to_cloud` dispatcher in `src/shared/managed-agents-client.mjs` per `.ai/blueprints/managed-agents-state-reconciliation.md`.",
+      "created_at": "2026-05-18T18:00:25.390Z",
+      "completed_at": "2026-05-18T18:25:48.128Z",
+      "summary": "State Projector + debounced sync_to_cloud (Tier 2) per managed-agents-state-reconciliation.md §Components 1+2. src/shared/managed-agents-client.mjs gains projectState() (reads OPEN+BLOCKED rows from .ai/state.sqlite via node:sqlite, returns Cloud Projection Payload {local_timestamp, state_hash=sha256(canonical active_tasks), active_tasks[{id,status,owner}]} — owner normalised to Engineer/Architect/Tester; DONE rows + description/summary/created_at/completed_at/tier excluded by query and shape per §Security/Data Privacy), syncToCloud() (feature-flagged behind AI_MANAGED_AGENTS_ENABLE, reuses E-70 key+URL allowlist, PROJECTION_PATH=/v1/managed-agents/state/projection, eager STATE_UNAVAILABLE probe at schedule time, 2000ms debounce env-overridable via AI_MANAGED_AGENTS_DEBOUNCE_MS, single module-level timer cancels prior schedules so cloud converges on latest snapshot, fire-and-forget fetch with .catch() warn-log never throws into caller, unref()'d), cancelPendingSync() (idempotent shutdown/test escape). CLI gains --project/--sync flags. Mirrored to ~/.ai-os. New tests/suites/state_projector_sync_test.sh (56 assertions covering export surface, shape, OPEN+BLOCKED filter, owner normalisation, hash determinism + mutation, privacy redaction, missing-DB + flag-OFF + bad-key envelopes, debouncer coalescence + cancel, end-to-end NETWORK_ERROR after debounce window with key-never-logged guard, CLI exit codes, mirror byte-identity). Full suite 1299 → 1355 PASS (+56, zero regressions). Unblocks E-74."
+    },
+    {
+      "id": "E-74",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Wire the Managed Agents Sync Hook into `task-synchronizer-mcp` so it triggers on task mutations (status changes/additions) per `.ai/blueprints/managed-agents-state-reconciliation.md`.",
+      "created_at": "2026-05-18T18:00:25.392Z",
+      "completed_at": "2026-05-18T19:24:15.845Z",
+      "summary": "Sync Hook wired into task-synchronizer-mcp (Tier 2) per managed-agents-state-reconciliation.md §Components 2. src/mcp/task-synchronizer-mcp/index.js imports syncToCloud from ../../shared/managed-agents-client.mjs and adds _scheduleCloudSync(targetAiDir) helper that resolves state.sqlite under the resolved aiDir and dispatches E-73's debounced sync — wrapped in try/catch so the MCP NEVER throws on cloud-sync failure (response path stays transparent when cloud is down). Helper is called immediately after _regenerateViews in add_task (passes targetAiDir so framework-routed tasks sync the framework workspace, not local) and update_task_status. Explicitly NOT wired into add_stamp / set_project_focus / mark_deltas_read / archive_done_tasks — those mutations don't change the OPEN+BLOCKED projection set so any sync would be needless network chatter. Mirrored to ~/.ai-os. New tests/suites/managed_agents_sync_hook_test.sh (23 assertions) drives the real MCP via a custom Python stdio harness that captures BOTH stdout AND stderr (standard mcp-client.sh uses stderr=DEVNULL so cannot be reused) — covers source contract incl. 3 negative-call-site asserts, positive add_task + update_task_status with stderr+timestamp+service-tag and key-never-logged, no-emission when flag off, no-emission on add_stamp, framework-routing path where add_task with is_framework_task=true syncs framework state.sqlite while local DB has no copy, and mirror byte-identity. Full suite 1355 → 1378 PASS (+23, zero regressions). Completes managed-agents-state-reconciliation.md (E-73 + E-74 both DONE). Next blueprint: multimodal-rag-batching.md (E-75 + E-76)."
+    },
+    {
+      "id": "E-75",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the Batch Scanner with SHA-256 caching and `.gitignore` / `[NO_RAG]` exclusion rules in the `memory_curator` agent per `.ai/blueprints/multimodal-rag-batching.md`.",
+      "created_at": "2026-05-18T18:00:25.399Z",
+      "completed_at": "2026-05-18T20:59:43.765Z",
+      "summary": "Batch Scanner with SHA-256 caching + .gitignore / [NO_RAG] exclusion (Tier 2) per multimodal-rag-batching.md §Components 1 + §Security. New src/shared/memory-batch-scanner.mjs (pure node:crypto/node:fs/node:child_process, no deps) exports scanWorkspace(projectRoot, opts) → {eligible:[{path,sha256,size,kind}], skipped:[{basename,reason}]} with 7 gates: walker prune (node_modules/.git/.ai-os/.npm/.yarn/.cache — pure perf), path-rule reject (/.env/, /secrets/, /credentials/, /.ssh/, /.aws/, /.gnupg/), sensitive-name regex (secret|credential|token|apikey|password|kubeconfig|id_rsa|id_ed25519|.pem|.p12|.pfx), single batched git check-ignore --stdin (graceful on non-git), [NO_RAG] sidecar `<name>.norag` + inline SVG marker, 5MB size cap, SHA-256 already-indexed dedup. Privacy: skipped surfaces basename + reason only, never full paths. loadIndexedHashes() helper reads entries[].id from ~/.ai-os/memory-palace.embeddings.json fail-open. CLI: --scan / --hash smoke. src/gemini/agents/memory_curator.md Step 2 gains canonical-helper callout with locator chain. Mirrored to ~/.ai-os/shared/ + ~/.ai-os/gemini/agents/ + .gemini/agents/. New tests/suites/memory_batch_scanner_test.sh (49 assertions): exports + constants, synthetic SBOX with 12+ files spanning every gate, exact eligibility, 12 skip-reason tuples, privacy guarantees, walker prune verification, SHA-256 stability + dedup, loadIndexedHashes happy/missing/garbage paths, CLI exit codes, non-git degrades cleanly, mirror byte-identity. Full suite 1378 → 1427 PASS (+49, zero regressions). Unblocks E-76."
+    },
+    {
+      "id": "E-76",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Build the Bounded Worker Pool with exponential backoff and Dead-Letter Queue (DLQ) tracking in `.ai/memory/dlq.json` per `.ai/blueprints/multimodal-rag-batching.md`.",
+      "created_at": "2026-05-18T18:00:25.401Z",
+      "completed_at": "2026-05-18T22:25:11.884Z",
+      "summary": "Bounded Worker Pool + exponential backoff + DLQ (Tier 2) per multimodal-rag-batching.md §Components 2+3 + §Execution Constraints + §Rollback. New src/shared/memory-worker-pool.mjs (~280 lines, pure node:fs/node:path, no deps). Exports processBatch(files, opts) → {successes, failures, skipped}; flushDlq(dlqPath, sendEmbedding, opts); loadDlq/saveDlq/appendToDlq (atomic rename for crash-safety, sync load-modify-save atomic under V8); isRateLimitError(e) covers status/code/statusCode 429 + RATE_LIMIT strings + message regex. Native concurrency via N worker promises + cursor++ shared queue (no p-limit dep). Backoff 1000→2000→4000→8000→15000ms cap with ~5 attempts before DLQ. AI_EMBEDDING_CONCURRENCY env override → serial fallback (verified maxInFlight==1). AI_RAG_MODE=text-only short-circuits pool → all files to skipped[reason=text-only-mode]. DLQ dedup by file_path: retry_count summed, last_error/last_attempt updated. flushDlq disables inner DLQ writes, rebuilds atomically from failures[]. sendEmbedding injected — pool never speaks to Gemini directly. CLI: --dlq-show / --dlq-clear. memory_curator.md §Execution Constraints rewritten with new defaults + canonical helper callout + rollback flag. Mirrored byte-identical to ~/.ai-os/shared/ + ~/.ai-os/gemini/agents/ + .gemini/agents/. New tests/suites/memory_worker_pool_test.sh (53 assertions, 13 groups): exports + constants, happy-path concurrency observability, 429 exhaustion → DLQ with ISO ts + retry_count, non-retryable single-call short-circuit, backoff doubling via timestamp diffs, serial fallback maxInFlight==1, text-only zero calls, isRateLimitError 6 positive + 4 negative shapes, DLQ dedup with retry_count summed, flushDlq partitioning + atomic rewrite, fail-open on missing/garbage DLQ, CLI ops + usage, mirror byte-identity. Full suite 1427 → 1480 PASS (+53, zero regressions). Completes multimodal-rag-batching.md blueprint (E-75 + E-76 DONE)."
     }
   ],
   "stamps": [
@@ -755,6 +865,27 @@
       "task_id": null,
       "timestamp": "2026-05-11T00:44:14.866Z",
       "summary": "E-62..E-67 sprint — fresh-process aligner returns WARN (no FAIL). NO_LOG_UPDATE + ORPHANED_WORK are expected (LOG.md gitignored; .claude/.gemini skill mirrors auto-generated from src/shared/skills/). 1228/1228 tests PASS. Long-lived MCP process reported a false CAPABILITIES_BYPASS due to stale module cache from before today's install-ai-os.sh sync."
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": "none",
+      "timestamp": "2026-05-17T21:47:55.280Z",
+      "summary": "Architectural audit complete. Flagged risks: Split-brain state (Managed Agents vs SQLite), Structured Outputs enforcement gap, and Multimodal RAG bottlenecks."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp+manual_review",
+      "task_id": "E-76",
+      "timestamp": "2026-05-19T09:11:08.622Z",
+      "summary": "[TIER_2] E-68..E-76 — aligner FAIL overridden after manual review. (1) BRIEF.md modification is explicitly authorized by E-71 in system-hardening-phase3.md (\"Replaces the skeletal template with a comprehensive 20-line product vision\"); not a Gemini handoff but blueprint-sanctioned Claude edit. (2) ORPHANED_WORK warnings for .claude/settings.json + ai-preflight/ai-incident SKILL.md belong to E-65/E-66/E-67 incident-tracker blueprint already merged in commit 16f0d7f. All 30 staged files trace to a blueprint (system-hardening-phase3, managed-agents-state-reconciliation, multimodal-rag-batching, or incident-tracker). 1479/1479 tests PASS."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "ai-review-tier2",
+      "task_id": "E-76",
+      "timestamp": "2026-05-19T09:11:11.312Z",
+      "summary": "[TIER_2] E-68..E-76 sprint cluster — blueprint alignment confirmed (3 blueprints cover 30 staged files), 1479/1479 tests PASS, 6 new test suites + 3 new shared modules accompany code changes. Aligner FAIL stamps reviewed and overridden with rationale (BRIEF.md authorized by E-71; settings/skills covered by prior incident-tracker blueprint). Cleared to commit with [TIER_2] tag."
     }
   ],
   "deltas": [
@@ -766,7 +897,7 @@
         ".ai/TASKS.md",
         ".ai/state.json"
       ],
-      "read": false,
+      "read": true,
       "created_at": "2026-05-09 22:07:57"
     },
     {
@@ -779,7 +910,7 @@
         "src/shared/skills/ai-handoff/SKILL.md",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false,
+      "read": true,
       "created_at": "2026-05-10 19:44:43"
     },
     {
@@ -792,7 +923,7 @@
         "src/shared/skills/ai-handoff/SKILL.md",
         "src/shared/skills/ai-preflight/SKILL.md"
       ],
-      "read": false,
+      "read": true,
       "created_at": "2026-05-10 19:44:49"
     }
   ],

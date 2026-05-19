@@ -27,6 +27,46 @@ const BUILTIN_TOOLS = new Set([
   "NotebookEdit", "ExitPlanMode", "EnterPlanMode",
 ]);
 
+// E-68: Tool Alias Normalizer (system-hardening-phase3.md §Components).
+// Gemini CLI exposes the same primitives under different canonical names
+// (Anthropic CamelCase ↔ Gemini snake_case). Without aliasing, a skill that
+// declares `allowed-tools: read_file` triggers a Ghost Tool violation even
+// though the underlying capability is identical. Lookup is O(1) — adds well
+// under the 5ms budget called out in the blueprint §Execution Constraints.
+const TOOL_ALIASES = Object.freeze({
+  // Claude (CamelCase) → Gemini (snake_case canonical)
+  "Bash":          "run_shell_command",
+  "Grep":          "grep_search",
+  "Read":          "read_file",
+  "Write":         "write_file",
+  "Edit":          "replace",
+  "Glob":          "glob",
+  "WebFetch":      "web_fetch",
+  "WebSearch":     "google_web_search",
+});
+
+// Reverse-lookup set: every Gemini-side canonical name is also acceptable.
+// This is what closes the Ghost Tool gate for cross-runtime skills.
+const ALIAS_VALUES = new Set(Object.values(TOOL_ALIASES));
+
+/**
+ * Normalise a declared tool name into its canonical Claude builtin (if any).
+ * Returns the input unchanged when the tool is not aliased — callers must
+ * still check BUILTIN_TOOLS / registry membership downstream.
+ *
+ * Pure function, no I/O, <5ms budget.
+ */
+function normaliseToolName(tool) {
+  if (typeof tool !== "string") return tool;
+  // Already a Claude builtin → no-op.
+  if (BUILTIN_TOOLS.has(tool)) return tool;
+  // Gemini canonical → map back to Claude builtin for unified lookup.
+  for (const [claude, gemini] of Object.entries(TOOL_ALIASES)) {
+    if (gemini === tool) return claude;
+  }
+  return tool;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseFrontmatter(text) {
@@ -76,6 +116,8 @@ function loadRegistry(registryPath) {
 
 function isToolAvailable(tool, registry) {
   if (BUILTIN_TOOLS.has(tool)) return true;
+  // E-68: Gemini-side canonical names map to the same underlying capability.
+  if (ALIAS_VALUES.has(tool)) return true;
   if (tool === "*") return true;
   if (tool.startsWith("mcp__")) return true; // MCP-prefixed tools are registry-resolved
   if (registry.has(tool)) return true;

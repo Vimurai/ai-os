@@ -28,6 +28,11 @@ import { resolve } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId } from "../shared/state-db.js";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
+// E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
+// no side effects at module load), but every call site goes through
+// syncToCloud() which short-circuits to {status:"DISABLED"} when
+// AI_MANAGED_AGENTS_ENABLE is unset. Local MCP behaviour is unchanged off.
+import { syncToCloud as _syncToCloud } from "../../shared/managed-agents-client.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("task-synchronizer-mcp");
@@ -135,6 +140,34 @@ function _archiveDoneTasks(aiDir, db) {
 
   _regenerateViews(aiDir, db);
   return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
+}
+
+// ── E-74: Cloud sync hook ────────────────────────────────────────────────────
+// Per .ai/blueprints/managed-agents-state-reconciliation.md §Components 2:
+// trigger the (debounced, fire-and-forget) Cloud Projection sync whenever a
+// task is added or transitions status. The MCP response MUST NOT block on
+// network — syncToCloud() returns a structured envelope synchronously and
+// schedules the actual fetch under an unref()'d timer.
+//
+// Wired only into add_task + update_task_status (the two mutation paths
+// that change the active-task projection). add_stamp / set_project_focus /
+// mark_deltas_read / archive_done_tasks do not change the OPEN+BLOCKED set
+// the cloud projects, so skipping them avoids needless network chatter.
+function _scheduleCloudSync(targetAiDir) {
+  try {
+    const dbPath  = resolve(targetAiDir, "state.sqlite");
+    const result  = _syncToCloud({ dbPath });
+    // Surface unexpected envelopes to ops logs but never re-throw — the
+    // MCP must be transparently functional when the cloud is down.
+    if (result && result.status && result.status !== "DEBOUNCED" && result.status !== "DISABLED") {
+      logger.warn("cloud-sync", "syncToCloud returned non-debounced envelope", {
+        status: result.status,
+        reason: result.reason,
+      });
+    }
+  } catch (e) {
+    logger.warn("cloud-sync", "syncToCloud threw — swallowed", { error: e.message });
+  }
 }
 
 // ── Error messages ────────────────────────────────────────────────────────────
@@ -454,6 +487,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               task.created_at, task.completed_at, task.summary);
 
       _regenerateViews(targetAiDir, targetDb);
+      // E-74: schedule cloud projection sync. Framework-routed tasks sync
+      // the framework workspace's state.sqlite, not the local one — the
+      // projection always reflects the workspace the row landed in.
+      _scheduleCloudSync(targetAiDir);
       const routeSuffix = targetAiDir === aiDir ? "" : ` (routed to framework workspace ${targetAiDir})`;
       return { content: [{ type: "text", text: `✓ Added ${id}: ${args.description}${routeSuffix}\n${JSON.stringify(task, null, 2)}` }] };
     }
@@ -475,6 +512,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       _regenerateViews(aiDir, db);
+      // E-74: schedule cloud projection sync after the status transition.
+      _scheduleCloudSync(aiDir);
       return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${args.summary ? ": " + args.summary : ""}` }] };
     }
 

@@ -2,17 +2,65 @@
 # AI-OS v3.2 Installer — thin copier
 # Source files live in src/; this script copies them to ~/.ai-os/ and sets up PATH.
 
-# Guard: require bash (process substitution is bash-only; sh/dash will fail)
+# Guard: require real bash (NOT bash invoked as `sh`).
+#
+# Process substitution `< <(find ...)` is disabled in two modes:
+#   (a) Running under sh/dash/posh — $BASH_VERSION is unset.
+#   (b) Running under bash POSIX mode — happens when `/bin/sh` is a copy
+#       of bash (default on macOS) and the user runs `sh install-ai-os.sh`.
+#       In that case $BASH_VERSION IS set, but `set -o posix` is on and
+#       process substitution still fails.
+#
+# Re-exec under proper bash for both cases so the user can run the
+# installer either way without hitting a cryptic "syntax error near `<`".
+_aios_need_reexec=0
 if [ -z "${BASH_VERSION:-}" ]; then
-  echo "Error: This script requires bash." >&2
-  echo "Run:   bash install-ai-os.sh" >&2
+  _aios_need_reexec=1
+else
+  case ":${SHELLOPTS:-}:" in
+    *:posix:*) _aios_need_reexec=1 ;;
+  esac
+fi
+if [ "$_aios_need_reexec" = 1 ]; then
+  if command -v bash >/dev/null 2>&1; then
+    exec bash "$0" "$@"
+  fi
+  echo "Error: This installer requires bash (not sh/POSIX mode)." >&2
+  echo "Install bash and re-run:  bash install-ai-os.sh" >&2
   exit 1
 fi
+unset _aios_need_reexec
 
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AIOS="${HOME}/.ai-os"
+
+# E-69: Fail-closed Node.js availability check (system-hardening-phase3.md §Security).
+# Runs BEFORE any file copy or env-line append. Node 22+ is required by:
+#   - src/shared/wal-flusher.mjs       (node:sqlite, prevents WAL bloat)
+#   - scripts/generate_mcp_docs.mjs    (regenerates .ai/blueprints/mcp.md on `ai sync`)
+#   - src/shared/incident-append.mjs   (PII-sanitised telemetry)
+#   - src/shared/incident-aggregate.mjs (preflight aggregator)
+# Skipping this check on degraded systems risks silent WAL bloat (gigabytes)
+# and missed compliance gates. Set AI_OS_SKIP_NODE_CHECK=1 only for CI
+# packaging-only flows where the artifact is staged on a non-target host.
+if [[ "${AI_OS_SKIP_NODE_CHECK:-0}" != "1" ]]; then
+  if ! command -v node >/dev/null 2>&1; then
+    echo "[ERROR] Node.js is required but not found in PATH." >&2
+    echo "        Install Node 22+ before running this installer." >&2
+    echo "        See: https://nodejs.org/  or  brew install node" >&2
+    exit 1
+  fi
+  _node_version="$(node --version 2>/dev/null || echo "v0.0.0")"
+  _node_major="${_node_version#v}"; _node_major="${_node_major%%.*}"
+  if [[ -z "${_node_major}" ]] || ! [[ "${_node_major}" =~ ^[0-9]+$ ]] || (( _node_major < 22 )); then
+    echo "[ERROR] Node.js 22+ required (found ${_node_version})." >&2
+    echo "        node:sqlite (used by wal-flusher.mjs) ships in Node 22." >&2
+    exit 1
+  fi
+  echo "✓ Node.js ${_node_version} detected (Node 22+ required)"
+fi
 
 echo "AI-OS v3.2 installer"
 echo "Source: ${REPO_DIR}/src"

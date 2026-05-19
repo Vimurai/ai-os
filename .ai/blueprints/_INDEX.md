@@ -10,7 +10,7 @@ A structured directory mapping that connects abstract domain blueprints to their
 1. **Core State Engine**: Maps to `architect.md` and `caching.md`.
 2. **MCP Nervous System**: Maps to `mcp.md` (auto-generated) and `mcp-router.md`.
 3. **Execution & Safety**: Maps to `code-execution.md`, `interop.md`, and `capabilities.md`.
-4. **Maintenance**: Maps to `aligner-hardening.md` and `wal-checkpoint-node.md`.
+4. **Maintenance**: Maps to `aligner-hardening.md`, `wal-checkpoint-node.md`, and `system-hardening-phase3.md`.
 5. **Framework Operations**: Maps to `task-routing.md` and `incident-tracker.md`.
 
 ## Data Model
