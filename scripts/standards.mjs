@@ -23,16 +23,45 @@
  * gate without removing the wiring.
  */
 
-import { resolve, basename } from "node:path";
-import {
+import { resolve, basename, dirname } from "node:path";
+import { readdirSync, statSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
+
+// Locator-aware import of standards-checker.mjs (E-83, blueprint
+// standards-checker-import-fix.md). Mirrors the E-52 pattern in
+// scripts/generate_mcp_docs.mjs so the CLI resolves correctly both in
+// the source repo and from the global install at ~/.ai-os/.
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const CHECKER_CANDIDATES = [
+  // Repo development: scripts/ → ../src/shared/standards-checker.mjs
+  resolve(SCRIPT_DIR, "../src/shared/standards-checker.mjs"),
+  // Installed mode: ~/.ai-os/scripts/ → ../shared/standards-checker.mjs
+  resolve(SCRIPT_DIR, "../shared/standards-checker.mjs"),
+  // Absolute fallback: explicit ~/.ai-os install root.
+  resolve(homedir(), ".ai-os/shared/standards-checker.mjs"),
+];
+let _checkerMod = null;
+for (const candidate of CHECKER_CANDIDATES) {
+  if (existsSync(candidate)) {
+    _checkerMod = await import(candidate);
+    break;
+  }
+}
+if (!_checkerMod) {
+  process.stderr.write(
+    "[standards] ERROR: standards-checker.mjs not found in any candidate paths.\n"
+  );
+  process.exit(1);
+}
+const {
   loadStandards,
   validateStaged,
   validateFiles,
   validateFile,
   reportDrift,
   DEFAULT_STANDARDS_PATH,
-} from "../src/shared/standards-checker.mjs";
-import { readdirSync, statSync } from "node:fs";
+} = _checkerMod;
 
 const VERSION = "1.0.0";
 

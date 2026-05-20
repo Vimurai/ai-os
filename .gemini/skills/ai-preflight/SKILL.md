@@ -3,7 +3,7 @@ name: ai-preflight
 description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Glob, Bash, mcp__task-synchronizer-mcp__verify_markdown_sync
+allowed-tools: Read, Glob, Bash, mcp__task-synchronizer-mcp__verify_markdown_sync, Skill
 context: default
 agent: default
 ---
@@ -111,6 +111,59 @@ node "${AGGREGATOR}" 2>/dev/null || echo '{"status":"AGGREGATOR_UNAVAILABLE"}'
 **Rollback**: set `AI_INCIDENT_TRACKER_DISABLE=1` to short-circuit the
 aggregator (it returns `status: "DISABLED"`). Manual deletion of
 `~/.ai-os/incidents.ndjson` is safe and stateless.
+
+### 7. INSIGHTS.md Staleness Check ← META-COGNITION (E-86, blueprint meta-cognition)
+
+After the incident aggregator, run the staleness probe for the
+cross-project meta-cognition report (E-85). The helper compares
+`~/.ai-os/INSIGHTS.md` mtime against telemetry rows accumulated in
+`~/.ai-os/telemetry.sqlite` (E-84). Budget: <50ms — one stat + one
+SQLite COUNT() with optional `since_iso` clause.
+
+**Locator chain** (mirrors E-58 / E-65 / E-75 / E-83):
+1. `src/shared/insights-staleness.mjs` (in-repo dev tree)
+2. `${HOME}/.ai-os/shared/insights-staleness.mjs` (installed mirror)
+
+**Invocation** (run silently, parse the JSON envelope):
+```bash
+for c in src/shared/insights-staleness.mjs "${HOME}/.ai-os/shared/insights-staleness.mjs"; do
+  if [ -f "$c" ]; then PROBE="$c"; break; fi
+done
+node "${PROBE}" 2>/dev/null || echo '{"status":"UNAVAILABLE"}'
+```
+
+**Output handling** — branch on the `status` field:
+
+- `FRESH` / `EMPTY` / `DISABLED` / `UNAVAILABLE` — silent. No-op;
+  continue to the open-on-demand reads below.
+- `STALE` — emit an inline context block to the agent. Use the format
+  below verbatim so the user can convert it to a `skill: ai-insights`
+  invocation:
+
+  ```
+  [INSIGHTS_STALE] N new telemetry rows since INSIGHTS.md last
+  refreshed (threshold: 200). The cross-project meta-cognition
+  report is out of date — recurring tool errors, latency outliers,
+  and CLI-automation candidates may have shifted.
+
+  Telemetry: <total_rows> total, <new_rows_since_insights> new since
+            <insights_mtime or "(never generated)">.
+
+  Suggested next step: run `skill: ai-insights` to regenerate
+  ~/.ai-os/INSIGHTS.md before the next planning loop. The skill is
+  on-demand and bounded — no telemetry write side-effects.
+  ```
+
+  Like the incident-aggregator hand-off (Step 6), this is **prompting**,
+  not **doing** — the staleness probe never invokes the meta_analyst
+  itself. The agent surfaces the block; the user decides whether to
+  trigger `ai-insights`.
+
+**Rollback**: set `AI_INSIGHTS_STALENESS_DISABLE=1` to short-circuit
+the probe (it returns `status: "DISABLED"`). The wider
+`AI_TELEMETRY_DISABLE=1` (E-84) also disables this check by extension.
+Manual deletion of `~/.ai-os/INSIGHTS.md` is safe — the next probe
+re-evaluates from the telemetry DB.
 
 ### Open Only When Task Touches That Domain
 - `.ai/BRIEF.md` — Project rules & lore (read if onboarding or task touches product goals)

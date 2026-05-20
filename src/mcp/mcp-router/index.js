@@ -46,6 +46,7 @@ import { resolve, join, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { createLogger } from "../shared/logger.js";
 import { DOMAINS } from "../shared/mcp-domains.mjs";
+import { recordToolExecution } from "../../shared/telemetry.mjs";
 
 const SERVICE = "mcp-router";
 const VERSION = "1.0.0";
@@ -310,6 +311,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const t0 = Date.now();
+  // Telemetry context (E-84): set inside proxy_call once validation passes,
+  // cleared after a successful record so the outer catch can stamp ERROR
+  // for any leak-through. Stays null for list_domains / activate_domain.
+  let _proxyTelemetryCtx = null;
 
   try {
     switch (name) {
@@ -450,6 +455,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           timeout_ms: timeoutMs,
         });
 
+        // E-84: stamp telemetry context. recordToolExecution is fire-and-
+        // forget — failures inside the helper are swallowed, never propagated.
+        _proxyTelemetryCtx = {
+          project_root: projectRoot,
+          tool_name: `${targetServer}.${targetTool}`,
+        };
+
         const result = await proxyOneShot(
           cmd,
           "tools/call",
@@ -462,6 +474,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           target_tool: targetTool,
           latency_ms: Date.now() - t0,
         });
+
+        recordToolExecution({
+          project_root: _proxyTelemetryCtx.project_root,
+          session_id: process.env.CLAUDE_CODE_SESSION_ID,
+          tool_name: _proxyTelemetryCtx.tool_name,
+          execution_time_ms: Date.now() - t0,
+          status: "SUCCESS",
+        });
+        _proxyTelemetryCtx = null;
 
         // Wrap the upstream result in a router-stamped envelope so the caller
         // can distinguish proxied output from native tool output.
@@ -489,6 +510,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     }
   } catch (e) {
     log("error", name, e.message, { latency_ms: Date.now() - t0 });
+    // E-84: if proxy_call leaked an exception, stamp ERROR telemetry. The
+    // helper is fire-and-forget and cannot itself throw.
+    if (_proxyTelemetryCtx) {
+      recordToolExecution({
+        project_root: _proxyTelemetryCtx.project_root,
+        session_id: process.env.CLAUDE_CODE_SESSION_ID,
+        tool_name: _proxyTelemetryCtx.tool_name,
+        execution_time_ms: Date.now() - t0,
+        status: "ERROR",
+      });
+    }
     return {
       content: [{ type: "text", text: `Error: ${e.message}` }],
       isError: true,

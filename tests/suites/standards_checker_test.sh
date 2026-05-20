@@ -350,6 +350,32 @@ assert_status 0 "standards.json mirror"        diff -q "$STANDARDS_JSON" "${HOME
 assert_status 0 "standards-checker mirror"     diff -q "$CHECKER" "${HOME}/.ai-os/shared/standards-checker.mjs"
 assert_status 0 "scripts/standards.mjs mirror" diff -q "$CLI"      "${HOME}/.ai-os/scripts/standards.mjs"
 
+# ── T-STD-S15: scripts/standards.mjs locator chain (E-83) ───────────────────
+echo ""
+echo "  [T-STD-S15] CLI resolves standards-checker.mjs via dynamic locator chain"
+
+# Synthetic install layout: <root>/scripts/standards.mjs + <root>/shared/standards-checker.mjs
+# (matches ~/.ai-os/ tree). Asserts Candidate 2 of the locator chain.
+INSTALL="${SBOX}/installroot"
+mkdir -p "${INSTALL}/scripts" "${INSTALL}/shared"
+cp "$CLI"      "${INSTALL}/scripts/standards.mjs"
+cp "$CHECKER"  "${INSTALL}/shared/standards-checker.mjs"
+cp "$STANDARDS_JSON" "${INSTALL}/shared/standards.json"
+
+assert_status 0 "list-rules works from installed-mode layout (Candidate 2)" \
+  bash -c "node '${INSTALL}/scripts/standards.mjs' list-rules --json >/dev/null 2>&1"
+
+# Fail-closed: script alone with no checker anywhere reachable. Override HOME
+# so the absolute Candidate 3 fallback also misses. Expect exit 1 + stderr marker.
+ORPHAN="${SBOX}/orphan"
+mkdir -p "${ORPHAN}/scripts" "${ORPHAN}/fakehome"
+cp "$CLI" "${ORPHAN}/scripts/standards.mjs"
+stderr_out="$( HOME="${ORPHAN}/fakehome" node "${ORPHAN}/scripts/standards.mjs" list-rules 2>&1 >/dev/null )"
+rc=$?
+assert_status 0 "orphan layout → exit 1"                bash -c "[[ $rc -eq 1 ]]"
+assert_status 0 "fail-closed stderr marker present"     \
+  bash -c "echo '$stderr_out' | grep -q '\[standards\] ERROR: standards-checker.mjs not found'"
+
 echo ""
 assert_summary
 echo "===== standards_checker_test.sh PASS ====="
