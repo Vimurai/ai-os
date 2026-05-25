@@ -25,7 +25,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextKeywordSeedId as _nextKeywordSeedId, nextContentVariationId as _nextContentVariationId } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId } from "../shared/state-db.js";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
 // E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
@@ -33,9 +33,10 @@ import { createLogger } from "../shared/logger.js";
 // syncToCloud() which short-circuits to {status:"DISABLED"} when
 // AI_MANAGED_AGENTS_ENABLE is unset. Local MCP behaviour is unchanged off.
 import { syncToCloud as _syncToCloud } from "../../shared/managed-agents-client.mjs";
-// E-79: Multi-Variation-State-Tracker — canonical SEO approach-type slug
-// list. Used to validate ContentVariation.approach_type on add_content_variation.
-import { SEO_APPROACH_TYPES, SEO_APPROACH_TYPES_SET, MAX_VARIATIONS_PER_SEED, isValidApproachType as _isValidApproachType } from "../../shared/seo-approach-types.mjs";
+// E-88: Multi-Variation-State-Tracker — canonical SEO Topic Cluster intents.
+// Used to validate ClusterPage.intent_type and enforce the cluster-page cap
+// on add_cluster_page.
+import { SEO_ALL_INTENTS, MAX_CLUSTER_PAGES_PER_SEED, isValidIntentType as _isValidIntentType, isClusterIntent as _isClusterIntent } from "../../shared/seo-cluster-intents.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("task-synchronizer-mcp");
@@ -346,56 +347,56 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         },
       },
     },
-    // ── E-79: Multi-Variation-State-Tracker tools ─────────────────────────────
-    // Backing tables (keyword_seeds, content_variations) live in state-db.js.
-    // Wired here per .ai/blueprints/seo-keyword-multiplier.md §Components 3
-    // + §API. Cloud sync hook does NOT fire from these — the managed-agents
-    // projection contract (E-73 §Data Privacy) covers only tasks, not
-    // SEO state.
+    // ── E-88: Multi-Variation-State-Tracker tools (SEO Topic Cluster Engine) ──
+    // Backing tables (topic_seeds, cluster_pages) live in state-db.js. Wired
+    // here per .ai/blueprints/seo-keyword-multiplier.md §Components 3 + §API.
+    // Cloud sync hook does NOT fire from these — the managed-agents
+    // projection contract (E-73 §Data Privacy) covers only tasks, not SEO
+    // state.
     {
-      name: "add_keyword_seed",
-      description: "Register a new KeywordSeed (E-79). Returns an auto-assigned KS-N id. Use this once at the start of a multiplyKeyword(term) expansion in src/gemini/agents/seo_manager.md; the SEO-Content-Generator (E-78) then attaches up to 20 ContentVariations to it.",
+      name: "add_topic_seed",
+      description: "Register a new TopicSeed (E-88). Returns an auto-assigned TS-N id. Use this once at the start of a generateTopicCluster(term) expansion in src/gemini/agents/seo_manager.md; the SEO-Content-Generator then attaches one Pillar + up to MAX_CLUSTER_PAGES_PER_SEED Cluster pages to it.",
       inputSchema: {
         type: "object",
         properties: {
-          term:          { type: "string", description: "The keyword seed term (1..256 chars, no shell metachars)" },
-          target_volume: { type: "number", description: "Target number of variations to generate (1..20, default 20)", default: 20 },
+          term:          { type: "string", description: "The topic seed term (1..256 chars, no shell metachars)" },
+          target_volume: { type: "number", description: "Target number of Cluster pages to generate (1..10, default 10)", default: 10 },
         },
         required: ["term"],
       },
     },
     {
-      name: "add_content_variation",
-      description: "Register a ContentVariation against an existing KeywordSeed (E-79). Refuses approach_type values outside the 20-canonical set defined in src/shared/seo-approach-types.mjs. Refuses to create variation #21 for a given seed_id (defence-in-depth on blueprint §Execution Constraints/Generation Limits).",
+      name: "add_cluster_page",
+      description: "Register a ClusterPage against an existing TopicSeed (E-88). Refuses intent_type values outside the canonical set (1 Pillar + Cluster intents) defined in src/shared/seo-cluster-intents.mjs. Enforces the cannibalization guard (unique intent per seed) and the lifted cluster-page cap (defence-in-depth on blueprint §Execution Constraints/Generation Limits).",
       inputSchema: {
         type: "object",
         properties: {
-          seed_id:       { type: "string", description: "KeywordSeed id (e.g. 'KS-1')" },
-          approach_type: { type: "string", description: "One of the 20 canonical slugs (listicle, how-to-guide, …, future-predictions)" },
-          content_blob:  { type: "string", description: "Optional inline markdown body, or a relative repo path if content lives on disk" },
+          seed_id:      { type: "string", description: "TopicSeed id (e.g. 'TS-1')" },
+          intent_type:  { type: "string", description: "One of the canonical intents (pillar-overview, cost, comparison, how-to, …, faq)" },
+          content_blob: { type: "string", description: "Optional inline markdown body, or a relative repo path if content lives on disk" },
         },
-        required: ["seed_id", "approach_type"],
+        required: ["seed_id", "intent_type"],
       },
     },
     {
       name: "report_performance",
-      description: "Update a ContentVariation.performance_metrics with new SEO metrics (E-79 reportPerformance API). Merges supplied keys into the existing JSON object — pass only the fields that changed.",
+      description: "Update a ClusterPage.performance_metrics with new SEO metrics (E-88 reportPerformance API). Merges supplied keys into the existing JSON object — pass only the fields that changed.",
       inputSchema: {
         type: "object",
         properties: {
-          variation_id: { type: "string", description: "ContentVariation id (e.g. 'CV-1')" },
-          metrics:      { type: "object", description: "JSON merge patch — e.g. { clicks: 120, impressions: 4500, ctr: 0.027, position: 8.4 }" },
+          page_id: { type: "string", description: "ClusterPage id (e.g. 'CP-1')" },
+          metrics: { type: "object", description: "JSON merge patch — e.g. { clicks: 120, impressions: 4500, ctr: 0.027, position: 8.4 }" },
         },
-        required: ["variation_id", "metrics"],
+        required: ["page_id", "metrics"],
       },
     },
     {
-      name: "get_seed_cohort",
-      description: "Return a KeywordSeed plus every ContentVariation attached to it (E-79). Used by the SEO-Content-Generator (E-78) Step 4 duplicate-content gate and by the Architect to audit a seed's progress toward the 20-variation target.",
+      name: "get_topic_cluster",
+      description: "Return a TopicSeed plus every ClusterPage attached to it (E-88). Used by the SEO-Content-Generator duplicate-content gate and by the Architect to audit a cluster's progress toward its target.",
       inputSchema: {
         type: "object",
         properties: {
-          seed_id: { type: "string", description: "KeywordSeed id (e.g. 'KS-1')" },
+          seed_id: { type: "string", description: "TopicSeed id (e.g. 'TS-1')" },
         },
         required: ["seed_id"],
       },
@@ -827,105 +828,106 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       };
     }
 
-    // ── E-79 Multi-Variation-State-Tracker handlers ───────────────────────────
+    // ── E-88 Multi-Variation-State-Tracker handlers (Topic Cluster Engine) ────
     // All four operate on the local aiDir's state.sqlite only (no framework
     // routing — SEO state is project-scoped). No cloud sync fires from these
     // mutations per E-73 Data-Privacy contract (only tasks cross the boundary).
 
-    case "add_keyword_seed": {
+    case "add_topic_seed": {
       const term = typeof args.term === "string" ? args.term.trim() : "";
       if (term.length === 0 || term.length > 256) {
-        return { content: [{ type: "text", text: "✗ [INVALID_KEYWORD_TERM] term must be 1..256 chars" }], isError: true };
+        return { content: [{ type: "text", text: "✗ [INVALID_TOPIC_TERM] term must be 1..256 chars" }], isError: true };
       }
       // Reject shell metacharacters (mirrors seo_manager.md Preflight #3).
       if (/[;&|`$()<>\n\r]/.test(term)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_KEYWORD_TERM] term contains shell metacharacters" }], isError: true };
+        return { content: [{ type: "text", text: "✗ [INVALID_TOPIC_TERM] term contains shell metacharacters" }], isError: true };
       }
-      const targetVolume = Number.isFinite(args.target_volume) ? Math.floor(args.target_volume) : 20;
-      if (targetVolume < 1 || targetVolume > MAX_VARIATIONS_PER_SEED) {
-        return { content: [{ type: "text", text: `✗ [INVALID_TARGET_VOLUME] must be 1..${MAX_VARIATIONS_PER_SEED}` }], isError: true };
+      const targetVolume = Number.isFinite(args.target_volume) ? Math.floor(args.target_volume) : MAX_CLUSTER_PAGES_PER_SEED;
+      if (targetVolume < 1 || targetVolume > MAX_CLUSTER_PAGES_PER_SEED) {
+        return { content: [{ type: "text", text: `✗ [INVALID_TARGET_VOLUME] must be 1..${MAX_CLUSTER_PAGES_PER_SEED}` }], isError: true };
       }
-      const id = _nextKeywordSeedId(db);
+      const id = _nextTopicSeedId(db);
       const createdAt = new Date().toISOString();
       db.prepare(
-        "INSERT INTO keyword_seeds(id, term, status, target_volume, created_at, completed_at) VALUES (?, ?, ?, ?, ?, NULL)"
+        "INSERT INTO topic_seeds(id, term, status, target_volume, created_at, completed_at) VALUES (?, ?, ?, ?, ?, NULL)"
       ).run(id, term, "OPEN", targetVolume, createdAt);
       return {
         content: [{
           type: "text",
-          text: `✓ Added KeywordSeed ${id}: "${term}" (target_volume=${targetVolume})\n` +
+          text: `✓ Added TopicSeed ${id}: "${term}" (target_volume=${targetVolume})\n` +
                 JSON.stringify({ id, term, status: "OPEN", target_volume: targetVolume, created_at: createdAt }, null, 2),
         }],
       };
     }
 
-    case "add_content_variation": {
+    case "add_cluster_page": {
       const seedId = String(args.seed_id || "").trim();
-      const approach = String(args.approach_type || "").trim();
-      if (!/^KS-\d+$/.test(seedId)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format KS-N" }], isError: true };
+      const intent = String(args.intent_type || "").trim();
+      if (!/^TS-\d+$/.test(seedId)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format TS-N" }], isError: true };
       }
-      if (!_isValidApproachType(approach)) {
+      if (!_isValidIntentType(intent)) {
         return {
           content: [{
             type: "text",
-            text: `✗ [UNKNOWN_APPROACH_TYPE] '${approach}' is not in the 20-canonical set. Valid: ${SEO_APPROACH_TYPES.join(", ")}`,
+            text: `✗ [UNKNOWN_INTENT_TYPE] '${intent}' is not a canonical cluster intent. Valid: ${SEO_ALL_INTENTS.join(", ")}`,
           }],
           isError: true,
         };
       }
-      const seedRow = db.prepare("SELECT id FROM keyword_seeds WHERE id = ?").get(seedId);
+      const seedRow = db.prepare("SELECT id FROM topic_seeds WHERE id = ?").get(seedId);
       if (!seedRow) {
-        return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] KeywordSeed '${seedId}' does not exist. Call add_keyword_seed first.` }], isError: true };
+        return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] TopicSeed '${seedId}' does not exist. Call add_topic_seed first.` }], isError: true };
       }
-      // Defence-in-depth: enforce the 20-cap at the storage layer even if
-      // upstream (seo_manager E-77) miscounts. Blueprint §Execution
-      // Constraints/Generation Limits is hard.
-      const sibCount = db.prepare(
-        "SELECT COUNT(*) as n FROM content_variations WHERE seed_id = ?"
-      ).get(seedId).n;
-      if (sibCount >= MAX_VARIATIONS_PER_SEED) {
-        return { content: [{ type: "text", text: `✗ [VARIATION_CAP_REACHED] seed ${seedId} already has ${sibCount}/${MAX_VARIATIONS_PER_SEED} variations` }], isError: true };
-      }
-      // Refuse duplicate (seed_id, approach_type) — the 20 canonical types
-      // are each unique within a seed. The blueprint says "20 unique
-      // article structures" — uniqueness includes the structure label.
+      // Cannibalization guard: refuse a duplicate (seed_id, intent_type) —
+      // every page in a cluster MUST target a unique, non-overlapping intent.
       const dup = db.prepare(
-        "SELECT id FROM content_variations WHERE seed_id = ? AND approach_type = ?"
-      ).get(seedId, approach);
+        "SELECT id FROM cluster_pages WHERE seed_id = ? AND intent_type = ?"
+      ).get(seedId, intent);
       if (dup) {
-        return { content: [{ type: "text", text: `✗ [APPROACH_ALREADY_USED] ${seedId} already has approach '${approach}' (variation ${dup.id})` }], isError: true };
+        return { content: [{ type: "text", text: `✗ [INTENT_ALREADY_USED] ${seedId} already has intent '${intent}' (page ${dup.id})` }], isError: true };
+      }
+      // Defence-in-depth: enforce the lifted cluster-page cap at the storage
+      // layer even if upstream (seo_manager E-87) miscounts. The Pillar page
+      // does not count against the cap — only deep-dive Cluster pages do.
+      if (_isClusterIntent(intent)) {
+        const clusterCount = db.prepare(
+          `SELECT COUNT(*) as n FROM cluster_pages WHERE seed_id = ? AND intent_type != ?`
+        ).get(seedId, "pillar-overview").n;
+        if (clusterCount >= MAX_CLUSTER_PAGES_PER_SEED) {
+          return { content: [{ type: "text", text: `✗ [CLUSTER_CAP_REACHED] seed ${seedId} already has ${clusterCount}/${MAX_CLUSTER_PAGES_PER_SEED} cluster pages` }], isError: true };
+        }
       }
 
-      const id = _nextContentVariationId(db);
+      const id = _nextClusterPageId(db);
       const createdAt = new Date().toISOString();
       const blob = typeof args.content_blob === "string" ? args.content_blob : null;
       db.prepare(
-        "INSERT INTO content_variations(id, seed_id, approach_type, content_blob, performance_metrics, published_at, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)"
-      ).run(id, seedId, approach, blob, createdAt);
+        "INSERT INTO cluster_pages(id, seed_id, intent_type, content_blob, performance_metrics, published_at, created_at) VALUES (?, ?, ?, ?, NULL, NULL, ?)"
+      ).run(id, seedId, intent, blob, createdAt);
 
       return {
         content: [{
           type: "text",
-          text: `✓ Added ContentVariation ${id} for ${seedId} [${approach}]\n` +
-                JSON.stringify({ id, seed_id: seedId, approach_type: approach, created_at: createdAt }, null, 2),
+          text: `✓ Added ClusterPage ${id} for ${seedId} [${intent}]\n` +
+                JSON.stringify({ id, seed_id: seedId, intent_type: intent, created_at: createdAt }, null, 2),
         }],
       };
     }
 
     case "report_performance": {
-      const vid = String(args.variation_id || "").trim();
-      if (!/^CV-\d+$/.test(vid)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_VARIATION_ID] expected format CV-N" }], isError: true };
+      const pid = String(args.page_id || "").trim();
+      if (!/^CP-\d+$/.test(pid)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_PAGE_ID] expected format CP-N" }], isError: true };
       }
       if (!args.metrics || typeof args.metrics !== "object" || Array.isArray(args.metrics)) {
         return { content: [{ type: "text", text: "✗ [INVALID_METRICS] metrics must be a JSON object" }], isError: true };
       }
       const row = db.prepare(
-        "SELECT id, performance_metrics FROM content_variations WHERE id = ?"
-      ).get(vid);
+        "SELECT id, performance_metrics FROM cluster_pages WHERE id = ?"
+      ).get(pid);
       if (!row) {
-        return { content: [{ type: "text", text: `✗ [VARIATION_NOT_FOUND] ${vid}` }], isError: true };
+        return { content: [{ type: "text", text: `✗ [PAGE_NOT_FOUND] ${pid}` }], isError: true };
       }
       // Merge-patch semantics: existing JSON + supplied keys; new keys
       // overwrite. Mirrors the JSON merge contract documented in the tool's
@@ -936,48 +938,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const merged = { ...existing, ...args.metrics };
       db.prepare(
-        "UPDATE content_variations SET performance_metrics = ? WHERE id = ?"
-      ).run(JSON.stringify(merged), vid);
+        "UPDATE cluster_pages SET performance_metrics = ? WHERE id = ?"
+      ).run(JSON.stringify(merged), pid);
       return {
         content: [{
           type: "text",
-          text: `✓ Updated ${vid} performance_metrics\n` + JSON.stringify(merged, null, 2),
+          text: `✓ Updated ${pid} performance_metrics\n` + JSON.stringify(merged, null, 2),
         }],
       };
     }
 
-    case "get_seed_cohort": {
+    case "get_topic_cluster": {
       const seedId = String(args.seed_id || "").trim();
-      if (!/^KS-\d+$/.test(seedId)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format KS-N" }], isError: true };
+      if (!/^TS-\d+$/.test(seedId)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format TS-N" }], isError: true };
       }
       const seed = db.prepare(
-        "SELECT id, term, status, target_volume, created_at, completed_at FROM keyword_seeds WHERE id = ?"
+        "SELECT id, term, status, target_volume, created_at, completed_at FROM topic_seeds WHERE id = ?"
       ).get(seedId);
       if (!seed) {
         return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] ${seedId}` }], isError: true };
       }
-      const variations = db.prepare(
-        "SELECT id, approach_type, content_blob, performance_metrics, published_at, created_at FROM content_variations WHERE seed_id = ? ORDER BY id"
-      ).all(seedId).map((v) => ({
-        id:                  v.id,
-        approach_type:       v.approach_type,
-        content_blob:        v.content_blob,
-        performance_metrics: v.performance_metrics ? JSON.parse(v.performance_metrics) : null,
-        published_at:        v.published_at,
-        created_at:          v.created_at,
+      const pages = db.prepare(
+        "SELECT id, intent_type, content_blob, performance_metrics, published_at, created_at FROM cluster_pages WHERE seed_id = ? ORDER BY id"
+      ).all(seedId).map((p) => ({
+        id:                  p.id,
+        intent_type:         p.intent_type,
+        content_blob:        p.content_blob,
+        performance_metrics: p.performance_metrics ? JSON.parse(p.performance_metrics) : null,
+        published_at:        p.published_at,
+        created_at:          p.created_at,
       }));
-      const remaining = Math.max(0, seed.target_volume - variations.length);
+      const clusterPages = pages.filter((p) => p.intent_type !== "pillar-overview");
+      const remaining = Math.max(0, seed.target_volume - clusterPages.length);
       return {
         content: [{
           type: "text",
           text: JSON.stringify({
             seed,
-            variations,
+            pages,
             counts: {
-              total:     variations.length,
+              total:     pages.length,
+              pillar:    pages.filter((p) => p.intent_type === "pillar-overview").length,
+              cluster:   clusterPages.length,
               remaining,
-              published: variations.filter((v) => v.published_at != null).length,
+              published: pages.filter((p) => p.published_at != null).length,
             },
           }, null, 2),
         }],

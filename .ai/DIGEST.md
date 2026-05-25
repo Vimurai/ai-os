@@ -73,3 +73,4 @@
 - 2026-05-17: E-68/E-69 verification-mcp Tool Alias Normalizer + installer Node 22+ guard
 - 2026-05-19: auto-stamped by Stop hook
 - 2026-05-20: auto-stamped by Stop hook
+- 2026-05-25: auto-stamped by Stop hook

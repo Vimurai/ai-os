@@ -28,6 +28,10 @@ export function getDb(aiDir) {
 
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = WAL;");
+  // E-88: migrate the legacy SEO Keyword-Multiplier tables to the Topic
+  // Cluster Engine vocabulary before the CREATE block runs. Idempotent and
+  // safe on fresh DBs (no-op when the legacy tables are absent).
+  _migrateSeoSchema(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
@@ -72,34 +76,36 @@ export function getDb(aiDir) {
       created_at   TEXT NOT NULL,
       status       TEXT NOT NULL DEFAULT 'pending'
     );
-    -- E-79: Multi-Variation-State-Tracker tables for the SEO
-    -- Keyword-Multiplier (.ai/blueprints/seo-keyword-multiplier.md
-    -- §Data Model). Idempotent — CREATE IF NOT EXISTS preserves any
-    -- pre-existing rows on schema reopen.
-    CREATE TABLE IF NOT EXISTS keyword_seeds (
+    -- E-88: Multi-Variation-State-Tracker tables for the SEO Topic Cluster
+    -- Engine (.ai/blueprints/seo-keyword-multiplier.md §Data Model).
+    -- TopicSeed (formerly KeywordSeed) + ClusterPage (formerly
+    -- ContentVariation). Idempotent — CREATE IF NOT EXISTS preserves any
+    -- pre-existing rows on schema reopen. Legacy DBs are renamed in place
+    -- by _migrateSeoSchema() above.
+    CREATE TABLE IF NOT EXISTS topic_seeds (
       id            TEXT PRIMARY KEY,
       term          TEXT NOT NULL,
       status        TEXT NOT NULL DEFAULT 'OPEN'
                       CHECK(status IN ('OPEN','IN_PROGRESS','COMPLETED','ARCHIVED')),
-      target_volume INTEGER NOT NULL DEFAULT 20
-                      CHECK(target_volume > 0 AND target_volume <= 20),
+      target_volume INTEGER NOT NULL DEFAULT 10
+                      CHECK(target_volume > 0 AND target_volume <= 10),
       created_at    TEXT NOT NULL,
       completed_at  TEXT
     );
-    CREATE TABLE IF NOT EXISTS content_variations (
+    CREATE TABLE IF NOT EXISTS cluster_pages (
       id                  TEXT PRIMARY KEY,
       seed_id             TEXT NOT NULL,
-      approach_type       TEXT NOT NULL,
+      intent_type         TEXT NOT NULL,
       content_blob        TEXT,
       performance_metrics TEXT,
       published_at        TEXT,
       created_at          TEXT NOT NULL,
-      FOREIGN KEY (seed_id) REFERENCES keyword_seeds(id) ON DELETE CASCADE
+      FOREIGN KEY (seed_id) REFERENCES topic_seeds(id) ON DELETE CASCADE
     );
-    CREATE INDEX IF NOT EXISTS idx_variations_seed
-      ON content_variations(seed_id);
-    CREATE INDEX IF NOT EXISTS idx_variations_approach
-      ON content_variations(seed_id, approach_type);
+    CREATE INDEX IF NOT EXISTS idx_cluster_pages_seed
+      ON cluster_pages(seed_id);
+    CREATE INDEX IF NOT EXISTS idx_cluster_pages_intent
+      ON cluster_pages(seed_id, intent_type);
     INSERT OR IGNORE INTO meta(key, value) VALUES ('version', '1.0');
     INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale', 'false');
     INSERT OR IGNORE INTO meta(key, value) VALUES ('digest_stale_reason', '');
@@ -244,22 +250,53 @@ export function nextId(db, prefix) {
 }
 
 /**
- * E-79: next sequential KeywordSeed id (`KS-N`). Separate namespace from
- * the task-id sequence so seeds and tasks never collide.
+ * E-88: next sequential TopicSeed id (`TS-N`). Separate namespace from the
+ * task-id sequence so seeds and tasks never collide.
  */
-export function nextKeywordSeedId(db) {
-  const rows = db.prepare("SELECT id FROM keyword_seeds WHERE id LIKE ?").all("KS-%");
+export function nextTopicSeedId(db) {
+  const rows = db.prepare("SELECT id FROM topic_seeds WHERE id LIKE ?").all("TS-%");
   const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
-  return `KS-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+  return `TS-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
 }
 
 /**
- * E-79: next sequential ContentVariation id (`CV-N`). Distinct from
- * E-/P-/T- task ids — variations are tracked by their seed cohort and
- * approach_type, not as Engineer/Architect/Tester work items.
+ * E-88: next sequential ClusterPage id (`CP-N`). Distinct from E-/P-/T-
+ * task ids — pages are tracked by their topic cluster and intent_type, not
+ * as Engineer/Architect/Tester work items.
  */
-export function nextContentVariationId(db) {
-  const rows = db.prepare("SELECT id FROM content_variations WHERE id LIKE ?").all("CV-%");
+export function nextClusterPageId(db) {
+  const rows = db.prepare("SELECT id FROM cluster_pages WHERE id LIKE ?").all("CP-%");
   const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
-  return `CV-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+  return `CP-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+}
+
+/**
+ * E-88: in-place migration of the legacy Keyword-Multiplier schema to the
+ * Topic Cluster Engine vocabulary. Idempotent and safe on fresh DBs:
+ *   keyword_seeds       → topic_seeds
+ *   content_variations  → cluster_pages
+ *   cluster_pages.approach_type → intent_type
+ * Existing rows (and their target_volume CHECK from the legacy schema) are
+ * preserved; the MCP layer enforces the lifted cap via MAX_CLUSTER_PAGES_PER_SEED.
+ */
+function _migrateSeoSchema(db) {
+  const hasTable = (name) =>
+    !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name);
+
+  if (hasTable("keyword_seeds") && !hasTable("topic_seeds")) {
+    db.exec("ALTER TABLE keyword_seeds RENAME TO topic_seeds;");
+  }
+  if (hasTable("content_variations") && !hasTable("cluster_pages")) {
+    db.exec("ALTER TABLE content_variations RENAME TO cluster_pages;");
+  }
+  if (hasTable("cluster_pages")) {
+    const cols = db.prepare("PRAGMA table_info(cluster_pages)").all();
+    if (cols.some((c) => c.name === "approach_type")) {
+      db.exec("ALTER TABLE cluster_pages RENAME COLUMN approach_type TO intent_type;");
+    }
+  }
+  // Drop the legacy index names so the CREATE INDEX IF NOT EXISTS below
+  // installs the renamed indices without leaving orphans behind.
+  db.exec("DROP INDEX IF EXISTS idx_variations_seed;");
+  db.exec("DROP INDEX IF EXISTS idx_variations_approach;");
 }

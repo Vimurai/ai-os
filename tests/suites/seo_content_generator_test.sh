@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# seo_content_generator_test.sh — Tests for E-78 SEO-Content-Generator agent.
+# seo_content_generator_test.sh — Tests for the SEO-Content-Generator agent.
 #
 # Verifies src/gemini/agents/seo_content_generator.md against the contract
 # in .ai/blueprints/seo-keyword-multiplier.md §Components 2 + §API:
 #
-#   - generateVariation(seed_id, type) → variation_blob
-#   - Honors §Execution Constraints (120s, concurrency 3, 20-cap dedup)
+#   - generateClusterContent(seed_id, intent_type) → content_blob
+#   - Honors §Execution Constraints (120s, concurrency 3, cluster cap)
 #   - Honors §Security (duplicate-content, identity_guardian, critic_security)
-#   - Anti-drift: NOT the orchestrator (E-77), NOT the state tracker (E-79)
-#   - Approach-type taxonomy is single-sourced from seo_manager (E-77)
+#   - Anti-drift: NOT the orchestrator (E-87), NOT the state tracker
+#   - Intent taxonomy is single-sourced from seo-cluster-intents.mjs /
+#     the seo_manager cluster-intent table
 #   - Frontmatter description double-quoted (colon-parse guard)
 #   - Mirrored byte-identical to .gemini/ + ~/.ai-os/gemini/
 
@@ -44,7 +45,7 @@ assert_status 0 "description value uses safe quoting (no colon-parse trap)" \
 import re, sys
 with open('$AGENT_SRC') as f:
     head = ''.join(f.readlines()[:20])
-m = re.search(r'^description:\s*(.+?)$', head, flags=re.M)
+m = re.search(r'^description:\s*(.+?)\$', head, flags=re.M)
 if not m: sys.exit(1)
 val = m.group(1).strip()
 sys.exit(0 if (val.startswith('\"') and val.endswith('\"')) or val.startswith('>') or val.startswith('|') else 2)
@@ -57,20 +58,20 @@ echo "  [T-SCG-S02] Agent body covers every required blueprint section"
 assert_status 0 "ROLE declaration"                   grep -q '^ROLE: SEO_CONTENT_GENERATOR' "$AGENT_SRC"
 assert_status 0 "Forbidden section"                  grep -q '^## Forbidden' "$AGENT_SRC"
 assert_status 0 "Preflight section"                  grep -q '^## Preflight' "$AGENT_SRC"
-assert_status 0 "API contract section"               grep -q 'generateVariation(seed_id: string, type: string)' "$AGENT_SRC"
+assert_status 0 "API contract section"               grep -q 'generateClusterContent(seed_id: string, intent_type: string)' "$AGENT_SRC"
 assert_status 0 "Execution Constraints section"      grep -q '^## Execution Constraints' "$AGENT_SRC"
 assert_status 0 "Rollback section"                   grep -q '^## Rollback' "$AGENT_SRC"
 assert_status 0 "What this agent is NOT (anti-drift)" grep -q '^## What this agent is NOT' "$AGENT_SRC"
 
-# ── T-SCG-S03: 20-approach-type taxonomy is single-sourced ──────────────────
+# ── T-SCG-S03: Cluster-intent taxonomy is single-sourced ────────────────────
 echo ""
-echo "  [T-SCG-S03] Generator's template table covers all 20 canonical types"
+echo "  [T-SCG-S03] Generator's template table covers the canonical intents"
 
-# Extract approach-type slugs from the generator's template table.
+# Extract intent slugs from the generator's template table.
 gen_count="$(awk '/^## Step 2/,/^## Step 3/' "$AGENT_SRC" \
   | grep -oE '`[a-z][a-z0-9-]+`' | sort -u | wc -l | tr -d ' ')"
-assert_status 0 "generator enumerates ≥ 20 distinct approach slugs" \
-  bash -c "[[ $gen_count -ge 20 ]]"
+assert_status 0 "generator enumerates ≥ 11 distinct intent slugs (pillar + 10)" \
+  bash -c "[[ $gen_count -ge 11 ]]"
 
 # Cross-reference: every slug in the generator MUST also exist in the manager.
 missing="$(python3 -c "
@@ -82,27 +83,27 @@ with open('$MANAGER_SRC') as f:
 # Pull slugs from generator's Step 2 table.
 m_block = re.search(r'## Step 2(.+?)## Step 3', gen_text, flags=re.S)
 gen_slugs = set(re.findall(r'\`([a-z][a-z0-9-]+)\`', m_block.group(1) if m_block else ''))
-# Pull slugs from manager's approach-table.
-mgr_block = re.search(r'## The 20 Canonical Approach-Types(.+?)## Step 1', mgr_text, flags=re.S)
+# Pull slugs from manager's cluster-intent table.
+mgr_block = re.search(r'## The Canonical Cluster Intents(.+?)## Step 1', mgr_text, flags=re.S)
 mgr_slugs = set(re.findall(r'\`([a-z][a-z0-9-]+)\`', mgr_block.group(1) if mgr_block else ''))
 missing = gen_slugs - mgr_slugs
 print(','.join(sorted(missing)) if missing else 'OK')
 ")"
-assert_status 0 "every generator slug exists in the manager taxonomy" \
+assert_status 0 "every generator intent exists in the manager taxonomy" \
   bash -c "[[ '$missing' == 'OK' ]]"
 
 # ── T-SCG-S04: Anti-drift mandates ───────────────────────────────────────────
 echo ""
 echo "  [T-SCG-S04] Generator forbids orchestration + state tracking"
 
-assert_status 0 "Forbidden: NO orchestration (E-77)" \
-  bash -c "awk '/^## Forbidden/,/^## Preflight/' '$AGENT_SRC' | grep -qE 'orchestrate|Keyword-Multiplier-Manager'"
-assert_status 0 "Forbidden: NO state tracking (E-79)" \
+assert_status 0 "Forbidden: NO orchestration (E-87)" \
+  bash -c "awk '/^## Forbidden/,/^## Preflight/' '$AGENT_SRC' | grep -qE 'orchestrate|SEO-Topic-Cluster-Manager'"
+assert_status 0 "Forbidden: NO state tracking" \
   bash -c "awk '/^## Forbidden/,/^## Preflight/' '$AGENT_SRC' | grep -qE 'state|Multi-Variation-State-Tracker'"
 assert_status 0 "Forbidden: NO publish / deploy" \
   bash -c "awk '/^## Forbidden/,/^## Preflight/' '$AGENT_SRC' | grep -qiE 'publish|deploy'"
-assert_status 0 "What-this-is-NOT references E-77 by id"  grep -q 'E-77' "$AGENT_SRC"
-assert_status 0 "What-this-is-NOT references E-79 by id"  grep -q 'E-79' "$AGENT_SRC"
+assert_status 0 "What-this-is-NOT references E-87 by id"  grep -q 'E-87' "$AGENT_SRC"
+assert_status 0 "References the Multi-Variation-State-Tracker"  grep -q 'Multi-Variation-State-Tracker' "$AGENT_SRC"
 
 # ── T-SCG-S05: Blueprint Execution Constraints surfaced verbatim ────────────
 echo ""
@@ -114,8 +115,8 @@ assert_status 0 "concurrency cap of 3"         \
   bash -c "awk '/^## Execution Constraints/,/^## Rollback/' '$AGENT_SRC' | grep -qE '3 in-flight|concurrency.*3'"
 assert_status 0 "exponential backoff 1000→15000ms" \
   bash -c "awk '/^## Execution Constraints/,/^## Rollback/' '$AGENT_SRC' | grep -qE '1000ms.*15000ms|1000ms → 15000ms'"
-assert_status 0 "20-cap defence-in-depth"      \
-  bash -c "awk '/^## Execution Constraints/,/^## Rollback/' '$AGENT_SRC' | grep -qE '20-cap|#21'"
+assert_status 0 "cluster cap / cannibalization defence-in-depth"      \
+  bash -c "awk '/^## Execution Constraints/,/^## Rollback/' '$AGENT_SRC' | grep -qE 'cannibalization|cluster-page cap'"
 
 # ── T-SCG-S06: Security gates (duplicate-content + identity + critic) ───────
 echo ""
@@ -138,7 +139,7 @@ assert_status 0 "REVIEW_BLOCKED status documented" \
 echo ""
 echo "  [T-SCG-S07] Structured status envelope on every failure path"
 
-for status in OFFLINE UNKNOWN_APPROACH_TYPE INVALID_SEED_ID RATE_LIMITED_EXHAUSTED BUDGET_EXCEEDED DUPLICATE_REJECTED REVIEW_BLOCKED; do
+for status in OFFLINE UNKNOWN_INTENT_TYPE INVALID_SEED_ID RATE_LIMITED_EXHAUSTED BUDGET_EXCEEDED DUPLICATE_REJECTED REVIEW_BLOCKED; do
   assert_status 0 "status code referenced: ${status}" \
     grep -q "${status}" "$AGENT_SRC"
 done
@@ -178,13 +179,13 @@ else
   echo "    ⚠  ~/.ai-os mirror absent — skipping"
 fi
 
-# ── T-SCG-S11: Bidirectional blueprint reference ────────────────────────────
+# ── T-SCG-S11: Blueprint reference ──────────────────────────────────────────
 echo ""
-echo "  [T-SCG-S11] Blueprint names E-78 + the agent file references the blueprint"
+echo "  [T-SCG-S11] Blueprint names the SEO-Content-Generator + agent references it back"
 
 assert_status 0 "blueprint file exists"               test -f "$BLUEPRINT"
-assert_status 0 "blueprint names E-78 SEO-Content-Generator" \
-  grep -qE "E-78.*SEO-Content-Generator|SEO-Content-Generator.*E-78" "$BLUEPRINT"
+assert_status 0 "blueprint names the SEO-Content-Generator (Component 2)" \
+  grep -q "SEO-Content-Generator" "$BLUEPRINT"
 assert_status 0 "agent description names blueprint path" \
   grep -q "seo-keyword-multiplier.md" "$AGENT_SRC"
 
