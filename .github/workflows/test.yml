@@ -33,6 +33,13 @@ jobs:
             fi
           done
 
+      # Populate ~/.ai-os/ so mirror byte-identity tests (diff against
+      # ${HOME}/.ai-os/...) and install-dependent suites have the framework
+      # environment they assume. Without this, the suite is not CI-portable.
+      # The installer is a non-interactive thin copier (src/ -> ~/.ai-os/).
+      - name: Install AI-OS framework
+        run: bash install-ai-os.sh
+
       - name: Run tests
         run: bash tests/run.sh
 
