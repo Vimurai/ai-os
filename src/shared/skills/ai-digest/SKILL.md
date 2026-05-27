@@ -3,8 +3,8 @@ name: ai-digest
 description: Use activate_skill with this name when DIGEST.md is stale (>3 days old), after a major sprint, or after running skill: ai-archive. Reads all .ai/ files and produces a concise 20-60 line project snapshot.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Grep, Glob
-context: fork
+allowed-tools: Read, Grep, Glob, Bash, Write, Edit
+context: default
 agent: default
 ---
 

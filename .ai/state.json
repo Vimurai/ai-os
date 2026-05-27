@@ -3,7 +3,7 @@
   "project": {
     "current_tier": 2,
     "release_verdict": null,
-    "focus": "E-98: wire repo-mapper into ai sync + ai-preflight loads REPO_MAP.md + register ast-parser-mcp in .mcp.json per ast-repository-map.md §Components 3"
+    "focus": "E-100: skill frontmatter context:fork→local so ai-digest/trigger-audit run directly (forked-execution-drift incident)"
   },
   "tasks": [
     {
@@ -189,22 +189,22 @@
     {
       "id": "E-99",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Refactor `.mcp.json` integration tests (`registry_sync_test.sh`, `idempotency_test.sh`, `mcp_test.sh`) to use temporary sandboxes or strict trap-based backup/restore to prevent working tree pollution. Acceptance: all tests pass, `git status` remains clean.",
       "created_at": "2026-05-27T13:45:11.721Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-05-27T20:46:02.888Z",
+      "summary": "Fixed .mcp.json working-tree contamination (incident .mcp.json:test-harness-path-rewrite). SCOPE NOTE: the 3 tests the task named (registry_sync_test=read-only, idempotency_test + mcp_test=already mktemp+trap isolated) were NOT the polluters — empirical bisect (run-each-suite + git diff .mcp.json) identified installer_node_check_test.sh as the sole offender: T-NODE-S05 (and S02/S03 defensively) ran install-ai-os.sh from the repo cwd, so the installer's cwd-relative .mcp.json regeneration (with sandbox-HOME abs paths) overwrote the repo .mcp.json. Fix: wrap all 3 installer invocations in ( cd \"$SBOX\" && ... ) subshells (task's 'temporary sandboxes' approach) so cwd-relative writes land in the sandbox. Acceptance MET: installer_node_check_test 18/18 pass; full suite 2107 pass; .mcp.json stays CLEAN after the full suite (verified — no more manual reverts). ALIGN_PASS + CLEAN_PASS + CRITIC_STAMP."
     },
     {
       "id": "E-100",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Update YAML frontmatter in `.gemini/skills/` operational scripts (like `ai-digest`, `trigger-audit`) to use `context: local` instead of `context: fork` to prevent unintended subagent delegation and ensure direct file manipulation. Acceptance: tests pass, `ai-digest` correctly updates `DIGEST.md`.",
       "created_at": "2026-05-27T13:45:11.725Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-05-27T21:17:41.324Z",
+      "summary": "Fixed forked-skill drift (incident skill-tool:forked-execution-drift). DEVIATION FROM TASK TEXT: the task said context:local, but `local` is NOT a valid Claude Code frontmatter value (confirmed via claude-code-guide: only fork=subagent and default/omitted=in-thread exist). Used context:default — the proven in-thread value (ai-task/ai-insights already use it). Changed context:fork→default on the operational skills that must run in-thread: ai-digest, trigger-audit, ai-sync-state (src/shared) + ai-compact (src/claude), mirrored byte-identical to .claude/.gemini/~/.ai-os. Also fixed ai-digest allowed-tools (was read-only Read,Grep,Glob → added Bash,Write,Edit) so it can persist DIGEST.md in-thread (review finding). LEFT context:fork on ai-review + architectural-aligner (review/audit orchestrators returning verdicts) and critic personas (parallel-spawnable, per critic_clean_code_test). VERIFIED: invoking ai-digest now runs in-thread (loaded skill content, executed directly, regenerated DIGEST.md) instead of forking into a summary. New tests/suites/skill_context_test.sh (21 assertions incl. guard that context:local appears nowhere). Full suite 2128 pass; CLEAN_PASS + ALIGN_PASS + CRITIC_STAMP."
     }
   ],
   "stamps": [
@@ -1005,6 +1005,62 @@
       "task_id": "E-98",
       "timestamp": "2026-05-27T15:16:15.842Z",
       "summary": "[TIER_2] E-98 repo-map wiring APPROVED. Blueprint aligned (ALIGN_PASS, 2 benign warnings dispositioned) + clean-code gate clear (CLEAN_PASS, 0 err/0 warn). Tests: 22/22 wiring + 15 ast_parser + 13 mapper + 17 generate = 67 green. Verified: ai sync hook fail-open (missing node/server/parse error never blocks), AI_OS_DISABLE_REPO_MAP=1 rollback honored in both CLI+hook, lazy SDK import keeps --generate-map dependency-light, stdout purity intact, all 3 ai-preflight SKILL mirrors byte-identical. COMMIT BLOCKER (action required, not a code defect): grammars/*.wasm are UNTRACKED and tree-sitter-wasms is now devDependency-only — they are load-bearing runtime assets the installer rsyncs to ~/.ai-os; `git add src/mcp/ast-parser-mcp/grammars/` before committing or a fresh clone+install has a broken extractor."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-99",
+      "timestamp": "2026-05-27T20:45:23.390Z",
+      "summary": "align_diff WARN (not FAIL) — sole signal [ORPHANED_WORK] on tests/suites/installer_node_check_test.sh; test-hygiene refactor not tied to a blueprint feature, dispositioned per E-83/E-97 precedent. Tier 2 gate: WARN passes."
+    },
+    {
+      "type": "CLEAN_PASS",
+      "agent": "critic_clean_code",
+      "task_id": "E-99",
+      "timestamp": "2026-05-27T20:45:24.151Z",
+      "summary": "standards-checker PASS — 1 file clean (tests/suites/installer_node_check_test.sh), 0 errors, 0 warnings, elapsed 1ms."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "ai-review-tier2",
+      "task_id": "E-99",
+      "timestamp": "2026-05-27T20:45:30.611Z",
+      "summary": "[TIER_2] Blueprint aligned (ALIGN WARN dispositioned — orphaned-work false-positive on test file) + clean-code gate clear (CLEAN_PASS, 0 errors/0 warnings). Acceptance verified: installer_node_check_test.sh 18/18 pass; git status stays clean, repo .mcp.json untouched (mtime preserved). cwd-isolation subshells prevent installer's cwd-relative .mcp.json regen from polluting the working tree. The 3 originally-named files (registry_sync/idempotency/mcp_test) were already mktemp+trap sandboxed; the actual offender was installer_node_check_test.sh. CLEARED TO COMMIT."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-100",
+      "timestamp": "2026-05-27T21:01:15.228Z",
+      "summary": "align_diff WARN (not FAIL) — sole signal [ORPHANED_WORK] on tests/suites/installer_node_check_test.sh (the E-99 staged file; the E-100 skill-frontmatter changes are unstaged so the aligner did not see them). Harness/skill-config refactor not tied to a blueprint feature — dispositioned per E-83/E-97 precedent. Tier 2 gate: WARN passes."
+    },
+    {
+      "type": "CLEAN_WARN",
+      "agent": "ai-review-tier2",
+      "task_id": "E-100",
+      "timestamp": "2026-05-27T21:01:29.752Z",
+      "summary": "Clean-code surface clean (11 one-line context:fork→default edits + new skill_context_test.sh 19/19 pass, mirrors byte-identical). SUBSTANTIVE GAP: src/shared/skills/ai-digest declares allowed-tools: Read, Grep, Glob (no Write/Edit/Bash) yet its body ('Produce DIGEST.md', 'After Writing', 'Append to .ai/LOG.md') and the E-100 acceptance criterion require it to WRITE. Under old context:fork the orchestrator wrote; under new context:default the skill runs in-thread and cannot persist DIGEST.md with its declared toolset. Sibling ai-compact correctly carries Write,Edit. FIX: add Write, Edit to ai-digest allowed-tools (all 3 mirrors). trigger-audit has Bash, ai-sync-state is read-only by design — both fine. Not FAIL (verification-mcp only flags ghost-tools, not under-provisioning) but acceptance 'ai-digest correctly updates DIGEST.md' is not satisfiable as written."
+    },
+    {
+      "type": "CLEAN_PASS",
+      "agent": "ai-review-tier2",
+      "task_id": "E-100",
+      "timestamp": "2026-05-27T21:16:53.987Z",
+      "summary": "standards-checker PASS — 13 staged files, 0 errors, 0 warnings, 3ms. RESOLVES prior [CLEAN_WARN]: ai-digest allowed-tools now 'Read, Grep, Glob, Bash, Write, Edit' (was read-only) across all 3 mirrors (byte-identical md5 da0e05f), so context:default in-thread DIGEST.md persistence is satisfiable. New skill_context_test.sh adds 2 assertions proving ai-digest+ai-compact carry Write. skill_context_test.sh 21/21 pass."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "ai-review-tier2",
+      "task_id": "E-100",
+      "timestamp": "2026-05-27T21:16:56.396Z",
+      "summary": "align_diff WARN (not FAIL) — sole signals [NO_LOG_UPDATE]+[ORPHANED_WORK] on the skill SKILL.md mirrors. Recurring false-positive class (E-77/78/79/83/95/96/97/99): aligner reads architect.md only and does not recurse domain blueprints; skill-frontmatter hygiene (context:fork→default + allowed-tools) is not a blueprint feature. Dispositioned per established precedent. Tier 2 gate: WARN passes."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "ai-review-tier2",
+      "task_id": "E-100",
+      "timestamp": "2026-05-27T21:17:03.963Z",
+      "summary": "[TIER_2] E-100 re-review PASS — ai-digest allowed-tools fix verified. CLEAN_PASS + ALIGN_PASS(WARN dispositioned). Prior [CLEAN_WARN] resolved: ai-digest now carries Write/Edit/Bash so context:default in-thread DIGEST.md persistence works; all 4 operational skills flipped fork→default; mirrors byte-identical. skill_context_test 21/21. Note: task text said 'context: local' but impl correctly uses 'context: default' (local is invalid Claude Code value; test asserts local appears nowhere). 3 full-suite failures are pre-existing env-only e2e in code_execution_mcp_test [T-CODEX-S07] (Docker python:3.12-slim/node:22-alpine images not pulled) — unrelated to E-100; 2128 logic tests pass."
     }
   ],
   "deltas": [

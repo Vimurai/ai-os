@@ -4,7 +4,7 @@ description: Use activate_skill with this name when SESSION.md exceeds ~2000 tok
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Bash, Write, Edit
-context: fork
+context: default
 agent: default
 ---
 

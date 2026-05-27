@@ -58,7 +58,8 @@ FAKE_HOME="${SBOX}/home"
 mkdir -p "$FAKE_HOME"
 
 set +e
-PATH="$PATH_NO_NODE" HOME="$FAKE_HOME" bash "$INSTALL" >"${SBOX}/stdout" 2>"${SBOX}/stderr"
+# E-99: run from within the sandbox so a cwd-relative write can never reach the repo.
+( cd "$SBOX" && PATH="$PATH_NO_NODE" HOME="$FAKE_HOME" bash "$INSTALL" ) >"${SBOX}/stdout" 2>"${SBOX}/stderr"
 exit_code=$?
 set -e
 
@@ -91,7 +92,8 @@ FAKE_HOME2="${SBOX}/home2"
 mkdir -p "$FAKE_HOME2"
 
 set +e
-PATH="${STUB_DIR}:${PATH_NO_NODE}" HOME="$FAKE_HOME2" bash "$INSTALL" >"${SBOX}/stdout2" 2>"${SBOX}/stderr2"
+# E-99: run from within the sandbox so a cwd-relative write can never reach the repo.
+( cd "$SBOX" && PATH="${STUB_DIR}:${PATH_NO_NODE}" HOME="$FAKE_HOME2" bash "$INSTALL" ) >"${SBOX}/stdout2" 2>"${SBOX}/stderr2"
 exit_code2=$?
 set -e
 
@@ -139,7 +141,11 @@ assert_status 0 "fallback error names bash explicitly" \
 if bash --posix -c ':' 2>/dev/null; then
   SBOX_POSIX="$(mktemp -d)"
   set +e
-  HOME="${SBOX_POSIX}/home" AI_OS_SKIP_NODE_CHECK=1 bash --posix "$INSTALL" \
+  # E-99: run the installer from WITHIN the sandbox so any cwd-relative write
+  # (the installer regenerates .mcp.json with absolute paths) lands in the
+  # sandbox, never the repo working tree. ($INSTALL + redirect paths are
+  # absolute, so the cd is safe.)
+  ( cd "${SBOX_POSIX}" && HOME="${SBOX_POSIX}/home" AI_OS_SKIP_NODE_CHECK=1 bash --posix "$INSTALL" ) \
     >"${SBOX_POSIX}/stdout" 2>"${SBOX_POSIX}/stderr"
   posix_rc=$?
   set -e

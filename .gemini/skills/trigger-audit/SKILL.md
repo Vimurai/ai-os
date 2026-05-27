@@ -4,7 +4,7 @@ description: Use activate_skill with this name immediately after the PLAN phase 
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash
-context: fork
+context: default
 agent: default
 ---
 

@@ -4,7 +4,7 @@ description: Use activate_skill with this name when handing off work between Gem
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read
-context: fork
+context: default
 agent: default
 ---
 
