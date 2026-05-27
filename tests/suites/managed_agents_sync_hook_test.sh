@@ -83,12 +83,20 @@ proc.stdin.flush()
 # keep the loop open by itself.)
 time.sleep(wait_ms / 1000.0)
 
+# Close stdin (EOF ends the server's read loop) then drain the pipes via
+# wait()+read() rather than communicate(). communicate() re-touches the now-
+# closed stdin (selector path calls .fileno()), which raises "ValueError: I/O
+# operation on closed file" on some Python versions (e.g. the ubuntu CI runner)
+# while passing on others (macOS 3.14). Output here is small JSON-RPC + a few
+# stderr warns, well under the pipe buffer, so wait()-then-read() cannot deadlock.
+proc.stdin.close()
 try:
-    proc.stdin.close()
-    stdout, stderr = proc.communicate(timeout=5)
+    proc.wait(timeout=5)
 except subprocess.TimeoutExpired:
     proc.kill()
-    stdout, stderr = proc.communicate()
+    proc.wait()
+stdout = proc.stdout.read()
+stderr = proc.stderr.read()
 
 response = None
 for line in stdout.splitlines():
