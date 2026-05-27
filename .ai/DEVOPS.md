@@ -39,3 +39,54 @@ The resilience test suite will be positioned after `lint` and `typecheck` but be
 - Implement and validate on the current branch (`master`) before merging. Run `bash tests/suites/resilience_test.sh` locally to confirm PASS before any commit.
 
 ---
+
+## DEVOPS-002 — Install framework in CI before tests
+
+**Date**: 2026-05-27
+**Status**: IN PROGRESS
+
+### What is changing and why
+`.github/workflows/test.yml` runs `bash tests/run.sh` against a bare checkout
+with **no framework install**, so `~/.ai-os/` never exists in CI. ~12 assertions
+across 5 suites (telemetry, insights_staleness, meta_analyst,
+multi_variation_state_tracker, standards_checker) assert byte-identity via
+`diff -q "$SRC" "${HOME}/.ai-os/..."` and fail with exit 2 (file missing). A
+further ~16 assertions (managed_agents_sync_hook, state_projector_sync,
+installer_node_check) depend on the installed/dev environment. CI has been
+chronically red on every push as a result. **All 28 failures pass locally**
+where `~/.ai-os/` is present.
+
+**Fix:** add an `Install AI-OS framework` step that runs `bash install-ai-os.sh`
+**before** `Run tests`, populating `~/.ai-os/` from `src/` so the mirror +
+install-dependent suites have their expected environment. The installer is a
+non-interactive thin copier; `install_global()`'s failure-prone parts
+(`gh copilot`, `do_mcp_setup`) are guarded with `|| true`/`|| echo`, so it does
+not abort under `set -e`.
+
+### Security implications
+- **No new secrets.** Installer is local file copy + npm install (deps already
+  installed by the existing CI step). No network beyond npm (already present).
+- **No new permissions.** Runs as the unprivileged GitHub runner user; writes
+  only under `$HOME` (ephemeral runner).
+- **No CI secrets exposure.** Installer output is build log only; no tokens.
+
+### Pipeline order enforced
+1. deps (`npm ci` + per-MCP `npm install`)
+2. **install (`bash install-ai-os.sh`)** ← new, before tests
+3. `test` (`bash tests/run.sh`)
+4. secret-gitignore check (unchanged)
+
+### Rollback plan
+- Revert the single added step in `.github/workflows/test.yml` (delete the
+  `Install AI-OS framework` step or `git revert` the commit). The change is
+  additive and isolated to the workflow file — no source or test changes.
+- If the installer step itself breaks CI, removing the step returns the suite
+  to its prior (red mirror) baseline with no other regression.
+
+### Branch strategy
+- Validate on branch `ci/install-framework-before-tests` first (never modify
+  master CI blindly). Push, watch the Actions run on the branch, iterate on any
+  residual failures (notably the `bash --posix` installer re-exec assertion,
+  which may be a separate ubuntu-bash portability issue), then merge to master.
+
+---
