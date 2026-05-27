@@ -25,7 +25,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps } from "../shared/state-db.js";
+import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
 // E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
@@ -78,12 +79,15 @@ function _importFromJson(jsonPath, db) {
   setProj.run("focus",           proj.focus          ?? null);
 
   const insertTask = db.prepare(`
-    INSERT OR IGNORE INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary, depends_on)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (const t of (state.tasks || [])) {
+    // E-91: preserve dependency edges across the one-time JSON→SQLite import.
+    const deps = Array.isArray(t.depends_on) ? t.depends_on : [];
     insertTask.run(t.id, t.owner, t.status, t.tier ?? null,
-                   t.description, t.created_at, t.completed_at ?? null, t.summary ?? null);
+                   t.description, t.created_at, t.completed_at ?? null, t.summary ?? null,
+                   deps.length ? JSON.stringify(deps) : null);
   }
 
   const insertStamp = db.prepare(
@@ -229,179 +233,7 @@ const server = new Server(
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "get_state",
-      description: "Returns state.json. Use filters to avoid large responses. summary:true returns counts only (~200 tokens). status/owner/tier filter the task list.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          summary: { type: "boolean",  description: "Return counts + project info only (no task list). Use this by default." },
-          status:  { type: "string",   enum: ["OPEN", "BLOCKED", "DONE"], description: "Filter tasks by status" },
-          owner:   { type: "string",   description: "Filter tasks by owner substring (e.g. 'claude', 'gemini')" },
-          tier:    { type: "number",   enum: [1, 2, 3], description: "Filter tasks by tier" },
-        },
-      },
-    },
-    {
-      name: "add_task",
-      description: "Adds a new task to state with auto-assigned ID. Returns the new task. Set is_framework_task: true (E-63) to route the task to the canonical AI-OS clone at $AIOS_WORKSPACE instead of the local project's .ai/.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          owner:             { type: "string",  description: "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
-          description:       { type: "string",  description: "Task description" },
-          tier:              { type: "number",  description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
-          prefix:            { type: "string",  description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },
-          is_framework_task: { type: "boolean", description: "If true, persist into $AIOS_WORKSPACE/.ai (canonical AI-OS clone) instead of local .ai/. Errors with [WORKSPACE_NOT_FOUND] when AIOS_WORKSPACE is unset/invalid. (E-63)", default: false },
-        },
-        required: ["owner", "description"],
-      },
-    },
-    {
-      name: "update_task_status",
-      description: "Updates a task's status (OPEN, BLOCKED, DONE). Marks completed_at for DONE.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          id:      { type: "string", description: "Task ID (e.g. 'E-78')" },
-          status:  { type: "string", description: "New status", enum: ["OPEN", "BLOCKED", "DONE"] },
-          summary: { type: "string", description: "Completion summary (for DONE status)" },
-        },
-        required: ["id", "status"],
-      },
-    },
-    {
-      name: "add_stamp",
-      description: "Writes an atomic audit stamp. Used by critic agents and review synthesizer.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          task_id: { type: "string", description: "Related task ID (e.g. 'E-78')" },
-          type:    { type: "string", description: "Stamp type (e.g. 'ARCH_PASS', 'SEC_FAIL', 'CRITIC_STAMP')" },
-          agent:   { type: "string", description: "Agent that produced this stamp" },
-          summary: { type: "string", description: "One-line summary of the finding" },
-        },
-        required: ["type", "agent", "summary"],
-      },
-    },
-    {
-      name: "set_project_focus",
-      description: "Updates the project's current focus and tier.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          focus:        { type: "string", description: "Current focus description" },
-          current_tier: { type: "number", description: "Current risk tier", enum: [1, 2, 3] },
-        },
-        required: ["focus"],
-      },
-    },
-    {
-      name: "archive_done_tasks",
-      description: `Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when total DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}.`,
-      inputSchema: { type: "object", properties: {} },
-    },
-    // append_tasks intentionally removed from tool list — disabled (bypasses SQLite).
-    // Call add_task instead.
-    {
-      name: "verify_markdown_sync",
-      description: "Checks that TASKS.md and REVIEWS.md are in sync with state. Returns PASS or FAIL.",
-      inputSchema: { type: "object", properties: {} },
-    },
-    {
-      name: "validate_payload",
-      description:
-        "Validate a payload against a named AI-OS state transition schema before submitting it. " +
-        "Schemas: task_create, task_update, stamp_add, project_update. " +
-        "Returns SCHEMA_PASS or SCHEMA_FAIL with per-field error details. " +
-        "Use before calling add_task, update_task_status, add_stamp, or set_project_focus to catch type errors early.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          schema_name: {
-            type: "string",
-            enum: ["task_create", "task_update", "stamp_add", "project_update"],
-            description: "Name of the schema to validate against.",
-          },
-          payload: {
-            type: "object",
-            description: "The JSON payload to validate.",
-          },
-        },
-        required: ["schema_name", "payload"],
-        additionalProperties: false,
-      },
-    },
-    {
-      name: "mark_deltas_read",
-      description: "Marks implementation deltas as read after the Architect has incorporated them into architect.md. Pass specific task_ids to acknowledge selectively, or omit to acknowledge all unread deltas.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          task_ids: {
-            type: "array",
-            items: { type: "string" },
-            description: "Task IDs whose deltas to acknowledge (e.g. ['E-78', 'E-79']). Omit to acknowledge all unread.",
-          },
-        },
-      },
-    },
-    // ── E-88: Multi-Variation-State-Tracker tools (SEO Topic Cluster Engine) ──
-    // Backing tables (topic_seeds, cluster_pages) live in state-db.js. Wired
-    // here per .ai/blueprints/seo-keyword-multiplier.md §Components 3 + §API.
-    // Cloud sync hook does NOT fire from these — the managed-agents
-    // projection contract (E-73 §Data Privacy) covers only tasks, not SEO
-    // state.
-    {
-      name: "add_topic_seed",
-      description: "Register a new TopicSeed (E-88). Returns an auto-assigned TS-N id. Use this once at the start of a generateTopicCluster(term) expansion in src/gemini/agents/seo_manager.md; the SEO-Content-Generator then attaches one Pillar + up to MAX_CLUSTER_PAGES_PER_SEED Cluster pages to it.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          term:          { type: "string", description: "The topic seed term (1..256 chars, no shell metachars)" },
-          target_volume: { type: "number", description: "Target number of Cluster pages to generate (1..10, default 10)", default: 10 },
-        },
-        required: ["term"],
-      },
-    },
-    {
-      name: "add_cluster_page",
-      description: "Register a ClusterPage against an existing TopicSeed (E-88). Refuses intent_type values outside the canonical set (1 Pillar + Cluster intents) defined in src/shared/seo-cluster-intents.mjs. Enforces the cannibalization guard (unique intent per seed) and the lifted cluster-page cap (defence-in-depth on blueprint §Execution Constraints/Generation Limits).",
-      inputSchema: {
-        type: "object",
-        properties: {
-          seed_id:      { type: "string", description: "TopicSeed id (e.g. 'TS-1')" },
-          intent_type:  { type: "string", description: "One of the canonical intents (pillar-overview, cost, comparison, how-to, …, faq)" },
-          content_blob: { type: "string", description: "Optional inline markdown body, or a relative repo path if content lives on disk" },
-        },
-        required: ["seed_id", "intent_type"],
-      },
-    },
-    {
-      name: "report_performance",
-      description: "Update a ClusterPage.performance_metrics with new SEO metrics (E-88 reportPerformance API). Merges supplied keys into the existing JSON object — pass only the fields that changed.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          page_id: { type: "string", description: "ClusterPage id (e.g. 'CP-1')" },
-          metrics: { type: "object", description: "JSON merge patch — e.g. { clicks: 120, impressions: 4500, ctr: 0.027, position: 8.4 }" },
-        },
-        required: ["page_id", "metrics"],
-      },
-    },
-    {
-      name: "get_topic_cluster",
-      description: "Return a TopicSeed plus every ClusterPage attached to it (E-88). Used by the SEO-Content-Generator duplicate-content gate and by the Architect to audit a cluster's progress toward its target.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          seed_id: { type: "string", description: "TopicSeed id (e.g. 'TS-1')" },
-        },
-        required: ["seed_id"],
-      },
-    },
-  ],
+  tools: buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }),
 }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
@@ -469,8 +301,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const params = [];
         if (args.status) { sql += " AND status = ?";              params.push(args.status); }
         if (args.tier)   { sql += " AND tier = ?";                params.push(args.tier); }
+        // E-91: readiness is computed against ALL tasks — a dependency may sit
+        // outside the filtered subset — so build a global status map first.
+        const statusAll = new Map(
+          db.prepare("SELECT id, status FROM tasks").all().map(r => [r.id, r.status])
+        );
         const tasks = db.prepare(sql + " ORDER BY rowid").all(...params)
-          .filter(t => !args.owner || t.owner?.toLowerCase().includes(args.owner.toLowerCase()));
+          .filter(t => !args.owner || t.owner?.toLowerCase().includes(args.owner.toLowerCase()))
+          .map(t => {
+            const depends_on = _parseDeps(t.depends_on);
+            const blocked_by = depends_on.filter(d => statusAll.get(d) !== "DONE");
+            return { ...t, depends_on, ready: blocked_by.length === 0, blocked_by };
+          });
         const proj = Object.fromEntries(
           db.prepare("SELECT key, value FROM project").all().map(r => [r.key, r.value])
         );
@@ -527,22 +369,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       const prefix = args.prefix || "E";
       const id     = _nextId(targetDb, prefix);
+
+      // E-91: validate the dependency edges before insert (existence, no
+      // self-reference, acyclic, depth <= 5). A new task starts BLOCKED when
+      // any dependency is not yet DONE, otherwise OPEN.
+      const deps = [...new Set(Array.isArray(args.depends_on) ? args.depends_on : [])];
+      if (deps.length) {
+        const dag = _validateDag(targetDb, id, deps);
+        if (!dag.ok) {
+          return { content: [{ type: "text", text: `✗ [${dag.code}] ${dag.error}` }], isError: true };
+        }
+      }
+      const allDepsDone = deps.every(d => {
+        const r = targetDb.prepare("SELECT status FROM tasks WHERE id = ?").get(d);
+        return r && r.status === "DONE";
+      });
+      const initialStatus = deps.length && !allDepsDone ? "BLOCKED" : "OPEN";
+
       const task   = {
         id,
         owner:        args.owner,
-        status:       "OPEN",
+        status:       initialStatus,
         tier:         args.tier || null,
         description:  args.description,
         created_at:   new Date().toISOString(),
         completed_at: null,
         summary:      null,
+        depends_on:   deps,
       };
 
       targetDb.prepare(`
-        INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary, depends_on)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(task.id, task.owner, task.status, task.tier, task.description,
-              task.created_at, task.completed_at, task.summary);
+              task.created_at, task.completed_at, task.summary,
+              deps.length ? JSON.stringify(deps) : null);
 
       _regenerateViews(targetAiDir, targetDb);
       // E-74: schedule cloud projection sync. Framework-routed tasks sync
@@ -562,6 +423,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return { content: [{ type: "text", text: `✗ Task '${args.id}' not found.` }], isError: true };
       }
 
+      // E-91: optional dependency revision — validate the new edge set
+      // (existence/self-reference/cycle/depth) before persisting it.
+      if (args.depends_on !== undefined) {
+        const deps = [...new Set(Array.isArray(args.depends_on) ? args.depends_on : [])];
+        const dag  = _validateDag(db, args.id, deps);
+        if (!dag.ok) {
+          return { content: [{ type: "text", text: `✗ [${dag.code}] ${dag.error}` }], isError: true };
+        }
+        db.prepare("UPDATE tasks SET depends_on = ? WHERE id = ?")
+          .run(deps.length ? JSON.stringify(deps) : null, args.id);
+      }
+
       if (args.status === "DONE") {
         db.prepare("UPDATE tasks SET status = ?, completed_at = ?, summary = ? WHERE id = ?")
           .run(args.status, new Date().toISOString(), args.summary ?? null, args.id);
@@ -569,10 +442,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(args.status, args.id);
       }
 
+      // E-91: DAG unblock cascade. When a task becomes DONE, any BLOCKED task
+      // whose entire depends_on set is now satisfied transitions to OPEN so the
+      // Orchestrator (E-92) can dispatch it. The graph is read AFTER the status
+      // write so `args.id` already counts as DONE.
+      const unblocked = [];
+      if (args.status === "DONE") {
+        const { deps: graph, status } = _readDependencyGraph(db);
+        for (const [tid, tdeps] of graph) {
+          if (status.get(tid) === "BLOCKED" && tdeps.includes(args.id) &&
+              tdeps.every(d => status.get(d) === "DONE")) {
+            db.prepare("UPDATE tasks SET status = 'OPEN' WHERE id = ?").run(tid);
+            unblocked.push(tid);
+          }
+        }
+      }
+
       _regenerateViews(aiDir, db);
       // E-74: schedule cloud projection sync after the status transition.
       _scheduleCloudSync(aiDir);
-      return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${args.summary ? ": " + args.summary : ""}` }] };
+      const unblockNote = unblocked.length ? ` | unblocked: ${unblocked.join(", ")}` : "";
+      return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${args.summary ? ": " + args.summary : ""}${unblockNote}` }] };
     }
 
     // ── add_stamp ─────────────────────────────────────────────────────────────

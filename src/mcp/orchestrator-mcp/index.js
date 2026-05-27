@@ -120,6 +120,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         required: ["tier"],
       },
     },
+    {
+      name: "run_dispatch",
+      description:
+        "E-92 (ecc-integrations.md §Components 4): DAG-aware dispatch planner. Reads task " +
+        "readiness from the depends_on graph (E-91) and returns the dispatch frontier — OPEN " +
+        "tasks whose dependencies are all DONE — plus tasks still blocked (with their unmet " +
+        "deps) and a recommended dispatch_mode: 'parallel' when several independent tasks are " +
+        "ready, 'sequential' for one, 'idle' for none. Read-only; performs no state writes. " +
+        "Optionally filter by owner substring.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          owner: {
+            type: "string",
+            description: "Optional owner substring filter (e.g. 'claude', 'gemini', 'tester')",
+          },
+        },
+      },
+    },
   ],
 }));
 
@@ -469,6 +488,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       lines.push(`Files in diff: ${changedSrcFiles.length} src/ files, ${[...diff.matchAll(/^\+\+\+ b\/(.+)$/gm)].length} total`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
+    }
+
+    // ── run_dispatch (E-92) ─────────────────────────────────────────────────────
+    case "run_dispatch": {
+      const dbPath = resolve(ai, "state.sqlite");
+      if (!existsSync(dbPath)) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          dispatch_mode: "idle", ready: [], blocked: [],
+          counts: { ready: 0, blocked: 0 },
+          recommendation: "No state.sqlite found — nothing to dispatch.",
+        }, null, 2) }] };
+      }
+
+      const ownerFilter = (args && args.owner) ? String(args.owner).toLowerCase() : null;
+      const matchOwner  = (t) => !ownerFilter || (t.owner || "").toLowerCase().includes(ownerFilter);
+      const slim        = (t) => ({ id: t.id, owner: t.owner, tier: t.tier ?? null, depends_on: t.depends_on || [] });
+
+      // readState (state-db.js) enriches each task with E-91 readiness fields:
+      // `ready` (all depends_on are DONE) and `blocked_by` (unmet dep ids).
+      const state = readState(getDb(ai));
+      const ready = state.tasks
+        .filter(t => t.status === "OPEN" && t.ready && matchOwner(t))
+        .map(slim);
+      // Anything not DONE and not in the ready frontier is waiting on the DAG.
+      const blocked = state.tasks
+        .filter(t => t.status !== "DONE" && !(t.status === "OPEN" && t.ready) && matchOwner(t))
+        .map(t => ({ ...slim(t), status: t.status, blocked_by: t.blocked_by || [] }));
+
+      const dispatch_mode = ready.length === 0 ? "idle" : ready.length === 1 ? "sequential" : "parallel";
+      let recommendation;
+      if (dispatch_mode === "idle") {
+        recommendation = blocked.length
+          ? `No ready tasks — ${blocked.length} task(s) blocked on unmet dependencies. Complete their depends_on first.`
+          : "No OPEN tasks ready for dispatch — backlog is empty or fully DONE.";
+      } else if (dispatch_mode === "sequential") {
+        recommendation = `1 task ready: dispatch ${ready[0].id} (${ready[0].owner}).`;
+      } else {
+        recommendation = `${ready.length} independent tasks ready — dispatch in PARALLEL: ${ready.map(r => r.id).join(", ")}. All dependencies satisfied.`;
+      }
+
+      return { content: [{ type: "text", text: JSON.stringify({
+        dispatch_mode, ready, blocked,
+        counts: { ready: ready.length, blocked: blocked.length },
+        recommendation,
+      }, null, 2) }] };
     }
 
     // ── run_intent_cleanup (DEPRECATED E-147) ─────────────────────────────────

@@ -49,7 +49,8 @@ export function getDb(aiDir) {
       description  TEXT NOT NULL,
       created_at   TEXT NOT NULL,
       completed_at TEXT,
-      summary      TEXT
+      summary      TEXT,
+      depends_on   TEXT
     );
     CREATE TABLE IF NOT EXISTS stamps (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,9 +114,25 @@ export function getDb(aiDir) {
     INSERT OR IGNORE INTO project(key, value) VALUES ('release_verdict', NULL);
     INSERT OR IGNORE INTO project(key, value) VALUES ('focus', NULL);
   `);
+  // E-91: add the DAG `depends_on` column to pre-existing tasks tables.
+  // CREATE TABLE IF NOT EXISTS never alters an existing table, so DBs created
+  // before E-91 need this idempotent ALTER. Safe + no-op on fresh DBs.
+  _migrateTaskDag(db);
 
   _dbCache.set(dbPath, db);
   return db;
+}
+
+/**
+ * E-91 (ecc-integrations.md §Components 3): add the `depends_on` column to a
+ * legacy tasks table that predates DAG support. Idempotent — checks
+ * table_info before altering. Mirrors the _migrateSeoSchema pattern.
+ */
+function _migrateTaskDag(db) {
+  const cols = db.prepare("PRAGMA table_info(tasks)").all();
+  if (!cols.some((c) => c.name === "depends_on")) {
+    db.exec("ALTER TABLE tasks ADD COLUMN depends_on TEXT;");
+  }
 }
 
 /**
@@ -129,6 +146,21 @@ function _safeParseFiles(raw) {
     return Array.isArray(v) ? v : [];
   } catch (e) {
     process.stderr.write(`[WARN] state-db: corrupt deltas.files JSON — defaulting to []: ${e.message}\n`);
+    return [];
+  }
+}
+
+/**
+ * E-91: parse the JSON-encoded `depends_on` column into a string array.
+ * Corrupt or absent values degrade to [] (a task with no parseable
+ * dependencies is treated as having none, never crashes readState).
+ */
+export function parseDeps(raw) {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  } catch {
     return [];
   }
 }
@@ -160,7 +192,18 @@ export function readState(db) {
       release_verdict: proj.release_verdict ?? null,
       focus:           proj.focus ?? null,
     },
-    tasks:               tasks.map(t => ({ ...t, tier: t.tier ?? null })),
+    tasks:               (() => {
+      // E-91: enrich every task with parsed dependencies and DAG readiness.
+      // `ready` is true when all depends_on tasks are DONE (or none exist);
+      // `blocked_by` lists the still-unmet dependency ids. The Orchestrator
+      // (E-92) dispatches only tasks that are OPEN and ready.
+      const statusById = new Map(tasks.map(t => [t.id, t.status]));
+      return tasks.map(t => {
+        const depends_on = parseDeps(t.depends_on);
+        const blocked_by = depends_on.filter(d => statusById.get(d) !== "DONE");
+        return { ...t, tier: t.tier ?? null, depends_on, ready: blocked_by.length === 0, blocked_by };
+      });
+    })(),
     stamps,
     deltas,
     digest_stale:        meta.digest_stale === "true",
@@ -218,6 +261,89 @@ export function regenerateViews(aiDir, db) {
     JSON.stringify(state, null, 2) + "\n",
     "utf8"
   );
+}
+
+// ── E-91: DAG dependency engine (ecc-integrations.md §Components 3) ──────────
+
+/** Maximum dependency chain depth. Beyond this the LLM context gets confused
+ *  by deep state trees (blueprint §Execution Constraints). */
+export const MAX_DAG_DEPTH = 5;
+
+/**
+ * Read the full dependency graph from the tasks table.
+ * Returns { deps: Map<id, string[]>, status: Map<id, status> }.
+ */
+export function readDependencyGraph(db) {
+  const rows   = db.prepare("SELECT id, status, depends_on FROM tasks").all();
+  const deps   = new Map();
+  const status = new Map();
+  for (const r of rows) {
+    deps.set(r.id, parseDeps(r.depends_on));
+    status.set(r.id, r.status);
+  }
+  return { deps, status };
+}
+
+/**
+ * Validate that giving task `id` the dependency list `candidateDeps` keeps the
+ * graph acyclic, within depth, and references only existing tasks. `id` may be
+ * a brand-new task (not yet inserted) or an existing one whose deps are being
+ * revised. Pure read — performs no writes.
+ *
+ * @returns {{ok: true, depth: number}} on success,
+ *          {{ok: false, code: "DAG_FAIL", error: string}} on violation.
+ */
+export function validateDag(db, id, candidateDeps, opts = {}) {
+  const maxDepth = opts.maxDepth ?? MAX_DAG_DEPTH;
+  const unique   = [...new Set(Array.isArray(candidateDeps) ? candidateDeps : [])];
+  const { deps: graph } = readDependencyGraph(db);
+
+  // Self-reference is the degenerate 1-node cycle.
+  if (unique.includes(id)) {
+    return { ok: false, code: "DAG_FAIL", error: `Task ${id} cannot depend on itself.` };
+  }
+  // Every dependency must already exist — you cannot depend on a task that
+  // was never created (catches typos and out-of-order task drops).
+  const missing = unique.filter(d => !graph.has(d));
+  if (missing.length) {
+    return { ok: false, code: "DAG_FAIL", error: `Unknown dependency task(s): ${missing.join(", ")}.` };
+  }
+
+  // Overlay the candidate edges (covers both new and revised tasks).
+  graph.set(id, unique);
+
+  // Cycle detection via DFS from `id`, tracking the recursion stack.
+  const onStack = new Set();
+  const seen    = new Set();
+  const path    = [];
+  let   cycle   = null;
+  (function dfs(node) {
+    if (cycle) return;
+    if (onStack.has(node)) { cycle = [...path, node]; return; }
+    if (seen.has(node)) return;
+    onStack.add(node); path.push(node);
+    for (const d of (graph.get(node) || [])) dfs(d);
+    onStack.delete(node); path.pop(); seen.add(node);
+  })(id);
+  if (cycle) {
+    return { ok: false, code: "DAG_FAIL", error: `Circular dependency detected: ${cycle.join(" → ")}.` };
+  }
+
+  // Longest dependency chain length from `id` (graph is proven acyclic above).
+  const memo = new Map();
+  const depthOf = (node) => {
+    if (memo.has(node)) return memo.get(node);
+    const ds = graph.get(node) || [];
+    const d  = ds.length === 0 ? 1 : 1 + Math.max(...ds.map(depthOf));
+    memo.set(node, d);
+    return d;
+  };
+  const depth = depthOf(id);
+  if (depth > maxDepth) {
+    return { ok: false, code: "DAG_FAIL", error: `Dependency chain depth ${depth} exceeds max ${maxDepth}.` };
+  }
+
+  return { ok: true, depth };
 }
 
 /**
