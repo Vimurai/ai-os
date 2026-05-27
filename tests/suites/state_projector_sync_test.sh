@@ -23,6 +23,31 @@ source "${SCRIPT_DIR}/../lib/assert.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CLIENT="${REPO_ROOT}/src/shared/managed-agents-client.mjs"
 
+# Resolve a populated on-disk state.sqlite for the "real DB" path tests
+# (T-STP-S02, T-STP-S13). The repo's own .ai/state.sqlite is gitignored, so it
+# is absent in CI and fresh clones — seed an equivalent temp DB in that case so
+# these tests stay portable instead of depending on a dev-only working file.
+REAL_DB="${REPO_ROOT}/.ai/state.sqlite"
+REAL_DB_TMPDIR=""
+if [[ ! -f "$REAL_DB" ]]; then
+  REAL_DB_TMPDIR="$(mktemp -d)"
+  REAL_DB="${REAL_DB_TMPDIR}/state.sqlite"
+  node --input-type=module -e "
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync('${REAL_DB}');
+    db.exec(\`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY, owner TEXT NOT NULL, status TEXT NOT NULL,
+        tier INTEGER, description TEXT NOT NULL, created_at TEXT NOT NULL,
+        completed_at TEXT, summary TEXT
+      );
+      INSERT INTO tasks VALUES ('E-1','Engineer (Claude)','OPEN',2,'seed open','2026-01-01',NULL,NULL);
+      INSERT INTO tasks VALUES ('E-2','Engineer (Claude)','DONE',2,'seed done','2026-01-01','2026-01-02','done');
+    \`);
+    db.close();
+  "
+fi
+
 echo "===== state_projector_sync_test.sh ====="
 
 # ── T-STP-S01: Source carries the new exports + blueprint constants ──────────
@@ -45,7 +70,7 @@ echo "  [T-STP-S02] projectState returns Cloud Projection Payload from real DB"
 
 out="$(node --input-type=module -e "
   const m = await import('file://${CLIENT}');
-  const r = m.projectState({ dbPath: '${REPO_ROOT}/.ai/state.sqlite' });
+  const r = m.projectState({ dbPath: '${REAL_DB}' });
   console.log(JSON.stringify(r));
 " 2>/dev/null)"
 
@@ -62,7 +87,7 @@ echo ""
 echo "  [T-STP-S03] DONE rows are filtered out of the projection"
 
 SBOX="$(mktemp -d)"
-trap 'rm -rf "$SBOX"' EXIT
+trap 'rm -rf "$SBOX" "$REAL_DB_TMPDIR"' EXIT
 SBOX_DB="${SBOX}/state.sqlite"
 
 node --input-type=module -e "
@@ -315,13 +340,13 @@ assert_status 0 "Unknown owner passes through"        bash -c "echo '$out' | gre
 echo ""
 echo "  [T-STP-S13] CLI flags: --project on real DB exits 0; --sync (disabled) exits 1"
 
-# --project against real repo DB — should succeed (status OK → exit 0).
-node "$CLIENT" --project "${REPO_ROOT}/.ai/state.sqlite" >/dev/null 2>&1
+# --project against a populated DB — should succeed (status OK → exit 0).
+node "$CLIENT" --project "${REAL_DB}" >/dev/null 2>&1
 rc_project=$?
 assert_status 0 "--project on real DB exit code 0" bash -c "[[ $rc_project -eq 0 ]]"
 
 # --sync without env → DISABLED → exit 1.
-env -i PATH="$PATH" node "$CLIENT" --sync "${REPO_ROOT}/.ai/state.sqlite" >/dev/null 2>&1
+env -i PATH="$PATH" node "$CLIENT" --sync "${REAL_DB}" >/dev/null 2>&1
 rc_sync=$?
 assert_status 0 "--sync without env exit code 1" bash -c "[[ $rc_sync -eq 1 ]]"
 
