@@ -1306,7 +1306,10 @@ doctor() {
   if git rev-parse --git-dir &>/dev/null; then
     local pc_hook
     pc_hook="$(git rev-parse --git-dir)/hooks/pre-commit"
-    if [[ -f "$pc_hook" ]] && grep -q "AI-OS Gate 2" "$pc_hook" 2>/dev/null; then
+    # E-41: match the installer's detection — the current execution stub
+    # carries the AIOS_STUB_MARKER, while legacy copies carry "AI-OS Gate 2".
+    # Accept either so a correctly-installed stub is not reported missing.
+    if [[ -f "$pc_hook" ]] && { _is_aios_stub "$pc_hook" || grep -q "AI-OS Gate 2" "$pc_hook" 2>/dev/null; }; then
       echo "  ✓ .git/hooks/pre-commit: Gate 2 installed"
     else
       echo "  ✗ .git/hooks/pre-commit: Gate 2 NOT installed — run: ai init"
