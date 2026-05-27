@@ -249,15 +249,23 @@ PY
 # Usage: strip_gemini_agent_fields <dir>
 strip_gemini_agent_fields() {
   local dir="${1:-.gemini/agents}"
-  local f
+  local f tmp
   for f in "${dir}"/*.md; do
     [[ -f "$f" ]] || continue
-    # Strip disable-model-invocation, user-invocable, allowed-tools lines inside ---...--- block
-    sed -i '' '/^---$/,/^---$/{
+    # Strip disable-model-invocation, user-invocable, allowed-tools lines inside ---...--- block.
+    # Portable in-place edit: `sed -i ''` is BSD/macOS-only — GNU sed (Linux/CI)
+    # reads the empty '' as the script and the real script as a filename, failing
+    # with "No such file or directory". Use a temp file + cat-back instead, which
+    # works on both seds and preserves the original file's permissions/inode.
+    tmp="$(mktemp)" || continue
+    if sed '/^---$/,/^---$/{
       /^disable-model-invocation:/d
       /^user-invocable:/d
       /^allowed-tools:/d
-    }' "$f"
+    }' "$f" > "$tmp"; then
+      cat "$tmp" > "$f"
+    fi
+    rm -f "$tmp"
   done
 }
 
