@@ -13,12 +13,14 @@
  * per-file parse timeout + 1 MB size cap bound CPU (DoS).
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { resolve, relative, join, sep } from "node:path";
+// E-98: the MCP SDK is imported lazily (server mode only) so the
+// `--generate-map` CLI path used by the `ai sync` hook stays dependency-light —
+// it needs only web-tree-sitter + the vendored grammars, no SDK.
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { resolve, relative, join, dirname, sep } from "node:path";
 import { languageForFile, extractFromSource } from "./extractor.mjs";
+import { rankSymbols } from "./repo-mapper.mjs";
+import { serializeRepoMap } from "./serializer.mjs";
 
 const MAX_FILE_BYTES = 1_000_000; // skip files > 1 MB (DoS / minified bundles)
 const DEFAULT_MAX_FILES = 2000;
@@ -115,51 +117,116 @@ async function parseWorkspace(dirPath, maxFiles) {
       symbols.push({ file_path: f.rel, exports: sym.exports, classes: sym.classes, imports: sym.imports });
     }
   }
-  return { root: relative(cwd, rootDir) || ".", file_count: files.length, skipped, symbols };
+  // E-96: rank by dependency-graph centrality before returning (PageRank).
+  const ranked = rankSymbols(symbols);
+  return { root: relative(cwd, rootDir) || ".", file_count: files.length, skipped, symbols: ranked };
 }
 
-// ── Server ───────────────────────────────────────────────────────────────────
+// E-97/E-98: parse → rank → serialize → write .ai/REPO_MAP.md. Shared by the
+// generate_map MCP tool and the `--generate-map` CLI mode (ai sync hook).
+async function generateMap({ dirPath, maxFiles, maxTokens } = {}) {
+  if (process.env.AI_OS_DISABLE_REPO_MAP === "1") return { disabled: true };
+  const ws = await parseWorkspace(dirPath, maxFiles);
+  if (ws.error) return { error: ws.error };
+  const ser = serializeRepoMap(ws.symbols, { maxTokens });
+  const outPath = resolve(process.cwd(), ".ai", "REPO_MAP.md");
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, ser.markdown, "utf8");
+  return {
+    outPath,
+    summary: {
+      path: ".ai/REPO_MAP.md",
+      files_included: ser.included,
+      files_total: ser.total,
+      estimated_tokens: ser.estimatedTokens,
+      max_tokens: ser.maxTokens,
+    },
+  };
+}
 
-const server = new Server(
-  { name: "ast-parser-mcp", version: "1.0.0" },
-  { capabilities: { tools: {} } }
-);
+// ── Tool surface (plain data + dispatch — no SDK dependency) ─────────────────
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "parse_workspace",
-      description:
-        "E-95 (ast-repository-map.md): scan a directory and return extracted TS/JS symbols " +
-        "(exports, classes+method signatures, imports) per file. Respects .gitignore + " +
-        ".ai-osignore, never indexes .env*/node_modules, skips minified and >1MB files. " +
-        "Ranking (centrality_score) is applied by the repo-mapper (E-96).",
-      inputSchema: {
-        type: "object",
-        properties: {
-          dir_path:  { type: "string", description: "Directory to scan, relative to the workspace root (default '.')." },
-          max_files: { type: "number", description: `Cap on files parsed (default ${DEFAULT_MAX_FILES}).` },
-        },
+const TOOLS = [
+  {
+    name: "parse_workspace",
+    description:
+      "E-95 (ast-repository-map.md): scan a directory and return extracted TS/JS symbols " +
+      "(exports, classes+method signatures, imports) per file, ranked by dependency-graph " +
+      "centrality (E-96). Respects .gitignore + .ai-osignore, never indexes .env*/node_modules, " +
+      "skips minified and >1MB files.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dir_path:  { type: "string", description: "Directory to scan, relative to the workspace root (default '.')." },
+        max_files: { type: "number", description: `Cap on files parsed (default ${DEFAULT_MAX_FILES}).` },
       },
     },
-  ],
-}));
+  },
+  {
+    name: "generate_map",
+    description:
+      "E-97 (ast-repository-map.md): run parse_workspace, serialize the ranked symbols into a " +
+      "concise markdown skeleton (⋮ for elided function bodies), and write it to .ai/REPO_MAP.md " +
+      "within a strict token budget (default 2048) — lowest-centrality files are trimmed first. " +
+      "Returns a summary { path, files_included, files_total, estimated_tokens }. " +
+      "Set AI_OS_DISABLE_REPO_MAP=1 to short-circuit (blueprint rollback).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dir_path:   { type: "string", description: "Directory to scan, relative to the workspace root (default '.')." },
+        max_files:  { type: "number", description: `Cap on files parsed (default ${DEFAULT_MAX_FILES}).` },
+        max_tokens: { type: "number", description: "Token budget for REPO_MAP.md (default 2048)." },
+      },
+    },
+  },
+];
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  if (name !== "parse_workspace") {
-    return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
-  }
-  try {
+async function dispatchTool(name, args) {
+  if (name === "parse_workspace") {
     const result = await parseWorkspace(args?.dir_path, args?.max_files);
-    if (result.error) {
-      return { content: [{ type: "text", text: result.error }], isError: true };
-    }
+    if (result.error) return { content: [{ type: "text", text: result.error }], isError: true };
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-  } catch (e) {
-    return { content: [{ type: "text", text: `[PARSE_ERROR] ${e.message}` }], isError: true };
   }
-});
+  if (name === "generate_map") {
+    const r = await generateMap({ dirPath: args?.dir_path, maxFiles: args?.max_files, maxTokens: args?.max_tokens });
+    if (r.disabled) {
+      return { content: [{ type: "text", text: "[REPO_MAP_DISABLED] AI_OS_DISABLE_REPO_MAP=1 — generate_map is a no-op." }] };
+    }
+    if (r.error) return { content: [{ type: "text", text: r.error }], isError: true };
+    return { content: [{ type: "text", text: JSON.stringify(r.summary, null, 2) }] };
+  }
+  return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
+}
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+// ── Entry point ──────────────────────────────────────────────────────────────
+// `--generate-map` (the ai sync hook) regenerates .ai/REPO_MAP.md and exits
+// WITHOUT loading the SDK — fail-open. Otherwise start the stdio MCP server,
+// lazily importing the SDK so the CLI path stays self-contained.
+if (process.argv.includes("--generate-map")) {
+  const r = await generateMap();
+  if (r.disabled) {
+    process.stderr.write("[REPO_MAP_DISABLED] AI_OS_DISABLE_REPO_MAP=1\n");
+  } else if (r.error) {
+    process.stderr.write(`${r.error}\n`);
+    process.exitCode = 1;
+  } else {
+    process.stderr.write(
+      `[REPO_MAP] wrote ${r.outPath} (${r.summary.files_included}/${r.summary.files_total} files, ~${r.summary.estimated_tokens} tokens)\n`
+    );
+  }
+} else {
+  const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
+  const { StdioServerTransport } = await import("@modelcontextprotocol/sdk/server/stdio.js");
+  const { CallToolRequestSchema, ListToolsRequestSchema } = await import("@modelcontextprotocol/sdk/types.js");
+  const server = new Server({ name: "ast-parser-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    try {
+      return await dispatchTool(name, args);
+    } catch (e) {
+      return { content: [{ type: "text", text: `[PARSE_ERROR] ${e.message}` }], isError: true };
+    }
+  });
+  await server.connect(new StdioServerTransport());
+}

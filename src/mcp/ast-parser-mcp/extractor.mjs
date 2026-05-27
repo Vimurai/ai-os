@@ -10,12 +10,14 @@
  */
 
 import Parser from "web-tree-sitter";
-import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
-const require = createRequire(import.meta.url);
-const WASM_OUT = require
-  .resolve("tree-sitter-wasms/package.json")
-  .replace(/package\.json$/, "out/");
+// E-98: grammars are VENDORED into the server dir (grammars/*.wasm) so the
+// installed ~/.ai-os/mcp/ast-parser-mcp copy is self-contained — the installer
+// rsync ships them with the server, no root-hoisted tree-sitter-wasms needed at
+// runtime (tree-sitter-wasms remains a devDependency: the source of these .wasm).
+const GRAMMARS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "grammars");
 
 // Per-file parse timeout (blueprint §Security — DoS bound). web-tree-sitter
 // returns a partial/aborted tree if a single parse exceeds this.
@@ -43,7 +45,7 @@ export async function initParsers() {
   };
   const out = {};
   for (const [name, wasm] of Object.entries(langs)) {
-    const grammar = await Parser.Language.load(WASM_OUT + wasm);
+    const grammar = await Parser.Language.load(resolve(GRAMMARS_DIR, wasm));
     const p = new Parser();
     p.setLanguage(grammar);
     if (typeof p.setTimeoutMicros === "function") p.setTimeoutMicros(PARSE_TIMEOUT_MICROS);

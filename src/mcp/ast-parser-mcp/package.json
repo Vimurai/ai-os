@@ -9,7 +9,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "*",
-    "web-tree-sitter": "0.20.8",
+    "web-tree-sitter": "0.20.8"
+  },
+  "devDependencies": {
     "tree-sitter-wasms": "^0.1.13"
   }
 }

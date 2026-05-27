@@ -252,7 +252,7 @@ Tree-sitter is widely deployed (GitHub code-nav, Neovim, Aider). The WASM runtim
 
 ### Impact
 - Unlocks: E-95 (`ast-parser-mcp`), E-96 (ranking), E-97 (`generate_map`), E-98 (sync/preflight wiring).
-- First runtime dependency beyond `@modelcontextprotocol/sdk`; isolated to the `ast-parser-mcp` workspace.
+- **E-98 update**: the 3 grammar `.wasm` are now VENDORED into `src/mcp/ast-parser-mcp/grammars/` (~5 MB, tracked) so the installed `~/.ai-os` server is self-contained. `tree-sitter-wasms` is therefore a **devDependency** (build-time source of the `.wasm`), not a runtime dep. The only runtime npm dep is `web-tree-sitter`, and the `--generate-map` CLI path lazy-loads the MCP SDK so the `ai sync` hook needs neither the SDK nor any root-hoisted package.
 
 ### Rollback
 `npm rm web-tree-sitter tree-sitter-wasms`, delete `src/mcp/ast-parser-mcp/`, set `AI_OS_DISABLE_REPO_MAP=1` (blueprint rollback). Agents fall back to `grep`/`list_directory`.
