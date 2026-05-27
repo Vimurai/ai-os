@@ -8,11 +8,12 @@
 
 ## Triad Health
 - Architect (Gemini): IDLE — P-## DONE. Active blueprints: ecc-integrations.md (DONE via E-91..E-94), ast-repository-map.md (pending E-95..E-98).
-- Engineer (Claude): all E-## DONE through E-94. Latest sprint E-91..E-94 = ecc-integrations.md (DAG dependencies + dispatch + instinct extraction + approval-gated skill promotion) — COMPLETE.
-- Tester (TestSprite): PASS — 2040 assertions post-E-94 (84 new across the ecc sprint).
+- Engineer (Claude): all E-## DONE through E-95. ecc-integrations.md COMPLETE (E-91..E-94, committed cb67dd8); ast-repository-map.md in progress — E-95 (ast-parser-mcp) DONE, E-96..E-98 open.
+- Tester (TestSprite): PASS — 2055 assertions post-E-95 (+15 ast-parser).
 
 ## Current Focus
-- ecc-integrations.md COMPLETE (E-91..E-94). Next backlog: ast-repository-map.md (E-95 ast-parser-mcp, E-96 ranking, E-97 generate_map→REPO_MAP.md, E-98 ai-sync/preflight wiring).
+- ast-repository-map.md in progress: E-95 (ast-parser-mcp — Tree-sitter WASM parse_workspace) DONE. Next: E-96 ranking/centrality, E-97 generate_map→REPO_MAP.md, E-98 ai-sync/preflight wiring + .mcp.json registration + mirror the new server's deps.
+- First external runtime dep added (D-008): web-tree-sitter@0.20.8 + tree-sitter-wasms (WASM, isolated to ast-parser-mcp workspace).
 - ⚠ `state.json.project.focus` reflects the last set focus (E-94); clears on next handover.
 - Meta-cognition loop live: `~/.ai-os/telemetry.sqlite` (E-84) + `meta_analyst`/`ai-insights` (E-85) + preflight staleness check (E-86). INSIGHTS.md status `[INSIGHTS_STABLE]` (21 rows, 1 tool, 0 actionable signals).
 
@@ -53,7 +54,8 @@
 - Interop: advisor-mcp, approval-mcp | Caching: cache-manager-mcp | Compute: code-execution-mcp | Routing: mcp-router
 
 ## Recent Changes (last 10)
-- 2026-05-27: E-91..E-94 ecc-integrations.md COMPLETE — DAG depends_on + cycle/depth detection (state-db.js), orchestrator run_dispatch, instinct-stager.mjs (staged inert proposed skills), skill-promoter.mjs (approval-mcp-gated promotion); tool-schemas.mjs extraction. +84 tests (2040 total). Uncommitted until this commit.
+- 2026-05-27: E-95 ast-parser-mcp — new MCP server, Tree-sitter WASM (web-tree-sitter@0.20.8 + tree-sitter-wasms, D-008) parse_workspace symbol extraction (exports/classes/imports) with .gitignore/.env*/node_modules exclusion + path containment + 500ms parse timeout. +15 tests (2055 total). NOT yet registered in .mcp.json / mirrored (deferred to E-98).
+- 2026-05-27: E-91..E-94 ecc-integrations.md COMPLETE — DAG depends_on + cycle/depth detection (state-db.js), orchestrator run_dispatch, instinct-stager.mjs (staged inert proposed skills), skill-promoter.mjs (approval-mcp-gated promotion); tool-schemas.mjs extraction. +84 tests. Committed cb67dd8.
 - 2026-05-26: Maintenance — archived 45 DONE tasks → .ai/archive/state-done-2026-05.json (state.json 134→76 KB, TASKS.md 64→15 KB); INSIGHTS.md generated [INSIGHTS_STABLE]; DIGEST regenerated.
 - 2026-05-25: E-87/E-88/E-90 SEO Topic Cluster Engine — seo_manager.md → Topic-Cluster-Manager, seo-approach-types.mjs → seo-cluster-intents.mjs (11 intents), new seo_engineer.md (commit b2f9fa8).
 - 2026-05-20: E-86 ai-preflight INSIGHTS.md staleness check (meta-cognition.md).

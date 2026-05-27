@@ -223,3 +223,38 @@ We need to track and resolve recurrent errors across the Triad. A system must au
 Toggle `AI_INCIDENT_TRACKER_DISABLE=1` env variable or manually delete `incidents.ndjson`.
 
 ---
+
+## [[D-008]] — Tree-sitter via WASM (web-tree-sitter) for the AST Repository Map ([[E-95]])
+
+**Date**: 2026-05-27
+**Task**: [[E-95]] (blueprint `ast-repository-map.md`)
+**Decision**: **Add `web-tree-sitter` (WASM) + `tree-sitter-wasms` (prebuilt JS/TS grammar `.wasm` bundle).** Chosen by the human over native bindings. A deliberate, scoped exception to [[D-003]] ("No New Dependencies").
+
+### Why needed
+`ast-repository-map.md` mandates Tree-sitter to extract structural signatures (exports/classes/methods/imports) for a token-compressed `REPO_MAP.md`. A correct multi-language parser is not reasonably implementable in-house — hand-rolled regex parsing of TS/JS is brittle and is exactly the failure mode the blueprint exists to replace.
+
+### Alternatives considered
+1. **Implement it ourselves (regex/heuristics)** — brittle on real TS/JS (generics, decorators, JSX); high maintenance. Rejected.
+2. **Native `tree-sitter` bindings** — faster, but require `node-gyp` + a C toolchain and ship platform-specific binaries, breaking the drop-in-installer portability promise across macOS/Linux/Windows/CI. Rejected by the human.
+3. **`web-tree-sitter` (WASM) + `tree-sitter-wasms`** — pure-WASM, no native build, portable; grammars load from prebuilt `.wasm`. **Chosen.**
+
+### Size / weight
+`web-tree-sitter` ships a small JS loader + `tree-sitter.wasm` runtime (~1 MB). `tree-sitter-wasms` bundles many grammar `.wasm` files (a few MB) but only `javascript` + `typescript` are loaded at runtime.
+
+### Security track record
+Tree-sitter is widely deployed (GitHub code-nav, Neovim, Aider). The WASM runtime runs grammars in a sandboxed VM (no FS/network). No notable CVEs for the parser core. Parsing is bounded per the blueprint (≤500 ms/file, skip >1 MB / minified) to prevent DoS; `.gitignore`/`.env*` are respected so secrets are never indexed.
+
+### Maintenance status
+`web-tree-sitter` **pinned to `0.20.8`** (not the latest `0.26.9`): the `0.26` runtime's dylink ABI rejects `tree-sitter-wasms@0.1.13`'s prebuilt grammars (built against the tree-sitter 0.20-era ABI). `0.20.8` is the battle-tested combo used by Aider/continue.dev. `tree-sitter-wasms@0.1.13` (modified 2025-10-07, maintained community bundle). Revisit the pin if/when `tree-sitter-wasms` ships 0.25+-ABI grammars.
+
+### License
+`web-tree-sitter`: MIT. `tree-sitter-wasms`: Unlicense (public domain). Both compatible.
+
+### Impact
+- Unlocks: E-95 (`ast-parser-mcp`), E-96 (ranking), E-97 (`generate_map`), E-98 (sync/preflight wiring).
+- First runtime dependency beyond `@modelcontextprotocol/sdk`; isolated to the `ast-parser-mcp` workspace.
+
+### Rollback
+`npm rm web-tree-sitter tree-sitter-wasms`, delete `src/mcp/ast-parser-mcp/`, set `AI_OS_DISABLE_REPO_MAP=1` (blueprint rollback). Agents fall back to `grep`/`list_directory`.
+
+---

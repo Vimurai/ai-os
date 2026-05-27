@@ -3,7 +3,7 @@
   "project": {
     "current_tier": 2,
     "release_verdict": null,
-    "focus": "E-94: approval-mcp HITL gate to promote proposed skills to active (ecc-integrations.md §Components 2 + §Security)"
+    "focus": "E-95: ast-parser-mcp with Tree-sitter (TS/JS), parse_workspace API per ast-repository-map.md"
   },
   "tasks": [
     {
@@ -149,12 +149,12 @@
     {
       "id": "E-95",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Create `ast-parser-mcp` using Node.js Tree-sitter bindings for TS/JS, implementing `parse_workspace` API per `.ai/blueprints/ast-repository-map.md`.",
       "created_at": "2026-05-26T20:50:23.254Z",
-      "completed_at": null,
-      "summary": null
+      "completed_at": "2026-05-27T08:40:13.283Z",
+      "summary": "ast-parser-mcp created (ast-repository-map.md §Components 1 + §API). New MCP server with parse_workspace: Tree-sitter via web-tree-sitter@0.20.8 (WASM, pinned for tree-sitter-wasms 0.1.13 grammar ABI compat — D-008) loading JS/TS/TSX grammars. extractor.mjs walks the syntax tree → exports (fn/class/const/interface/type/enum/default + CommonJS module.exports), classes+method signatures, imports (ES + require). index.js walks the workspace respecting .gitignore + .ai-osignore, never indexes .env*/node_modules, skips minified + >1MB files, enforces workspace containment (PATH_DENIED) and a 500ms per-file parse timeout (setTimeoutMicros). Ranking (centrality_score) deferred to E-96. dependency_gate→D-008 (web-tree-sitter MIT + tree-sitter-wasms Unlicense; 5 pre-existing SDK-transitive audit vulns, none from new deps). New tests/suites/ast_parser_test.sh (15 assertions). Full suite 2055 pass; ALIGN_PASS + CLEAN_PASS + CRITIC_STAMP."
     },
     {
       "id": "E-96",
@@ -901,6 +901,27 @@
       "task_id": "E-94",
       "timestamp": "2026-05-27T06:52:12.030Z",
       "summary": "[TIER_2] E-94 approval-gated skill promotion — ALIGN_PASS + CLEAN_WARN (2 pre-existing file-size warnings ignored, 0 on E-94 surface). skill_promoter_test 22/22 pass; full suite green over 2 consecutive runs. Approval gate fail-closes on REJECTED/NON_TTY/missing. Safe to commit."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-95",
+      "timestamp": "2026-05-27T08:39:26.207Z",
+      "summary": "E-95 ast-parser-mcp aligned with ast-repository-map.md (Component 1 + parse_workspace API + Data Model + Security bounds). 2 non-blocking WARNs: [NO_LOG_UPDATE] LOG.md pending; [ORPHANED_WORK] false-positive (files covered by ast-repository-map.md blueprint, not architect.md)."
+    },
+    {
+      "type": "CLEAN_PASS",
+      "agent": "critic_clean_code",
+      "task_id": "E-95",
+      "timestamp": "2026-05-27T08:39:27.409Z",
+      "summary": "standards-checker PASS — 7 files clean, 0 errors, 0 warnings (elapsed 4ms). MCP stdout purity independently verified: parse_workspace emits only valid JSON-RPC."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "ai-review-tier2",
+      "task_id": null,
+      "timestamp": "2026-05-27T08:39:33.428Z",
+      "summary": "[TIER_2] E-95 ast-parser-mcp — blueprint aligned (ALIGN_PASS) + clean-code gate clear (CLEAN_PASS, 0 err/0 warn). 15/15 tests green. 2 aligner WARNs ignored (LOG.md update pending; orphaned-work false positive — covered by ast-repository-map.md). Note for follow-up: D-008 cites web-tree-sitter 0.26.9 but package.json/lock pin 0.20.8."
     }
   ],
   "deltas": [
