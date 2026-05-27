@@ -12,8 +12,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Develop the critic_clean_code persona and integrate it into the ai-review flow. | Tier: 2 per .ai/blueprints/engineering-standards.md",
-      "created_at": "2026-05-19T10:51:26.904Z",
-      "completed_at": "2026-05-19T11:58:15.214Z",
+      "created_at": "2026-05-19T00:00:00.000Z",
+      "completed_at": "2026-05-19T00:00:00.000Z",
       "summary": "critic_clean_code persona + ai-review integration (Tier 2) per engineering-standards.md §Components 2. New src/claude/agents/critic_clean_code.md follows the critic_arch/critic_security pattern: preflight reads engineering-standards.md + standards.json, Step 1 invokes scripts/standards.mjs check --staged --json via locator chain (in-tree → ~/.ai-os/scripts/), Step 2 parses {reports, summary}, Step 3 maps to verdict (error=0+warn=0 → CLEAN_PASS; error=0+warn≥1 → CLEAN_WARN non-blocking; error≥1 → CLEAN_FAIL COMMIT BLOCKED), Step 4 stamps via task-synchronizer-mcp::add_stamp (never writes REVIEWS.md). AI_OS_SKIP_STANDARDS=1 rollback emits CLEAN_PASS+STANDARDS_SKIPPED marker. P0/P1/P2 severity classification documented. Rules: read-only, single-source-of-truth via CLI (no reimplementation). src/claude/skills/ai-review/SKILL.md updated: Tier 2 now spawns blueprint-aligner-mcp + critic_clean_code in parallel — pass-gate requires ALIGN_PASS AND not CLEAN_FAIL (warn acceptable); Tier 3 critic line-up adds critic_clean_code alongside arch/security/tests/aligner/security_engineer with CLEAN_PASS/WARN/FAIL in expected stamps list. Gemini-side ai-review untouched (different skill). Mirrored byte-identical to .claude/ + ~/.ai-os/claude/. New tests/suites/critic_clean_code_test.sh (45 assertions, 10 groups) covering frontmatter integrity + colon-parse guard + context:fork + Bash allowed, CLI single-source references (scripts/standards.mjs + --staged --json + locator + standards.json + blueprint), MCP stamping contract with REVIEWS.md write-forbid + 3 stamp types + agent string, verdict ladder semantics, AI_OS_SKIP_STANDARDS rollback with stamp emission, preflight reads + no-staged short-circuit, ai-review Tier 2 + Tier 3 integration, 4 mirror byte-identity, referenced-file existence, anti-drift guards. Full suite 1687 → 1732 PASS (+45, zero regressions). Unblocks E-82."
     },
     {
@@ -22,8 +22,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update hooks/pre-commit.sh to enforce the new standards gate. | Tier: 2 per .ai/blueprints/engineering-standards.md",
-      "created_at": "2026-05-19T10:51:28.599Z",
-      "completed_at": "2026-05-19T12:07:37.374Z",
+      "created_at": "2026-05-19T00:00:00.000Z",
+      "completed_at": "2026-05-19T00:00:00.000Z",
       "summary": "hooks/pre-commit.sh standards gate (Tier 2) per engineering-standards.md §Components 2 + §Rollback Plan. New check_standards_gate() inserted between check_mcp_stdout_purity and has_recent_critic_stamp. Flow: (1) Early skip on AI_OS_SKIP_STANDARDS=1 — silent. (2) command -v node guard — graceful skip if missing. (3) Locator chain mirrors E-58/E-65/E-75: in-tree scripts/standards.mjs → ~/.ai-os/scripts/standards.mjs → graceful skip (pre-E-80 install compatibility). (4) Invoke `node $cli check --staged` from repo_root. (5) On rc=0 silent return; on rc≠0 emit STANDARDS_BLOCK banner with fix hints (kebab-case rename, NDJSON logger reference, .tmp/.bak/.swp/.orig cleanup, secret-pattern strip) + rollback flag pointer + CLI report on stderr + exit 1. Mirrored byte-identical to ~/.ai-os/hooks/pre-commit.sh. New tests/suites/pre_commit_standards_gate_test.sh (22 assertions, 10 groups): source contract (function defined + invoked + bash -n), AI_OS_SKIP_STANDARDS guard BEFORE CLI invocation (python ordering check), locator-chain pattern with all 3 arms, node-absent guard, STANDARDS_BLOCK banner shape with verbatim title + rollback hint + fix hints + exit-1-after-banner ordering check, behavioural tests in isolated git sandbox (.orig file → banner + CLI report + exit 1; SKIP=1 → no banner; clean file → no banner; node-stripped env → no banner), mirror byte-identity. Sandbox seeds .ai/TASKS.md with generated header so check_markdown_sync doesn't fire first; file-based grep assertions (sub-shell var-scope trap fixed — same pattern as E-74). Full suite 1732 → 1754 PASS (+22, zero regressions; +67 total across E-80/E-81/E-82). Completes engineering-standards.md blueprint end-to-end. All Engineer tasks closed."
     },
     {
@@ -32,8 +32,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor `scripts/standards.mjs` to replace the static import of `standards-checker.mjs` with a dynamic locator chain per `.ai/blueprints/standards-checker-import-fix.md`, ensuring compatibility with both in-repo and installed execution environments. Update `tests/suites/standards_checker_test.sh` if necessary.",
-      "created_at": "2026-05-19T20:38:52.727Z",
-      "completed_at": "2026-05-19T21:35:01.963Z",
+      "created_at": "2026-05-19T00:00:00.000Z",
+      "completed_at": "2026-05-19T00:00:00.000Z",
       "summary": "DONE 2026-05-19 — Dynamic locator chain in scripts/standards.mjs (Tier 2) per standards-checker-import-fix.md. Replaced static `import { ... } from \"../src/shared/standards-checker.mjs\"` with locator-aware `await import()` chain — mirrors the E-52 pattern in scripts/generate_mcp_docs.mjs so the CLI resolves correctly both in-repo and from the ~/.ai-os/ global install. Locator chain: (1) scripts/ → ../src/shared/standards-checker.mjs (repo-dev), (2) ~/.ai-os/scripts/ → ../shared/standards-checker.mjs (installed-mode), (3) absolute homedir(.ai-os/shared/standards-checker.mjs) fallback. Fail-closed: emits `[standards] ERROR: standards-checker.mjs not found in any candidate paths.` on stderr + exit 1 when all candidates miss. Destructures exactly the 6 §Data Model symbols (loadStandards/validateStaged/validateFiles/validateFile/reportDrift/DEFAULT_STANDARDS_PATH). Pure node:* built-ins (path/fs/url/os) — no new deps. Performance overhead negligible (existsSync + one dynamic import — well under the 200ms standards-checker budget). Mirrored byte-identical to ~/.ai-os/scripts/standards.mjs. New T-STD-S15 in tests/suites/standards_checker_test.sh (3 assertions, +26 lines): synthetic install-layout sandbox exercising Candidate 2 (list-rules works from installed-mode), orphan-HOME negative path (exit 1 when checker absent from all candidates), fail-closed stderr marker presence. Full suite 1754 → 1759 PASS (+5, zero regressions). ai-review Tier 2: ALIGN_FAIL → human disposition CRITIC_STAMP (recurring false-positive class — \"../src/\" substring inside English-prose comment + aligner doesn't recurse domain blueprints, same precedent as E-77/E-78/E-79 and E-82 hotfix); CLEAN_PASS (errors=0 warnings=0 elapsed_ms=2). Rollback: `git checkout HEAD~1 scripts/standards.mjs` or AI_OS_SKIP_STANDARDS=1 hook bypass. Completes standards-checker-import-fix.md blueprint."
     },
     {
@@ -42,8 +42,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Implement telemetry.sqlite schema and background writing hook in the MCP router per .ai/blueprints/meta-cognition.md.",
-      "created_at": "2026-05-19T21:02:04.549Z",
-      "completed_at": "2026-05-19T22:37:27.501Z",
+      "created_at": "2026-05-19T00:00:00.000Z",
+      "completed_at": "2026-05-19T00:00:00.000Z",
       "summary": "DONE 2026-05-20 — telemetry.sqlite + mcp-router background hook (Tier 2) per meta-cognition.md §Components 1+§Data Model+§Security. New src/shared/telemetry.mjs (pure node:sqlite/crypto/fs/path/os, no deps): two-table schema (tool_executions + task_velocity) with CHECK constraints + timestamp indices, public API recordToolExecution/recordTaskVelocity (fire-and-forget via setImmediate; {sync:true} test hook), getTelemetryStats({since_iso?}) for read-side aggregates. Privacy: project_root→sha256[12] hex (raw path never persisted), session_id sanitised by E-49 regex /^[A-Za-z0-9-]{1,64}$/ (malformed→\"unknown\"), status enum constrained {SUCCESS,ERROR}, no payload bodies. Fail mode: DB errors swallowed, NDJSON warn to stderr, never throws. Rollback: AI_TELEMETRY_DISABLE=1. Cached DB handle at module scope; <5ms warm. CLI smoke --stats/--path. mcp-router/index.js: let _proxyTelemetryCtx scope variable; success path records SUCCESS after proxyOneShot, outer catch records ERROR if proxy_call leaked. Session-id from process.env.CLAUDE_CODE_SESSION_ID. Mirrored to ~/.ai-os/. tests/suites/telemetry_test.sh (45 assertions, 10 groups): source contract, schema bootstrap + privacy guarantees (raw path never leaks, project_hash regex), session_id sanitiser table (6 malformed→\"unknown\"), CHECK fallback, AI_TELEMETRY_DISABLE rollback, EMPTY+OK stats envelopes, fire-and-forget timing (DB absent sync / present after setImmediate), CLI exit codes, router wiring (2× call sites), mirror byte-identity. mcp_router_test.sh 32/32 PASS (zero regressions). Full suite 1759→1804 PASS. Unblocks E-85+E-86."
     },
     {
@@ -52,8 +52,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Create the meta_analyst agent definition and the ai-insights skill per .ai/blueprints/meta-cognition.md.",
-      "created_at": "2026-05-19T21:02:04.559Z",
-      "completed_at": "2026-05-19T22:38:09.180Z",
+      "created_at": "2026-05-19T00:00:00.000Z",
+      "completed_at": "2026-05-19T00:00:00.000Z",
       "summary": "DONE 2026-05-20 — meta_analyst agent + ai-insights skill (Tier 2) per meta-cognition.md §Components 2+3. New src/gemini/agents/meta_analyst.md: SQL-aggregates-only contract, read-only telemetry.sqlite, write-only ~/.ai-os/INSIGHTS.md. Anti-drift §Forbidden: no source code, no SELECT *, no add_task, no proxy_call. Five canonical aggregates (error hotspots / latency outliers / frequency cohort / cross-project breadth / task velocity) — hard LIMIT clauses (≤50 rows) + 30-day window for token-budget compliance. Three recommendation classes (CLI automation / Tool deprecation / Latency hardening). Sentinels [INSIGHTS_EMPTY/STABLE/PAUSED]. Stamps via add_stamp(INSIGHTS_GENERATED). Locator chain mirrors E-58/E-65/E-75 for telemetry.mjs. New src/shared/skills/ai-insights/SKILL.md: single trigger surface, delegates via activate_agent(meta_analyst), never queries DB directly, AI_TELEMETRY_DISABLE rollback + add_stamp re-emit rule. Frontmatter colon-parse guard. Mirrored to .gemini/agents + ~/.ai-os/gemini/agents + .claude/skills + .gemini/skills + ~/.ai-os/shared/skills. tests/suites/meta_analyst_test.sh (59 assertions, 10 groups): frontmatter integrity, Forbidden block, five aggregates with LIMIT+window, three classes, all sentinels, add_stamp wiring, restricted toolset, locator x-ref, delegation contract (zero SELECT in skill), telemetry CLI smoke, 5 mirror byte-identity. Full suite 1804→1863 PASS. Unblocks E-86."
     },
     {
@@ -62,8 +62,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update ai-preflight skill to check INSIGHTS.md staleness and emit warnings per .ai/blueprints/meta-cognition.md.",
-      "created_at": "2026-05-19T21:02:04.561Z",
-      "completed_at": "2026-05-19T22:38:16.111Z",
+      "created_at": "2026-05-19T00:00:00.000Z",
+      "completed_at": "2026-05-19T00:00:00.000Z",
       "summary": "DONE 2026-05-20 — ai-preflight INSIGHTS.md staleness check (Tier 2) per meta-cognition.md §Components 4. New src/shared/insights-staleness.mjs (pure node:fs/path/os/url, no deps): exports checkInsightsStaleness({insights_path?, telemetry_path?, threshold?}) → {status, total_rows, new_rows_since_insights, insights_mtime, threshold, reason}. Status enum: FRESH/STALE/EMPTY/DISABLED/UNAVAILABLE. DEFAULT_THRESHOLD=200. Locator chain mirrors E-58/E-65/E-75/E-83 for telemetry.mjs. Helper NEVER throws; CLI always exits 0. Performance <50ms (single stat + one getTelemetryStats with since_iso). src/shared/skills/ai-preflight/SKILL.md gains Step 7 between incident aggregator and \"Open Only When Task Touches That Domain\": locator chain, verbatim [INSIGHTS_STALE] block format prompting skill: ai-insights, AI_INSIGHTS_STALENESS_DISABLE=1 rollback, silence on FRESH/EMPTY/DISABLED/UNAVAILABLE. allowed-tools extended with Skill. Mirrored to ~/.ai-os/ + .claude + .gemini. tests/suites/insights_staleness_test.sh (43 assertions, 10 groups): source contract + 5 status values, both rollback flags → DISABLED, telemetry absent → EMPTY, <threshold → FRESH, ≥threshold no INSIGHTS → STALE, INSIGHTS forward-dated → FRESH, INSIGHTS back-dated + post-date rows → STALE with exact count, CLI envelope + --quiet, ai-preflight Step 7 wiring, 4 mirror byte-identity. Full suite 1863→1906 PASS. Completes meta-cognition blueprint end-to-end."
     },
     {
@@ -72,8 +72,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor `seo_manager.md` to orchestrate Topic Clusters (Pillar + Cluster intents) instead of 20 format-spins per `.ai/blueprints/seo-keyword-multiplier.md`.",
-      "created_at": "2026-05-25T18:39:22.192Z",
-      "completed_at": "2026-05-25T19:46:27.526Z",
+      "created_at": "2026-05-25T00:00:00.000Z",
+      "completed_at": "2026-05-25T00:00:00.000Z",
       "summary": "Rewrote src/gemini/agents/seo_manager.md as the SEO-Topic-Cluster-Manager (Tier 2). Orchestrates generateTopicCluster(term) -> task_ids[]: emits 1 Pillar + up to 10 distinct-intent Cluster page tasks instead of 20 format-spins. Canonical cluster-intent table (pillar-overview + 10 intents, single-sourced from seo-cluster-intents.mjs); cannibalization guard (unique intent per seed); add_topic_seed persistence + add_task per page with 'SEO cluster page: <term> [<intent>]' prefix; INVALID_TOPIC_TERM untrusted-input validation; concurrency 3, 120s budget, MAX_CLUSTER_PAGES_PER_SEED cap; rollback via update_task_status sweep. Anti-drift references SEO-Content-Generator + Multi-Variation-State-Tracker + SEO-Engineer (E-90). Rewrote seo_manager_test.sh (46 assertions). Mirrored to .gemini/ + ~/.ai-os/gemini/."
     },
     {
@@ -82,8 +82,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor `src/shared/seo-approach-types.mjs` to define canonical cluster intents (pillar, cost, comparison, etc.) and lift strict 20-cap per `.ai/blueprints/seo-keyword-multiplier.md`.",
-      "created_at": "2026-05-25T18:39:29.417Z",
-      "completed_at": "2026-05-25T19:46:21.097Z",
+      "created_at": "2026-05-25T00:00:00.000Z",
+      "completed_at": "2026-05-25T00:00:00.000Z",
       "summary": "Refactored SEO taxonomy module to Topic Cluster Engine (Tier 2). Renamed src/shared/seo-approach-types.mjs → seo-cluster-intents.mjs: SEO_PILLAR_INTENT (pillar-overview) + 10 distinct cluster intents (cost/comparison/how-to/process/alternatives/best-for-use-case/benefits/requirements/mistakes/faq), SEO_ALL_INTENTS (11), frozen sets, MAX_CLUSTER_PAGES_PER_SEED=10 (lifted rigid 20-cap), isValidIntentType/isPillarIntent/isClusterIntent. state-db.js: keyword_seeds→topic_seeds, content_variations→cluster_pages, approach_type→intent_type, target_volume CHECK<=10, idx renames, nextTopicSeedId(TS-N)/nextClusterPageId(CP-N), + idempotent _migrateSeoSchema() (ALTER RENAME TO/COLUMN, verified preserving legacy rows). task-synchronizer-mcp: tools add_topic_seed/add_cluster_page/get_topic_cluster + report_performance(page_id); TS-/CP- IDs; cannibalization guard (unique intent per seed) + CLUSTER_CAP_REACHED; error tags INVALID_TOPIC_TERM/UNKNOWN_INTENT_TYPE/INTENT_ALREADY_USED/INVALID_PAGE_ID/PAGE_NOT_FOUND. Rewrote multi_variation_state_tracker_test.sh (74 assertions, incl. legacy-schema migration test). Mirrored to ~/.ai-os/. Full suite 1956/0."
     },
     {
@@ -92,8 +92,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Generate the specific \"serviceheft auto\" cluster content tasks via `seo_manager` run per `.ai/blueprints/seo-keyword-multiplier.md`.",
-      "created_at": "2026-05-25T18:39:29.423Z",
-      "completed_at": "2026-05-25T18:41:15.705Z",
+      "created_at": "2026-05-25T00:00:00.000Z",
+      "completed_at": "2026-05-25T00:00:00.000Z",
       "summary": "Removed: Generating specific content is not relevant for the AI-OS framework project."
     },
     {
@@ -102,8 +102,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Create `src/claude/agents/seo_engineer.md` persona to enforce technical SEO standards and metadata implementation during task execution per `.ai/blueprints/seo-keyword-multiplier.md`.",
-      "created_at": "2026-05-25T18:43:14.939Z",
-      "completed_at": "2026-05-25T19:46:31.189Z",
+      "created_at": "2026-05-25T00:00:00.000Z",
+      "completed_at": "2026-05-25T00:00:00.000Z",
       "summary": "Created src/claude/agents/seo_engineer.md — SEO-Engineer Claude execution persona (Tier 2). Enforces technical SEO when wiring generated Topic Cluster content into the app: unique meta tags (title/description/OG/Twitter), self-referential canonicals (clusters never canonicalize to Pillar), JSON-LD structured data (Article/FAQPage/BreadcrumbList), pillar↔cluster internal-link graph, semantic HTML. API wireClusterPage(page_id) -> implementation_report; idempotent + stack-aware; treats topic term as untrusted (escape before HTML/JSON-LD emit); [SEO_ENGINEER_BLOCKED] findings. Anti-drift: NOT content generation (generator), NOT orchestration (E-87), NOT state tracking. allowed-tools Read/Write/Edit/Grep/Glob/Bash. New seo_engineer_test.sh (38 assertions). Mirrored to .claude/ + ~/.ai-os/claude/."
     },
     {
@@ -112,8 +112,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update `task-synchronizer-mcp` schemas to include `depends_on`, implement cycle detection, and modify `get_state` to return readiness flags per `.ai/blueprints/ecc-integrations.md`.",
-      "created_at": "2026-05-26T19:57:34.477Z",
-      "completed_at": "2026-05-26T21:22:47.247Z",
+      "created_at": "2026-05-26T00:00:00.000Z",
+      "completed_at": "2026-05-26T00:00:00.000Z",
       "summary": "DAG dependency support in task-synchronizer-mcp (ecc-integrations.md §Components 3). Added depends_on TEXT column + idempotent ALTER migration to state-db.js; exported MAX_DAG_DEPTH/readDependencyGraph/validateDag (DFS cycle + self-ref + depth-5 detection) and parseDeps; readState now emits depends_on/ready/blocked_by. add_task validates deps and starts tasks BLOCKED until deps DONE; update_task_status runs the DONE→OPEN unblock cascade and accepts dep revision; get_state surfaces readiness in all branches. Added depends_on to task_create/task_update JSON schemas + inline MCP inputSchemas. Extracted the 172-line tool array into tool-schemas.mjs (index.js 1059→889, under the 1000 standards cap). New tests/suites/dag_dependency_test.sh (24 assertions, real MCP). Full suite 1980 pass; CLEAN_PASS + ALIGN_PASS."
     },
     {
@@ -122,8 +122,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Upgrade Orchestrator to respect DAG readiness and dispatch parallel subagents (or sequential Claude runs) based on dependency resolution per `.ai/blueprints/ecc-integrations.md`.",
-      "created_at": "2026-05-26T19:57:34.485Z",
-      "completed_at": "2026-05-26T22:33:55.662Z",
+      "created_at": "2026-05-26T00:00:00.000Z",
+      "completed_at": "2026-05-26T00:00:00.000Z",
       "summary": "Orchestrator DAG-readiness dispatch (ecc-integrations.md §Components 4). Added read-only run_dispatch tool to orchestrator-mcp: reads E-91 readiness (depends_on graph via readState), returns the ready frontier (OPEN tasks with all deps DONE), blocked tasks with blocked_by, and dispatch_mode (parallel/sequential/idle) with a recommendation; supports owner-substring filtering. New tests/suites/orchestrator_dispatch_test.sh (15 assertions, real orchestrator+sync MCP). orchestrator/index.js 490→555 lines (under cap). Full suite 1995 pass; ALIGN_PASS + CLEAN_WARN (0 errors)."
     },
     {
@@ -132,8 +132,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Implement the `meta_analyst` Instinct Extraction prompt and staging logic for `.gemini/skills/proposed/` per `.ai/blueprints/ecc-integrations.md`.",
-      "created_at": "2026-05-26T19:57:34.490Z",
-      "completed_at": "2026-05-27T06:06:31.141Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "meta_analyst Instinct Extraction + staging (ecc-integrations.md §Components 1-2). Added src/shared/instinct-stager.mjs: validateInstinct/renderProposedSkill/stageInstincts — stages instincts (pattern_id/confidence_score/trigger_condition/proposed_skill_content per §Data Model) as INERT proposed Gemini skills under .gemini/skills/proposed/<slug>/SKILL.md (disable-model-invocation:true, user-invocable:false, status:proposed), with MIN_CONFIDENCE=0.7 gate, dangerous-content rejection (secrets/rm-rf/pipe-to-shell — §Security skill-injection surface), and path-traversal-safe slugs. Added Instinct-Extraction Mode + extract_instincts contract to meta_analyst.md (off-band only). Documented staging area README. Promotion HITL-gated to E-94. New tests/suites/instinct_stager_test.sh (22 assertions). Mirrors synced (src↔.gemini↔~/.ai-os). Full suite 2017 pass; CLEAN_PASS + ALIGN_PASS."
     },
     {
@@ -142,8 +142,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Integrate `approval-mcp` to gate the promotion of proposed skills to active skills per `.ai/blueprints/ecc-integrations.md`.",
-      "created_at": "2026-05-26T19:57:34.492Z",
-      "completed_at": "2026-05-27T07:00:45.834Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "approval-mcp HITL gate for proposed→active skill promotion (ecc-integrations.md §Components 2 + §Security). Added src/shared/skill-promoter.mjs: listProposedSkills/activateContent/promoteSkill — promoteSkill is fail-closed, promoting ONLY on approval-mcp decision.status==='APPROVED' (REJECTED/NON_TTY/missing refused). Defence in depth: approval gate → content re-scan (scanDangerousContent, reused from instinct-stager via new exports) → no-clobber of active skills → safe-slug. On approval flips inert frontmatter to active, strips stale PROPOSED provenance, writes .gemini/skills/<slug>/SKILL.md, removes proposal. Documented request_approval→promoteSkill flow in meta_analyst.md. New tests/suites/skill_promoter_test.sh (23 assertions). Completes the ecc-integrations.md blueprint (E-91..E-94). Full suite 2040 pass; ALIGN_PASS + CLEAN_WARN (0 errors)."
     },
     {
@@ -152,8 +152,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Create `ast-parser-mcp` using Node.js Tree-sitter bindings for TS/JS, implementing `parse_workspace` API per `.ai/blueprints/ast-repository-map.md`.",
-      "created_at": "2026-05-26T20:50:23.254Z",
-      "completed_at": "2026-05-27T08:40:13.283Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "ast-parser-mcp created (ast-repository-map.md §Components 1 + §API). New MCP server with parse_workspace: Tree-sitter via web-tree-sitter@0.20.8 (WASM, pinned for tree-sitter-wasms 0.1.13 grammar ABI compat — D-008) loading JS/TS/TSX grammars. extractor.mjs walks the syntax tree → exports (fn/class/const/interface/type/enum/default + CommonJS module.exports), classes+method signatures, imports (ES + require). index.js walks the workspace respecting .gitignore + .ai-osignore, never indexes .env*/node_modules, skips minified + >1MB files, enforces workspace containment (PATH_DENIED) and a 500ms per-file parse timeout (setTimeoutMicros). Ranking (centrality_score) deferred to E-96. dependency_gate→D-008 (web-tree-sitter MIT + tree-sitter-wasms Unlicense; 5 pre-existing SDK-transitive audit vulns, none from new deps). New tests/suites/ast_parser_test.sh (15 assertions). Full suite 2055 pass; ALIGN_PASS + CLEAN_PASS + CRITIC_STAMP."
     },
     {
@@ -162,8 +162,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Implement the dependency graph and ranking algorithm within the `repo-mapper` service to score symbol importance per `.ai/blueprints/ast-repository-map.md`.",
-      "created_at": "2026-05-26T20:50:23.261Z",
-      "completed_at": "2026-05-27T13:55:13.174Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "repo-mapper dependency graph + centrality ranking (ast-repository-map.md §Components 2 / §Core Concept). New src/mcp/ast-parser-mcp/repo-mapper.mjs (pure, no deps): buildDependencyGraph resolves relative imports (extension-less + dir/index) to workspace files and builds a file-level import graph; pageRank (damping 0.85, dangling-rank redistribution) scores file centrality; rankSymbols normalizes to [0,1] (top file=1.0), attaches centrality_score, sorts desc (file_path tiebreak), non-mutating. Wired rankSymbols into ast-parser-mcp parse_workspace so it now returns a ranked array per the blueprint API. New tests/suites/repo_mapper_test.sh (13 assertions: hub-ranks-first, import resolution, external→null, normalize, sorted, [0,1], empty, MCP integration). Full suite 2068 pass; ALIGN_PASS + CLEAN_PASS + CRITIC_STAMP."
     },
     {
@@ -172,8 +172,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Implement `generate_map` API to serialize ranked symbols into `.ai/REPO_MAP.md` within a strict token budget per `.ai/blueprints/ast-repository-map.md`.",
-      "created_at": "2026-05-26T20:50:23.267Z",
-      "completed_at": "2026-05-27T14:18:00.056Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "generate_map → .ai/REPO_MAP.md (ast-repository-map.md §API + §Execution Constraints). New src/mcp/ast-parser-mcp/serializer.mjs (pure): serializeRepoMap renders a markdown skeleton (file path + centrality, exports, imports, class+method signatures with ⋮ elided bodies), estimateTokens (~chars/4), and tail-trims lowest-centrality files to fit DEFAULT_MAX_TOKENS=2048 (keeps ≥ the most-central file). Added generate_map tool to ast-parser-mcp: runs parse_workspace → serialize → writes .ai/REPO_MAP.md, returns {path, files_included, files_total, estimated_tokens, max_tokens}; honors max_tokens arg + AI_OS_DISABLE_REPO_MAP=1 rollback (no-op/no-write). New tests/suites/repo_map_generate_test.sh (17 assertions). Full suite 2085 pass; CLEAN_PASS + CRITIC_STAMP (aligner WARN false-positive dispositioned per E-83 precedent)."
     },
     {
@@ -182,8 +182,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Wire the `repo-mapper` execution into the `ai sync` lifecycle and update `ai-preflight` to load `REPO_MAP.md` if available per `.ai/blueprints/ast-repository-map.md`.",
-      "created_at": "2026-05-26T20:50:23.269Z",
-      "completed_at": "2026-05-27T15:16:46.433Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "Wired repo-mapper into ai sync + ai-preflight loads REPO_MAP.md (ast-repository-map.md §Components 3). src/bin/ai: new _generate_repo_map() runs `ast-parser-mcp --generate-map` during do_sync (fail-open: missing node/server/parse-error never blocks sync; AI_OS_DISABLE_REPO_MAP=1 rollback). index.js: added --generate-map CLI mode + lazy-loads the MCP SDK (server mode only) so the sync hook path is SDK-free. Vendored the 3 grammar .wasm into src/mcp/ast-parser-mcp/grammars/ (extractor loads them locally; tree-sitter-wasms demoted to devDependency) — makes the installed ~/.ai-os server self-contained. ai-preflight SKILL.md gains Step 8 (load .ai/REPO_MAP.md if present), mirrored byte-identical to .claude/.gemini/~/.ai-os. D-008 updated. New tests/suites/repo_map_wiring_test.sh (22 assertions). Full suite 2107 pass; CLEAN_PASS + ALIGN_PASS + CRITIC_STAMP. DEFERRED (not in blueprint, entangled with the .mcp.json-contamination incident): explicit .mcp.json/registry registration of ast-parser-mcp for interactive agent use. COMPLETES ast-repository-map.md (E-95..E-98)."
     },
     {
@@ -192,8 +192,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Refactor `.mcp.json` integration tests (`registry_sync_test.sh`, `idempotency_test.sh`, `mcp_test.sh`) to use temporary sandboxes or strict trap-based backup/restore to prevent working tree pollution. Acceptance: all tests pass, `git status` remains clean.",
-      "created_at": "2026-05-27T13:45:11.721Z",
-      "completed_at": "2026-05-27T20:46:02.888Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "Fixed .mcp.json working-tree contamination (incident .mcp.json:test-harness-path-rewrite). SCOPE NOTE: the 3 tests the task named (registry_sync_test=read-only, idempotency_test + mcp_test=already mktemp+trap isolated) were NOT the polluters — empirical bisect (run-each-suite + git diff .mcp.json) identified installer_node_check_test.sh as the sole offender: T-NODE-S05 (and S02/S03 defensively) ran install-ai-os.sh from the repo cwd, so the installer's cwd-relative .mcp.json regeneration (with sandbox-HOME abs paths) overwrote the repo .mcp.json. Fix: wrap all 3 installer invocations in ( cd \"$SBOX\" && ... ) subshells (task's 'temporary sandboxes' approach) so cwd-relative writes land in the sandbox. Acceptance MET: installer_node_check_test 18/18 pass; full suite 2107 pass; .mcp.json stays CLEAN after the full suite (verified — no more manual reverts). ALIGN_PASS + CLEAN_PASS + CRITIC_STAMP."
     },
     {
@@ -202,8 +202,8 @@
       "status": "DONE",
       "tier": 2,
       "description": "Update YAML frontmatter in `.gemini/skills/` operational scripts (like `ai-digest`, `trigger-audit`) to use `context: local` instead of `context: fork` to prevent unintended subagent delegation and ensure direct file manipulation. Acceptance: tests pass, `ai-digest` correctly updates `DIGEST.md`.",
-      "created_at": "2026-05-27T13:45:11.725Z",
-      "completed_at": "2026-05-27T21:17:41.324Z",
+      "created_at": "2026-05-27T00:00:00.000Z",
+      "completed_at": "2026-05-27T00:00:00.000Z",
       "summary": "Fixed forked-skill drift (incident skill-tool:forked-execution-drift). DEVIATION FROM TASK TEXT: the task said context:local, but `local` is NOT a valid Claude Code frontmatter value (confirmed via claude-code-guide: only fork=subagent and default/omitted=in-thread exist). Used context:default — the proven in-thread value (ai-task/ai-insights already use it). Changed context:fork→default on the operational skills that must run in-thread: ai-digest, trigger-audit, ai-sync-state (src/shared) + ai-compact (src/claude), mirrored byte-identical to .claude/.gemini/~/.ai-os. Also fixed ai-digest allowed-tools (was read-only Read,Grep,Glob → added Bash,Write,Edit) so it can persist DIGEST.md in-thread (review finding). LEFT context:fork on ai-review + architectural-aligner (review/audit orchestrators returning verdicts) and critic personas (parallel-spawnable, per critic_clean_code_test). VERIFIED: invoking ai-digest now runs in-thread (loaded skill content, executed directly, regenerated DIGEST.md) instead of forking into a summary. New tests/suites/skill_context_test.sh (21 assertions incl. guard that context:local appears nowhere). Full suite 2128 pass; CLEAN_PASS + ALIGN_PASS + CRITIC_STAMP."
     }
   ],
