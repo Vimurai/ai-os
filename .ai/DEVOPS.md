@@ -90,3 +90,42 @@ not abort under `set -e`.
   which may be a separate ubuntu-bash portability issue), then merge to master.
 
 ---
+
+## DEVOPS-003 — Bump GitHub Actions to v5
+
+**Date**: 2026-05-27
+**Status**: IN PROGRESS
+
+### What is changing and why
+`actions/checkout@v4` and `actions/setup-node@v4` run on Node.js 20, which
+GitHub flagged as deprecated. The runner will force Node.js 24 by default
+from **2026-06-02**, after which the v4 actions emit warnings (and risk
+forward-compat issues). v5 of both actions ships native Node 24 support
+and is a drop-in replacement — same inputs, same behaviour. Bump to:
+
+- `actions/checkout@v4` → `actions/checkout@v5`
+- `actions/setup-node@v4` → `actions/setup-node@v5`
+
+### Security implications
+- **No new secrets.** No new permissions. Both actions are first-party
+  (`actions/*`) and pinned by major version, consistent with the existing
+  pinning style.
+- Both v5 releases are official GitHub Actions releases; no supply-chain
+  posture change vs the prior v4 pin.
+
+### Pipeline order enforced
+Unchanged — only the action versions are bumped:
+1. deps (`npm ci` + per-MCP `npm install`)
+2. install (`bash install-ai-os.sh`)
+3. test (`bash tests/run.sh`)
+4. secret-gitignore check
+
+### Rollback plan
+- One-line revert of the two `uses:` pins back to `@v4`, or `git revert`
+  the commit. Additive-equivalent change; no other files touched.
+
+### Branch strategy
+- Validate on branch `ci/bump-actions-v5`; merge only after the branch's
+  PR run is fully green.
+
+---
