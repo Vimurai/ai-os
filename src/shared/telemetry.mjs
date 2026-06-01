@@ -37,9 +37,10 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 export const TELEMETRY_SERVICE = "telemetry";
 export const TELEMETRY_DB_PATH = resolve(homedir(), ".ai-os", "telemetry.sqlite");
@@ -348,8 +349,23 @@ async function _runCli() {
   process.exit(2);
 }
 
-const _isMain = import.meta.url === `file://${process.argv[1]}`;
-if (_isMain) {
+// _isMain compares resolved real paths because macOS routes ${TMPDIR} (and
+// any mktemp -d sandbox) through /var → /private/var symlinks. The naive
+// `import.meta.url === file://${process.argv[1]}` check fails there — the
+// CLI silently no-ops, with no way to detect the misfire. realpathSync on
+// both sides normalises the comparison; missing argv[1] or unreadable paths
+// fall through to false.
+function _detectMain() {
+  try {
+    const here = realpathSync(fileURLToPath(import.meta.url));
+    const argv = process.argv[1] ? realpathSync(process.argv[1]) : "";
+    return argv === here;
+  } catch {
+    return false;
+  }
+}
+
+if (_detectMain()) {
   _runCli().catch((e) => {
     process.stderr.write(`telemetry crashed: ${e.message}\n`);
     process.exit(1);

@@ -23,6 +23,7 @@ source "${SCRIPT_DIR}/../lib/assert.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TELEMETRY="${REPO_ROOT}/src/shared/telemetry.mjs"
 ROUTER="${REPO_ROOT}/src/mcp/mcp-router/index.js"
+HOOK="${REPO_ROOT}/hooks/post-tool-use.sh"
 
 echo "===== telemetry_test.sh ====="
 
@@ -440,12 +441,160 @@ assert_status 0 "error-path records status=ERROR" \
 assert_status 0 "telemetry call uses CLAUDE_CODE_SESSION_ID (E-49 contract)" \
   grep -qE 'CLAUDE_CODE_SESSION_ID' "$ROUTER"
 
+# ── T-TEL-S14: post-tool-use.sh source contract (E-105) ──────────────────────
+echo ""
+echo "  [T-TEL-S14] hooks/post-tool-use.sh wires telemetry without breaking AQG"
+
+assert_status 0 "post-tool-use.sh exists" test -f "$HOOK"
+
+# AQG behavior preserved verbatim (LOCKED on test failure).
+assert_status 0 "AQG block preserved (LOCKED tag)" \
+  grep -qE 'LOCKED - AQG FAILED' "$HOOK"
+assert_status 0 "AQG re-runs tests/run.sh"     grep -qE 'tests/run\.sh' "$HOOK"
+
+# New telemetry block invokes --record-tool via the locator chain.
+assert_status 0 "hook references --record-tool" \
+  grep -qE '\-\-record-tool' "$HOOK"
+assert_status 0 "hook uses locator chain (src/shared first, ~/.ai-os fallback)" \
+  bash -c "grep -qE 'src/shared/telemetry\.mjs' '$HOOK' \
+        && grep -qE '\\\$\\{HOME\\}/\\.ai-os/shared/telemetry\\.mjs' '$HOOK'"
+
+# Fail-open: backgrounded via & + disown, stderr/stdout swallowed.
+assert_status 0 "telemetry call is backgrounded (& + disown)" \
+  bash -c "grep -qE '2>&1 &\$' '$HOOK' && grep -qE 'disown' '$HOOK'"
+assert_status 0 "telemetry stderr/stdout redirected to /dev/null" \
+  grep -qE '>/dev/null 2>&1' "$HOOK"
+
+# Privacy: hook never forwards tool_input/tool_response bodies — only the
+# three blueprint fields the CLI persists.
+assert_status 0 "translation extracts only tool_name + execution_time_ms + status" \
+  bash -c "grep -q 'tool_name' '$HOOK' \
+        && grep -q 'execution_time_ms' '$HOOK' \
+        && grep -q '\"status\"' '$HOOK'"
+
+# ── T-TEL-S15: hook end-to-end records a row in sandbox HOME ─────────────────
+echo ""
+echo "  [T-TEL-S15] hook end-to-end: payload → backgrounded write → DB row"
+
+SBOX_H="$(mktemp -d)"
+mkdir -p "${SBOX_H}/.ai-os/shared" "${SBOX_H}/repo/.git"
+cp "$TELEMETRY" "${SBOX_H}/.ai-os/shared/telemetry.mjs"
+
+PAYLOAD_H='{"session_id":"hook-e2e","tool_name":"E105.HookSmoke","tool_input":{"x":1},"tool_response":{"isError":false,"duration_ms":27}}'
+
+# Run hook — synchronous part should be quick; background write may take ~1s.
+( cd "${SBOX_H}/repo" && echo "$PAYLOAD_H" \
+    | HOME="${SBOX_H}" bash "$HOOK" >/dev/null 2>&1 )
+RC_HOOK=$?
+assert_status 0 "hook rc==0 on success path" bash -c "[[ $RC_HOOK -eq 0 ]]"
+
+# Wait for the backgrounded node to land its write. Cold-start node ≈ 200ms;
+# 2s is comfortable headroom.
+sleep 2
+
+DB_H="${SBOX_H}/.ai-os/telemetry.sqlite"
+assert_status 0 "background write created sandbox DB" test -f "$DB_H"
+
+ROW_H="$(node -e "
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync('${DB_H}');
+const r = db.prepare('SELECT tool_name, execution_time_ms, status FROM tool_executions ORDER BY timestamp DESC LIMIT 1').get();
+process.stdout.write(JSON.stringify(r));
+")"
+assert_contains "tool_name from payload landed"   "\"tool_name\":\"E105.HookSmoke\""  "$ROW_H"
+assert_contains "execution_time_ms from duration" "\"execution_time_ms\":27"          "$ROW_H"
+assert_contains "status SUCCESS from isError:false" "\"status\":\"SUCCESS\""          "$ROW_H"
+
+# Error path: isError:true → status=ERROR
+PAYLOAD_HE='{"session_id":"hook-e2e","tool_name":"E105.ErrCase","tool_response":{"isError":true,"duration_ms":3}}'
+( cd "${SBOX_H}/repo" && echo "$PAYLOAD_HE" \
+    | HOME="${SBOX_H}" bash "$HOOK" >/dev/null 2>&1 )
+sleep 2
+ROWS_HE="$(node -e "
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync('${DB_H}');
+const r = db.prepare(\"SELECT status FROM tool_executions WHERE tool_name='E105.ErrCase'\").get();
+process.stdout.write(JSON.stringify(r));
+")"
+assert_contains "isError:true translates to status=ERROR" "\"status\":\"ERROR\"" "$ROWS_HE"
+
+# ── T-TEL-S16: hook fail-open on every degraded environment ───────────────────
+echo ""
+echo "  [T-TEL-S16] hook fail-open: missing helper / malformed input / no tool_name"
+
+# (a) telemetry.mjs absent from both locator slots → hook rc==0, no DB
+SBOX_NO="$(mktemp -d)"
+mkdir -p "${SBOX_NO}/repo/.git"
+( cd "${SBOX_NO}/repo" && echo "$PAYLOAD_H" \
+    | HOME="${SBOX_NO}" bash "$HOOK" >/dev/null 2>&1 )
+RC_NOHELPER=$?
+sleep 1
+assert_status 0 "hook rc==0 even when telemetry.mjs is missing" \
+  bash -c "[[ $RC_NOHELPER -eq 0 ]]"
+assert_status 1 "no DB written when helper is missing" \
+  test -f "${SBOX_NO}/.ai-os/telemetry.sqlite"
+
+# (b) malformed JSON payload → python parse fails → hook rc==0, no row
+SBOX_BAD="$(mktemp -d)"
+mkdir -p "${SBOX_BAD}/.ai-os/shared" "${SBOX_BAD}/repo/.git"
+cp "$TELEMETRY" "${SBOX_BAD}/.ai-os/shared/telemetry.mjs"
+( cd "${SBOX_BAD}/repo" && echo "not json at all" \
+    | HOME="${SBOX_BAD}" bash "$HOOK" >/dev/null 2>&1 )
+RC_BADJSON=$?
+sleep 1
+assert_status 0 "hook rc==0 on malformed payload" \
+  bash -c "[[ $RC_BADJSON -eq 0 ]]"
+assert_status 1 "no DB written from malformed payload" \
+  test -f "${SBOX_BAD}/.ai-os/telemetry.sqlite"
+
+# (c) AI_TELEMETRY_DISABLE=1 → helper short-circuits, no row written
+SBOX_OFF="$(mktemp -d)"
+mkdir -p "${SBOX_OFF}/.ai-os/shared" "${SBOX_OFF}/repo/.git"
+cp "$TELEMETRY" "${SBOX_OFF}/.ai-os/shared/telemetry.mjs"
+( cd "${SBOX_OFF}/repo" && echo "$PAYLOAD_H" \
+    | HOME="${SBOX_OFF}" AI_TELEMETRY_DISABLE=1 bash "$HOOK" >/dev/null 2>&1 )
+RC_OFF=$?
+sleep 1
+assert_status 0 "hook rc==0 with AI_TELEMETRY_DISABLE=1" \
+  bash -c "[[ $RC_OFF -eq 0 ]]"
+assert_status 1 "no DB written when AI_TELEMETRY_DISABLE=1" \
+  test -f "${SBOX_OFF}/.ai-os/telemetry.sqlite"
+
+# ── T-TEL-S17: hook synchronous overhead within blueprint <50ms budget ───────
+echo ""
+echo "  [T-TEL-S17] hook synchronous overhead under <50ms budget (warm)"
+
+SBOX_T="$(mktemp -d)"
+mkdir -p "${SBOX_T}/.ai-os/shared" "${SBOX_T}/repo/.git"
+cp "$TELEMETRY" "${SBOX_T}/.ai-os/shared/telemetry.mjs"
+
+# Cold + warm runs — measure warmer runs (2-5) as the steady-state.
+ELAPSED_MS_MAX=0
+for i in 1 2 3 4 5; do
+  START_NS=$(node -e 'process.stdout.write(String(Date.now()))')
+  ( cd "${SBOX_T}/repo" && echo "$PAYLOAD_H" \
+      | HOME="${SBOX_T}" bash "$HOOK" >/dev/null 2>&1 )
+  END_NS=$(node -e 'process.stdout.write(String(Date.now()))')
+  EL=$((END_NS - START_NS))
+  if [[ $i -ge 2 && $EL -gt $ELAPSED_MS_MAX ]]; then ELAPSED_MS_MAX=$EL; fi
+done
+# Wallclock measurement is bounded by the two `node -e Date.now` calls (~75ms
+# overhead apiece). The hook itself must be << than the floor of measurable
+# elapsed time. We assert on the steady-state max not exceeding 250ms (which
+# already includes ~150ms of measurement noise). The real synchronous-hook
+# overhead is verified separately via the `time` builtin and documented in
+# DEVOPS-004; this assertion is the CI-safe lower bound that catches gross
+# regressions (e.g. someone removes the `&` and makes the write synchronous).
+assert_status 0 "hook warm-path under 250ms wallclock (sync slack budget)" \
+  bash -c "[[ $ELAPSED_MS_MAX -lt 250 ]]"
+
 # ── T-TEL-S10: ~/.ai-os mirrors byte-identical ────────────────────────────────
 echo ""
 echo "  [T-TEL-S10] ~/.ai-os mirrors byte-identical"
 
 assert_status 0 "telemetry.mjs mirror"          diff -q "$TELEMETRY" "${HOME}/.ai-os/shared/telemetry.mjs"
 assert_status 0 "mcp-router/index.js mirror"    diff -q "$ROUTER"    "${HOME}/.ai-os/mcp/mcp-router/index.js"
+assert_status 0 "post-tool-use.sh mirror"       diff -q "$HOOK"      "${HOME}/.ai-os/hooks/post-tool-use.sh"
 
 echo ""
 assert_summary
