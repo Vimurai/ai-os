@@ -207,7 +207,6 @@ export function projectState(opts = {}) {
 // requested within the window (the cloud should always converge on the
 // newest local state, not a partial sequence).
 let _pendingTimer = null;
-let _pendingArmEnv = null;
 
 function _fireProjectionSync(dbPath, env) {
   const key = readKey(env);
@@ -287,10 +286,8 @@ export function syncToCloud(opts = {}, env = process.env) {
     clearTimeout(_pendingTimer);
     _pendingTimer = null;
   }
-  _pendingArmEnv = env;
   _pendingTimer = setTimeout(() => {
     _pendingTimer = null;
-    _pendingArmEnv = null;
     _fireProjectionSync(dbPath, env);
   }, debounceMs);
   // Don't keep the event loop alive solely for the debounce timer — if the
@@ -309,7 +306,6 @@ export function cancelPendingSync() {
   if (_pendingTimer !== null) {
     clearTimeout(_pendingTimer);
     _pendingTimer = null;
-    _pendingArmEnv = null;
     return true;
   }
   return false;

@@ -364,7 +364,7 @@ async function runChaosTest(url, interactions, timeoutMs) {
       `[CHAOS_REPORT] ${date} | Severity: ${severity}`,
       ``,
       `## Chaos Test Results`,
-      `- Rapid-click (${interactions}×): ${rapidClickErrors.length === 0 ? "PASS" : "FAIL — " + rapidClickErrors.join("; ")}`,
+      `- Rapid-click (${Math.min(interactions, 20)}×): ${rapidClickErrors.length === 0 ? "PASS" : "FAIL — " + rapidClickErrors.join("; ")}`,
       `- Empty form submit: ${formErrors.length === 0 ? "PASS" : "FAIL — " + formErrors.join("; ")}`,
       `- Back/forward stress: ${navErrors.length === 0 ? "PASS" : "FAIL — " + navErrors.join("; ")}`,
       `- JS console errors: ${errors.length === 0 ? "None" : errors.slice(0, 5).join("; ")}`,

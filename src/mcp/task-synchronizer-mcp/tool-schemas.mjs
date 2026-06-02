@@ -39,13 +39,14 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     },
     {
       name: "update_task_status",
-      description: "Updates a task's status (OPEN, BLOCKED, DONE). Marks completed_at for DONE. Completing a task auto-unblocks any dependents whose dependencies are now all DONE.",
+      description: "Updates a task's status (OPEN, BLOCKED, DONE). Marks completed_at for DONE. Completing a task auto-unblocks any dependents whose dependencies are now all DONE. E-101: DONE tasks are locked — pass reopen:true to mutate one, else returns [TASK_LOCKED].",
       inputSchema: {
         type: "object",
         properties: {
           id:         { type: "string", description: "Task ID (e.g. 'E-78')" },
           status:     { type: "string", description: "New status", enum: ["OPEN", "BLOCKED", "DONE"] },
           summary:    { type: "string", description: "Completion summary (for DONE status)" },
+          reopen:     { type: "boolean", description: "E-101 (sovereignty-hardening.md §Components 2): required to mutate a task already in DONE status. Without it, a DONE task returns [TASK_LOCKED] to protect completed implementation history. Rollback: AI_OS_SOVEREIGNTY_LOCK=0." },
           depends_on: { type: "array", items: { type: "string" }, description: "E-91: optionally revise this task's dependency list. Validated for existence, cycles, and depth (<=5) before write." },
         },
         required: ["id", "status"],

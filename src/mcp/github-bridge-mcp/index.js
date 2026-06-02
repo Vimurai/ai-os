@@ -23,8 +23,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { existsSync, readFileSync, writeFileSync } from "fs";
-import { resolve } from "path";
 import { spawnSync } from "child_process";
 import { createLogger } from "../shared/logger.js";
 
@@ -233,7 +231,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         lines.push(`  Updated: ${issue.updatedAt?.slice(0, 10) || "?"}`);
         lines.push("");
       }
-      lines.push(`To fetch issue content into context: create_tasks_from_issues([${issues.slice(0, 3).map(i => i.number).join(", ")}])`);
+      lines.push(`To fetch issue content into context: create_intent_from_issues({ numbers: [${issues.slice(0, 3).map(i => i.number).join(", ")}] })`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }

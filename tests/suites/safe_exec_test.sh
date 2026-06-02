@@ -99,4 +99,62 @@ test_pattern "SECRET_IN_COMMAND: safe command not blocked" \
   'echo "hello world"' \
   'nomatch'
 
+# ── E-102: Architect sovereignty enforcement (sovereignty-hardening.md §API) ──
+# These drive the REAL MCP handler over stdio (not an inlined regex copy) so the
+# caller_role wiring, [SOVEREIGNTY_BLOCK] verdict, and rollback are verified end
+# to end.
+source "${SCRIPT_DIR}/../lib/mcp-client.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+SE_SERVER="${REPO_ROOT}/src/mcp/safe-exec-mcp/index.js"
+
+# verdict <command> <caller_role|""> → prints content[0].text of analyze_command
+verdict() {
+  local cmd="$1" role="$2" payload
+  if [[ -n "$role" ]]; then
+    payload="$(CMD="$cmd" ROLE="$role" python3 -c 'import json,os; print(json.dumps({"command":os.environ["CMD"],"caller_role":os.environ["ROLE"]}))')"
+  else
+    payload="$(CMD="$cmd" python3 -c 'import json,os; print(json.dumps({"command":os.environ["CMD"]}))')"
+  fi
+  mcp_call_tool "${SE_SERVER}" analyze_command "$payload" | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)
+except Exception: print(""); sys.exit(0)
+c=d.get("content",[{}]); print(c[0].get("text","") if c else "")'
+}
+
+unset AI_OS_SOVEREIGNTY_LOCK 2>/dev/null || true
+
+# architect: destructive implementation git ops are SOVEREIGNTY_BLOCK
+assert_contains "E-102: architect git checkout src → SOVEREIGNTY_BLOCK" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git checkout src/foo.js' architect)"
+assert_contains "E-102: architect git reset --hard → SOVEREIGNTY_BLOCK" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git reset --hard HEAD' architect)"
+assert_contains "E-102: architect git clean -fd → SOVEREIGNTY_BLOCK" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git clean -fd' architect)"
+assert_contains "E-102: architect rm -rf src → SOVEREIGNTY_BLOCK" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'rm -rf src/build' architect)"
+assert_contains "E-102: architect touch outside .ai → SOVEREIGNTY_BLOCK" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'touch newfile.js' architect)"
+
+# architect: operations scoped to .ai/ or plans/ are allowed
+assert_not_contains "E-102: architect git checkout .ai/ allowed" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git checkout .ai/RULES.md' architect)"
+assert_not_contains "E-102: architect mkdir plans/ allowed" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'mkdir plans/new-feature' architect)"
+
+# engineer / unset role: legacy role-agnostic analysis (no sovereignty block)
+assert_not_contains "E-102: engineer git checkout src allowed" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git checkout src/foo.js' engineer)"
+assert_not_contains "E-102: no caller_role → legacy (no sovereignty)" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git checkout src/foo.js' '')"
+
+# rollback: AI_OS_SOVEREIGNTY_LOCK=0 disables the architect blocks
+export AI_OS_SOVEREIGNTY_LOCK=0
+assert_not_contains "E-102: rollback flag bypasses sovereignty" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'rm -rf src/build' architect)"
+unset AI_OS_SOVEREIGNTY_LOCK
+
+# caller_role is optional — legacy single-arg calls still PASS clean commands
+assert_contains "E-102: command-only call still works" \
+  "PASS" "$(verdict 'ls -la' '')"
+
 assert_summary

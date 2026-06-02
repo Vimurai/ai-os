@@ -445,7 +445,16 @@ already_agq = any(
     for h in entry.get("hooks", [])
 )
 if not already_agq:
-    post_hooks.append({"matcher": "Write|Edit", "hooks": [{"type": "command", "command": agq_cmd}]})
+    # E-105/universal-telemetry.md: matcher ".*" so the telemetry pipe captures
+    # 100% of tool invocations (not just Write|Edit). The AQG test-runner inside
+    # the script self-gates to Write/Edit, so ".*" is safe.
+    post_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": agq_cmd}]})
+else:
+    # Heal a pre-E-106 narrow matcher: the telemetry hook must be ".*".
+    for entry in post_hooks:
+        if any(h.get("command") == agq_cmd for h in entry.get("hooks", [])) \
+           and entry.get("matcher") != ".*":
+            entry["matcher"] = ".*"
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
@@ -1207,9 +1216,17 @@ do_sync() {
     exit 0
   fi
 
-  cp -f "${AIOS}/hooks/"*.sh "${HOME}/.ai-os/hooks/" 2>/dev/null || true
-  chmod +x "${HOME}/.ai-os/hooks/"*.sh 2>/dev/null || true
-  echo "  Hooks synced"
+  # Propagate hook edits from the framework clone into the runtime mirror when a
+  # distinct workspace is configured (the previous code copied ${AIOS}/hooks onto
+  # itself — AIOS == ~/.ai-os == destination — a silent no-op), then (re)install
+  # this project's git-hook stubs so commits run the canonical AI-OS hooks.
+  _hook_ws="$(_resolve_aios_workspace)"
+  if [[ -n "$_hook_ws" && -d "${_hook_ws}/hooks" && "$_hook_ws" != "$AIOS" ]]; then
+    cp -f "${_hook_ws}/hooks/"*.sh "${AIOS}/hooks/" 2>/dev/null || true
+    chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
+    echo "  Hooks propagated from framework workspace → ${AIOS}/hooks"
+  fi
+  install_git_hooks
 
   # E-41: upgrade any legacy copied .git/hooks/* to the stub model so the
   # canonical AI-OS hooks always run (no copy-by-value drift).

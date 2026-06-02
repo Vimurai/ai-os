@@ -53,7 +53,7 @@
       "mcp__github-bridge-mcp__check_gh_auth",
       "mcp__github-bridge-mcp__fetch_assigned_issues",
       "mcp__github-bridge-mcp__get_issue",
-      "mcp__github-bridge-mcp__create_tasks_from_issues",
+      "mcp__github-bridge-mcp__create_intent_from_issues",
       "mcp__github-bridge-mcp__get_pr_status",
       "mcp__advisor-mcp__ask_architect",
       "mcp__approval-mcp__request_approval",
@@ -99,7 +99,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit",
+        "matcher": ".*",
         "hooks": [
           {
             "type": "command",

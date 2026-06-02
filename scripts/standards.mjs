@@ -58,9 +58,7 @@ const {
   loadStandards,
   validateStaged,
   validateFiles,
-  validateFile,
   reportDrift,
-  DEFAULT_STANDARDS_PATH,
 } = _checkerMod;
 
 const VERSION = "1.0.0";

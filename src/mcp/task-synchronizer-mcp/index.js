@@ -37,7 +37,7 @@ import { syncToCloud as _syncToCloud } from "../../shared/managed-agents-client.
 // E-88: Multi-Variation-State-Tracker — canonical SEO Topic Cluster intents.
 // Used to validate ClusterPage.intent_type and enforce the cluster-page cap
 // on add_cluster_page.
-import { SEO_ALL_INTENTS, MAX_CLUSTER_PAGES_PER_SEED, isValidIntentType as _isValidIntentType, isClusterIntent as _isClusterIntent } from "../../shared/seo-cluster-intents.mjs";
+import { SEO_ALL_INTENTS, SEO_PILLAR_INTENT, MAX_CLUSTER_PAGES_PER_SEED, isValidIntentType as _isValidIntentType, isClusterIntent as _isClusterIntent } from "../../shared/seo-cluster-intents.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("task-synchronizer-mcp");
@@ -418,9 +418,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "update_task_status": {
       const _updateErr = _assertSchema("task_update", args);
       if (_updateErr) return _updateErr;
-      const row = db.prepare("SELECT id FROM tasks WHERE id = ?").get(args.id);
+      const row = db.prepare("SELECT id, status FROM tasks WHERE id = ?").get(args.id);
       if (!row) {
         return { content: [{ type: "text", text: `✗ Task '${args.id}' not found.` }], isError: true };
+      }
+
+      // E-101 (sovereignty-hardening.md §Components 2): immutability lock on DONE
+      // tasks. A task already in DONE status cannot be re-transitioned unless the
+      // caller explicitly passes reopen:true — this prevents accidental mutation
+      // of completed implementation history. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.
+      if (row.status === "DONE" && args.reopen !== true && process.env.AI_OS_SOVEREIGNTY_LOCK !== "0") {
+        return {
+          content: [{ type: "text", text: `✗ [TASK_LOCKED] '${args.id}' is DONE and cannot be mutated. Pass reopen:true to override (sovereignty-hardening.md §Components 2), or set AI_OS_SOVEREIGNTY_LOCK=0 to disable the lock.` }],
+          isError: true,
+        };
       }
 
       // E-91: optional dependency revision — validate the new edge set
@@ -783,7 +794,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (_isClusterIntent(intent)) {
         const clusterCount = db.prepare(
           `SELECT COUNT(*) as n FROM cluster_pages WHERE seed_id = ? AND intent_type != ?`
-        ).get(seedId, "pillar-overview").n;
+        ).get(seedId, SEO_PILLAR_INTENT).n;
         if (clusterCount >= MAX_CLUSTER_PAGES_PER_SEED) {
           return { content: [{ type: "text", text: `✗ [CLUSTER_CAP_REACHED] seed ${seedId} already has ${clusterCount}/${MAX_CLUSTER_PAGES_PER_SEED} cluster pages` }], isError: true };
         }
@@ -859,7 +870,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         published_at:        p.published_at,
         created_at:          p.created_at,
       }));
-      const clusterPages = pages.filter((p) => p.intent_type !== "pillar-overview");
+      const clusterPages = pages.filter((p) => p.intent_type !== SEO_PILLAR_INTENT);
       const remaining = Math.max(0, seed.target_volume - clusterPages.length);
       return {
         content: [{
@@ -869,7 +880,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             pages,
             counts: {
               total:     pages.length,
-              pillar:    pages.filter((p) => p.intent_type === "pillar-overview").length,
+              pillar:    pages.filter((p) => p.intent_type === SEO_PILLAR_INTENT).length,
               cluster:   clusterPages.length,
               remaining,
               published: pages.filter((p) => p.published_at != null).length,

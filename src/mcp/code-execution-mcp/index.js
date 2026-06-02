@@ -150,7 +150,7 @@ function capOutput(buf) {
 
 // ── Sandboxed execution ───────────────────────────────────────────────────────
 
-function buildDockerArgs(language, code, timeoutMs) {
+function buildDockerArgs(language, code) {
   const lang = LANGUAGES[language];
   // Wall-clock seconds for --stop-timeout-ish behaviour. Docker has no
   // built-in --timeout for run, so the parent process enforces it via SIGKILL.
@@ -181,7 +181,7 @@ function buildDockerArgs(language, code, timeoutMs) {
 
 function executeInDocker(language, code, timeoutMs) {
   return new Promise((resolvePromise) => {
-    const args = buildDockerArgs(language, code, timeoutMs);
+    const args = buildDockerArgs(language, code);
     const t0 = Date.now();
 
     const child = spawn("docker", args, {

@@ -168,16 +168,8 @@ function recordDecision(action, reason, status) {
  */
 function promptHuman(safeAction, safeReason) {
   return new Promise((resolve) => {
-    // Write directly to /dev/tty to bypass MCP stdio pipe
-    const ttyStream = (() => {
-      try {
-        const { createWriteStream } = require("node:fs");
-        return createWriteStream("/dev/tty");
-      } catch {
-        return process.stderr;
-      }
-    })();
-
+    // HITL prompts are written to process.stderr — it reaches the operator's
+    // terminal without polluting the MCP stdio (stdout) JSON-RPC channel.
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stderr,

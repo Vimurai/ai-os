@@ -56,8 +56,8 @@ const log = (level, tool, message, extras) =>
   logger.log(level, tool, message, extras);
 
 // ── Domain Registry (curated category → servers) ──────────────────────────────
-// Source of truth: src/mcp/shared/mcp-domains.js (E-52). Both this router and
-// scripts/generate_mcp_docs.js import from there so DOMAINS cannot drift
+// Source of truth: src/mcp/shared/mcp-domains.mjs (E-52). Both this router and
+// scripts/generate_mcp_docs.mjs import from there so DOMAINS cannot drift
 // between the routing surface and the auto-generated mcp.md blueprint.
 
 // ── Project root and registry ─────────────────────────────────────────────────

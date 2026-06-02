@@ -43,7 +43,7 @@ function md5(content) {
 function safePath(filePath, cwd) {
   const abs = resolve(cwd, filePath);
   const rel = relative(cwd, abs);
-  if (rel.startsWith("..") || resolve(rel) === abs && rel.startsWith("/")) return null;
+  if (rel.startsWith("..")) return null;
   return abs;
 }
 

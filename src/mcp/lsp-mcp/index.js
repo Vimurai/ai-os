@@ -19,7 +19,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, statSync } from "fs";
 import { resolve, dirname } from "path";
 import { createRequire } from "module";
 import { spawnSync } from "child_process";
@@ -248,8 +248,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "get_diagnostics": {
       const targetPath = resolve(cwd, args.path);
 
-      // Determine if path is a directory (project root) or a single file
-      const isFile = existsSync(targetPath) && !targetPath.endsWith("/");
+      if (!existsSync(targetPath)) {
+        return { content: [{ type: "text", text: `✗ Path not found: ${args.path}` }], isError: true };
+      }
+      // Determine if path is a directory (project root) or a single file.
+      // resolve() strips trailing slashes, so a string heuristic mis-classifies
+      // every directory as a file — use statSync to ask the filesystem.
+      const isFile = statSync(targetPath).isFile();
 
       if (isFile) {
         // Single-file diagnostics via compiler API
