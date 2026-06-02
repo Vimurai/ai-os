@@ -157,4 +157,10 @@ unset AI_OS_SOVEREIGNTY_LOCK
 assert_contains "E-102: command-only call still works" \
   "PASS" "$(verdict 'ls -la' '')"
 
+# ── SUDO_SU adjacency (review fix): only flag -i/su that belong to sudo ──────
+assert_contains     "SUDO_SU: sudo -i flagged"            "SUDO_SU" "$(verdict 'sudo -i' '')"
+assert_contains     "SUDO_SU: sudo su flagged"            "SUDO_SU" "$(verdict 'sudo su' '')"
+assert_not_contains "SUDO_SU: sudo apt install -i pkg ok" "SUDO_SU" "$(verdict 'sudo apt install -i pkg' '')"
+assert_not_contains "SUDO_SU: sudo grep -i x ok"          "SUDO_SU" "$(verdict 'sudo grep -i pattern file' '')"
+
 assert_summary

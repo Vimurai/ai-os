@@ -126,7 +126,10 @@ const WARN_RULES = [
   },
   {
     id: "SUDO_SU",
-    pattern: (tokens) => tokens.includes("sudo") && (tokens.includes("su") || tokens.includes("-i")),
+    // Only flag -i/--login/su when they belong to the sudo invocation (appear
+    // right after `sudo`, past any of sudo's own flags) — not an unrelated -i on
+    // some other command (e.g. `sudo apt install -i pkg`, `sudo grep -i x`).
+    pattern: (tokens, raw) => /\bsudo\s+(-\w+\s+)*(-i|--login|su)\b/.test(raw),
     message: "sudo su / sudo -i — privilege escalation",
   },
   {
