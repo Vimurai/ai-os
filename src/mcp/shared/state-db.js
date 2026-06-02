@@ -8,7 +8,7 @@
  * Exports: getDb, readState, regenerateViews, nextId
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "fs";
 import { resolve } from "path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -369,10 +369,70 @@ export function withTransaction(db, callback) {
 /**
  * Compute the next sequential ID for a given prefix (E, P, T).
  */
-export function nextId(db, prefix) {
-  const rows = db.prepare("SELECT id FROM tasks WHERE id LIKE ?").all(`${prefix}-%`);
-  const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
-  return `${prefix}-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+// Highest numeric suffix among `<prefix>-N` ids, or 0 when none match.
+function _maxIdNum(ids, prefix) {
+  let max = 0;
+  for (const id of ids) {
+    if (typeof id !== "string" || !id.startsWith(`${prefix}-`)) continue;
+    const n = parseInt(id.split("-")[1], 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return max;
+}
+
+// E-109 (drift-resolution-2026.md): highest `<prefix>-N` id across every
+// .ai/archive/state-done-*.json. Archived tasks have been DELETEd from the live
+// table, so their ids must still bound the sequence or nextId can re-issue a
+// retired id (the state-json-db-mismatch incident). Fail-soft on missing/corrupt
+// archives — a bad file must never block task creation.
+function _archivedMaxId(aiDir, prefix) {
+  if (!aiDir) return 0;
+  try {
+    const dir = resolve(aiDir, "archive");
+    if (!existsSync(dir)) return 0;
+    let max = 0;
+    for (const f of readdirSync(dir)) {
+      if (!/^state-done-.*\.json$/.test(f)) continue;
+      let rows;
+      try { rows = JSON.parse(readFileSync(resolve(dir, f), "utf8")); } catch { continue; }
+      if (!Array.isArray(rows)) continue;
+      const m = _maxIdNum(rows.map(t => t && t.id), prefix);
+      if (m > max) max = m;
+    }
+    return max;
+  } catch {
+    return 0;
+  }
+}
+
+// E-109: allocate the next task id without ever colliding with an archived or
+// previously-issued id. The next number is max(live, archived, high-water) + 1.
+// PURE — it never writes, so a speculative nextId() for an add_task that later
+// fails validation does not burn an id. The caller persists the high-water via
+// recordIdHighWater() only after the row is actually inserted.
+export function nextId(db, prefix, aiDir) {
+  const liveRows = db.prepare("SELECT id FROM tasks WHERE id LIKE ?").all(`${prefix}-%`);
+  const liveMax  = _maxIdNum(liveRows.map(r => r.id), prefix);
+  const archMax  = _archivedMaxId(aiDir, prefix);
+
+  const hwRow = db.prepare("SELECT value FROM project WHERE key = ?").get(`last_id_${prefix}`);
+  const hwMax = hwRow ? (parseInt(hwRow.value, 10) || 0) : 0;
+
+  return `${prefix}-${Math.max(liveMax, archMax, hwMax) + 1}`;
+}
+
+// E-109: persist the per-prefix high-water mark AFTER a task row is committed, so
+// the sequence stays monotonic even if the row is later DELETEd from the live
+// table without being archived. Idempotent: only advances, never regresses.
+export function recordIdHighWater(db, id) {
+  if (typeof id !== "string" || !id.includes("-")) return;
+  const [prefix, numStr] = id.split("-");
+  const num = parseInt(numStr, 10);
+  if (isNaN(num)) return;
+  const key = `last_id_${prefix}`;
+  const row = db.prepare("SELECT value FROM project WHERE key = ?").get(key);
+  const cur = row ? (parseInt(row.value, 10) || 0) : 0;
+  if (num > cur) db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES (?, ?)").run(key, String(num));
 }
 
 /**

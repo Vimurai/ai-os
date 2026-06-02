@@ -25,7 +25,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
@@ -407,7 +407,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const prefix = args.prefix || "E";
-      const id     = _nextId(targetDb, prefix);
+      const id     = _nextId(targetDb, prefix, targetAiDir);
 
       // E-91: validate the dependency edges before insert (existence, no
       // self-reference, acyclic, depth <= 5). A new task starts BLOCKED when
@@ -443,6 +443,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       `).run(task.id, task.owner, task.status, task.tier, task.description,
               task.created_at, task.completed_at, task.summary,
               deps.length ? JSON.stringify(deps) : null);
+
+      // E-109: advance the per-prefix high-water mark only now that the row is
+      // committed, so a rejected add_task never burns an id.
+      _recordIdHighWater(targetDb, task.id);
 
       _regenerateViews(targetAiDir, targetDb);
       // E-74: schedule cloud projection sync. Framework-routed tasks sync
