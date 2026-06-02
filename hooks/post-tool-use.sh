@@ -56,6 +56,42 @@ PY
   fi
 } 2>/dev/null
 
+# ── Context-cache rebuild (E-112, caching.md §3.1) ───────────────────────────
+# When a blueprint or architect.md is written/edited, rebuild the cache-manager
+# System Context cache. This is the blueprint's "post-write hook" trigger — the
+# cache rebuilds ONLY when its source files change, not on every tool. Detached
+# + fail-open: never blocks the hook. Rollback: AI_OS_DISABLE_CACHE=1.
+{
+  CACHE_TRIGGER="$(HOOK_INPUT="$INPUT" python3 - <<'PY' 2>/dev/null
+import json, os, sys
+try:
+    d = json.loads(os.environ.get("HOOK_INPUT", ""))
+except Exception:
+    sys.exit(0)
+if d.get("tool_name") not in ("Write", "Edit"):
+    sys.exit(0)
+inp = (d.get("tool_input") or {})
+fp = inp.get("file_path") or inp.get("path") or ""
+if not fp:
+    sys.exit(0)
+n = "/" + os.path.normpath(fp).replace("\\", "/").lstrip("/")
+if "/.ai/blueprints/" in n or n.endswith("/.ai/architect.md"):
+    print("REBUILD")
+PY
+)"
+  if [[ "$CACHE_TRIGGER" == "REBUILD" && "${AI_OS_DISABLE_CACHE:-}" != "1" ]]; then
+    CACHE_SERVER=""
+    for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/cache-manager-mcp/index.js" \
+             "${HOME}/.ai-os/mcp/cache-manager-mcp/index.js"; do
+      if [[ -f "$c" ]]; then CACHE_SERVER="$c"; break; fi
+    done
+    if [[ -n "$CACHE_SERVER" ]] && command -v node >/dev/null 2>&1; then
+      ( node "$CACHE_SERVER" --build >/dev/null 2>&1 ) &
+      disown 2>/dev/null || true
+    fi
+  fi
+} 2>/dev/null
+
 
 # Detect if the modified file is under src/ — pass via env var to avoid injection
 RESULT=$(HOOK_INPUT="$INPUT" python3 - <<'PY'
