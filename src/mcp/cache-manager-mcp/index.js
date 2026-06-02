@@ -571,6 +571,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+// E-112 (caching.md §3.1): `--build` CLI mode — build/persist the System Context
+// cache for the current project and exit, WITHOUT starting the stdio server.
+// `ai sync` invokes this after regenerating blueprint-derived docs so the cache
+// is actually exercised in a live flow (it was built but never invoked). The
+// downstream prompt-prefix injection (§3.2/§3.3) is a runtime/harness concern
+// beyond this MCP. Fail-open: any error warns to stderr and exits 0 so a sync
+// cycle is never blocked.
+if (process.argv.includes("--build")) {
+  try {
+    const projectRoot = validateProjectRoot();
+    const { blob, fileRecords } = assembleContext(projectRoot);
+    const d = getDb();
+    if (d) persistCache(d, blob, fileRecords, projectRoot);
+    process.stderr.write(
+      `[cache-manager] context cache ${d ? "built" : "assembled (SQLite unavailable — in-memory only)"}: ` +
+      `${fileRecords.length} files, ${blob.length} chars, ~${estimateTokens(blob.length)} tokens\n`
+    );
+  } catch (e) {
+    process.stderr.write(`[cache-manager] WARN: ${e.message} — cache build skipped (sync continues).\n`);
+  }
+  process.exit(0);
+}
+
 log("info", "startup", `${SERVICE} v${VERSION} starting`, { db: DB_PATH });
 const transport = new StdioServerTransport();
 await server.connect(transport);

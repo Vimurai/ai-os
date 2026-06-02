@@ -15,7 +15,7 @@ Project root: !pwd
 AI-OS project: !test -d .ai && echo "YES — .ai/ found" || echo "NO — run: ai init"
 DIGEST freshness: !head -2 .ai/DIGEST.md 2>/dev/null || echo "(DIGEST.md missing — run skill: ai-digest)"
 Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | head -5 || echo "(none)"
-Incident status: !for c in src/shared/incident-aggregate.mjs "${HOME}/.ai-os/shared/incident-aggregate.mjs"; do [ -f "$c" ] && node "$c" 2>/dev/null | head -1 && break; done 2>/dev/null || echo "(aggregator unavailable)"
+Incident status: !for c in src/shared/incident-aggregate.mjs "${HOME}/.ai-os/shared/incident-aggregate.mjs"; do [ -f "$c" ] && node "$c" 2>/dev/null | grep -m1 '"status"' | sed -E 's/.*"status": *"([^"]+)".*/\1/' && break; done 2>/dev/null || echo "(aggregator unavailable)"
 
 ## Preflight Read Order (DIGEST-First)
 

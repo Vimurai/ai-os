@@ -76,11 +76,6 @@ export function isValidIntentType(slug) {
   return typeof slug === "string" && SEO_ALL_INTENTS_SET.has(slug);
 }
 
-/** True when `slug` is the broad-intent Pillar page intent. */
-export function isPillarIntent(slug) {
-  return slug === SEO_PILLAR_INTENT;
-}
-
 /** True when `slug` is one of the distinct deep-dive Cluster intents. */
 export function isClusterIntent(slug) {
   return SEO_CLUSTER_INTENTS_SET.has(slug);

@@ -32,6 +32,12 @@ assert_contains "lsp-mcp: uses ts.createProgram or getProgram"  "getProgram" "$L
 assert_contains "lsp-mcp: project-level tsc via spawnSync"  "spawnSync" "$LSP"
 assert_contains "lsp-mcp: only npx tsc --noEmit allowed"    "noEmit"    "$LSP"
 
+# Workspace containment (review fix): path args confined to cwd, escape → PATH_DENIED
+assert_contains "lsp-mcp: workspace containment via isWithin" "isWithin"    "$LSP"
+assert_contains "lsp-mcp: rejects escaping paths PATH_DENIED"  "PATH_DENIED" "$LSP"
+# get_diagnostics uses statSync (not the trailing-slash heuristic) to classify dirs
+assert_contains "lsp-mcp: get_diagnostics uses statSync().isFile()" "statSync" "$LSP"
+
 # Security: no shell string interpolation in spawnSync call
 assert_not_contains "lsp-mcp: no shell:true in spawnSync" "shell: true" "$LSP"
 

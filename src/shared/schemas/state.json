@@ -25,6 +25,7 @@
         "id":         { "type": "string", "pattern": "^[EPT]-[0-9]+$", "description": "Task ID (e.g. 'E-11')" },
         "status":     { "type": "string", "enum": ["OPEN", "BLOCKED", "DONE"],   "description": "New status" },
         "summary":    { "type": "string", "maxLength": 2000,                      "description": "Completion summary (required when status=DONE)" },
+        "reopen":     { "type": "boolean",                                        "description": "E-101 (sovereignty-hardening.md §Components 2): DONE tasks are immutable. Pass reopen:true to explicitly mutate a completed task; otherwise update_task_status returns [TASK_LOCKED]. Rollback: AI_OS_SOVEREIGNTY_LOCK=0." },
         "depends_on": { "type": "array", "maxItems": 25, "items": { "type": "string", "pattern": "^[EPT]-[0-9]+$" }, "description": "E-91: optionally revise this task's dependency list. Validated for existence, cycles, and depth (<=5) before being written; rejected with [DAG_FAIL] on violation." }
       },
       "required": ["id", "status"],

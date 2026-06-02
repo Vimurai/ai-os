@@ -38,7 +38,7 @@ Use the `ux_reviewer` agent (Gemini) to:
 2. Check each primary route for: CLS < 0.1, WCAG AA contrast, 44px touch targets, visible focus rings.
 3. Run Lighthouse: Performance ≥ 80, Accessibility ≥ 90.
 4. Rapid-click stress: 10× clicks on primary CTA.
-5. Append `[VIBE_REPORT] YYYY-MM-DD | Score: X/10` to `.ai/REVIEWS.md`.
+5. Record the verdict via `mcp__task-synchronizer-mcp__add_stamp({type:"VIBE_CLEARED", agent:"ux_reviewer", summary:"Score X/10 — <one-line>"})` on a clean pass (no P0), or `type:"VIBE_BLOCKED"` on a P0. Do NOT append to `.ai/REVIEWS.md` directly — it is regenerated from the SQLite stamps table, so the stamp must go through `add_stamp` to surface there for `review_synthesizer` (which gates Tier 3 on `[VIBE_CLEARED]`).
 
 Or use `vibe-check-mcp`:
 ```
@@ -55,7 +55,8 @@ Use the `chaos_monkey` agent to:
 4. Tag `[CHAOS_CLEARED]` or `[CHAOS_BLOCKED]` in `.ai/LOG.md`.
 
 ### Required Stamps (Tier 3 Release Gate)
-All three must exist in `.ai/REVIEWS.md` before committing:
-- `[VIBE_REPORT]` (≤ 7 days old)
+All three must exist before committing (recorded via `add_stamp`, surfaced in
+`.ai/REVIEWS.md` / `.ai/LOG.md` — never hand-appended):
+- `[VIBE_CLEARED]` (≤ 7 days old) — the stamp `review_synthesizer` requires for Tier 3
 - `[CHAOS_CLEARED]`
 - `[CRITIC_STAMP]` (from `skill: ai-review`)

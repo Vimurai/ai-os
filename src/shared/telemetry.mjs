@@ -37,9 +37,10 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 export const TELEMETRY_SERVICE = "telemetry";
 export const TELEMETRY_DB_PATH = resolve(homedir(), ".ai-os", "telemetry.sqlite");
@@ -192,11 +193,27 @@ function _doRecordTaskVelocity(payload, opts) {
   }
 }
 
+// E-106 (universal-telemetry.md): the mcp-router records a GRANULAR
+// `<server>.<tool>` row for every proxy_call, while the global edge hook
+// (post-tool-use.sh) ALSO records the COARSE wrapper for the same routed call.
+// Drop that coarse duplicate at the writer so a routed call is counted once —
+// the granular row is the source of truth. Other mcp-router tools
+// (activate_domain/list_domains) have no granular counterpart and are kept.
+// Rollback: AI_OS_TELEMETRY_NO_DEDUP=1 keeps both rows.
+const ROUTER_PROXY_WRAPPER = "mcp__mcp-router__proxy_call";
+
+function _isRoutedDuplicate(payload) {
+  if (process.env.AI_OS_TELEMETRY_NO_DEDUP === "1") return false;
+  const t = typeof payload?.tool_name === "string" ? payload.tool_name.trim() : "";
+  return t === ROUTER_PROXY_WRAPPER;
+}
+
 // Public entry — fire-and-forget. The wrapper defers the actual sync write
 // to the next macrotask so the calling MCP returns its response immediately.
 // All errors are swallowed inside _doRecord*.
 export function recordToolExecution(payload, opts) {
   if (_isDisabled()) return;
+  if (_isRoutedDuplicate(payload)) return; // coarse proxy_call dup — router logs the granular row
   if (opts?.sync === true) {
     _doRecordToolExecution(payload, opts);
     return;
@@ -263,9 +280,49 @@ export function resetTelemetryCache() {
   _cachedPath = null;
 }
 
-// CLI smoke for sysadmins. `node telemetry.mjs --stats` prints the read-side
-// envelope; --record-tool / --record-task accept JSON on stdin for ad-hoc
-// fixturing. NEVER advertised as a UI surface.
+// Pure-node project-root resolver — walks parents looking for a .git entry.
+// Used by --record-tool / --record-task so the hook layer (E-105) can pipe
+// raw tool JSON without pre-computing the project root. Capped at 32 hops
+// so a malformed path can't loop. Returns startDir on miss; the hasher
+// then maps every non-repo cwd to a stable "no-git" bucket per directory.
+function _findProjectRoot(startDir) {
+  let dir = startDir;
+  for (let i = 0; i < 32; i++) {
+    if (existsSync(resolve(dir, ".git"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return startDir;
+}
+
+async function _readStdinJson() {
+  try {
+    let buf = "";
+    for await (const chunk of process.stdin) buf += chunk;
+    const trimmed = buf.trim();
+    if (!trimmed) return null;
+    return JSON.parse(trimmed);
+  } catch (e) {
+    _logErr("stdin-parse-failed", e.message);
+    return null;
+  }
+}
+
+// CLI smoke for sysadmins and hook callers.
+//   --stats         → JSON envelope of getTelemetryStats() (read-side).
+//   --path          → canonical TELEMETRY_DB_PATH.
+//   --record-tool   → consume one tool execution from stdin JSON
+//                     ({tool_name, execution_time_ms, status, ...}) and
+//                     write a tool_executions row. Used by E-105
+//                     post-tool-use.sh to capture every Claude Code tool
+//                     invocation, not just mcp-router::proxy_call.
+//   --record-task   → consume one task velocity event from stdin JSON
+//                     ({task_id, turn_count, tokens_consumed}) and write
+//                     a task_velocity row.
+// Both record subcommands exit 0 on every path (fail-open per blueprint
+// §Security). project_hash is derived from process.cwd() walked up to
+// .git; session_id is read from CLAUDE_CODE_SESSION_ID (E-49 contract).
 async function _runCli() {
   const argv = process.argv.slice(2);
   if (argv.includes("--stats")) {
@@ -276,14 +333,55 @@ async function _runCli() {
     process.stdout.write(TELEMETRY_DB_PATH + "\n");
     return;
   }
+  if (argv.includes("--record-tool")) {
+    const payload = await _readStdinJson();
+    if (payload && typeof payload === "object") {
+      const project_root = _findProjectRoot(process.cwd());
+      const session_id = process.env.CLAUDE_CODE_SESSION_ID || "unknown";
+      recordToolExecution({
+        project_root,
+        session_id,
+        tool_name: payload.tool_name,
+        execution_time_ms: payload.execution_time_ms,
+        status: payload.status,
+      }, { sync: true });
+    }
+    return;
+  }
+  if (argv.includes("--record-task")) {
+    const payload = await _readStdinJson();
+    if (payload && typeof payload === "object") {
+      recordTaskVelocity({
+        task_id: payload.task_id,
+        turn_count: payload.turn_count,
+        tokens_consumed: payload.tokens_consumed,
+      }, { sync: true });
+    }
+    return;
+  }
   process.stderr.write(
-    "usage: telemetry.mjs [--stats | --path]\n"
+    "usage: telemetry.mjs [--stats | --path | --record-tool | --record-task]\n"
   );
   process.exit(2);
 }
 
-const _isMain = import.meta.url === `file://${process.argv[1]}`;
-if (_isMain) {
+// _isMain compares resolved real paths because macOS routes ${TMPDIR} (and
+// any mktemp -d sandbox) through /var → /private/var symlinks. The naive
+// `import.meta.url === file://${process.argv[1]}` check fails there — the
+// CLI silently no-ops, with no way to detect the misfire. realpathSync on
+// both sides normalises the comparison; missing argv[1] or unreadable paths
+// fall through to false.
+function _detectMain() {
+  try {
+    const here = realpathSync(fileURLToPath(import.meta.url));
+    const argv = process.argv[1] ? realpathSync(process.argv[1]) : "";
+    return argv === here;
+  } catch {
+    return false;
+  }
+}
+
+if (_detectMain()) {
   _runCli().catch((e) => {
     process.stderr.write(`telemetry crashed: ${e.message}\n`);
     process.exit(1);

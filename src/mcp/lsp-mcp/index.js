@@ -13,17 +13,26 @@
  * Graceful fallback: if TypeScript is not installed, all tools return a clear
  * error message rather than crashing — projects without tsconfig.json still work.
  *
- * Security: spawnSync whitelist enforced — only `npx tsc --noEmit` allowed.
+ * Security: the only external command is a fixed `npx tsc --noEmit` invocation —
+ * no shell, no user-supplied argv. All tool `path` args are confined to the
+ * workspace (cwd) via isWithin(); paths that escape it are rejected [PATH_DENIED].
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { existsSync, readFileSync } from "fs";
-import { resolve, dirname } from "path";
+import { existsSync, readFileSync, statSync } from "fs";
+import { resolve, dirname, relative } from "path";
 import { createRequire } from "module";
 import { spawnSync } from "child_process";
 import { createLogger } from "../shared/logger.js";
+
+// Workspace containment — true when `p` resolves inside `root` (mirrors the
+// PATH_DENIED guard the sibling MCPs use). Rejects absolute or ../-escaping paths.
+function isWithin(p, root) {
+  const r = relative(root, p);
+  return r === "" || !r.startsWith("..");
+}
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("lsp-mcp");
@@ -183,6 +192,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── get_definitions ──────────────────────────────────────────────────────
     case "get_definitions": {
       const filePath = resolve(cwd, args.path);
+      if (!isWithin(filePath, cwd)) {
+        return { content: [{ type: "text", text: `✗ [PATH_DENIED] path escapes workspace: ${args.path}` }], isError: true };
+      }
       if (!existsSync(filePath)) {
         return { content: [{ type: "text", text: `✗ File not found: ${filePath}` }], isError: true };
       }
@@ -215,6 +227,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── get_references ───────────────────────────────────────────────────────
     case "get_references": {
       const filePath = resolve(cwd, args.path);
+      if (!isWithin(filePath, cwd)) {
+        return { content: [{ type: "text", text: `✗ [PATH_DENIED] path escapes workspace: ${args.path}` }], isError: true };
+      }
       if (!existsSync(filePath)) {
         return { content: [{ type: "text", text: `✗ File not found: ${filePath}` }], isError: true };
       }
@@ -248,8 +263,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "get_diagnostics": {
       const targetPath = resolve(cwd, args.path);
 
-      // Determine if path is a directory (project root) or a single file
-      const isFile = existsSync(targetPath) && !targetPath.endsWith("/");
+      if (!isWithin(targetPath, cwd)) {
+        return { content: [{ type: "text", text: `✗ [PATH_DENIED] path escapes workspace: ${args.path}` }], isError: true };
+      }
+      if (!existsSync(targetPath)) {
+        return { content: [{ type: "text", text: `✗ Path not found: ${args.path}` }], isError: true };
+      }
+      // Determine if path is a directory (project root) or a single file.
+      // resolve() strips trailing slashes, so a string heuristic mis-classifies
+      // every directory as a file — use statSync to ask the filesystem.
+      const isFile = statSync(targetPath).isFile();
 
       if (isFile) {
         // Single-file diagnostics via compiler API

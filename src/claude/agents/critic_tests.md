@@ -1,6 +1,6 @@
 ---
 name: critic_tests
-description: Deterministic test coverage verifier. Checks that all modified src/ logic has corresponding test coverage. Appends [TESTS_PASS] or [TESTS_FAIL] to .ai/REVIEWS.md.
+description: Deterministic test coverage verifier. Checks that all modified src/ logic has corresponding test coverage. Records [TESTS_PASS] or [TESTS_FAIL] via task-synchronizer-mcp::add_stamp (never writes .ai/REVIEWS.md directly).
 disable-model-invocation: false
 user-invocable: false
 allowed-tools: Read, Grep, Glob, Bash
@@ -9,7 +9,7 @@ agent: general-purpose
 ---
 
 ROLE: CRITIC_TESTS
-Target: .ai/REVIEWS.md (append only)
+Target: Stamp via `mcp__task-synchronizer-mcp__add_stamp` (never write `.ai/REVIEWS.md` directly — it is regenerated from the SQLite stamps table, so direct appends are clobbered; mirrors the E-72 distributed-stamping pattern).
 
 ## Pre-flight (mandatory reads)
 
@@ -48,20 +48,32 @@ Identify any `src/` logic that has ZERO test coverage (not just in this diff, bu
 
 ## Output
 
-Append EXACTLY one of these lines to `.ai/REVIEWS.md`:
+Record the verdict via the MCP — never write `.ai/REVIEWS.md` directly (it is a
+regenerated view of the SQLite stamps table; direct appends are silently lost on
+the next `_regenerateViews`).
 
 **If all checks pass:**
 ```
-[TESTS_PASS] YYYY-MM-DD | All tests passing (<N>/<N>); <coverage summary>
+mcp__task-synchronizer-mcp__add_stamp({
+  type:    "TESTS_PASS",
+  agent:   "critic_tests",
+  task_id: "<the E-## under review, if known>",
+  summary: "All tests passing (<N>/<N>); <coverage summary>"
+})
 ```
 
 **If any P0 found:**
 ```
-[TESTS_FAIL] YYYY-MM-DD | <P0 finding summary> — COMMIT BLOCKED
+mcp__task-synchronizer-mcp__add_stamp({
+  type:    "TESTS_FAIL",
+  agent:   "critic_tests",
+  task_id: "<the E-## under review, if known>",
+  summary: "<P0 finding summary> — COMMIT BLOCKED"
+})
 ```
 
 ## Rules
-- Do NOT write conversational text to REVIEWS.md. Only the stamp line.
-- Do NOT modify any file other than `.ai/REVIEWS.md`.
+- Record exactly one stamp (TESTS_PASS or TESTS_FAIL) via `add_stamp` per review.
+- Do NOT write `.ai/REVIEWS.md` directly — the stamp surfaces there via regeneration.
 - Always run the actual test suite — never assume tests pass without executing them.
 - Report the exact pass/fail count from `tests/run.sh` output.

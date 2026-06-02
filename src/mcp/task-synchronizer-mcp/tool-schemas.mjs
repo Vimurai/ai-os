@@ -39,13 +39,14 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     },
     {
       name: "update_task_status",
-      description: "Updates a task's status (OPEN, BLOCKED, DONE). Marks completed_at for DONE. Completing a task auto-unblocks any dependents whose dependencies are now all DONE.",
+      description: "Updates a task's status (OPEN, BLOCKED, DONE). Marks completed_at for DONE. Completing a task auto-unblocks any dependents whose dependencies are now all DONE. E-101: DONE tasks are locked — pass reopen:true to mutate one, else returns [TASK_LOCKED].",
       inputSchema: {
         type: "object",
         properties: {
           id:         { type: "string", description: "Task ID (e.g. 'E-78')" },
           status:     { type: "string", description: "New status", enum: ["OPEN", "BLOCKED", "DONE"] },
           summary:    { type: "string", description: "Completion summary (for DONE status)" },
+          reopen:     { type: "boolean", description: "E-101 (sovereignty-hardening.md §Components 2): required to mutate a task already in DONE status. Without it, a DONE task returns [TASK_LOCKED] to protect completed implementation history. Rollback: AI_OS_SOVEREIGNTY_LOCK=0." },
           depends_on: { type: "array", items: { type: "string" }, description: "E-91: optionally revise this task's dependency list. Validated for existence, cycles, and depth (<=5) before write." },
         },
         required: ["id", "status"],
@@ -66,6 +67,18 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       },
     },
     {
+      name: "handoff_control",
+      description: "Interactive Bridge (interactive-bridge.md): emit a structured handoff signal to .ai/signal.json so the `ai watch` tmux watcher wakes the target agent's pane and injects the message. Overwrites the signal each call. The MCP only writes JSON — `ai watch` escapes the message before tmux send-keys.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target:  { type: "string", enum: ["claude", "gemini"], description: "Which agent to wake: 'claude' (Engineer, pane 0) or 'gemini' (Architect, pane 1)." },
+          message: { type: "string", description: "Message to inject into the target pane, e.g. 'Planning complete. Execute OPEN tasks.'" },
+        },
+        required: ["target", "message"],
+      },
+    },
+    {
       name: "set_project_focus",
       description: "Updates the project's current focus and tier.",
       inputSchema: {
@@ -79,7 +92,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     },
     {
       name: "archive_done_tasks",
-      description: `Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when total DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}.`,
+      description: `State-hygiene rotation (token-optimization.md). Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}, AND rotates old audit stamps (beyond the last 10) to .ai/archive/stamps-YYYYMM.json when the stamp count exceeds 50. Returns { archived_tasks, archived_stamps, archivePath }.`,
       inputSchema: { type: "object", properties: {} },
     },
     // append_tasks intentionally removed from tool list — disabled (bypasses SQLite).

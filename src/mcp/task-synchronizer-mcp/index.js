@@ -25,7 +25,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
@@ -37,7 +37,7 @@ import { syncToCloud as _syncToCloud } from "../../shared/managed-agents-client.
 // E-88: Multi-Variation-State-Tracker — canonical SEO Topic Cluster intents.
 // Used to validate ClusterPage.intent_type and enforce the cluster-page cap
 // on add_cluster_page.
-import { SEO_ALL_INTENTS, MAX_CLUSTER_PAGES_PER_SEED, isValidIntentType as _isValidIntentType, isClusterIntent as _isClusterIntent } from "../../shared/seo-cluster-intents.mjs";
+import { SEO_ALL_INTENTS, SEO_PILLAR_INTENT, MAX_CLUSTER_PAGES_PER_SEED, isValidIntentType as _isValidIntentType, isClusterIntent as _isClusterIntent } from "../../shared/seo-cluster-intents.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("task-synchronizer-mcp");
@@ -121,34 +121,15 @@ function _importFromJson(jsonPath, db) {
 // _readState, _regenerateViews, _nextId are imported as _readState/_regenerateViews/_nextId above.
 
 // ── Archive ───────────────────────────────────────────────────────────────────
+// E-111: archive rotation for DONE tasks + audit stamps (and its thresholds) now
+// lives in src/mcp/shared/state-db.js so task-synchronizer-mcp and
+// archive-manager-mcp share ONE implementation. _archiveDoneTasks / _archiveStamps
+// and the *_THRESHOLD constants are imported above.
 
-const DONE_ARCHIVE_THRESHOLD = 50;
-const DONE_KEEP_RECENT       = 10;
-
-function _archiveDoneTasks(aiDir, db) {
-  const done = db.prepare("SELECT * FROM tasks WHERE status = 'DONE' ORDER BY rowid").all();
-  if (done.length <= DONE_ARCHIVE_THRESHOLD) return null;
-
-  const toArchive   = done.slice(0, done.length - DONE_KEEP_RECENT);
-  const archiveIds  = toArchive.map(t => t.id);
-
-  const ym          = new Date().toISOString().slice(0, 7);
-  const archiveDir  = resolve(aiDir, "archive");
-  mkdirSync(archiveDir, { recursive: true });
-  const archivePath = resolve(archiveDir, `state-done-${ym}.json`);
-
-  let existing = [];
-  if (existsSync(archivePath)) {
-    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
-  }
-  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
-
-  const ph = archiveIds.map(() => "?").join(",");
-  db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...archiveIds);
-
-  _regenerateViews(aiDir, db);
-  return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
-}
+// E-107 (token-optimization.md §Components 1 / §Data Model): cap a DONE task's
+// stored summary so state.json stays light. The full narrative lives in LOG.md
+// (Engineer-managed). Rollback: set AI_OS_SUMMARY_CAP=2000.
+const SUMMARY_CAP = Number(process.env.AI_OS_SUMMARY_CAP) || 200;
 
 // ── E-74: Cloud sync hook ────────────────────────────────────────────────────
 // Per .ai/blueprints/managed-agents-state-reconciliation.md §Components 2:
@@ -368,7 +349,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       const prefix = args.prefix || "E";
-      const id     = _nextId(targetDb, prefix);
+      const id     = _nextId(targetDb, prefix, targetAiDir);
 
       // E-91: validate the dependency edges before insert (existence, no
       // self-reference, acyclic, depth <= 5). A new task starts BLOCKED when
@@ -405,6 +386,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               task.created_at, task.completed_at, task.summary,
               deps.length ? JSON.stringify(deps) : null);
 
+      // E-109: advance the per-prefix high-water mark only now that the row is
+      // committed, so a rejected add_task never burns an id.
+      _recordIdHighWater(targetDb, task.id);
+
       _regenerateViews(targetAiDir, targetDb);
       // E-74: schedule cloud projection sync. Framework-routed tasks sync
       // the framework workspace's state.sqlite, not the local one — the
@@ -418,9 +403,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "update_task_status": {
       const _updateErr = _assertSchema("task_update", args);
       if (_updateErr) return _updateErr;
-      const row = db.prepare("SELECT id FROM tasks WHERE id = ?").get(args.id);
+      const row = db.prepare("SELECT id, status FROM tasks WHERE id = ?").get(args.id);
       if (!row) {
         return { content: [{ type: "text", text: `✗ Task '${args.id}' not found.` }], isError: true };
+      }
+
+      // E-101 (sovereignty-hardening.md §Components 2): immutability lock on DONE
+      // tasks. A task already in DONE status cannot be re-transitioned unless the
+      // caller explicitly passes reopen:true — this prevents accidental mutation
+      // of completed implementation history. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.
+      if (row.status === "DONE" && args.reopen !== true && process.env.AI_OS_SOVEREIGNTY_LOCK !== "0") {
+        return {
+          content: [{ type: "text", text: `✗ [TASK_LOCKED] '${args.id}' is DONE and cannot be mutated. Pass reopen:true to override (sovereignty-hardening.md §Components 2), or set AI_OS_SOVEREIGNTY_LOCK=0 to disable the lock.` }],
+          isError: true,
+        };
       }
 
       // E-91: optional dependency revision — validate the new edge set
@@ -435,9 +431,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           .run(deps.length ? JSON.stringify(deps) : null, args.id);
       }
 
+      // E-107: cap the stored summary at SUMMARY_CAP chars. The full narrative
+      // belongs in LOG.md (Engineer-managed); state keeps a capped reference.
+      let storedSummary = args.summary ?? null;
+      let summaryTruncated = false;
+      if (typeof storedSummary === "string" && storedSummary.length > SUMMARY_CAP) {
+        const suffix = " …[full in LOG.md]";
+        storedSummary = storedSummary.slice(0, Math.max(0, SUMMARY_CAP - suffix.length)).trimEnd() + suffix;
+        summaryTruncated = true;
+      }
+
       if (args.status === "DONE") {
         db.prepare("UPDATE tasks SET status = ?, completed_at = ?, summary = ? WHERE id = ?")
-          .run(args.status, new Date().toISOString(), args.summary ?? null, args.id);
+          .run(args.status, new Date().toISOString(), storedSummary, args.id);
       } else {
         db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(args.status, args.id);
       }
@@ -462,7 +468,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // E-74: schedule cloud projection sync after the status transition.
       _scheduleCloudSync(aiDir);
       const unblockNote = unblocked.length ? ` | unblocked: ${unblocked.join(", ")}` : "";
-      return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${args.summary ? ": " + args.summary : ""}${unblockNote}` }] };
+      const truncNote   = summaryTruncated ? ` | [SUMMARY_TRUNCATED] summary capped at ${SUMMARY_CAP} chars — keep the full narrative in LOG.md` : "";
+      return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${storedSummary ? ": " + storedSummary : ""}${unblockNote}${truncNote}` }] };
     }
 
     // ── add_stamp ─────────────────────────────────────────────────────────────
@@ -476,6 +483,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       _regenerateViews(aiDir, db);
       return { content: [{ type: "text", text: `✓ Stamp [${args.type}] added by ${args.agent}` }] };
+    }
+
+    // ── handoff_control (E-114, interactive-bridge.md) ──────────────────────────
+    // Emit a structured signal to .ai/signal.json so the `ai watch` tmux watcher
+    // can wake the target agent's pane. Overwrites the signal each call (the
+    // watcher consumes the latest). This MCP only writes JSON (no shell) — the
+    // watcher is responsible for escaping the message before `tmux send-keys`.
+    case "handoff_control": {
+      const target = args.target;
+      if (target !== "claude" && target !== "gemini") {
+        return { content: [{ type: "text", text: "✗ [INVALID_TARGET] target must be 'claude' or 'gemini'." }], isError: true };
+      }
+      const message = typeof args.message === "string" ? args.message.trim() : "";
+      if (!message) {
+        return { content: [{ type: "text", text: "✗ [EMPTY_MESSAGE] a non-empty message is required." }], isError: true };
+      }
+      const payload = { timestamp: new Date().toISOString(), target, message };
+      const signalPath = resolve(aiDir, "signal.json");
+      try {
+        writeFileSync(signalPath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+      } catch (e) {
+        return { content: [{ type: "text", text: `✗ [SIGNAL_WRITE_FAILED] ${e.message}` }], isError: true };
+      }
+      return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target}: ${message}\n  signal: ${signalPath}` }] };
     }
 
     // ── set_project_focus ─────────────────────────────────────────────────────
@@ -493,12 +524,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── archive_done_tasks ────────────────────────────────────────────────────
     case "archive_done_tasks": {
-      const result = _archiveDoneTasks(aiDir, db);
-      if (!result) {
-        const doneCount = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status = 'DONE'").get().n;
-        return { content: [{ type: "text", text: `✓ No archive needed — ${doneCount} DONE tasks (threshold: ${DONE_ARCHIVE_THRESHOLD})` }] };
+      // E-108: rotate BOTH DONE tasks and audit stamps. They have independent
+      // thresholds, so a run may archive one, the other, both, or neither.
+      const taskResult  = _archiveDoneTasks(aiDir, db);
+      const stampResult = _archiveStamps(aiDir, db);
+      const archived_tasks  = taskResult  ? taskResult.archived  : 0;
+      const archived_stamps = stampResult ? stampResult.archived : 0;
+
+      if (!taskResult && !stampResult) {
+        const doneCount  = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status = 'DONE'").get().n;
+        const stampCount = db.prepare("SELECT COUNT(*) as n FROM stamps").get().n;
+        return { content: [{ type: "text", text: `✓ No archive needed — ${doneCount} DONE tasks (threshold ${DONE_ARCHIVE_THRESHOLD}), ${stampCount} stamps (threshold ${STAMP_ARCHIVE_THRESHOLD})` }] };
       }
-      return { content: [{ type: "text", text: `✓ [AUTO-ARCHIVE] ${result.archived} DONE tasks → ${result.archivePath}\n  ${result.kept} recent DONE tasks kept.` }] };
+
+      const archivePath = (stampResult && stampResult.archivePath) || (taskResult && taskResult.archivePath) || null;
+      const lines = ["✓ [AUTO-ARCHIVE]"];
+      if (taskResult)  lines.push(`  ${taskResult.archived} DONE tasks → ${taskResult.archivePath} (${taskResult.kept} recent kept)`);
+      if (stampResult) lines.push(`  ${stampResult.archived} stamps → ${stampResult.archivePath} (${stampResult.kept} recent kept)`);
+      lines.push(`  ${JSON.stringify({ archived_tasks, archived_stamps, archivePath })}`);
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     // ── Legacy: sync_tasks (DEPRECATED E-147/E-149) ───────────────────────────
@@ -783,7 +827,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (_isClusterIntent(intent)) {
         const clusterCount = db.prepare(
           `SELECT COUNT(*) as n FROM cluster_pages WHERE seed_id = ? AND intent_type != ?`
-        ).get(seedId, "pillar-overview").n;
+        ).get(seedId, SEO_PILLAR_INTENT).n;
         if (clusterCount >= MAX_CLUSTER_PAGES_PER_SEED) {
           return { content: [{ type: "text", text: `✗ [CLUSTER_CAP_REACHED] seed ${seedId} already has ${clusterCount}/${MAX_CLUSTER_PAGES_PER_SEED} cluster pages` }], isError: true };
         }
@@ -859,7 +903,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         published_at:        p.published_at,
         created_at:          p.created_at,
       }));
-      const clusterPages = pages.filter((p) => p.intent_type !== "pillar-overview");
+      const clusterPages = pages.filter((p) => p.intent_type !== SEO_PILLAR_INTENT);
       const remaining = Math.max(0, seed.target_volume - clusterPages.length);
       return {
         content: [{
@@ -869,7 +913,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             pages,
             counts: {
               total:     pages.length,
-              pillar:    pages.filter((p) => p.intent_type === "pillar-overview").length,
+              pillar:    pages.filter((p) => p.intent_type === SEO_PILLAR_INTENT).length,
               cluster:   clusterPages.length,
               remaining,
               published: pages.filter((p) => p.published_at != null).length,

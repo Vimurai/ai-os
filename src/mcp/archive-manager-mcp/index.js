@@ -5,17 +5,20 @@
  *
  * Tools:
  *   check_context_health()   → line + token health report; needs_archive: boolean
- *   execute_archive()        → runs `ai archive` via host CLI
+ *   execute_archive()        → SQLite-aware state rotation (DONE tasks + stamps);
+ *                              points to `skill: ai-archive` for log-file rotation
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { createReadStream, readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { createReadStream, readFileSync, existsSync } from "fs";
 import { createInterface } from "readline";
 import { resolve } from "path";
-import { spawnSync } from "child_process";
 import { createLogger } from "../shared/logger.js";
+// E-111: archive rotation is owned by the shared state-db layer (single source,
+// SQLite-aware, ACID view regeneration) — no more state.json view writes here.
+import { getDb, archiveDoneTasks, archiveStamps, DONE_ARCHIVE_THRESHOLD, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("archive-manager-mcp");
@@ -32,39 +35,11 @@ function countFileStats(fpath) {
   });
 }
 
-// ── State.json DONE-task archiving ────────────────────────────────────────────
-const DONE_ARCHIVE_THRESHOLD = 50;
-const DONE_KEEP_RECENT = 10;
-
-function archiveStateDoneTasks(cwd) {
-  const statePath = resolve(cwd, ".ai/state.json");
-  if (!existsSync(statePath)) return null;
-  let state;
-  try { state = JSON.parse(readFileSync(statePath, "utf8")); } catch { return null; }
-
-  const done = (state.tasks || []).filter(t => t.status === "DONE");
-  if (done.length <= DONE_ARCHIVE_THRESHOLD) return { skipped: true, doneCount: done.length };
-
-  const toArchive = done.slice(0, done.length - DONE_KEEP_RECENT);
-  const toKeep    = done.slice(done.length - DONE_KEEP_RECENT);
-  const open      = (state.tasks || []).filter(t => t.status !== "DONE");
-
-  const ym = new Date().toISOString().slice(0, 7);
-  const archiveDir = resolve(cwd, ".ai/archive");
-  mkdirSync(archiveDir, { recursive: true });
-  const archivePath = resolve(archiveDir, `state-done-${ym}.json`);
-
-  let existing = [];
-  if (existsSync(archivePath)) {
-    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch {}
-  }
-  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
-
-  state.tasks = [...open, ...toKeep];
-  writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
-
-  return { archived: toArchive.length, kept: toKeep.length, archivePath };
-}
+// E-111: the previous archiveStateDoneTasks() wrote .ai/state.json directly — a
+// regenerated view of state.sqlite — so its prune was clobbered on the next
+// regenerateViews and SQLite was never trimmed. Removed. State rotation now goes
+// through the SQLite-aware shared archiveDoneTasks()/archiveStamps() in
+// execute_archive (ACID, single source).
 
 // ── Thresholds (P-27 blueprint §23) ──────────────────────────────────────────
 const AUTO_ARCHIVE_LINES  = 200;
@@ -91,9 +66,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "execute_archive",
       description:
-        "Triggers 'ai archive' via the host CLI to move bloated .ai/ log files to the " +
-        "archive directory and re-initialize them from templates. " +
-        "Only call this after check_context_health returns needs_archive: true.",
+        "Rotates SQLite state out of the hot path: archives old DONE tasks and audit " +
+        "stamps to .ai/archive/*.json (ACID-safe, via the shared state-db owner) and " +
+        "returns { archived_tasks, archived_stamps }. For destructive log-file rotation " +
+        "(LOG.md/COMM.md/SESSION.md) run `skill: ai-archive`. " +
+        "Call after check_context_health returns needs_archive: true.",
       inputSchema: { type: "object", properties: {} },
     },
   ],
@@ -165,70 +142,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   // ── execute_archive ───────────────────────────────────────────────────────
   if (name === "execute_archive") {
     const cwd = process.cwd();
+    const aiDir = resolve(cwd, ".ai");
 
-    // Locate the `ai` binary — env override > PATH lookup > known install prefixes
-    const candidatePaths = [
-      process.env.AI_OS_BIN,
-      "/usr/local/bin/ai",
-      `${process.env.HOME}/.ai-os/bin/ai`,
-      "/opt/homebrew/bin/ai",
-      "/opt/ai-os/bin/ai",
-      resolve(cwd, "src/bin/ai"),
-    ].filter(Boolean);
-
-    let aiBin = null;
-    for (const p of candidatePaths) {
-      if (existsSync(p)) { aiBin = p; break; }
+    if (!existsSync(aiDir)) {
+      return { content: [{ type: "text", text: "✗ No .ai/ directory found. Run: ai init" }], isError: true };
     }
 
-    // Fallback: PATH lookup via `command -v ai`
-    if (!aiBin) {
-      const which = spawnSync("bash", ["-lc", "command -v ai"], { encoding: "utf8", timeout: 2000 });
-      const found = (which.stdout || "").trim();
-      if (which.status === 0 && found && existsSync(found)) aiBin = found;
+    // E-111: rotate SQLite state (DONE tasks + audit stamps) through the shared,
+    // ACID-safe owner. Previously this shelled the removed `ai archive` verb
+    // (always exit 1) and wrote the regenerated state.json view (clobbered).
+    let taskResult = null;
+    let stampResult = null;
+    let dbError = null;
+    try {
+      const db = getDb(aiDir);
+      taskResult  = archiveDoneTasks(aiDir, db);
+      stampResult = archiveStamps(aiDir, db);
+    } catch (e) {
+      dbError = e.message;
+    }
+    if (dbError) {
+      return { content: [{ type: "text", text: `✗ execute_archive failed: ${dbError}` }], isError: true };
     }
 
-    if (!aiBin) {
-      return {
-        content: [{ type: "text", text: "✗ `ai` binary not found. Set AI_OS_BIN, add `ai` to PATH, or run ./install-ai-os.sh." }],
-        isError: true,
-      };
+    const archived_tasks  = taskResult  ? taskResult.archived  : 0;
+    const archived_stamps = stampResult ? stampResult.archived : 0;
+
+    const lines = ["✓ [STATE-ARCHIVE]"];
+    if (taskResult)  lines.push(`  ${taskResult.archived} DONE tasks → ${taskResult.archivePath} (${taskResult.kept} recent kept)`);
+    if (stampResult) lines.push(`  ${stampResult.archived} stamps → ${stampResult.archivePath} (${stampResult.kept} recent kept)`);
+    if (!taskResult && !stampResult) {
+      lines.push(`  No state rotation needed (DONE-task threshold ${DONE_ARCHIVE_THRESHOLD}, stamp threshold ${STAMP_ARCHIVE_THRESHOLD}).`);
     }
+    lines.push(`  ${JSON.stringify({ archived_tasks, archived_stamps })}`);
+    // Log-file rotation (LOG.md/COMM.md/SESSION.md → .ai/archive/) is a
+    // destructive, HITL-gated operation owned by the ai-archive skill — a bash
+    // MCP cannot invoke a skill, so we point the operator to it rather than
+    // shelling the removed `ai archive` verb.
+    lines.push("  For log-file rotation (LOG.md/COMM.md/SESSION.md) run: skill: ai-archive");
 
-    const result = spawnSync("bash", [aiBin, "archive"], {
-      cwd,
-      encoding: "utf8",
-      timeout: 30000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
-
-    if (result.error) {
-      return {
-        content: [{ type: "text", text: `✗ execute_archive failed: ${result.error.message}` }],
-        isError: true,
-      };
-    }
-
-    const output = (result.stdout || "").trim();
-    const stderr = (result.stderr || "").trim();
-    const success = result.status === 0;
-
-    // Also archive old DONE tasks from state.json
-    const stateArchive = archiveStateDoneTasks(cwd);
-    const stateNote = stateArchive && !stateArchive.skipped
-      ? `\n✓ [STATE-ARCHIVE] ${stateArchive.archived} DONE tasks → ${stateArchive.archivePath} (${stateArchive.kept} recent kept)`
-      : stateArchive
-        ? `\n  state.json: ${stateArchive.doneCount} DONE tasks (below threshold — no prune needed)`
-        : "";
-
-    const lines = [
-      success ? "✓ [AUTO-ARCHIVE] Archive completed successfully." : "✗ Archive command exited non-zero.",
-      output  ? `stdout:\n${output}` : "",
-      stderr  ? `stderr:\n${stderr}` : "",
-      stateNote,
-    ].filter(Boolean);
-
-    return { content: [{ type: "text", text: lines.join("\n") }], isError: !success };
+    return { content: [{ type: "text", text: lines.join("\n") }] };
   }
 
   return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };

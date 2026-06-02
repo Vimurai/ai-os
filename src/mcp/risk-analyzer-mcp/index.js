@@ -162,8 +162,8 @@ const TIER_ACTIONS = {
     label: "Tier 3 — High Risk (Auth/Secrets/Breaking Changes)",
     run: [
       "security_engineer agent",
-      "ai test --vibe (ux_reviewer + chaos_monkey)",
-      "ai review claude (parallel critics)",
+      "skill: ai-test --vibe (ux_reviewer + chaos_monkey)",
+      "skill: ai-review (Tier 3 = full parallel critics: arch + security + tests)",
       "blueprint-aligner-mcp",
       "safe-exec-mcp for shell commands",
     ],

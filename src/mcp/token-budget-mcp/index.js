@@ -10,7 +10,7 @@
  *   report_cost(task_id, tokens, model?, usd?)  → record token usage for a task
  *   get_token_budget()                          → remaining budget + session totals
  *   get_usage_report(days?)                     → full usage breakdown by task/date
- *   set_budget(tokens, usd?)                    → configure warning thresholds
+ *   set_budget(token_threshold?, usd_threshold?) → configure warning thresholds
  *   reset_session()                             → clear session counters (not DB)
  *
  * Security:

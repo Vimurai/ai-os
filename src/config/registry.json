@@ -150,7 +150,7 @@
       "path": "src/mcp/github-bridge-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["check_gh_auth", "fetch_assigned_issues", "get_issue", "create_tasks_from_issues", "get_pr_status"],
+      "allowed-tools": ["check_gh_auth", "fetch_assigned_issues", "get_issue", "create_intent_from_issues", "get_pr_status"],
       "disable-model-invocation": false,
       "_note": "§28 GitHub Bridge: fetches assigned issues via gh CLI and seeds state.json for autonomous Architect cycles"
     },

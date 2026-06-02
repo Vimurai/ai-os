@@ -4,8 +4,13 @@
  * Analyzes shell commands for destructive or high-risk patterns before execution.
  * Uses token-based parsing (shell-quote) to detect rm -rf, curl|bash, etc.
  *
+ * E-102 (sovereignty-hardening.md §Components 1): also accepts an optional
+ * caller_role. When the role is 'architect', destructive implementation git
+ * operations and file mutations outside .ai/ and plans/ are BLOCKED with a
+ * [SOVEREIGNTY_BLOCK] verdict. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.
+ *
  * Tools:
- *   analyze_command(command) → risk assessment with PASS/WARN/BLOCK verdict
+ *   analyze_command(command, caller_role?) → risk assessment with PASS/WARN/BLOCK verdict
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -121,7 +126,10 @@ const WARN_RULES = [
   },
   {
     id: "SUDO_SU",
-    pattern: (tokens) => tokens.includes("sudo") && (tokens.includes("su") || tokens.includes("-i")),
+    // Only flag -i/--login/su when they belong to the sudo invocation (appear
+    // right after `sudo`, past any of sudo's own flags) — not an unrelated -i on
+    // some other command (e.g. `sudo apt install -i pkg`, `sudo grep -i x`).
+    pattern: (tokens, raw) => /\bsudo\s+(-\w+\s+)*(-i|--login|su)\b/.test(raw),
     message: "sudo su / sudo -i — privilege escalation",
   },
   {
@@ -148,6 +156,73 @@ function hasRootPaths(tokens) {
   return strTokens.some((t) => /^(\/$|\/root|\/home|\/etc|\/usr|\/var|\/boot|\~\/)/.test(t));
 }
 
+// ── E-102: Architect sovereignty rules (sovereignty-hardening.md §Components 1) ─
+// When caller_role === 'architect', the Architect (Gemini) may not run
+// destructive *implementation* git operations or create/destroy files outside
+// the Architect-owned .ai/ and plans/ trees. These are honour-system today
+// (caller_role is self-reported) but enforced fail-closed: a forbidden verb is
+// allowed ONLY when every path operand is scoped to .ai/ or plans/.
+const FORBIDDEN_ARCHITECT_GIT = ["reset", "revert", "checkout", "clean"];
+const FORBIDDEN_ARCHITECT_OPS = ["rm", "mkdir", "touch"];
+
+// A path operand the Architect is allowed to touch: within .ai/ or plans/
+// (optionally prefixed with ./). Bare commit-ish refs (HEAD, hashes, branch
+// names) are NOT safe paths, so an unscoped `git reset --hard HEAD` blocks.
+const SAFE_ARCHITECT_PATH = /^(\.\/)?(\.ai|plans)(\/|$)/;
+
+function isSafeArchitectPath(tok) {
+  return SAFE_ARCHITECT_PATH.test(tok);
+}
+
+// Non-flag operand tokens appearing after the first occurrence of `cmd`
+// (and, when given, after `sub`). `--` is treated as a separator and dropped.
+function operandsAfter(tokens, cmd, sub) {
+  const i = tokens.indexOf(cmd);
+  if (i === -1) return [];
+  let rest = tokens.slice(i + 1);
+  if (sub) {
+    const j = rest.indexOf(sub);
+    rest = j === -1 ? [] : rest.slice(j + 1);
+  }
+  return rest.filter((t) => t && t !== "--" && !t.startsWith("-"));
+}
+
+// Returns [{id, message}] sovereignty violations for an architect caller.
+function analyzeSovereignty(tokens, raw) {
+  const violations = [];
+
+  // ForbiddenArchitectGit: reset/revert/checkout/clean on implementation targets.
+  const gitMatch = /\bgit\s+(reset|revert|checkout|clean)\b/i.exec(raw);
+  if (gitMatch) {
+    const verb = gitMatch[1].toLowerCase();
+    const targets = operandsAfter(tokens, "git", verb);
+    const scopedSafe = targets.length > 0 && targets.every(isSafeArchitectPath);
+    if (!scopedSafe) {
+      violations.push({
+        id: `ARCH_GIT_${verb.toUpperCase()}`,
+        message: `git ${verb} is a forbidden Architect implementation operation (allowed only when every target is under .ai/ or plans/)`,
+      });
+    }
+  }
+
+  // ForbiddenArchitectOps: rm -rf / mkdir / touch outside .ai/ or plans/.
+  if (hasSequence(tokens, ["rm"], ["-rf", "-fr", "-r", "-R", "--recursive"])) {
+    const targets = operandsAfter(tokens, "rm");
+    if (!(targets.length > 0 && targets.every(isSafeArchitectPath))) {
+      violations.push({ id: "ARCH_RM_RF", message: "rm -rf outside .ai/ or plans/ is a forbidden Architect operation" });
+    }
+  }
+  for (const op of ["mkdir", "touch"]) {
+    if (tokens.includes(op)) {
+      const targets = operandsAfter(tokens, op);
+      if (!(targets.length > 0 && targets.every(isSafeArchitectPath))) {
+        violations.push({ id: `ARCH_${op.toUpperCase()}`, message: `${op} outside .ai/ or plans/ is a forbidden Architect operation` });
+      }
+    }
+  }
+  return violations;
+}
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -155,13 +230,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "analyze_command",
       description:
-        "Analyzes a shell command for destructive or high-risk patterns. Returns PASS, WARN, or BLOCK verdict with detailed reasoning.",
+        "Analyzes a shell command for destructive or high-risk patterns. Returns PASS, WARN, or BLOCK verdict with detailed reasoning. E-102: pass caller_role to enforce Triad sovereignty — when 'architect', destructive implementation git/file operations outside .ai/ and plans/ are BLOCKED with [SOVEREIGNTY_BLOCK].",
       inputSchema: {
         type: "object",
         properties: {
           command: {
             type: "string",
             description: "Shell command string to analyze",
+          },
+          caller_role: {
+            type: "string",
+            enum: ["architect", "engineer", "tester"],
+            description: "E-102 (sovereignty-hardening.md §Components 1): the requesting Triad role. When 'architect', git reset/revert/checkout/clean and rm -rf/mkdir/touch outside .ai//plans/ are BLOCKED with [SOVEREIGNTY_BLOCK]. Omitting it preserves legacy (role-agnostic) analysis. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.",
           },
         },
         required: ["command"],
@@ -188,9 +268,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const blocked = BLOCK_RULES.filter((r) => r.pattern(tokens, raw));
   const warned = WARN_RULES.filter((r) => r.pattern(tokens, raw));
 
+  // E-102: Architect sovereignty enforcement (sovereignty-hardening.md §API).
+  // Only engages for the 'architect' role; disabled by AI_OS_SOVEREIGNTY_LOCK=0.
+  const sovereignty =
+    args.caller_role === "architect" && process.env.AI_OS_SOVEREIGNTY_LOCK !== "0"
+      ? analyzeSovereignty(tokens, raw)
+      : [];
+
   let verdict;
   let icon;
-  if (blocked.length > 0) {
+  if (blocked.length > 0 || sovereignty.length > 0) {
     verdict = "BLOCK";
     icon = "✗";
   } else if (warned.length > 0) {
@@ -208,6 +295,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     ``,
   ];
 
+  if (sovereignty.length > 0) {
+    lines.push("### [SOVEREIGNTY_BLOCK] — Forbidden Architect Operation");
+    sovereignty.forEach((v) => lines.push(`- [${v.id}] ${v.message}`));
+    lines.push("");
+    lines.push("The Architect (Gemini) role may not run destructive implementation commands (sovereignty-hardening.md §Components 1). Switch to the Engineer (Claude) to execute this, or rescope the command to .ai/ or plans/.");
+  }
+
   if (blocked.length > 0) {
     lines.push("### BLOCKED — Do Not Execute");
     blocked.forEach((r) => lines.push(`- [${r.id}] ${r.message}`));
@@ -220,7 +314,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     warned.forEach((r) => lines.push(`- [${r.id}] ${r.message}`));
   }
 
-  if (blocked.length === 0 && warned.length === 0) {
+  if (blocked.length === 0 && warned.length === 0 && sovereignty.length === 0) {
     lines.push("No high-risk patterns detected.");
   }
 

@@ -105,6 +105,7 @@ else
 fi
 
 chmod +x "${AIOS}/bin/ai"
+chmod +x "${AIOS}/bin/ai-watch" 2>/dev/null || true   # E-115: Interactive Bridge watcher
 chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
 
 # E-62: Persist canonical AI-OS clone path so bin/ai can recover the

@@ -129,3 +129,69 @@ Unchanged — only the action versions are bumped:
   PR run is fully green.
 
 ---
+
+## DEVOPS-004 — Universal Telemetry Hook Wiring (E-105)
+
+**Date**: 2026-06-02
+**Task**: E-105
+**Status**: IN PROGRESS
+
+### What is changing and why
+`hooks/post-tool-use.sh` currently does AQG-only (re-runs `tests/run.sh`
+when Write/Edit touches `src/**`). Per `.ai/blueprints/universal-telemetry.md`
+§Components 2, it must also record every tool execution into
+`~/.ai-os/telemetry.sqlite` via the new `telemetry.mjs --record-tool` CLI
+shipped in E-104. Today telemetry sees ~1% of tool activity because only
+`mcp-router::proxy_call` is instrumented (incident logged 2026-06-01,
+signature `src/mcp/mcp-router/index.js:proxy_call_only_instrumentation`).
+
+**Change**: append a backgrounded telemetry block to `post-tool-use.sh`.
+The block translates Claude Code's PostToolUse JSON (`tool_name` + nested
+`tool_response.isError` / `tool_response.duration_ms`) into the
+blueprint's flat CLI schema and pipes it to
+`telemetry.mjs --record-tool`. Spawned with `&` + `disown` + stderr/stdout
+redirected to `/dev/null` so the hook returns within budget even when
+telemetry is slow.
+
+### Security implications
+- **No new secrets.** No new network access. Helper writes only to
+  `~/.ai-os/telemetry.sqlite` (already in scope per E-84).
+- **No new permissions.** `node` invocation only; locator chain mirrors
+  E-58 (`src/shared/telemetry.mjs` → `${HOME}/.ai-os/shared/telemetry.mjs`).
+- **PII**: `telemetry.mjs` already hashes `project_root` (sha256, 12 hex)
+  and the hook never forwards `tool_input`/`tool_response` payload bodies
+  — only the three blueprint fields (`tool_name`, `execution_time_ms`,
+  `status`).
+- **Fail-open**: `AI_TELEMETRY_DISABLE=1` short-circuits the helper.
+  Hook continues even if `node` is absent or the helper is missing.
+
+### Pipeline order enforced
+Hook-level change; CI pipeline order unchanged.
+1. deps (`npm ci`)
+2. install (`bash install-ai-os.sh`)
+3. test (`bash tests/run.sh`)  ← telemetry_test.sh extended with hook-integration assertions
+4. secret-gitignore check
+
+### Execution constraints
+- Hook overhead budget: **<50ms** (blueprint §Execution Constraints).
+  Achieved by background detach — telemetry write happens off the hot path.
+- AQG behavior preserved verbatim: telemetry block is appended AFTER the
+  existing AQG logic, never replacing or short-circuiting it.
+
+### Rollback plan
+- **Per blueprint §Rollback**: revert `~/.ai-os/hooks/post-tool-use.sh` to
+  the AQG-only version (`git checkout HEAD~1 -- hooks/post-tool-use.sh`
+  then re-install).
+- Set `AI_TELEMETRY_DISABLE=1` system-wide to pause data collection
+  without touching the hook.
+- The change is additive — the AQG block is byte-identical to its
+  pre-E-105 form. Hook-level removal of the telemetry block restores the
+  prior behavior.
+
+### Branch strategy
+- Local validation on `master`: run extended `tests/suites/telemetry_test.sh`
+  + `tests/run.sh` to verify (a) hook-integration assertions pass and (b)
+  AQG still locks on test failures unchanged. Hook overhead measured via
+  `time` wrapper around a sample invocation.
+
+---

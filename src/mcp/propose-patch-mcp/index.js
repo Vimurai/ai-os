@@ -30,7 +30,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync, copyFileSync } from "fs";
 import { resolve, relative } from "path";
 import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
@@ -296,26 +296,45 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const roleBlock = roleGuard(patch.caller_role, patch.path, cwd);
       if (roleBlock) return roleBlock;
 
-      // Apply the patch — determine if diff_content is a unified diff or full file
-      const isDiff = patch.diff_content.startsWith("---") || patch.diff_content.startsWith("@@");
+      // Apply the patch — determine if diff_content is a unified diff or a full
+      // file. A prefix heuristic (startsWith "---") misfires on full-file content
+      // that legitimately begins with "---" (YAML front-matter, markdown rules,
+      // dividers) and pipes it to patch(1), corrupting the target. Require the
+      // structural signature of a real unified diff — a hunk header — instead.
+      const isDiff = /^@@ -\d+(,\d+)? \+\d+(,\d+)? @@/m.test(patch.diff_content);
 
       try {
         if (isDiff) {
-          const result = spawnSync("patch", [patch.path, "-"], {
-            input: patch.diff_content,
-            encoding: "utf8",
-            timeout: 10000,
-            maxBuffer: 10 * 1024 * 1024,
-          });
-          if (result.status !== 0) {
+          const popts = { input: patch.diff_content, encoding: "utf8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 };
+          // 1. Dry-run first — never mutate the file unless every hunk applies.
+          const dry = spawnSync("patch", ["--dry-run", "-f", patch.path, "-"], popts);
+          if (dry.status !== 0) {
             return {
               content: [{
                 type: "text",
-                text: `✗ patch command failed (exit ${result.status}):\n${result.stderr || result.stdout || "(no output)"}`,
+                text: `✗ patch would not apply cleanly (dry-run exit ${dry.status}) — no changes written:\n${dry.stderr || dry.stdout || "(no output)"}`,
               }],
               isError: true,
             };
           }
+          // 2. Apply with a backup so a failure past the dry-run can be rolled back.
+          const backup = `${patch.path}.orig`;
+          const result = spawnSync("patch", ["-b", "-f", patch.path, "-"], popts);
+          if (result.status !== 0) {
+            // Restore from the backup and remove any reject fragments.
+            try { if (existsSync(backup)) copyFileSync(backup, patch.path); } catch {}
+            try { if (existsSync(backup)) unlinkSync(backup); } catch {}
+            try { const rej = `${patch.path}.rej`; if (existsSync(rej)) unlinkSync(rej); } catch {}
+            return {
+              content: [{
+                type: "text",
+                text: `✗ patch failed after dry-run passed (exit ${result.status}); file restored from backup:\n${result.stderr || result.stdout || "(no output)"}`,
+              }],
+              isError: true,
+            };
+          }
+          // 3. Success — drop the backup to keep the working tree clean.
+          try { if (existsSync(backup)) unlinkSync(backup); } catch {}
         } else {
           writeFileSync(patch.path, patch.diff_content, "utf8");
         }

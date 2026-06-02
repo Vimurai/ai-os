@@ -8,7 +8,7 @@
  * Exports: getDb, readState, regenerateViews, nextId
  */
 
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -369,10 +369,141 @@ export function withTransaction(db, callback) {
 /**
  * Compute the next sequential ID for a given prefix (E, P, T).
  */
-export function nextId(db, prefix) {
-  const rows = db.prepare("SELECT id FROM tasks WHERE id LIKE ?").all(`${prefix}-%`);
-  const nums = rows.map(r => parseInt(r.id.split("-")[1], 10)).filter(n => !isNaN(n));
-  return `${prefix}-${nums.length > 0 ? Math.max(...nums) + 1 : 1}`;
+// Highest numeric suffix among `<prefix>-N` ids, or 0 when none match.
+function _maxIdNum(ids, prefix) {
+  let max = 0;
+  for (const id of ids) {
+    if (typeof id !== "string" || !id.startsWith(`${prefix}-`)) continue;
+    const n = parseInt(id.split("-")[1], 10);
+    if (!isNaN(n) && n > max) max = n;
+  }
+  return max;
+}
+
+// E-109 (drift-resolution-2026.md): highest `<prefix>-N` id across every
+// .ai/archive/state-done-*.json. Archived tasks have been DELETEd from the live
+// table, so their ids must still bound the sequence or nextId can re-issue a
+// retired id (the state-json-db-mismatch incident). Fail-soft on missing/corrupt
+// archives — a bad file must never block task creation.
+function _archivedMaxId(aiDir, prefix) {
+  if (!aiDir) return 0;
+  try {
+    const dir = resolve(aiDir, "archive");
+    if (!existsSync(dir)) return 0;
+    let max = 0;
+    for (const f of readdirSync(dir)) {
+      if (!/^state-done-.*\.json$/.test(f)) continue;
+      let rows;
+      try { rows = JSON.parse(readFileSync(resolve(dir, f), "utf8")); } catch { continue; }
+      if (!Array.isArray(rows)) continue;
+      const m = _maxIdNum(rows.map(t => t && t.id), prefix);
+      if (m > max) max = m;
+    }
+    return max;
+  } catch {
+    return 0;
+  }
+}
+
+// E-109: allocate the next task id without ever colliding with an archived or
+// previously-issued id. The next number is max(live, archived, high-water) + 1.
+// PURE — it never writes, so a speculative nextId() for an add_task that later
+// fails validation does not burn an id. The caller persists the high-water via
+// recordIdHighWater() only after the row is actually inserted.
+export function nextId(db, prefix, aiDir) {
+  const liveRows = db.prepare("SELECT id FROM tasks WHERE id LIKE ?").all(`${prefix}-%`);
+  const liveMax  = _maxIdNum(liveRows.map(r => r.id), prefix);
+  const archMax  = _archivedMaxId(aiDir, prefix);
+
+  const hwRow = db.prepare("SELECT value FROM project WHERE key = ?").get(`last_id_${prefix}`);
+  const hwMax = hwRow ? (parseInt(hwRow.value, 10) || 0) : 0;
+
+  return `${prefix}-${Math.max(liveMax, archMax, hwMax) + 1}`;
+}
+
+// E-109: persist the per-prefix high-water mark AFTER a task row is committed, so
+// the sequence stays monotonic even if the row is later DELETEd from the live
+// table without being archived. Idempotent: only advances, never regresses.
+export function recordIdHighWater(db, id) {
+  if (typeof id !== "string" || !id.includes("-")) return;
+  const [prefix, numStr] = id.split("-");
+  const num = parseInt(numStr, 10);
+  if (isNaN(num)) return;
+  const key = `last_id_${prefix}`;
+  const row = db.prepare("SELECT value FROM project WHERE key = ?").get(key);
+  const cur = row ? (parseInt(row.value, 10) || 0) : 0;
+  if (num > cur) db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES (?, ?)").run(key, String(num));
+}
+
+// ── Archive rotation (E-111: single-source ownership) ───────────────────────
+// The SQLite-aware rotation for DONE tasks and audit stamps lives here so both
+// task-synchronizer-mcp (the archive_done_tasks tool) and archive-manager-mcp
+// (execute_archive) share ONE implementation — no more byte-duplicated copies,
+// and no writes to the regenerated state.json view. Both regenerate the .ai/
+// markdown views from SQLite after mutating, preserving the ACID contract.
+export const DONE_ARCHIVE_THRESHOLD  = 50;
+export const DONE_KEEP_RECENT        = 10;
+export const STAMP_ARCHIVE_THRESHOLD = 50;
+export const STAMP_KEEP_RECENT       = 10;
+
+// Generic JSON-array archive append + delete for one table. Returns
+// { archived, kept, archivePath } or null when at/below threshold.
+function _rotateToArchive(aiDir, db, { table, orderBy, fileStem, threshold, keep }) {
+  const rows = db.prepare(`SELECT * FROM ${table} ORDER BY ${orderBy}`).all();
+  if (rows.length <= threshold) return null;
+
+  const toArchive  = rows.slice(0, rows.length - keep);
+  const archiveIds = toArchive.map(r => r.id);
+
+  const ym          = new Date().toISOString().slice(0, 7);
+  const archiveDir  = resolve(aiDir, "archive");
+  mkdirSync(archiveDir, { recursive: true });
+  const archivePath = resolve(archiveDir, `${fileStem}-${ym}.json`);
+
+  let existing = [];
+  if (existsSync(archivePath)) {
+    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
+  }
+  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
+
+  const ph = archiveIds.map(() => "?").join(",");
+  db.prepare(`DELETE FROM ${table} WHERE id IN (${ph})`).run(...archiveIds);
+
+  regenerateViews(aiDir, db);
+  return { archived: toArchive.length, kept: keep, archivePath };
+}
+
+// Move old DONE tasks (beyond the last DONE_KEEP_RECENT) to
+// .ai/archive/state-done-YYYY-MM.json when the count exceeds the threshold.
+export function archiveDoneTasks(aiDir, db) {
+  const done = db.prepare("SELECT * FROM tasks WHERE status = 'DONE' ORDER BY rowid").all();
+  if (done.length <= DONE_ARCHIVE_THRESHOLD) return null;
+  // Reuse the generic rotator but scoped to DONE rows (it re-selects with the
+  // same predicate via a temp view would be overkill; inline the DONE slice).
+  const toArchive   = done.slice(0, done.length - DONE_KEEP_RECENT);
+  const archiveIds  = toArchive.map(t => t.id);
+  const ym          = new Date().toISOString().slice(0, 7);
+  const archiveDir  = resolve(aiDir, "archive");
+  mkdirSync(archiveDir, { recursive: true });
+  const archivePath = resolve(archiveDir, `state-done-${ym}.json`);
+  let existing = [];
+  if (existsSync(archivePath)) {
+    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
+  }
+  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
+  const ph = archiveIds.map(() => "?").join(",");
+  db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...archiveIds);
+  regenerateViews(aiDir, db);
+  return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
+}
+
+// Rotate the oldest audit stamps to .ai/archive/stamps-YYYY-MM.json once the
+// stamps table exceeds STAMP_ARCHIVE_THRESHOLD, keeping the newest in state.
+export function archiveStamps(aiDir, db) {
+  return _rotateToArchive(aiDir, db, {
+    table: "stamps", orderBy: "id", fileStem: "stamps",
+    threshold: STAMP_ARCHIVE_THRESHOLD, keep: STAMP_KEEP_RECENT,
+  });
 }
 
 /**
