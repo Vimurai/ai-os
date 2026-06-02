@@ -8,7 +8,7 @@
  * Exports: getDb, readState, regenerateViews, nextId
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -433,6 +433,77 @@ export function recordIdHighWater(db, id) {
   const row = db.prepare("SELECT value FROM project WHERE key = ?").get(key);
   const cur = row ? (parseInt(row.value, 10) || 0) : 0;
   if (num > cur) db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES (?, ?)").run(key, String(num));
+}
+
+// ── Archive rotation (E-111: single-source ownership) ───────────────────────
+// The SQLite-aware rotation for DONE tasks and audit stamps lives here so both
+// task-synchronizer-mcp (the archive_done_tasks tool) and archive-manager-mcp
+// (execute_archive) share ONE implementation — no more byte-duplicated copies,
+// and no writes to the regenerated state.json view. Both regenerate the .ai/
+// markdown views from SQLite after mutating, preserving the ACID contract.
+export const DONE_ARCHIVE_THRESHOLD  = 50;
+export const DONE_KEEP_RECENT        = 10;
+export const STAMP_ARCHIVE_THRESHOLD = 50;
+export const STAMP_KEEP_RECENT       = 10;
+
+// Generic JSON-array archive append + delete for one table. Returns
+// { archived, kept, archivePath } or null when at/below threshold.
+function _rotateToArchive(aiDir, db, { table, orderBy, fileStem, threshold, keep }) {
+  const rows = db.prepare(`SELECT * FROM ${table} ORDER BY ${orderBy}`).all();
+  if (rows.length <= threshold) return null;
+
+  const toArchive  = rows.slice(0, rows.length - keep);
+  const archiveIds = toArchive.map(r => r.id);
+
+  const ym          = new Date().toISOString().slice(0, 7);
+  const archiveDir  = resolve(aiDir, "archive");
+  mkdirSync(archiveDir, { recursive: true });
+  const archivePath = resolve(archiveDir, `${fileStem}-${ym}.json`);
+
+  let existing = [];
+  if (existsSync(archivePath)) {
+    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
+  }
+  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
+
+  const ph = archiveIds.map(() => "?").join(",");
+  db.prepare(`DELETE FROM ${table} WHERE id IN (${ph})`).run(...archiveIds);
+
+  regenerateViews(aiDir, db);
+  return { archived: toArchive.length, kept: keep, archivePath };
+}
+
+// Move old DONE tasks (beyond the last DONE_KEEP_RECENT) to
+// .ai/archive/state-done-YYYY-MM.json when the count exceeds the threshold.
+export function archiveDoneTasks(aiDir, db) {
+  const done = db.prepare("SELECT * FROM tasks WHERE status = 'DONE' ORDER BY rowid").all();
+  if (done.length <= DONE_ARCHIVE_THRESHOLD) return null;
+  // Reuse the generic rotator but scoped to DONE rows (it re-selects with the
+  // same predicate via a temp view would be overkill; inline the DONE slice).
+  const toArchive   = done.slice(0, done.length - DONE_KEEP_RECENT);
+  const archiveIds  = toArchive.map(t => t.id);
+  const ym          = new Date().toISOString().slice(0, 7);
+  const archiveDir  = resolve(aiDir, "archive");
+  mkdirSync(archiveDir, { recursive: true });
+  const archivePath = resolve(archiveDir, `state-done-${ym}.json`);
+  let existing = [];
+  if (existsSync(archivePath)) {
+    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
+  }
+  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
+  const ph = archiveIds.map(() => "?").join(",");
+  db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...archiveIds);
+  regenerateViews(aiDir, db);
+  return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
+}
+
+// Rotate the oldest audit stamps to .ai/archive/stamps-YYYY-MM.json once the
+// stamps table exceeds STAMP_ARCHIVE_THRESHOLD, keeping the newest in state.
+export function archiveStamps(aiDir, db) {
+  return _rotateToArchive(aiDir, db, {
+    table: "stamps", orderBy: "id", fileStem: "stamps",
+    threshold: STAMP_ARCHIVE_THRESHOLD, keep: STAMP_KEEP_RECENT,
+  });
 }
 
 /**

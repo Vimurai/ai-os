@@ -25,7 +25,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 import { createLogger } from "../shared/logger.js";
@@ -121,73 +121,15 @@ function _importFromJson(jsonPath, db) {
 // _readState, _regenerateViews, _nextId are imported as _readState/_regenerateViews/_nextId above.
 
 // ── Archive ───────────────────────────────────────────────────────────────────
-
-const DONE_ARCHIVE_THRESHOLD = 50;
-const DONE_KEEP_RECENT       = 10;
-
-// E-108 (token-optimization.md §Components 2): rotate audit stamps out of the
-// hot-path state once they exceed the threshold, keeping only the most recent.
-const STAMP_ARCHIVE_THRESHOLD = 50;
-const STAMP_KEEP_RECENT       = 10;
+// E-111: archive rotation for DONE tasks + audit stamps (and its thresholds) now
+// lives in src/mcp/shared/state-db.js so task-synchronizer-mcp and
+// archive-manager-mcp share ONE implementation. _archiveDoneTasks / _archiveStamps
+// and the *_THRESHOLD constants are imported above.
 
 // E-107 (token-optimization.md §Components 1 / §Data Model): cap a DONE task's
 // stored summary so state.json stays light. The full narrative lives in LOG.md
 // (Engineer-managed). Rollback: set AI_OS_SUMMARY_CAP=2000.
 const SUMMARY_CAP = Number(process.env.AI_OS_SUMMARY_CAP) || 200;
-
-function _archiveDoneTasks(aiDir, db) {
-  const done = db.prepare("SELECT * FROM tasks WHERE status = 'DONE' ORDER BY rowid").all();
-  if (done.length <= DONE_ARCHIVE_THRESHOLD) return null;
-
-  const toArchive   = done.slice(0, done.length - DONE_KEEP_RECENT);
-  const archiveIds  = toArchive.map(t => t.id);
-
-  const ym          = new Date().toISOString().slice(0, 7);
-  const archiveDir  = resolve(aiDir, "archive");
-  mkdirSync(archiveDir, { recursive: true });
-  const archivePath = resolve(archiveDir, `state-done-${ym}.json`);
-
-  let existing = [];
-  if (existsSync(archivePath)) {
-    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
-  }
-  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
-
-  const ph = archiveIds.map(() => "?").join(",");
-  db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...archiveIds);
-
-  _regenerateViews(aiDir, db);
-  return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
-}
-
-// E-108 (token-optimization.md §Components 2): rotate the oldest audit stamps to
-// .ai/archive/stamps-YYYY-MM.json once the table exceeds STAMP_ARCHIVE_THRESHOLD,
-// keeping the STAMP_KEEP_RECENT newest in active state. Standard JSON so the
-// repo-oracle skill can still discover them. Returns null when below threshold.
-function _archiveStamps(aiDir, db) {
-  const stamps = db.prepare("SELECT * FROM stamps ORDER BY id").all();
-  if (stamps.length <= STAMP_ARCHIVE_THRESHOLD) return null;
-
-  const toArchive  = stamps.slice(0, stamps.length - STAMP_KEEP_RECENT);
-  const archiveIds = toArchive.map(s => s.id);
-
-  const ym          = new Date().toISOString().slice(0, 7);
-  const archiveDir  = resolve(aiDir, "archive");
-  mkdirSync(archiveDir, { recursive: true });
-  const archivePath = resolve(archiveDir, `stamps-${ym}.json`);
-
-  let existing = [];
-  if (existsSync(archivePath)) {
-    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
-  }
-  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
-
-  const ph = archiveIds.map(() => "?").join(",");
-  db.prepare(`DELETE FROM stamps WHERE id IN (${ph})`).run(...archiveIds);
-
-  _regenerateViews(aiDir, db);
-  return { archived: toArchive.length, kept: STAMP_KEEP_RECENT, archivePath };
-}
 
 // ── E-74: Cloud sync hook ────────────────────────────────────────────────────
 // Per .ai/blueprints/managed-agents-state-reconciliation.md §Components 2:
