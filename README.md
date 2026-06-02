@@ -260,14 +260,15 @@ The bootloader fires these automatically when it detects matching diffs:
 | failing test | `ai-debug` | LOCKS commits until green |
 | existing code | `repo-oracle` | Surfaces history before edits |
 
-### Hand-off between agents
+### Hand-off between agents (Manual & Autonomous)
 ```text
-# Engineer → Architect (escalate a design question):
+# Manual Engineer → Architect (escalate a design question):
 skill: ai-handoff             # produces .ai/COMM.md packet, then switch tmux pane
 
-# Architect → Engineer:
-# In the Gemini pane, prompt: "Approve P-43 and add E-## breakdown."
-# Engineer's next preflight in the Claude pane will surface the unread delta automatically.
+# Autonomous Ping-Pong (Interactive Bridge):
+# Run `ai watch` in a hidden pane. When Gemini finishes planning, it will call 
+# the `handoff_control` tool to automatically wake Claude in the adjacent pane.
+# If Claude hits a wall (Task Budget exhausted), it will wake Gemini for help.
 ```
 
 ---

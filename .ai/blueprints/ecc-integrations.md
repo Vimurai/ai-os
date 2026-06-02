@@ -40,7 +40,7 @@ These features transition AI-OS from a strictly sequential, manually-skilled sys
 ```
 
 ## API / Interface Contracts
-- **`mcp_task-synchronizer_add_task`:** Updated to accept optional `depends_on: string[]` parameter. Returns `[SCHEMA_FAIL]` if a circular dependency is detected.
+- **`mcp_task-synchronizer_add_task`:** Updated to accept optional `depends_on: string[]` parameter. Returns `[DAG_FAIL]` if a circular dependency is detected.
 - **`mcp_task-synchronizer_update_task_status`:** When an `E-##` task is marked `DONE`, the system triggers an evaluation of dependent tasks to change their status from `BLOCKED` to `OPEN`.
 - **`meta_analyst_extract_instincts`:** Internal subagent prompt that outputs a JSON payload containing proposed skill structures based on recent successful `E-##` completions.
 

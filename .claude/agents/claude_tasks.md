@@ -20,9 +20,9 @@ Target: .ai/TASKS.md
 - `.ai/DECISIONS.md` — only if the task involves recording or linking pending decisions
 
 ## Rules
-- Edit ONLY the "## Claude (Architecture/Core/Security/DevOps/Tests)" section.
-- Preserve Gemini (G-##) and Cross-cutting (X-##) sections exactly.
-- Use C-## numbering sequentially from the current highest + 1.
+- Edit ONLY the "## Engineer (Claude)" section.
+- Preserve Architect (P-##) and Cross-cutting (X-##) sections exactly.
+- Use E-## numbering sequentially from the current highest + 1.
 - Each task must include all fields: Owner, Outcome, Area, Verify, DoneDefinition, NeedsDecision.
 - Link to a DECISION (D-###) for any task that adds a dependency or changes a security boundary.
 - Mark completed tasks with ~~strikethrough~~ or remove them (do not accumulate indefinitely).

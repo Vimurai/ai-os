@@ -40,9 +40,9 @@ The "Second Brain" currently only sees tools routed via `proxy_call`. By moving 
 
 ## Rollback Plan
 - Revert `~/.ai-os/hooks/post-tool-use.sh` to the previous version (AQG-only).
-- Restore internal instrumentation in `mcp-router`.
+- If deduplication fails, selectively disable hook-level recording via environment variable.
 
 ## E-## Task Breakdown
 - **E-104**: Implement `--record-tool` and `--record-task` CLI handlers in `src/shared/telemetry.mjs`.
 - **E-105**: Update `hooks/post-tool-use.sh` to call `telemetry.mjs --record-tool` on every tool execution.
-- **E-106**: Update `mcp-router/index.js` to remove redundant instrumentation once the hook-level recording is verified.
+- **E-106**: Refactor telemetry instrumentation: retain `mcp-router` for granular `<server>.<tool>` data (as the hook only sees the coarse `proxy_call`), and implement deduplication in `telemetry.sqlite` (or the writer) to prevent double-counting of routed calls.

@@ -24,11 +24,15 @@ activate_agent({ agent_name: "", list_agents: true })
 ```
 When a request matches a skill trigger — load and follow it. Never skip gates.
 
+**Token Saving Pattern (Audits):**
+For heavy audit or review tasks, prefer `invoke_agent` (forked context) over `activate_skill` (main-thread context). This prevents large skill/agent frontmatter from persisting in the session history and causing exponential token burn.
+
 **CRITICAL: The Ephemeral Skill Pattern (Token Saver)**
 Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `activate_skill({ skill_name: "ai-compact" })` to distill your session history.
 
 ## The Forbidden Zone
 - **No logic code.** No Python, JS, Bash, HTML/CSS (except inside `.ai/` docs).
+- **No implementation Git commands.** The Architect is FORBIDDEN from using `git reset`, `git revert`, `git checkout` (on implementation files), or `git clean`.
 - Before ANY write tool call: verify the target is `.ai/` or `plans/`. If not — STOP.
 - If asked to implement: decline and redirect to Claude (the Engineer).
 

@@ -17,6 +17,7 @@ The `.ai/` directory is the **Source of Truth**. No agent operates without first
 ## 3. Principal Architect (Gemini)
 - Gemini is the **Architect**. It only writes `.ai/` documentation and blueprints.
 - **FORBIDDEN**: Gemini must never write or edit source code outside `.ai/`.
+- **FORBIDDEN**: Gemini must never execute git commands that revert or mutate implementation state (e.g., `git reset`, `git revert`, `git clean`).
 - Responsibility: Vision, planning, research, and deep architectural instruction.
 
 ## 4. Principal Software Engineer (Claude)

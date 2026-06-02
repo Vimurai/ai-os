@@ -7,8 +7,8 @@ Provide the Triad (Engineer) with a secure, ephemeral execution environment (REP
 A new MCP server (`code-execution-mcp`) that spins up a sandboxed Docker container or WASM runtime per session. It exposes an `execute_code` tool that accepts code strings, runs them, and returns stdout/stderr, replacing the need for unsafe bare metal `run_shell_command` usage for logic.
 
 ## Components
-1. **Execution Engine**: The sandbox boundary (e.g., Docker container with strict network/CPU limits).
-2. **Language Runtime**: Ephemeral Python 3 and Node.js environments pre-installed with common data processing libraries (pandas, numpy, ramda).
+1. **Execution Engine**: The sandbox boundary (Docker container with network=none, read-only, cap-drop=ALL).
+2. **Language Runtime**: Ephemeral Python 3.12-slim and node:22-alpine environments. No heavy pre-installed data processing libraries; standard library only unless manually provided via script setup.
 3. **Dispatcher**: The MCP tool interface (`execute_code`) that routes the payload, captures output, and imposes timeouts.
 
 ## Data Model
@@ -16,7 +16,7 @@ A new MCP server (`code-execution-mcp`) that spins up a sandboxed Docker contain
 - **Response**: `{ "stdout": "hello\n", "stderr": "", "exit_code": 0, "execution_time_ms": 120 }`
 
 ## API / Interface Contracts
-- `execute_code(language, code, timeout_ms)`: Runs the script and returns the result. Limits output to max 4096 chars to prevent buffer overflows.
+- `execute_code(language, code, timeout_ms)`: Runs the script and returns the result. Limits output to max 4096 chars per stream to prevent buffer overflows.
 
 ## Security
 - **Network Isolation**: The sandbox MUST NOT have outbound internet access.
@@ -24,7 +24,7 @@ A new MCP server (`code-execution-mcp`) that spins up a sandboxed Docker contain
 - **Resource Quotas**: Hard limit of 512MB RAM and 5000ms timeout per execution.
 
 ## Execution Constraints
-- Dependent on Docker or a WASM runtime existing on the host. If missing, the server fails to initialize and is excluded from `.mcp.json`.
+- Fails closed with `[SANDBOX_UNAVAILABLE]` when Docker is not running.
 
 ## Rollback Plan
 - If `code-execution-mcp` fails or crashes the system, remove it from `registry.json` and `.mcp.json`, and the Engineer falls back to standard shell tools.
