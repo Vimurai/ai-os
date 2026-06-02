@@ -93,6 +93,33 @@ _regenerate_mcp_docs() {
   fi
 }
 
+# E-110: regenerate .ai/blueprints/_INDEX.md so it always lists every blueprint
+# (the hand-curated index silently omitted 20+). Fail-open — never blocks sync.
+_regenerate_blueprints_index() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "  ⚠ node not found — skipping _INDEX.md regeneration" >&2
+    return 0
+  fi
+  local SCRIPT=""
+  for candidate in \
+      "scripts/generate_blueprints_index.mjs" \
+      "${AIOS}/scripts/generate_blueprints_index.mjs"; do
+    if [[ -f "$candidate" ]]; then
+      SCRIPT="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$SCRIPT" ]]; then
+    echo "  ⚠ generate_blueprints_index.mjs not found — skipping _INDEX.md regeneration" >&2
+    return 0
+  fi
+  if node "$SCRIPT" 2>/dev/null; then
+    echo "  ✓ .ai/blueprints/_INDEX.md regenerated (all blueprints indexed)"
+  else
+    echo "  ⚠ _INDEX.md regeneration failed (sync continues)" >&2
+  fi
+}
+
 # E-53/E-58: Flush .ai/state.sqlite WAL via the node:sqlite-backed
 # wal-flusher.mjs helper (drift-resolution-2026.md §State Singularity +
 # wal-checkpoint-node.md). Path is hardcoded — the node script also
@@ -1235,6 +1262,10 @@ do_sync() {
   # E-52: regenerate .ai/blueprints/mcp.md from registry.json so the doc
   # cannot drift from the registered MCP server set.
   _regenerate_mcp_docs
+
+  # E-110: regenerate .ai/blueprints/_INDEX.md so the blueprint nav index
+  # always lists every domain blueprint (no manual-omission drift).
+  _regenerate_blueprints_index
 
   # E-53: flush state.sqlite WAL to prevent unbounded growth.
   _wal_checkpoint_state_db
