@@ -23,20 +23,25 @@ echo "===== blueprints_index_test.sh ====="
 assert_status 0 "generator exists"     test -f "$GEN"
 assert_status 0 "generator syntax OK"  node --check "$GEN"
 
-# ── T-BPI-S02: committed _INDEX.md byte-identical to a fresh --check run ──────
-TMP_OUT="$(mktemp)"
+# ── T-BPI-S02: generator output is deterministic + self-marked ───────────────
+# _INDEX.md is a generated artifact (gitignored like _SKILLS_INDEX.md), so we
+# test the generator's --check output rather than a committed file.
+TMP_OUT="$(mktemp)"; TMP_OUT2="$(mktemp)"
 ( cd "$REPO_ROOT" && node "$GEN" --check > "$TMP_OUT" 2>/dev/null )
-assert_status 0 "_INDEX.md byte-identical to generator (no hand-edit)" \
-  diff -q "$TMP_OUT" "$INDEX_MD"
+( cd "$REPO_ROOT" && node "$GEN" --check > "$TMP_OUT2" 2>/dev/null )
+assert_status 0 "generator output is deterministic (two runs identical)" \
+  diff -q "$TMP_OUT" "$TMP_OUT2"
 assert_status 0 "index marked auto-generated" \
-  grep -qE 'auto-generated — do NOT hand-edit' "$INDEX_MD"
+  grep -qE 'auto-generated — do NOT hand-edit' "$TMP_OUT"
+assert_status 1 "_INDEX.md is gitignored (not tracked — generated artifact)" \
+  git -C "$REPO_ROOT" ls-files --error-unmatch .ai/blueprints/_INDEX.md
 
-# ── T-BPI-S03: EVERY blueprint appears in the index (the E-110 acceptance) ────
+# ── T-BPI-S03: EVERY blueprint appears in the generated index (E-110 acceptance) ─
 MISSING=0
 for f in "${REPO_ROOT}"/.ai/blueprints/*.md; do
   base="$(basename "$f")"
   [[ "$base" == "_INDEX.md" ]] && continue
-  if ! grep -qF "\`${base}\`" "$INDEX_MD"; then
+  if ! grep -qF "\`${base}\`" "$TMP_OUT"; then
     echo "    ✗ missing from index: ${base}"
     MISSING=$((MISSING + 1))
   fi
@@ -44,7 +49,8 @@ done
 assert_status 0 "all blueprints indexed (0 omissions)" bash -c "[ $MISSING -eq 0 ]"
 # And the count footer matches the on-disk blueprint count.
 DISK_N="$(ls "${REPO_ROOT}"/.ai/blueprints/*.md | grep -vc '_INDEX.md')"
-assert_contains "index footer reports the on-disk count" "${DISK_N} blueprints indexed" "$(cat "$INDEX_MD")"
+assert_contains "index footer reports the on-disk count" "${DISK_N} blueprints indexed" "$(cat "$TMP_OUT")"
+rm -f "$TMP_OUT2"
 
 # ── T-BPI-S04: do_sync() wires the regenerator (node-guarded, mirror fallback) ─
 assert_status 0 "bin/ai defines _regenerate_blueprints_index()" \
