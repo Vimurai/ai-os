@@ -80,7 +80,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     },
     {
       name: "archive_done_tasks",
-      description: `Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when total DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}.`,
+      description: `State-hygiene rotation (token-optimization.md). Moves old DONE tasks (beyond the last ${DONE_KEEP_RECENT}) to .ai/archive/state-done-YYYYMM.json when DONE count exceeds ${DONE_ARCHIVE_THRESHOLD}, AND rotates old audit stamps (beyond the last 10) to .ai/archive/stamps-YYYYMM.json when the stamp count exceeds 50. Returns { archived_tasks, archived_stamps, archivePath }.`,
       inputSchema: { type: "object", properties: {} },
     },
     // append_tasks intentionally removed from tool list — disabled (bypasses SQLite).

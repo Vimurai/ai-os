@@ -125,6 +125,16 @@ function _importFromJson(jsonPath, db) {
 const DONE_ARCHIVE_THRESHOLD = 50;
 const DONE_KEEP_RECENT       = 10;
 
+// E-108 (token-optimization.md §Components 2): rotate audit stamps out of the
+// hot-path state once they exceed the threshold, keeping only the most recent.
+const STAMP_ARCHIVE_THRESHOLD = 50;
+const STAMP_KEEP_RECENT       = 10;
+
+// E-107 (token-optimization.md §Components 1 / §Data Model): cap a DONE task's
+// stored summary so state.json stays light. The full narrative lives in LOG.md
+// (Engineer-managed). Rollback: set AI_OS_SUMMARY_CAP=2000.
+const SUMMARY_CAP = Number(process.env.AI_OS_SUMMARY_CAP) || 200;
+
 function _archiveDoneTasks(aiDir, db) {
   const done = db.prepare("SELECT * FROM tasks WHERE status = 'DONE' ORDER BY rowid").all();
   if (done.length <= DONE_ARCHIVE_THRESHOLD) return null;
@@ -148,6 +158,35 @@ function _archiveDoneTasks(aiDir, db) {
 
   _regenerateViews(aiDir, db);
   return { archived: toArchive.length, kept: DONE_KEEP_RECENT, archivePath };
+}
+
+// E-108 (token-optimization.md §Components 2): rotate the oldest audit stamps to
+// .ai/archive/stamps-YYYY-MM.json once the table exceeds STAMP_ARCHIVE_THRESHOLD,
+// keeping the STAMP_KEEP_RECENT newest in active state. Standard JSON so the
+// repo-oracle skill can still discover them. Returns null when below threshold.
+function _archiveStamps(aiDir, db) {
+  const stamps = db.prepare("SELECT * FROM stamps ORDER BY id").all();
+  if (stamps.length <= STAMP_ARCHIVE_THRESHOLD) return null;
+
+  const toArchive  = stamps.slice(0, stamps.length - STAMP_KEEP_RECENT);
+  const archiveIds = toArchive.map(s => s.id);
+
+  const ym          = new Date().toISOString().slice(0, 7);
+  const archiveDir  = resolve(aiDir, "archive");
+  mkdirSync(archiveDir, { recursive: true });
+  const archivePath = resolve(archiveDir, `stamps-${ym}.json`);
+
+  let existing = [];
+  if (existsSync(archivePath)) {
+    try { existing = JSON.parse(readFileSync(archivePath, "utf8")); } catch { existing = []; }
+  }
+  writeFileSync(archivePath, JSON.stringify([...existing, ...toArchive], null, 2) + "\n", "utf8");
+
+  const ph = archiveIds.map(() => "?").join(",");
+  db.prepare(`DELETE FROM stamps WHERE id IN (${ph})`).run(...archiveIds);
+
+  _regenerateViews(aiDir, db);
+  return { archived: toArchive.length, kept: STAMP_KEEP_RECENT, archivePath };
 }
 
 // ── E-74: Cloud sync hook ────────────────────────────────────────────────────
@@ -446,9 +485,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           .run(deps.length ? JSON.stringify(deps) : null, args.id);
       }
 
+      // E-107: cap the stored summary at SUMMARY_CAP chars. The full narrative
+      // belongs in LOG.md (Engineer-managed); state keeps a capped reference.
+      let storedSummary = args.summary ?? null;
+      let summaryTruncated = false;
+      if (typeof storedSummary === "string" && storedSummary.length > SUMMARY_CAP) {
+        const suffix = " …[full in LOG.md]";
+        storedSummary = storedSummary.slice(0, Math.max(0, SUMMARY_CAP - suffix.length)).trimEnd() + suffix;
+        summaryTruncated = true;
+      }
+
       if (args.status === "DONE") {
         db.prepare("UPDATE tasks SET status = ?, completed_at = ?, summary = ? WHERE id = ?")
-          .run(args.status, new Date().toISOString(), args.summary ?? null, args.id);
+          .run(args.status, new Date().toISOString(), storedSummary, args.id);
       } else {
         db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(args.status, args.id);
       }
@@ -473,7 +522,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // E-74: schedule cloud projection sync after the status transition.
       _scheduleCloudSync(aiDir);
       const unblockNote = unblocked.length ? ` | unblocked: ${unblocked.join(", ")}` : "";
-      return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${args.summary ? ": " + args.summary : ""}${unblockNote}` }] };
+      const truncNote   = summaryTruncated ? ` | [SUMMARY_TRUNCATED] summary capped at ${SUMMARY_CAP} chars — keep the full narrative in LOG.md` : "";
+      return { content: [{ type: "text", text: `✓ ${args.id} → ${args.status}${storedSummary ? ": " + storedSummary : ""}${unblockNote}${truncNote}` }] };
     }
 
     // ── add_stamp ─────────────────────────────────────────────────────────────
@@ -504,12 +554,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── archive_done_tasks ────────────────────────────────────────────────────
     case "archive_done_tasks": {
-      const result = _archiveDoneTasks(aiDir, db);
-      if (!result) {
-        const doneCount = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status = 'DONE'").get().n;
-        return { content: [{ type: "text", text: `✓ No archive needed — ${doneCount} DONE tasks (threshold: ${DONE_ARCHIVE_THRESHOLD})` }] };
+      // E-108: rotate BOTH DONE tasks and audit stamps. They have independent
+      // thresholds, so a run may archive one, the other, both, or neither.
+      const taskResult  = _archiveDoneTasks(aiDir, db);
+      const stampResult = _archiveStamps(aiDir, db);
+      const archived_tasks  = taskResult  ? taskResult.archived  : 0;
+      const archived_stamps = stampResult ? stampResult.archived : 0;
+
+      if (!taskResult && !stampResult) {
+        const doneCount  = db.prepare("SELECT COUNT(*) as n FROM tasks WHERE status = 'DONE'").get().n;
+        const stampCount = db.prepare("SELECT COUNT(*) as n FROM stamps").get().n;
+        return { content: [{ type: "text", text: `✓ No archive needed — ${doneCount} DONE tasks (threshold ${DONE_ARCHIVE_THRESHOLD}), ${stampCount} stamps (threshold ${STAMP_ARCHIVE_THRESHOLD})` }] };
       }
-      return { content: [{ type: "text", text: `✓ [AUTO-ARCHIVE] ${result.archived} DONE tasks → ${result.archivePath}\n  ${result.kept} recent DONE tasks kept.` }] };
+
+      const archivePath = (stampResult && stampResult.archivePath) || (taskResult && taskResult.archivePath) || null;
+      const lines = ["✓ [AUTO-ARCHIVE]"];
+      if (taskResult)  lines.push(`  ${taskResult.archived} DONE tasks → ${taskResult.archivePath} (${taskResult.kept} recent kept)`);
+      if (stampResult) lines.push(`  ${stampResult.archived} stamps → ${stampResult.archivePath} (${stampResult.kept} recent kept)`);
+      lines.push(`  ${JSON.stringify({ archived_tasks, archived_stamps, archivePath })}`);
+      return { content: [{ type: "text", text: lines.join("\n") }] };
     }
 
     // ── Legacy: sync_tasks (DEPRECATED E-147/E-149) ───────────────────────────
