@@ -184,6 +184,27 @@ _generate_repo_map() {
   fi
 }
 
+# E-112 (caching.md §3.1): rebuild the cache-manager System Context cache during
+# sync so the cache-manager-mcp is actually exercised in a live flow (it was
+# built but never invoked). Fail-open; AI_OS_DISABLE_CACHE=1 is the escape hatch.
+_rebuild_context_cache() {
+  [[ "${AI_OS_DISABLE_CACHE:-}" == "1" ]] && { echo "  ⚠ context cache skipped (AI_OS_DISABLE_CACHE=1)"; return 0; }
+  if ! command -v node >/dev/null 2>&1; then
+    echo "  ⚠ node not found — skipping context cache rebuild" >&2
+    return 0
+  fi
+  local server="${AIOS}/mcp/cache-manager-mcp/index.js"
+  if [[ ! -f "$server" ]]; then
+    echo "  ⚠ cache-manager-mcp not installed — skipping context cache (run: ai install)" >&2
+    return 0
+  fi
+  if node "$server" --build 2>/dev/null; then
+    echo "  ✓ context cache rebuilt (cache-manager System Context)"
+  else
+    echo "  ⚠ context cache rebuild failed — non-fatal (sync continues)" >&2
+  fi
+}
+
 # E-62: Resolve canonical AI-OS framework clone path. Order:
 #   1. $AIOS_WORKSPACE if already exported (interactive shell, just-installed)
 #   2. ${AIOS}/config/aios-workspace.txt (persisted by install-ai-os.sh)
@@ -1922,6 +1943,9 @@ case "$cmd" in
   sync)          do_sync "${@:2}" ;;
   doctor)        doctor "${@:2}" ;;
   uninstall)     do_uninstall ;;
+  # E-115 (interactive-bridge.md): the tmux watcher. Delegates to the global
+  # ai-watch script so `ai watch` and the bare `ai-watch` binary share one impl.
+  watch)         exec "${AIOS}/bin/ai-watch" "${@:2}" ;;
   version|-v|--version) echo "ai-os ${VERSION}" ;;
   ""|help|-h|--help) usage ;;
 

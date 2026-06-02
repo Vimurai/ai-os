@@ -67,6 +67,18 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       },
     },
     {
+      name: "handoff_control",
+      description: "Interactive Bridge (interactive-bridge.md): emit a structured handoff signal to .ai/signal.json so the `ai watch` tmux watcher wakes the target agent's pane and injects the message. Overwrites the signal each call. The MCP only writes JSON — `ai watch` escapes the message before tmux send-keys.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          target:  { type: "string", enum: ["claude", "gemini"], description: "Which agent to wake: 'claude' (Engineer, pane 0) or 'gemini' (Architect, pane 1)." },
+          message: { type: "string", description: "Message to inject into the target pane, e.g. 'Planning complete. Execute OPEN tasks.'" },
+        },
+        required: ["target", "message"],
+      },
+    },
+    {
       name: "set_project_focus",
       description: "Updates the project's current focus and tier.",
       inputSchema: {

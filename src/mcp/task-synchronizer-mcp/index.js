@@ -485,6 +485,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: `✓ Stamp [${args.type}] added by ${args.agent}` }] };
     }
 
+    // ── handoff_control (E-114, interactive-bridge.md) ──────────────────────────
+    // Emit a structured signal to .ai/signal.json so the `ai watch` tmux watcher
+    // can wake the target agent's pane. Overwrites the signal each call (the
+    // watcher consumes the latest). This MCP only writes JSON (no shell) — the
+    // watcher is responsible for escaping the message before `tmux send-keys`.
+    case "handoff_control": {
+      const target = args.target;
+      if (target !== "claude" && target !== "gemini") {
+        return { content: [{ type: "text", text: "✗ [INVALID_TARGET] target must be 'claude' or 'gemini'." }], isError: true };
+      }
+      const message = typeof args.message === "string" ? args.message.trim() : "";
+      if (!message) {
+        return { content: [{ type: "text", text: "✗ [EMPTY_MESSAGE] a non-empty message is required." }], isError: true };
+      }
+      const payload = { timestamp: new Date().toISOString(), target, message };
+      const signalPath = resolve(aiDir, "signal.json");
+      try {
+        writeFileSync(signalPath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+      } catch (e) {
+        return { content: [{ type: "text", text: `✗ [SIGNAL_WRITE_FAILED] ${e.message}` }], isError: true };
+      }
+      return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target}: ${message}\n  signal: ${signalPath}` }] };
+    }
+
     // ── set_project_focus ─────────────────────────────────────────────────────
     case "set_project_focus": {
       const _focusErr = _assertSchema("project_update", args);
