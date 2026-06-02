@@ -193,11 +193,27 @@ function _doRecordTaskVelocity(payload, opts) {
   }
 }
 
+// E-106 (universal-telemetry.md): the mcp-router records a GRANULAR
+// `<server>.<tool>` row for every proxy_call, while the global edge hook
+// (post-tool-use.sh) ALSO records the COARSE wrapper for the same routed call.
+// Drop that coarse duplicate at the writer so a routed call is counted once —
+// the granular row is the source of truth. Other mcp-router tools
+// (activate_domain/list_domains) have no granular counterpart and are kept.
+// Rollback: AI_OS_TELEMETRY_NO_DEDUP=1 keeps both rows.
+const ROUTER_PROXY_WRAPPER = "mcp__mcp-router__proxy_call";
+
+function _isRoutedDuplicate(payload) {
+  if (process.env.AI_OS_TELEMETRY_NO_DEDUP === "1") return false;
+  const t = typeof payload?.tool_name === "string" ? payload.tool_name.trim() : "";
+  return t === ROUTER_PROXY_WRAPPER;
+}
+
 // Public entry — fire-and-forget. The wrapper defers the actual sync write
 // to the next macrotask so the calling MCP returns its response immediately.
 // All errors are swallowed inside _doRecord*.
 export function recordToolExecution(payload, opts) {
   if (_isDisabled()) return;
+  if (_isRoutedDuplicate(payload)) return; // coarse proxy_call dup — router logs the granular row
   if (opts?.sync === true) {
     _doRecordToolExecution(payload, opts);
     return;
