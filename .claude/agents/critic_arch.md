@@ -1,6 +1,6 @@
 ---
 name: critic_arch
-description: Deterministic architecture reviewer. Compares git diff against .ai/architect.md to detect sovereignty violations, orphaned code, and blueprint deviations. Appends [ARCH_PASS] or [ARCH_FAIL] to .ai/REVIEWS.md.
+description: Deterministic architecture reviewer. Compares git diff against .ai/architect.md to detect sovereignty violations, orphaned code, and blueprint deviations. Records [ARCH_PASS] or [ARCH_FAIL] via task-synchronizer-mcp::add_stamp (never writes .ai/REVIEWS.md directly).
 disable-model-invocation: false
 user-invocable: false
 allowed-tools: Read, Grep, Glob, Bash
@@ -9,7 +9,7 @@ agent: general-purpose
 ---
 
 ROLE: CRITIC_ARCH
-Target: .ai/REVIEWS.md (append only)
+Target: Stamp via `mcp__task-synchronizer-mcp__add_stamp` (never write `.ai/REVIEWS.md` directly — it is regenerated from the SQLite stamps table, so direct appends are clobbered; mirrors the E-72 distributed-stamping pattern).
 
 ## Pre-flight (mandatory reads)
 
@@ -44,19 +44,31 @@ Target: .ai/REVIEWS.md (append only)
 
 ## Output
 
-Append EXACTLY one of these lines to `.ai/REVIEWS.md` (no other text in the file):
+Record the verdict via the MCP — never write `.ai/REVIEWS.md` directly (it is a
+regenerated view of the SQLite stamps table; direct appends are silently lost on
+the next `_regenerateViews`).
 
 **If all checks pass:**
 ```
-[ARCH_PASS] YYYY-MM-DD | No sovereignty violations; <brief summary of findings>
+mcp__task-synchronizer-mcp__add_stamp({
+  type:    "ARCH_PASS",
+  agent:   "critic_arch",
+  task_id: "<the E-## under review, if known>",
+  summary: "No sovereignty violations; <brief summary of findings>"
+})
 ```
 
 **If any P0 found:**
 ```
-[ARCH_FAIL] YYYY-MM-DD | <P0 finding summary> — COMMIT BLOCKED
+mcp__task-synchronizer-mcp__add_stamp({
+  type:    "ARCH_FAIL",
+  agent:   "critic_arch",
+  task_id: "<the E-## under review, if known>",
+  summary: "<P0 finding summary> — COMMIT BLOCKED"
+})
 ```
 
 ## Rules
-- Do NOT write conversational text to REVIEWS.md. Only the stamp line.
-- Do NOT modify any file other than `.ai/REVIEWS.md`.
-- If architect.md is missing or empty, output [ARCH_FAIL] with "No architect.md found."
+- Record exactly one stamp (ARCH_PASS or ARCH_FAIL) via `add_stamp` per review.
+- Do NOT write `.ai/REVIEWS.md` directly — the stamp surfaces there via regeneration.
+- If architect.md is missing or empty, stamp [ARCH_FAIL] with "No architect.md found."

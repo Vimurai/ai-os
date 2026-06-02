@@ -75,9 +75,24 @@ function parseFrontmatter(text) {
   if (end === -1) return null;
   const fm = text.slice(3, end);
   const result = {};
-  for (const line of fm.split("\n")) {
-    const m = line.match(/^([\w-]+):\s*(.+)$/);
-    if (m) result[m[1].trim()] = m[2].trim();
+  const lines = fm.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const inline = lines[i].match(/^([\w-]+):\s*(.+)$/);
+    if (inline) { result[inline[1].trim()] = inline[2].trim(); continue; }
+    // YAML list-form: `key:` on its own line followed by indented `- item`
+    // lines. Without this, a list-form `allowed-tools` dropped to "" and zero
+    // tools were audited — a Ghost-Tool bypass. Normalise to the same
+    // comma-joined shape the inline form produces.
+    const keyOnly = lines[i].match(/^([\w-]+):\s*$/);
+    if (keyOnly) {
+      const items = [];
+      let j = i + 1;
+      while (j < lines.length && /^\s*-\s+/.test(lines[j])) {
+        items.push(lines[j].replace(/^\s*-\s+/, "").trim());
+        j++;
+      }
+      if (items.length) { result[keyOnly[1].trim()] = items.join(", "); i = j - 1; }
+    }
   }
   return result;
 }
@@ -215,8 +230,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         resolve(cwd, "src", "claude", "skills"),
         resolve(cwd, "src", "shared", "skills"),
         resolve(cwd, "src", "gemini", "agents"),
+        resolve(cwd, "src", "gemini", "skills"),
         join(aios, "claude", "agents"),
+        join(aios, "claude", "skills"),
         join(aios, "gemini", "agents"),
+        join(aios, "gemini", "skills"),
+        join(aios, "shared", "skills"),
       ];
 
   // Collect all .md files

@@ -37,9 +37,17 @@ audit_agent() {
       if (end === -1) return null;
       const fm = text.slice(3, end);
       const result = {};
-      for (const line of fm.split('\n')) {
-        const m = line.match(/^([\w-]+):\s*(.+)$/);
-        if (m) result[m[1].trim()] = m[2].trim();
+      const lines = fm.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const inline = lines[i].match(/^([\w-]+):\s*(.+)$/);
+        if (inline) { result[inline[1].trim()] = inline[2].trim(); continue; }
+        const keyOnly = lines[i].match(/^([\w-]+):\s*$/);
+        if (keyOnly) {
+          const items = [];
+          let j = i + 1;
+          while (j < lines.length && /^\s*-\s+/.test(lines[j])) { items.push(lines[j].replace(/^\s*-\s+/, '').trim()); j++; }
+          if (items.length) { result[keyOnly[1].trim()] = items.join(', '); i = j - 1; }
+        }
       }
       return result;
     }
@@ -128,6 +136,45 @@ allowed-tools: Read, mcp__task-synchronizer-mcp__add_task, mcp__orchestrator-mcp
 result=$(audit_agent "$MCP_TOOLS")
 assert_contains "T-05.06: mcp__ prefixed tools pass as non-Ghost" "PASS" "$result"
 
+# T-05.06b: YAML list-form allowed-tools with a ghost tool must still FAIL.
+# Regression: the old same-line-only parser dropped list-form keys → 0 tools
+# audited → silent Ghost-Tool bypass.
+LISTFORM_GHOST='---
+name: listform-ghost
+description: list-form allowed-tools hiding a ghost tool
+disable-model-invocation: false
+user-invocable: false
+allowed-tools:
+  - Read
+  - NonExistentTool123
+---
+# List-form Ghost'
+result=$(audit_agent "$LISTFORM_GHOST")
+assert_contains "T-05.06b: list-form ghost tool detected (FAIL)" "FAIL" "$result"
+assert_contains "T-05.06c: list-form ghost tool name reported" "NonExistentTool123" "$result"
+
+# T-05.06d: list-form with only valid tools passes.
+LISTFORM_OK='---
+name: listform-ok
+description: list-form allowed-tools, all valid
+disable-model-invocation: false
+user-invocable: false
+allowed-tools:
+  - Read
+  - Bash
+---
+# List-form OK'
+result=$(audit_agent "$LISTFORM_OK")
+assert_contains "T-05.06d: list-form valid tools PASS" "PASS" "$result"
+
+# T-05.06e: the REAL module parses list-form frontmatter (source anchor, so the
+# inlined helpers above can't silently diverge from src/mcp/verification-mcp).
+assert_status 0 "T-05.06e: real parseFrontmatter handles list-form" \
+  grep -q 'keyOnly' "$VERIFY_MCP"
+# T-05.06f: default scan now covers gemini skills + installed-mirror skills.
+assert_status 0 "T-05.06f: scan includes src/gemini/skills" \
+  grep -qE '"src", *"gemini", *"skills"|src.*gemini.*skills' "$VERIFY_MCP"
+
 # T-05.07: Bulk scan of src/claude/agents/ — zero CRITICAL violations
 AGENTS_DIR="${REPO_ROOT}/src/claude/agents"
 if [[ -d "$AGENTS_DIR" ]]; then
@@ -144,9 +191,17 @@ if [[ -d "$AGENTS_DIR" ]]; then
       if (end === -1) return null;
       const fm = text.slice(3, end);
       const result = {};
-      for (const line of fm.split('\n')) {
-        const m = line.match(/^([\w-]+):\s*(.+)$/);
-        if (m) result[m[1].trim()] = m[2].trim();
+      const lines = fm.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const inline = lines[i].match(/^([\w-]+):\s*(.+)$/);
+        if (inline) { result[inline[1].trim()] = inline[2].trim(); continue; }
+        const keyOnly = lines[i].match(/^([\w-]+):\s*$/);
+        if (keyOnly) {
+          const items = [];
+          let j = i + 1;
+          while (j < lines.length && /^\s*-\s+/.test(lines[j])) { items.push(lines[j].replace(/^\s*-\s+/, '').trim()); j++; }
+          if (items.length) { result[keyOnly[1].trim()] = items.join(', '); i = j - 1; }
+        }
       }
       return result;
     }
