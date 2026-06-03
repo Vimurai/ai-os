@@ -30,6 +30,13 @@ POLL_INTERVAL="${AI_WATCH_INTERVAL:-1}"
 PROJECT_DIR="$(pwd)"
 SIGNAL="${PROJECT_DIR}/${SIGNAL_REL}"
 
+# E-121/E-122: delay (seconds) between injecting the literal message and pressing
+# Enter, so the target REPL finishes buffering the text before it is submitted.
+# Without it a fast Enter races the literal keystrokes and submits a truncated
+# line (or is dropped entirely). Tunable for slow panes; set 0 in tests / unusual
+# environments. Fractional seconds — macOS/BSD and GNU `sleep` both accept them.
+SUBMIT_DELAY="${AI_WATCH_SUBMIT_DELAY:-0.1}"
+
 # ── Preconditions ────────────────────────────────────────────────────────────
 # Guarded inside _preconditions() so the helpers below can be `source`d by the
 # test suite without tmux present and without launching the watch loop.
@@ -153,6 +160,17 @@ _pane_ready() {  # _pane_ready <pane_id> → 0 if idle/ready for input, 1 if bus
   for c in $AI_WATCH_READY_CMDS; do
     [[ "$cmd" == "$c" ]] && return 0
   done
+
+  # E-121/E-122: Claude Code reports its foreground command as its version string
+  # (e.g. "2.1.161"), so tmux's #{pane_current_command} is a semver, not a REPL
+  # name. Treat a leading N.N.N as ready. The `^` anchor (no trailing `$`) is
+  # deliberate — it permits build suffixes like "2.1.161-rc1"; requiring three
+  # numeric groups avoids matching bare PIDs/ports. This only relaxes the ready
+  # heuristic — injection stays literal (-l --), so a false-positive is benign.
+  if [[ "$cmd" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    return 0
+  fi
+
   return 1
 }
 
@@ -185,6 +203,7 @@ _drain_once() {
     # evaluation here); --: end option parsing so a leading '-' in the message is
     # data. Then submit with Enter.
     tmux send-keys -t "$pane" -l -- "$message"
+    sleep "$SUBMIT_DELAY"                       # let the literal text settle before Enter (E-121/E-122)
     tmux send-keys -t "$pane" Enter
     echo "ai-watch: routed → ${target} (${pane}) #$((CURSOR + 1)): ${message}"
     CURSOR=$((CURSOR + 1))

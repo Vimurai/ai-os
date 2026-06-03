@@ -148,6 +148,7 @@ _drain_scenario() {  # _drain_scenario <queue_json> <ready:0|1> <pane_id|''> <st
     tmux() { if [ "$1" = "send-keys" ]; then shift; _SENT="${_SENT}|$*"; fi; return 0; }
     resolve_pane() { [ -n "$rid" ] && printf '%s' "$rid"; }
     _pane_ready() { [ "$ready" = "1" ]; }
+    SUBMIT_DELAY=0                              # E-122: no real latency in tests
     CURSOR="$start"
     _drain_once 2>/dev/null
     printf 'cursor=%s sent=[%s]' "$CURSOR" "$_SENT"
@@ -190,5 +191,55 @@ assert_contains "E-118.B7: node → READY"   "READY" "$(_ready_probe node 0)"
 assert_contains "E-118.B7: bash → BUSY"    "BUSY"  "$(_ready_probe bash 0)"
 assert_contains "E-118.B7: python → BUSY"  "BUSY"  "$(_ready_probe python3 0)"
 assert_contains "E-118.B7: bypass → READY" "READY" "$(_ready_probe bash 1)"
+
+# ── E-121/E-122: version-string ready heuristic + submission delay ────────────
+# Formalizes the two E-121 manual fixes to src/bin/ai-watch:
+#   (1) Claude Code's foreground command is its version string (e.g. "2.1.161"),
+#       so #{pane_current_command} is a semver — a leading N.N.N counts as ready.
+#   (2) a settle delay between the literal send-keys and Enter so a fast Enter
+#       cannot race/truncate the injected message. Delay is now configurable.
+echo "── E-121/E-122: version-string readiness + submit delay ────────────"
+
+# S17: both fixes are present + the delay is parameterised (not a magic literal).
+assert_status 0 "E-122.S17: version-string regex permits N.N.N commands" \
+  grep -qF '=~ ^[0-9]+\.[0-9]+\.[0-9]+' "$WATCH"
+assert_status 0 "E-122.S17: submit delay configurable via AI_WATCH_SUBMIT_DELAY" \
+  grep -qF 'AI_WATCH_SUBMIT_DELAY' "$WATCH"
+assert_status 0 "E-122.S17: submit delay defaults to 0.1s" \
+  grep -qE 'SUBMIT_DELAY="\$\{AI_WATCH_SUBMIT_DELAY:-0\.1\}"' "$WATCH"
+assert_status 0 "E-122.S17: _drain_once sleeps SUBMIT_DELAY before Enter" \
+  grep -qE 'sleep "\$SUBMIT_DELAY"' "$WATCH"
+
+# B8: version-string foreground command (Claude Code) → READY, with boundaries.
+assert_contains "E-122.B8: version 2.1.161 → READY"              "READY" "$(_ready_probe 2.1.161 0)"
+assert_contains "E-122.B8: version 0.10.5 → READY"               "READY" "$(_ready_probe 0.10.5 0)"
+assert_contains "E-122.B8: version + suffix 2.1.161-rc1 → READY" "READY" "$(_ready_probe 2.1.161-rc1 0)"
+assert_contains "E-122.B8: two-part 2.1 → BUSY (needs 3 groups)" "BUSY"  "$(_ready_probe 2.1 0)"
+assert_contains "E-122.B8: bare pid 12345 → BUSY"                "BUSY"  "$(_ready_probe 12345 0)"
+
+# B9: submission reliability — message is injected, THEN a delay, THEN Enter.
+# Mock sleep + tmux to record the call ORDER without incurring real latency; the
+# captured "sleep(0.1)" also proves the 0.1s default reaches the sleep call.
+_submit_seq() {  # → ">msg>sleep(<delay>)>enter" call trace for one queued entry
+  ( source "$WATCH" 2>/dev/null
+    SIGNAL="$(mktemp)"; printf '%s' '[{"timestamp":"t","target":"claude","message":"go"}]' > "$SIGNAL"
+    _SEQ=""
+    tmux() {
+      if [ "$1" = "send-keys" ]; then shift
+        case " $* " in *" Enter "*) _SEQ="${_SEQ}>enter" ;; *) _SEQ="${_SEQ}>msg" ;; esac
+      fi; return 0; }
+    sleep() { _SEQ="${_SEQ}>sleep(${1})"; }
+    resolve_pane() { printf '%s' '%P'; }
+    _pane_ready() { return 0; }
+    CURSOR=0
+    _drain_once 2>/dev/null
+    printf '%s' "$_SEQ"
+    rm -f "$SIGNAL" )
+}
+assert_contains "E-122.B9: order is message → delay → Enter" ">msg>sleep(0.1)>enter" "$(_submit_seq)"
+
+# B9b: Enter is sent immediately after the literal message (captured via _SENT).
+out="$(_drain_scenario "$_Q2" 1 '%P' 0)"
+assert_contains "E-122.B9b: Enter follows the literal message" "-l -- alpha|-t %P Enter" "$out"
 
 assert_summary

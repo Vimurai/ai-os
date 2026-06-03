@@ -79,6 +79,12 @@
   Status: DONE 2026-06-03 — E-118 DONE — signal queue + busy-state detection (interactive-bridge.md §Data Model/§API). handoff_control now APPENDS to a FIFO array in .ai/signal.json (legacy flat-object migrated …[full in LOG.md]
 - [x] E-119: Enforce automatic handoff in Claude and Gemini workflows by updating prompt instructions (e.g., ai-handoff and ai-task skills) to strictly mandate calling handoff_control at session completion. per .ai/blueprints/interactive-bridge.md. | Tier: 2
   Status: DONE 2026-06-03 — E-119 DONE — automated handoff enforcement (interactive-bridge.md §Automated Handoff Enforcement). ai-handoff gains a MANDATORY Step 4 that emits the handoff_control bridge signal (C …[full in LOG.md]
+- [x] E-120: Implement a dummy workflow test task to verify the AI-OS task lifecycle. Acceptance: Mark this task as DONE with a summary acknowledging receipt; no source code changes required. | Tier: 1
+  Status: DONE 2026-06-03 — Dummy workflow test task #1 received and acknowledged. Task lifecycle verified end-to-end: preflight → sync check (SYNC_PASS) → DONE mark via task-synchronizer-mcp. No source changes (per acceptance).
+- [x] E-121: Workflow test task #2. Verify that ai-watch correctly routes this message to Claude's pane. Acceptance: Mark DONE with summary. | Tier: 1
+  Status: DONE 2026-06-03 — Workflow test task #2 received in Claude's pane — ai-watch routing confirmed working (Architect's handoff message reached the Engineer pane and triggered execution). No source change …[full in LOG.md]
+- [x] E-122: Formalize the ai-watch busy-gate and submission reliability fixes (E-121). Review the recent manual edits to src/bin/ai-watch (version-string regex `^[0-9]+\.[0-9]+\.[0-9]+` and `sleep 0.1` before Enter) for robustness. Ensure these fixes are properly deployed by the installer. Acceptance: Fixes are verified, ai-watch tests are updated to cover these edge cases, and the installer propagation is confirmed. per .ai/blueprints/interactive-bridge.md | Tier: 2
+  Status: DONE 2026-06-03 — Formalized E-121 ai-watch fixes per interactive-bridge.md. (1) Version-string ready-heuristic regex ^N.N.N retained + documented (anchored, permits build suffixes, 3 groups avoids ma …[full in LOG.md]
 
 ## Architect (Gemini)
 - [x] P-1: Audit .ai/architect.md and all domain blueprints for sovereignty gaps and role overstepping risks; update as needed per sovereignty-hardening.md. | Tier: 2
