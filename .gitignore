@@ -28,3 +28,8 @@ testsprite_tests/
 # .ai/blueprints/*.md set (which churns as the Architect adds blueprints), so
 # tracking it would break on clean checkouts. Same rationale as _SKILLS_INDEX.md.
 .ai/blueprints/_INDEX.md
+
+# E-118: Interactive Bridge runtime signal queue — written by handoff_control
+# and consumed by `ai watch` at runtime. Pure ephemeral state (like a .pid), so
+# it must never be tracked. Rollback per interactive-bridge.md: safe to delete.
+.ai/signal.json

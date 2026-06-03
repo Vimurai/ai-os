@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
-# ai-watch — Interactive Bridge tmux watcher (E-115, interactive-bridge.md)
+# ai-watch — Interactive Bridge tmux watcher (E-115/E-117/E-118, interactive-bridge.md)
 #
-# Polls .ai/signal.json in the CURRENT project and routes the handoff message to
-# the target agent's tmux pane via `tmux send-keys`, enabling the Architect⇄
-# Engineer "ping-pong" loop without an API wrapper. The signal is written by the
-# task-synchronizer-mcp `handoff_control` tool (E-114).
+# Polls .ai/signal.json in the CURRENT project and routes queued handoff messages
+# to the target agent's tmux pane via `tmux send-keys`, enabling the Architect⇄
+# Engineer "ping-pong" loop without an API wrapper. The signal queue is written by
+# the task-synchronizer-mcp `handoff_control` tool (E-114/E-118).
 #
-#   target "claude" → the pane titled "claude" (else pane index 0)
-#   target "gemini" → the pane titled "gemini" (else pane index 1)
+# E-118: .ai/signal.json is a FIFO queue (array). A CURSOR tracks consumed entries
+# (startup backlog is skipped, never replayed). Each entry is injected ONLY when
+# the target pane is idle/ready (busy-state gate); a busy target holds the queue
+# in FIFO order until it frees.
+#
+# Pane resolution (E-117) runs most-specific → most-conventional:
+#   exact title → fuzzy title (CI) → window name (CI) → conventional ordinal.
+#   target "claude" → 1st project pane (base-index agnostic); "gemini" → 2nd.
 #
 # Security:
 #   - Isolation: only panes whose pane_current_path is inside THIS project dir
@@ -25,92 +31,189 @@ PROJECT_DIR="$(pwd)"
 SIGNAL="${PROJECT_DIR}/${SIGNAL_REL}"
 
 # ── Preconditions ────────────────────────────────────────────────────────────
-if ! command -v tmux >/dev/null 2>&1; then
-  echo "ai-watch: tmux is not installed — the Interactive Bridge requires tmux." >&2
-  exit 1
-fi
-if ! tmux info >/dev/null 2>&1; then
-  echo "ai-watch: not inside a tmux server/session — start tmux first." >&2
-  exit 1
-fi
-if [[ ! -d "${PROJECT_DIR}/.ai" ]]; then
-  echo "ai-watch: no .ai/ in ${PROJECT_DIR} — run from an AI-OS project root." >&2
-  exit 1
-fi
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "ai-watch: python3 is required to parse the signal." >&2
-  exit 1
-fi
+# Guarded inside _preconditions() so the helpers below can be `source`d by the
+# test suite without tmux present and without launching the watch loop.
+_preconditions() {
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "ai-watch: tmux is not installed — the Interactive Bridge requires tmux." >&2
+    return 1
+  fi
+  if ! tmux info >/dev/null 2>&1; then
+    echo "ai-watch: not inside a tmux server/session — start tmux first." >&2
+    return 1
+  fi
+  if [[ ! -d "${PROJECT_DIR}/.ai" ]]; then
+    echo "ai-watch: no .ai/ in ${PROJECT_DIR} — run from an AI-OS project root." >&2
+    return 1
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ai-watch: python3 is required to parse the signal." >&2
+    return 1
+  fi
+}
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
-# Emit "<pane_id>\t<pane_index>\t<pane_title>\t<pane_current_path>" for every
-# pane, then keep only those rooted in PROJECT_DIR (isolation §Security).
+# _lc <string> → lowercased copy. bash 3.2 (the macOS default) has no ${x,,},
+# so case-insensitive matching is done with tr.
+_lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+# Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>"
+# for every pane, then keep only those rooted in PROJECT_DIR (isolation §Security).
 _project_panes() {
-  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{pane_title}	#{pane_current_path}' 2>/dev/null \
-    | while IFS=$'\t' read -r pid pidx ptitle ppath; do
+  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{pane_title}	#{window_name}	#{pane_current_path}' 2>/dev/null \
+    | while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
         case "$ppath" in
-          "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$ppath" ;;
+          "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" ;;
         esac
       done
 }
 
-# resolve_pane <target> → prints the pane id, or nothing. Prefers a pane titled
-# exactly <target>; falls back to the conventional index (claude→0, gemini→1).
+# resolve_pane <target> → prints the pane id, or nothing. Resolution order runs
+# most-specific → most-conventional, per interactive-bridge.md §API (E-117):
+#   1. exact pane-title match     (case-sensitive fast path)
+#   2. fuzzy pane-title match     (case-insensitive substring, e.g. "claude-code")
+#   3. window-name match          (case-insensitive substring — exact + fuzzy)
+#   4. conventional ordinal       (claude→1st project pane, gemini→2nd), chosen by
+#      pane-index ORDER not literal value, so it stays correct under tmux
+#      base-index / pane-base-index 1 (panes start at 1, not 0).
 resolve_pane() {
-  local target="$1" want_idx="" pid pidx ptitle ppath
+  local target="$1" want_idx="" lc_target ordinal pid pidx ptitle pwin ppath
   case "$target" in claude) want_idx=0 ;; gemini) want_idx=1 ;; *) return 1 ;; esac
-  # Pass 1: explicit pane-title match.
-  while IFS=$'\t' read -r pid pidx ptitle ppath; do
+  lc_target="$(_lc "$target")"
+
+  # Pass 1: exact pane-title match.
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
     [[ "$ptitle" == "$target" ]] && { printf '%s' "$pid"; return 0; }
   done < <(_project_panes)
-  # Pass 2: conventional index within this project.
-  while IFS=$'\t' read -r pid pidx ptitle ppath; do
-    [[ "$pidx" == "$want_idx" ]] && { printf '%s' "$pid"; return 0; }
+
+  # Pass 2: fuzzy pane-title match (case-insensitive substring).
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+    case "$(_lc "$ptitle")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
   done < <(_project_panes)
+
+  # Pass 3: window-name match (case-insensitive substring covers exact + fuzzy).
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+    case "$(_lc "$pwin")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
+  done < <(_project_panes)
+
+  # Pass 4: conventional ordinal among project panes, base-index agnostic.
+  # Sort by pane index so "1st pane" is correct whether indices start at 0 or 1.
+  ordinal=0
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+    [[ "$ordinal" -eq "$want_idx" ]] && { printf '%s' "$pid"; return 0; }
+    ordinal=$((ordinal + 1))
+  done < <(_project_panes | sort -t$'\t' -k2,2n)
+
   return 1
 }
 
-_signal_field() {  # _signal_field <key>
-  KEY="$1" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+# ── Queue parsing (E-118) ─────────────────────────────────────────────────────
+# .ai/signal.json is a FIFO queue (array of {timestamp,target,message}). A legacy
+# flat object (E-114) is treated as a single-entry queue; a corrupt/missing file
+# yields length 0 so the watcher never wedges on bad state (§Execution Constraints).
+_queue_len() {  # _queue_len → number of queued entries
+  python3 - "$SIGNAL" <<'PY' 2>/dev/null || echo 0
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    if isinstance(d, list): print(len(d))
+    elif isinstance(d, dict) and d: print(1)
+    else: print(0)
+except Exception:
+    print(0)
+PY
+}
+
+_queue_field() {  # _queue_field <index> <key> → queue[index][key] ("" if absent)
+  IDX="$1" KEY="$2" python3 - "$SIGNAL" <<'PY' 2>/dev/null
 import json, os, sys
 try:
-    print(json.load(open(sys.argv[1])).get(os.environ["KEY"], ""))
+    d = json.load(open(sys.argv[1]))
+    if isinstance(d, dict): d = [d]          # legacy flat object → single entry
+    i = int(os.environ["IDX"])
+    if isinstance(d, list) and 0 <= i < len(d):
+        print(d[i].get(os.environ["KEY"], ""))
 except Exception:
     pass
 PY
 }
 
-_signal_mtime() {
-  stat -f %m "$SIGNAL" 2>/dev/null || stat -c %Y "$SIGNAL" 2>/dev/null || echo ""
+# ── Busy-state detection (E-118, §API) ────────────────────────────────────────
+# Inject ONLY when the target pane's foreground command is the agent REPL waiting
+# for input (e.g. `node`/`claude`/`gemini`). When the REPL shells out to run a
+# tool the foreground becomes `bash`/`python`/etc. — busy — and we hold the signal
+# in the queue. Override the ready set with AI_WATCH_READY_CMDS; bypass the whole
+# gate (always-ready) with AI_WATCH_NO_BUSY_CHECK=1 for unusual environments.
+AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini}"
+_pane_ready() {  # _pane_ready <pane_id> → 0 if idle/ready for input, 1 if busy
+  [[ "${AI_WATCH_NO_BUSY_CHECK:-0}" == "1" ]] && return 0
+  local pane="$1" cmd c
+  cmd="$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null)"
+  [[ -z "$cmd" ]] && return 1                 # unknown → treat as busy (safe)
+  for c in $AI_WATCH_READY_CMDS; do
+    [[ "$cmd" == "$c" ]] && return 0
+  done
+  return 1
+}
+
+# ── Queue drain (E-118) ───────────────────────────────────────────────────────
+# Process queued entries from the global CURSOR forward in a single pass. Mutates
+# CURSOR. Factored out of the poll loop so the FIFO / busy-hold / no-pane-drop
+# semantics are unit-testable without the infinite `sleep` loop.
+_drain_once() {
+  local len target message pane
+  len="$(_queue_len)"
+  # Queue shrank (rotated/cleared/corrupt) → resync the cursor, never replay.
+  [[ "$len" -lt "$CURSOR" ]] && CURSOR="$len"
+  while [[ "$CURSOR" -lt "$len" ]]; do
+    target="$(_queue_field "$CURSOR" target)"
+    message="$(_queue_field "$CURSOR" message)"
+    if [[ -z "$target" || -z "$message" ]]; then
+      # Malformed entry — advance past it so it can't wedge the queue.
+      CURSOR=$((CURSOR + 1)); continue
+    fi
+    pane="$(resolve_pane "$target")"
+    if [[ -z "$pane" ]]; then
+      echo "ai-watch: no pane for target '${target}' in ${PROJECT_DIR} — dropping queued signal #$((CURSOR + 1))." >&2
+      CURSOR=$((CURSOR + 1)); continue
+    fi
+    # Busy-state gate: if the target REPL is mid-tool, leave the entry queued and
+    # retry next poll. RETURN (don't skip) to preserve FIFO ordering — a later
+    # signal must not overtake a blocked one.
+    _pane_ready "$pane" || return 0
+    # -l: send the message LITERALLY (no tmux key-name interpretation, no shell
+    # evaluation here); --: end option parsing so a leading '-' in the message is
+    # data. Then submit with Enter.
+    tmux send-keys -t "$pane" -l -- "$message"
+    tmux send-keys -t "$pane" Enter
+    echo "ai-watch: routed → ${target} (${pane}) #$((CURSOR + 1)): ${message}"
+    CURSOR=$((CURSOR + 1))
+  done
+  return 0
 }
 
 # ── Watch loop ───────────────────────────────────────────────────────────────
-echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
-LAST_MTIME=""
-# Don't replay a pre-existing signal on startup — record its mtime first.
-[[ -f "$SIGNAL" ]] && LAST_MTIME="$(_signal_mtime)"
+main() {
+  _preconditions || exit 1
 
-while true; do
-  if [[ -f "$SIGNAL" ]]; then
-    CUR_MTIME="$(_signal_mtime)"
-    if [[ -n "$CUR_MTIME" && "$CUR_MTIME" != "$LAST_MTIME" ]]; then
-      LAST_MTIME="$CUR_MTIME"
-      target="$(_signal_field target)"
-      message="$(_signal_field message)"
-      if [[ -n "$target" && -n "$message" ]]; then
-        pane="$(resolve_pane "$target")"
-        if [[ -n "$pane" ]]; then
-          # -l: send the message LITERALLY (no tmux key-name interpretation, no
-          # shell evaluation here); --: end option parsing so a leading '-' in the
-          # message is data. Then submit with Enter.
-          tmux send-keys -t "$pane" -l -- "$message"
-          tmux send-keys -t "$pane" Enter
-          echo "ai-watch: routed → ${target} (${pane}): ${message}"
-        else
-          echo "ai-watch: no pane for target '${target}' in ${PROJECT_DIR} (need a pane titled '${target}' or at the conventional index)." >&2
-        fi
-      fi
-    fi
-  fi
-  sleep "$POLL_INTERVAL"
-done
+  echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
+  # CURSOR = number of queue entries already handled. Start at the current queue
+  # length so a pre-existing backlog is NOT replayed when the watcher (re)starts.
+  CURSOR=0
+  [[ -f "$SIGNAL" ]] && CURSOR="$(_queue_len)"
+
+  while true; do
+    [[ -f "$SIGNAL" ]] && _drain_once
+    sleep "$POLL_INTERVAL"
+  done
+}
+
+# Run the watch loop only when executed directly. `source`-ing this script
+# exposes the helpers (resolve_pane, _project_panes, _lc, …) to the test suite
+# without launching the infinite loop or tripping the tmux preconditions.
+# Detection uses the `return` idiom rather than $0/BASH_SOURCE comparison: a
+# bare `return` only succeeds inside a sourced file, so its failure means the
+# script was executed (BASH_SOURCE/$0 are unreliable across zsh→bash harnesses).
+if ! (return 0 2>/dev/null); then
+  main "$@"
+fi

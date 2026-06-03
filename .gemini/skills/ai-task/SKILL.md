@@ -48,14 +48,19 @@ Append to `.ai/LOG.md`:
 YYYY-MM-DD | Gemini | P-## | <summary of what was blueprinted>
 ```
 
-## Step 4 — Trigger Handoff to Claude
+## Step 4 — Trigger Handoff to Claude (MANDATORY — E-119)
 
-After all P-## tasks are closed:
+After all P-## tasks are closed you MUST hand control to the Engineer at session
+completion — this is **non-optional** (interactive-bridge.md §Automated Handoff
+Enforcement). Run:
 ```
 activate_skill({ skill_name: "ai-handoff" })
 ```
 
-The handoff writes `.ai/COMM.md` so Claude can orient immediately on the next E-## without re-reading the full conversation.
+ai-handoff writes `.ai/COMM.md` **and** emits the `handoff_control` bridge signal,
+so the `ai watch` tmux watcher wakes Claude's pane automatically — the autonomous
+"ping-pong" loop continues without a human keypress. Claude orients on the next
+E-## without re-reading the full conversation.
 
 ## Step 5 — Surface Next Actions
 
@@ -67,5 +72,7 @@ Report:
 ## What NOT to Do
 
 - Do NOT mark P-## DONE if the corresponding E-## tasks haven't been written to TASKS.md
-- Do NOT skip the handoff — Claude needs COMM.md to orient without re-reading blueprints
+- Do NOT skip the handoff (Step 4) — it is mandatory at session completion (E-119).
+  COMM.md orients Claude, but only the `handoff_control` bridge signal it emits
+  wakes Claude's pane and keeps the ping-pong loop alive without a human keypress.
 - Do NOT modify source code or files outside `.ai/` or `plans/`

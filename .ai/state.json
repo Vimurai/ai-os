@@ -502,6 +502,62 @@
       ],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-116",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Perform a simple test task by marking this as DONE. Acceptance: Task marked DONE in TASKS.md.",
+      "created_at": "2026-06-02T22:34:24.605Z",
+      "completed_at": "2026-06-02T22:51:46.588Z",
+      "summary": "E-116 DONE — Interactive Bridge sprint kickoff/onboarding test task. Acceptance met: task marked DONE via task-synchronizer-mcp (ai-task lifecycle). Confirms the DAG dispatch + hando …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-117",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Harden ai-watch pane resolution: implement fuzzy matching for titles, check window names, and handle base-index 1 environments. per .ai/blueprints/interactive-bridge.md.",
+      "created_at": "2026-06-02T22:40:20.300Z",
+      "completed_at": "2026-06-02T23:24:20.699Z",
+      "summary": "E-117 DONE — hardened ai-watch pane resolution (interactive-bridge.md §API). resolve_pane now runs 4 passes: exact title → fuzzy case-insensitive title (e.g. \"claude-code\") → window- …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-118",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor handoff_control tool and ai-watch script to support a signal queue (JSON array in signal.json) and implement busy-state detection before injecting keystrokes into tmux panes. per .ai/blueprints/interactive-bridge.md.",
+      "created_at": "2026-06-02T22:43:43.611Z",
+      "completed_at": "2026-06-03T05:48:14.902Z",
+      "summary": "E-118 DONE — signal queue + busy-state detection (interactive-bridge.md §Data Model/§API). handoff_control now APPENDS to a FIFO array in .ai/signal.json (legacy flat-object migrated …[full in LOG.md]",
+      "depends_on": [
+        "E-117"
+      ],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-119",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Enforce automatic handoff in Claude and Gemini workflows by updating prompt instructions (e.g., ai-handoff and ai-task skills) to strictly mandate calling handoff_control at session completion. per .ai/blueprints/interactive-bridge.md.",
+      "created_at": "2026-06-02T22:43:43.616Z",
+      "completed_at": "2026-06-03T06:34:55.230Z",
+      "summary": "E-119 DONE — automated handoff enforcement (interactive-bridge.md §Automated Handoff Enforcement). ai-handoff gains a MANDATORY Step 4 that emits the handoff_control bridge signal (C …[full in LOG.md]",
+      "depends_on": [
+        "E-118"
+      ],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1484,6 +1540,13 @@
       "task_id": null,
       "timestamp": "2026-06-02T22:22:45.324Z",
       "summary": "E-106 (re-scoped): retain mcp-router granular instrumentation + dedup the coarse mcp__mcp-router__proxy_call duplicate at the telemetry writer (granular row is source of truth; other router tools kept). AI_OS_TELEMETRY_NO_DEDUP rollback. +9 telemetry_dedup_test; telemetry_test S09 88/0 + mcp_router 32/0 confirm router retained. Full suite 2362/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-119",
+      "timestamp": "2026-06-03T06:37:29.180Z",
+      "summary": "Tier-2 review (E-116..E-119, interactive-bridge.md): human-dispositioned PASS. align_diff WARN [ORPHANED_WORK] on ai-handoff/ai-task skills is a false positive — covered by interactive-bridge.md §Components 3 / E-119; aligner only checks architect.md (no domain-blueprint recursion, E-83 precedent). run_review deterministic P0 [PATH_TRAVERSAL] = the repo-standard `source \"${SCRIPT_DIR}/../lib/assert.sh\"` test bootstrap (84 suites); P1 [UNAPPROVED_DEP] = JSON signal-payload keys (timestamp/target/message) in data/tests, not deps. Full suite 2438 pass; only 3 Docker-flaky code_execution e2e red (daemon down, code-execution-mcp untouched). Cleared to commit."
     }
   ],
   "deltas": [

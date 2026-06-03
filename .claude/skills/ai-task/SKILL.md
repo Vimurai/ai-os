@@ -3,7 +3,7 @@ name: ai-task
 description: Manage AI-OS task lifecycle — mark tasks DONE, run handover, check for next tasks. Use after completing any E-## implementation. Wraps task-synchronizer-mcp and run_handover in one step.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Bash, Glob, Grep, mcp__task-synchronizer-mcp__update_task_status, mcp__task-synchronizer-mcp__get_state, mcp__orchestrator-mcp__run_handover
+allowed-tools: Read, Bash, Glob, Grep, mcp__task-synchronizer-mcp__update_task_status, mcp__task-synchronizer-mcp__get_state, mcp__orchestrator-mcp__run_handover, mcp__task-synchronizer-mcp__handoff_control
 context: default
 agent: default
 ---
@@ -56,11 +56,28 @@ mcp__orchestrator-mcp__run_handover({
 
 This stamps the delta so the Architect (Gemini) can review implementation divergence from the blueprint.
 
-## Step 4 — Surface Next Task
+## Step 4 — Surface Next Task & Hand Control Back (MANDATORY)
 
-Read `.ai/TASKS.md` and report:
-- Any remaining open E-## tasks
-- If no E-## tasks remain: "All Engineer tasks complete. Awaiting new tasks from the Architect (Gemini)."
+Read `.ai/TASKS.md` and report any remaining open E-## tasks.
+
+- **If open E-## tasks remain**: continue with the next ready one — no handoff yet.
+- **If NO E-## tasks remain (queue exhausted)**: you MUST hand control back to the
+  Architect at session completion. This is **non-optional** (E-119,
+  interactive-bridge.md §Automated Handoff Enforcement) — the autonomous
+  "ping-pong" loop only continues if you emit a handoff signal. Either:
+  - run `skill: "ai-handoff"` (preferred — writes COMM.md **and** emits the bridge
+    signal), or
+  - at minimum, emit the signal directly:
+    ```
+    mcp__task-synchronizer-mcp__handoff_control({
+      target: "gemini",
+      message: "Engineer queue exhausted. <one-line of what shipped>. Please review and plan next."
+    })
+    ```
+  Then report: "All Engineer tasks complete. Handed control to the Architect (Gemini)."
+
+If `ai watch` is not running the signal is a harmless no-op (it stays queued for
+the next watcher start), so always emit it — never assume a human will press the key.
 
 ## Step 5 — Verify Sync (optional)
 
@@ -74,3 +91,6 @@ mcp__task-synchronizer-mcp__verify_markdown_sync()
 - Do NOT modify `.ai/TASKS.md` directly — always go through task-synchronizer-mcp
 - Do NOT mark a task DONE without a summary
 - Do NOT skip handover — Architect needs the delta to detect blueprint drift
+- Do NOT end a session with an exhausted E-## queue WITHOUT emitting a
+  `handoff_control` signal (Step 4) — the Architect must be woken to continue the
+  loop (E-119). Skipping it strands the ping-pong loop waiting on a human keypress.

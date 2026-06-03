@@ -71,6 +71,14 @@
   Status: DONE 2026-06-02 — E-114 DONE — handoff_control tool in task-synchronizer-mcp writes .ai/signal.json {timestamp,target(enum),message}; validates target + non-empty message; JSON-safe. +13 handoff_control_test. Commit 4e25c12.
 - [x] E-115: Create the ai-watch global bash script in src/bin/ai-watch and update the installer to deploy it per .ai/blueprints/interactive-bridge.md. | Tier: 2
   Status: DONE 2026-06-02 — E-115 DONE — src/bin/ai-watch tmux watcher routes .ai/signal.json to claude/gemini panes scoped to $(pwd); injection-safe send-keys -l --; `ai watch` dispatch + installer chmod. +18 ai_watch_test. Commit 4e25c12.
+- [x] E-116: Perform a simple test task by marking this as DONE. Acceptance: Task marked DONE in TASKS.md. | Tier: 1
+  Status: DONE 2026-06-02 — E-116 DONE — Interactive Bridge sprint kickoff/onboarding test task. Acceptance met: task marked DONE via task-synchronizer-mcp (ai-task lifecycle). Confirms the DAG dispatch + hando …[full in LOG.md]
+- [x] E-117: Harden ai-watch pane resolution: implement fuzzy matching for titles, check window names, and handle base-index 1 environments. per .ai/blueprints/interactive-bridge.md. | Tier: 2
+  Status: DONE 2026-06-02 — E-117 DONE — hardened ai-watch pane resolution (interactive-bridge.md §API). resolve_pane now runs 4 passes: exact title → fuzzy case-insensitive title (e.g. "claude-code") → window- …[full in LOG.md]
+- [x] E-118: Refactor handoff_control tool and ai-watch script to support a signal queue (JSON array in signal.json) and implement busy-state detection before injecting keystrokes into tmux panes. per .ai/blueprints/interactive-bridge.md. | Tier: 2
+  Status: DONE 2026-06-03 — E-118 DONE — signal queue + busy-state detection (interactive-bridge.md §Data Model/§API). handoff_control now APPENDS to a FIFO array in .ai/signal.json (legacy flat-object migrated …[full in LOG.md]
+- [x] E-119: Enforce automatic handoff in Claude and Gemini workflows by updating prompt instructions (e.g., ai-handoff and ai-task skills) to strictly mandate calling handoff_control at session completion. per .ai/blueprints/interactive-bridge.md. | Tier: 2
+  Status: DONE 2026-06-03 — E-119 DONE — automated handoff enforcement (interactive-bridge.md §Automated Handoff Enforcement). ai-handoff gains a MANDATORY Step 4 that emits the handoff_control bridge signal (C …[full in LOG.md]
 
 ## Architect (Gemini)
 - [x] P-1: Audit .ai/architect.md and all domain blueprints for sovereignty gaps and role overstepping risks; update as needed per sovereignty-hardening.md. | Tier: 2
