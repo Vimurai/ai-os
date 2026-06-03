@@ -68,7 +68,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     },
     {
       name: "handoff_control",
-      description: "Interactive Bridge (interactive-bridge.md): emit a structured handoff signal to .ai/signal.json so the `ai watch` tmux watcher wakes the target agent's pane and injects the message. Overwrites the signal each call. The MCP only writes JSON — `ai watch` escapes the message before tmux send-keys.",
+      description: "Interactive Bridge (interactive-bridge.md): emit a structured handoff signal to .ai/signal.json so the `ai watch` tmux watcher wakes the target agent's pane and injects the message. E-118: APPENDS to a FIFO queue (array) — a busy agent never loses a pending handoff; legacy flat-object payloads are migrated, corrupt queues are safely reset. The MCP only writes JSON — `ai watch` escapes the message before tmux send-keys.",
       inputSchema: {
         type: "object",
         properties: {

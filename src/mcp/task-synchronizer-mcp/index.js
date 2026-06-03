@@ -485,11 +485,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: `✓ Stamp [${args.type}] added by ${args.agent}` }] };
     }
 
-    // ── handoff_control (E-114, interactive-bridge.md) ──────────────────────────
+    // ── handoff_control (E-114/E-118, interactive-bridge.md) ────────────────────
     // Emit a structured signal to .ai/signal.json so the `ai watch` tmux watcher
-    // can wake the target agent's pane. Overwrites the signal each call (the
-    // watcher consumes the latest). This MCP only writes JSON (no shell) — the
-    // watcher is responsible for escaping the message before `tmux send-keys`.
+    // can wake the target agent's pane. E-118: signal.json is a QUEUE (array) —
+    // the entry is APPENDED, never overwritten, so a busy agent never loses a
+    // pending handoff. Legacy flat-object payloads (E-114) are migrated in place;
+    // a corrupt/unreadable queue is safely reset (interactive-bridge.md §Execution
+    // Constraints). This MCP only writes JSON (no shell) — the watcher escapes the
+    // message before `tmux send-keys`.
     case "handoff_control": {
       const target = args.target;
       if (target !== "claude" && target !== "gemini") {
@@ -499,14 +502,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!message) {
         return { content: [{ type: "text", text: "✗ [EMPTY_MESSAGE] a non-empty message is required." }], isError: true };
       }
-      const payload = { timestamp: new Date().toISOString(), target, message };
+      const entry = { timestamp: new Date().toISOString(), target, message };
       const signalPath = resolve(aiDir, "signal.json");
+      const MAX_QUEUE = 50; // bound growth — `ai watch` consumes via a cursor.
+      let queue = [];
+      if (existsSync(signalPath)) {
+        try {
+          const parsed = JSON.parse(readFileSync(signalPath, "utf8"));
+          if (Array.isArray(parsed)) queue = parsed;
+          else if (parsed && typeof parsed === "object") queue = [parsed]; // legacy → queue
+        } catch { queue = []; } // corrupt → safely reset rather than throw
+      }
+      queue.push(entry);
+      if (queue.length > MAX_QUEUE) queue = queue.slice(queue.length - MAX_QUEUE);
       try {
-        writeFileSync(signalPath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+        writeFileSync(signalPath, JSON.stringify(queue, null, 2) + "\n", "utf8");
       } catch (e) {
         return { content: [{ type: "text", text: `✗ [SIGNAL_WRITE_FAILED] ${e.message}` }], isError: true };
       }
-      return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target}: ${message}\n  signal: ${signalPath}` }] };
+      return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target} (queued #${queue.length}): ${message}\n  signal: ${signalPath}` }] };
     }
 
     // ── set_project_focus ─────────────────────────────────────────────────────

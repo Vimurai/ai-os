@@ -3,7 +3,7 @@ name: ai-handoff
 description: Produce a structured handoff packet for Gemini↔Claude transitions. Reads unread deltas from state, formats blueprint divergence and decisions into .ai/COMM.md. Use before switching agents.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Bash, Edit, mcp__task-synchronizer-mcp__get_state, mcp__task-synchronizer-mcp__mark_deltas_read, mcp__task-synchronizer-mcp__verify_markdown_sync
+allowed-tools: Read, Bash, Edit, mcp__task-synchronizer-mcp__get_state, mcp__task-synchronizer-mcp__mark_deltas_read, mcp__task-synchronizer-mcp__verify_markdown_sync, mcp__task-synchronizer-mcp__handoff_control
 context: default
 agent: default
 ---
@@ -87,13 +87,34 @@ After writing COMM.md, if handing off to Gemini, mark deltas read so they don't 
 mcp__task-synchronizer-mcp__mark_deltas_read()
 ```
 
-## Step 4 — Confirm
+## Step 4 — Emit the Bridge Signal (MANDATORY — E-119, interactive-bridge.md)
+
+Writing COMM.md only **records** context — it does NOT wake the other agent. To
+keep the autonomous "ping-pong" loop alive without a human keypress, you MUST
+emit a handoff signal. The `ai watch` tmux watcher consumes it and injects the
+wake keystroke into the receiving agent's pane:
+
+```
+mcp__task-synchronizer-mcp__handoff_control({
+  target: "gemini",   // the RECEIVING agent: "gemini" (Claude→Architect) or "claude" (Gemini→Engineer)
+  message: "Engineer queue exhausted — review COMM.md and plan the next sprint."
+})
+```
+
+This is **non-optional at session completion**. If `ai watch` is not running the
+signal is a harmless no-op (it stays queued and is consumed when the watcher next
+starts), so always emit it — never assume a human will press the key for you.
+
+## Step 5 — Confirm
 
 Report:
-> "Handoff written to .ai/COMM.md. Switch to [Gemini/Claude] and run `skill: 'ai-sync-state'` to pick up context."
+> "Handoff written to .ai/COMM.md and signalled via handoff_control. Switch to [Gemini/Claude] and run `skill: 'ai-sync-state'` to pick up context."
 
 ## What NOT to Do
 
 - Do NOT overwrite COMM.md — always append
 - Do NOT skip divergence section — even "NONE" must be stated explicitly
 - Do NOT call mark_deltas_read when handing off TO Claude (Gemini should review them first)
+- Do NOT skip the `handoff_control` bridge signal (Step 4) — COMM.md records
+  context but only `handoff_control` wakes the other agent (E-119). Emitting it is
+  mandatory whenever your task/plan queue is exhausted.
