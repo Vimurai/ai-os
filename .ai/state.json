@@ -558,6 +558,45 @@
       ],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-120",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Implement a dummy workflow test task to verify the AI-OS task lifecycle. Acceptance: Mark this task as DONE with a summary acknowledging receipt; no source code changes required.",
+      "created_at": "2026-06-03T07:22:16.333Z",
+      "completed_at": "2026-06-03T10:44:26.315Z",
+      "summary": "Dummy workflow test task #1 received and acknowledged. Task lifecycle verified end-to-end: preflight → sync check (SYNC_PASS) → DONE mark via task-synchronizer-mcp. No source changes (per acceptance).",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-121",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Workflow test task #2. Verify that ai-watch correctly routes this message to Claude's pane. Acceptance: Mark DONE with summary.",
+      "created_at": "2026-06-03T10:43:27.247Z",
+      "completed_at": "2026-06-03T10:44:27.381Z",
+      "summary": "Workflow test task #2 received in Claude's pane — ai-watch routing confirmed working (Architect's handoff message reached the Engineer pane and triggered execution). No source change …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-122",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Formalize the ai-watch busy-gate and submission reliability fixes (E-121). Review the recent manual edits to src/bin/ai-watch (version-string regex `^[0-9]+\\.[0-9]+\\.[0-9]+` and `sleep 0.1` before Enter) for robustness. Ensure these fixes are properly deployed by the installer. Acceptance: Fixes are verified, ai-watch tests are updated to cover these edge cases, and the installer propagation is confirmed. per .ai/blueprints/interactive-bridge.md",
+      "created_at": "2026-06-03T11:00:47.317Z",
+      "completed_at": "2026-06-03T11:33:48.626Z",
+      "summary": "Formalized E-121 ai-watch fixes per interactive-bridge.md. (1) Version-string ready-heuristic regex ^N.N.N retained + documented (anchored, permits build suffixes, 3 groups avoids ma …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1547,6 +1586,20 @@
       "task_id": "E-119",
       "timestamp": "2026-06-03T06:37:29.180Z",
       "summary": "Tier-2 review (E-116..E-119, interactive-bridge.md): human-dispositioned PASS. align_diff WARN [ORPHANED_WORK] on ai-handoff/ai-task skills is a false positive — covered by interactive-bridge.md §Components 3 / E-119; aligner only checks architect.md (no domain-blueprint recursion, E-83 precedent). run_review deterministic P0 [PATH_TRAVERSAL] = the repo-standard `source \"${SCRIPT_DIR}/../lib/assert.sh\"` test bootstrap (84 suites); P1 [UNAPPROVED_DEP] = JSON signal-payload keys (timestamp/target/message) in data/tests, not deps. Full suite 2438 pass; only 3 Docker-flaky code_execution e2e red (daemon down, code-execution-mcp untouched). Cleared to commit."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-122",
+      "timestamp": "2026-06-03T11:33:18.902Z",
+      "summary": "[TIER_2] ai-watch formalization aligned with interactive-bridge.md; 2 aligner WARNs dispositioned as false-positives."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-122",
+      "timestamp": "2026-06-03T11:33:20.330Z",
+      "summary": "Human disposition: NO_LOG_UPDATE false (LOG.md gitignored, updated on disk); ORPHANED_WORK false (ai-watch covered by interactive-bridge.md, aligner doesn't recurse domain blueprints). Precedent E-77/78/79/82/83."
     }
   ],
   "deltas": [
