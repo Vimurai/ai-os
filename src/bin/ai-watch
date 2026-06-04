@@ -532,15 +532,59 @@ _legacy_main() {
   done
 }
 
+# ── One-shot: clear the queue (fresh start) ───────────────────────────────────
+# `ai watch --clear` empties .ai/signal.json so stale/unwanted signals are not
+# processed when the watcher next starts. Does NOT need tmux (admin command); does
+# NOT take the instance lock, so it works while a watcher is running. Uses the
+# short write-lock so it never collides with an in-flight delivered-flag write.
+_clear_queue() {
+  if [[ ! -d "${PROJECT_DIR}/.ai" ]]; then
+    echo "ai-watch: no .ai/ in ${PROJECT_DIR} — run from an AI-OS project root." >&2
+    return 1
+  fi
+  local n="?"
+  command -v python3 >/dev/null 2>&1 && [[ -f "$SIGNAL" ]] && n="$(_queue_len)"
+  local _held=0; _signal_lock && _held=1
+  printf '[]\n' > "$SIGNAL"
+  local rc=$?
+  [[ "$_held" -eq 1 ]] && _signal_unlock
+  if [[ "$rc" -ne 0 ]]; then
+    echo "ai-watch: failed to clear ${SIGNAL}." >&2; return 1
+  fi
+  echo "ai-watch: cleared ${n} queued signal(s) → fresh start (${SIGNAL})."
+  return 0
+}
+
+_usage() {
+  cat >&2 <<EOF
+ai-watch — Interactive Bridge tmux watcher (interactive-bridge.md)
+Usage:
+  ai watch            Watch .ai/signal.json and route handoffs to agent panes.
+  ai watch --clear    Empty the signal queue (fresh start); does not watch.
+  ai watch --help     Show this help.
+Stop a running watcher with Ctrl-C.
+EOF
+}
+
 # ── Watch loop ───────────────────────────────────────────────────────────────
 main() {
+  case "${1:-}" in
+    --clear|clear) _clear_queue; exit $? ;;
+    --help|-h)     _usage; exit 0 ;;
+  esac
   _preconditions || exit 1
 
   if ! _acquire_lock; then
     echo "ai-watch: another watcher is already running for ${PROJECT_DIR} (lock: ${LOCK_DIR}) — exiting." >&2
     exit 1
   fi
-  trap '_release_lock' EXIT INT TERM
+  # EXIT does the cleanup (release the lock). INT/TERM must EXIT, not just run a
+  # handler — a signal trap that doesn't exit RESUMES the loop, so Ctrl-C would
+  # otherwise release the lock and keep watching. Exiting from INT/TERM triggers
+  # the EXIT trap, which releases the lock exactly once (130/143 = 128 + signal).
+  trap '_release_lock' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
 
   echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
 
