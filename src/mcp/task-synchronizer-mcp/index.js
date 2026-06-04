@@ -23,7 +23,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmdirSync } from "fs";
 import { resolve } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
@@ -504,23 +504,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
       const entry = { timestamp: new Date().toISOString(), target, message };
       const signalPath = resolve(aiDir, "signal.json");
-      const MAX_QUEUE = 50; // bound growth — `ai watch` consumes via a cursor.
-      let queue = [];
-      if (existsSync(signalPath)) {
-        try {
-          const parsed = JSON.parse(readFileSync(signalPath, "utf8"));
-          if (Array.isArray(parsed)) queue = parsed;
-          else if (parsed && typeof parsed === "object") queue = [parsed]; // legacy → queue
-        } catch { queue = []; } // corrupt → safely reset rather than throw
+      const lockPath = signalPath + ".lock";
+      const MAX_QUEUE = 50; // bound growth — `ai watch` consumes via per-entry delivered flags.
+      // Short-lived write lock SHARED with ai-watch's _signal_lock (same ".lock"
+      // path) so this append and the watcher's delivered-flag write are serialised
+      // — neither clobbers the other (interactive-bridge.md §Execution Constraints).
+      // Bounded synchronous spin (~0.5s) then proceed best-effort rather than block
+      // the MCP. Atomics.wait gives a sync sleep without busy-spinning the loop.
+      const _sleepMs = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch { /* SAB unavailable → no wait */ } };
+      let _lockHeld = false;
+      for (let i = 0; i < 25; i++) {
+        try { mkdirSync(lockPath); _lockHeld = true; break; } catch { _sleepMs(20); }
       }
-      queue.push(entry);
-      if (queue.length > MAX_QUEUE) queue = queue.slice(queue.length - MAX_QUEUE);
       try {
-        writeFileSync(signalPath, JSON.stringify(queue, null, 2) + "\n", "utf8");
-      } catch (e) {
-        return { content: [{ type: "text", text: `✗ [SIGNAL_WRITE_FAILED] ${e.message}` }], isError: true };
+        let queue = [];
+        if (existsSync(signalPath)) {
+          try {
+            const parsed = JSON.parse(readFileSync(signalPath, "utf8"));
+            if (Array.isArray(parsed)) queue = parsed;
+            else if (parsed && typeof parsed === "object") queue = [parsed]; // legacy → queue
+          } catch { queue = []; } // corrupt → safely reset rather than throw
+        }
+        queue.push(entry);
+        // Bound growth WITHOUT ever dropping an undelivered handoff: evict only the
+        // OLDEST delivered entries (delivered === true). If undelivered entries alone
+        // exceed MAX_QUEUE (a stuck/absent agent), the queue is allowed to exceed the
+        // cap rather than silently lose a pending signal.
+        if (queue.length > MAX_QUEUE) {
+          const deliveredOverflow = queue.filter((e) => e && e.delivered === true).length;
+          let toDrop = Math.min(queue.length - MAX_QUEUE, deliveredOverflow);
+          if (toDrop > 0) {
+            queue = queue.filter((e) => {
+              if (toDrop > 0 && e && e.delivered === true) { toDrop--; return false; }
+              return true;
+            });
+          }
+        }
+        try {
+          writeFileSync(signalPath, JSON.stringify(queue, null, 2) + "\n", "utf8");
+        } catch (e) {
+          return { content: [{ type: "text", text: `✗ [SIGNAL_WRITE_FAILED] ${e.message}` }], isError: true };
+        }
+        return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target} (queued #${queue.length}): ${message}\n  signal: ${signalPath}` }] };
+      } finally {
+        if (_lockHeld) { try { rmdirSync(lockPath); } catch { /* already gone */ } }
       }
-      return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target} (queued #${queue.length}): ${message}\n  signal: ${signalPath}` }] };
     }
 
     // ── set_project_focus ─────────────────────────────────────────────────────
