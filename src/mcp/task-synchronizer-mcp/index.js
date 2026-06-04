@@ -502,7 +502,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!message) {
         return { content: [{ type: "text", text: "✗ [EMPTY_MESSAGE] a non-empty message is required." }], isError: true };
       }
-      const entry = { timestamp: new Date().toISOString(), target, message };
+      // delivered:false makes the pending state explicit per interactive-bridge.md
+      // §API (E-124). ai-watch treats absent OR false identically as undelivered,
+      // so this is purely for self-documenting queue state / blueprint fidelity.
+      const entry = { timestamp: new Date().toISOString(), target, message, delivered: false };
       const signalPath = resolve(aiDir, "signal.json");
       const lockPath = signalPath + ".lock";
       const MAX_QUEUE = 50; // bound growth — `ai watch` consumes via per-entry delivered flags.

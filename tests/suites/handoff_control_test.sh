@@ -55,6 +55,8 @@ assert_status 0 "E-114.02: signal.json is valid JSON" python3 -c "import json;js
 assert_contains "E-114.02: payload target=claude"   "claude" "$(qfield "$SIGNAL" 0 target)"
 assert_contains "E-114.02: payload message persisted" "Execute OPEN tasks" "$(qfield "$SIGNAL" 0 message)"
 assert_contains "E-114.02: payload timestamp present" "T" "$(qfield "$SIGNAL" 0 timestamp)"
+# E-124: new signals are appended with an explicit delivered:false (pending) flag.
+assert_contains "E-124: new payload has delivered=false" "False" "$(qfield "$SIGNAL" 0 delivered)"
 
 # ── E-118.01: signal.json is a JSON ARRAY (queue), not a flat object ─────────
 assert_status 0 "E-118.01: signal.json top-level is an array" \
