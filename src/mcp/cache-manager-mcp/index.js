@@ -578,6 +578,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // downstream prompt-prefix injection (§3.2/§3.3) is a runtime/harness concern
 // beyond this MCP. Fail-open: any error warns to stderr and exits 0 so a sync
 // cycle is never blocked.
+// E-126 (caching.md §3.2/§3.3): `--emit-context` CLI — print the compiled System
+// Context blob to stdout so the SessionStart hook (hooks/session-start.sh) can
+// inject it as a prompt-prefix at Claude session start (the previously-unwired
+// "Agent Invocation" step of the caching workflow). No server is started.
+// Fail-open: any error (or AI_OS_DISABLE_CACHE=1) emits nothing and exits 0 so
+// session start is never blocked.
+if (process.argv.includes("--emit-context")) {
+  try {
+    if (process.env.AI_OS_DISABLE_CACHE !== "1") {
+      const projectRoot = validateProjectRoot();
+      const { blob } = assembleContext(projectRoot);
+      if (blob && blob.trim()) process.stdout.write(blob);
+    }
+  } catch {
+    // fail-open: emit nothing rather than block session start
+  }
+  process.exit(0);
+}
+
 if (process.argv.includes("--build")) {
   try {
     const projectRoot = validateProjectRoot();
