@@ -56,7 +56,7 @@ function normalizeForSecretScan(raw) {
 const BLOCK_RULES = [
   {
     id: "RM_RF_ROOT",
-    pattern: (tokens) => hasSequence(tokens, ["rm"], ["-rf", "-fr", "--no-preserve-root"]) && hasRootPaths(tokens),
+    pattern: (tokens, raw) => rmRecursiveForce(tokens) && hasRootPaths(tokens, raw),
     message: "rm -rf on root/home paths — BLOCKED (irreversible data destruction)",
   },
   {
@@ -114,7 +114,7 @@ const BLOCK_RULES = [
 const WARN_RULES = [
   {
     id: "RM_RF",
-    pattern: (tokens) => hasSequence(tokens, ["rm"], ["-rf", "-fr"]),
+    pattern: (tokens) => rmRecursiveForce(tokens),
     message: "rm -rf detected — verify target path is intentional",
   },
   {
@@ -154,9 +154,34 @@ function hasSequence(tokens, cmds, flags) {
   return cmds.some((cmd) => strTokens.includes(cmd)) && flags.some((f) => strTokens.includes(f));
 }
 
-function hasRootPaths(tokens) {
+// E-125: rm invoked with BOTH recursive and force — combined (-rf/-fr/-Rfv…) OR
+// SPLIT (`rm -r -f`), OR --no-preserve-root. Split flags are equivalent to -rf, so
+// a fail-closed gate must treat them identically (plain hasSequence missed them).
+function _shortFlagHas(strTokens, ch) {
+  return strTokens.some((t) => /^-[A-Za-z]+$/.test(t) && t.slice(1).includes(ch));
+}
+function rmRecursiveForce(tokens) {
+  const t = tokens.filter((x) => typeof x === "string").map((x) => String(x));
+  if (!t.includes("rm")) return false;
+  if (t.includes("--no-preserve-root")) return true;
+  const recursive = t.includes("-R") || t.includes("--recursive") || _shortFlagHas(t, "r");
+  const force = t.includes("--force") || _shortFlagHas(t, "f");
+  return recursive && force;
+}
+
+// E-125: catastrophic rm targets (root/home). Tokenizers EXPAND $HOME→"" and turn
+// `/*` into a glob object (both dropped from string tokens), and bare ~ slips the
+// old token-only check — so also scan the raw string. Only consulted inside the
+// rm-recursive-force rule, where any root/home target is irreversible.
+function hasRootPaths(tokens, raw) {
   const strTokens = tokens.filter((t) => typeof t === "string").map((t) => String(t));
-  return strTokens.some((t) => /^(\/$|\/root|\/home|\/etc|\/usr|\/var|\/boot|\~\/)/.test(t));
+  if (strTokens.some((t) => /^(\/$|\/root|\/home|\/etc|\/usr|\/var|\/boot|~$|~\/|\$HOME(\/|$)|\$\{HOME\}(\/|$))/.test(t))) return true;
+  if (raw == null) return false;
+  const r = String(raw);
+  if (/(^|[\s=])(\$HOME|\$\{HOME\})(\/|\s|$)/.test(r)) return true;  // $HOME / ${HOME} (tokenizer expands to "")
+  if (/(^|\s)~(\/|\s|$)/.test(r)) return true;                      // ~ or ~/
+  if (/(^|\s)\/\*(\s|$)/.test(r)) return true;                      // /* glob (dropped from tokens)
+  return false;
 }
 
 // ── E-102: Architect sovereignty rules (sovereignty-hardening.md §Components 1) ─
@@ -301,6 +326,61 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+// ── Core analysis (shared by the MCP tool AND the --check CLI gate, E-125) ─────
+// SINGLE source of truth: the fail-closed PreToolUse gate (hooks/pre-tool-use.sh)
+// runs `--check`, which calls THIS exact logic — so the gate ENFORCES the same
+// verdicts the analyze_command tool reports (no advisory/enforcement drift).
+// Returns { verdict: "PASS"|"WARN"|"BLOCK", blocked, warned, sovereignty, report }.
+function runAnalysis(raw, callerRole) {
+  let tokens;
+  try {
+    tokens = parse(raw).filter((t) => typeof t === "string").map((t) => String(t));
+  } catch {
+    tokens = String(raw).split(/\s+/);
+  }
+
+  const blocked = BLOCK_RULES.filter((r) => r.pattern(tokens, raw));
+  const warned = WARN_RULES.filter((r) => r.pattern(tokens, raw));
+
+  // E-102/E-123: Architect sovereignty enforcement (sovereignty-hardening.md §API).
+  // Only engages for the 'architect' role; disabled by AI_OS_SOVEREIGNTY_LOCK=0.
+  const sovereignty =
+    callerRole === "architect" && process.env.AI_OS_SOVEREIGNTY_LOCK !== "0"
+      ? analyzeSovereignty(tokens, raw)
+      : [];
+
+  const verdict = blocked.length > 0 || sovereignty.length > 0 ? "BLOCK" : warned.length > 0 ? "WARN" : "PASS";
+  const icon = verdict === "BLOCK" ? "✗" : verdict === "WARN" ? "⚠" : "✓";
+
+  const lines = [
+    `## safe-exec-mcp Analysis`,
+    `Command: \`${String(raw).slice(0, 120)}\``,
+    `Verdict: ${icon} ${verdict}`,
+    ``,
+  ];
+  if (sovereignty.length > 0) {
+    lines.push("### [SOVEREIGNTY_BLOCK] — Forbidden Architect Operation");
+    sovereignty.forEach((v) => lines.push(`- [${v.id}] ${v.message}`));
+    lines.push("");
+    lines.push("The Architect (Gemini) role may not run destructive implementation commands (sovereignty-hardening.md §Components 1). Switch to the Engineer (Claude) to execute this, or rescope the command to .ai/ or plans/.");
+  }
+  if (blocked.length > 0) {
+    lines.push("### BLOCKED — Do Not Execute");
+    blocked.forEach((r) => lines.push(`- [${r.id}] ${r.message}`));
+    lines.push("");
+    lines.push("Add [SEC_CLEARED] to .ai/LOG.md with Architect approval before retrying.");
+  }
+  if (warned.length > 0) {
+    lines.push("### Warnings — Verify Before Executing");
+    warned.forEach((r) => lines.push(`- [${r.id}] ${r.message}`));
+  }
+  if (blocked.length === 0 && warned.length === 0 && sovereignty.length === 0) {
+    lines.push("No high-risk patterns detected.");
+  }
+
+  return { verdict, blocked, warned, sovereignty, report: lines.join("\n") };
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -308,69 +388,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
   }
 
-  const raw = args.command;
-  let tokens;
-  try {
-    tokens = parse(raw).filter((t) => typeof t === "string").map((t) => String(t));
-  } catch {
-    tokens = raw.split(/\s+/);
-  }
-
-  const blocked = BLOCK_RULES.filter((r) => r.pattern(tokens, raw));
-  const warned = WARN_RULES.filter((r) => r.pattern(tokens, raw));
-
-  // E-102: Architect sovereignty enforcement (sovereignty-hardening.md §API).
-  // Only engages for the 'architect' role; disabled by AI_OS_SOVEREIGNTY_LOCK=0.
-  const sovereignty =
-    args.caller_role === "architect" && process.env.AI_OS_SOVEREIGNTY_LOCK !== "0"
-      ? analyzeSovereignty(tokens, raw)
-      : [];
-
-  let verdict;
-  let icon;
-  if (blocked.length > 0 || sovereignty.length > 0) {
-    verdict = "BLOCK";
-    icon = "✗";
-  } else if (warned.length > 0) {
-    verdict = "WARN";
-    icon = "⚠";
-  } else {
-    verdict = "PASS";
-    icon = "✓";
-  }
-
-  const lines = [
-    `## safe-exec-mcp Analysis`,
-    `Command: \`${raw.slice(0, 120)}\``,
-    `Verdict: ${icon} ${verdict}`,
-    ``,
-  ];
-
-  if (sovereignty.length > 0) {
-    lines.push("### [SOVEREIGNTY_BLOCK] — Forbidden Architect Operation");
-    sovereignty.forEach((v) => lines.push(`- [${v.id}] ${v.message}`));
-    lines.push("");
-    lines.push("The Architect (Gemini) role may not run destructive implementation commands (sovereignty-hardening.md §Components 1). Switch to the Engineer (Claude) to execute this, or rescope the command to .ai/ or plans/.");
-  }
-
-  if (blocked.length > 0) {
-    lines.push("### BLOCKED — Do Not Execute");
-    blocked.forEach((r) => lines.push(`- [${r.id}] ${r.message}`));
-    lines.push("");
-    lines.push("Add [SEC_CLEARED] to .ai/LOG.md with Architect approval before retrying.");
-  }
-
-  if (warned.length > 0) {
-    lines.push("### Warnings — Verify Before Executing");
-    warned.forEach((r) => lines.push(`- [${r.id}] ${r.message}`));
-  }
-
-  if (blocked.length === 0 && warned.length === 0 && sovereignty.length === 0) {
-    lines.push("No high-risk patterns detected.");
-  }
-
-  return { content: [{ type: "text", text: lines.join("\n") }] };
+  const { report } = runAnalysis(args.command, args.caller_role);
+  return { content: [{ type: "text", text: report }] };
 });
+
+// ── E-125: fail-closed pre-execution gate CLI (sovereignty-hardening.md / T-HITL-004) ──
+// `node index.js --check "<command>" [caller_role]` runs the same analysis the
+// analyze_command tool uses and EXITS 2 on a BLOCK verdict (fail-closed), 0
+// otherwise. hooks/pre-tool-use.sh invokes this on every Bash tool call so a
+// BLOCK is actually PREVENTED, not merely reported (replacing advisory-only).
+// Running in --check mode short-circuits before the stdio server connects.
+const _checkIdx = process.argv.indexOf("--check");
+if (_checkIdx !== -1) {
+  const cmd = process.argv[_checkIdx + 1] || "";
+  const role = process.argv[_checkIdx + 2] || process.env.AI_OS_CALLER_ROLE || "";
+  if (!cmd) {
+    process.stderr.write("[safe-exec --check] no command provided\n");
+    process.exit(0); // nothing to gate — fail open on empty input
+  }
+  let result;
+  try {
+    result = runAnalysis(cmd, role);
+  } catch (e) {
+    // Analyzer itself failed — fail OPEN but LOUD so circumvention is detectable
+    // (T-HITL-004): blocking every command on an internal error would brick the
+    // shell. The catastrophic-pattern backstop lives in the hook for defense in depth.
+    process.stderr.write(`[safe-exec --check] analyzer error (failing open): ${e.message}\n`);
+    process.exit(0);
+  }
+  // Report always goes to stdout (clean, no node-warning noise); the EXIT CODE is
+  // the machine signal the hook reads — 2 = BLOCK (fail-closed), 0 = allow.
+  process.stdout.write(result.report + "\n");
+  process.exit(result.verdict === "BLOCK" ? 2 : 0);
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

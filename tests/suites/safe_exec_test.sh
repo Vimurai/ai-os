@@ -214,4 +214,19 @@ assert_contains     "SUDO_SU: sudo su flagged"            "SUDO_SU" "$(verdict '
 assert_not_contains "SUDO_SU: sudo apt install -i pkg ok" "SUDO_SU" "$(verdict 'sudo apt install -i pkg' '')"
 assert_not_contains "SUDO_SU: sudo grep -i x ok"          "SUDO_SU" "$(verdict 'sudo grep -i pattern file' '')"
 
+# ── E-125: hardened catastrophic rm detection (now load-bearing for the gate) ──
+# The fail-closed gate enforces these, so the analyzer must catch the forms that
+# tokenization previously dropped: $HOME/${HOME} (expand to ""), bare ~, /* glob,
+# and SPLIT flags (rm -r -f) — all equivalent to a catastrophic rm -rf.
+assert_contains "E-125: rm -rf \$HOME → RM_RF_ROOT"               "RM_RF_ROOT" "$(verdict 'rm -rf $HOME' '')"
+assert_contains "E-125: rm -rf \${HOME} → RM_RF_ROOT"             "RM_RF_ROOT" "$(verdict 'rm -rf ${HOME}' '')"
+assert_contains "E-125: rm -rf ~ → RM_RF_ROOT"                    "RM_RF_ROOT" "$(verdict 'rm -rf ~' '')"
+assert_contains "E-125: rm -rf /* → RM_RF_ROOT"                   "RM_RF_ROOT" "$(verdict 'rm -rf /*' '')"
+assert_contains "E-125: split 'rm -r -f /' → RM_RF_ROOT"          "RM_RF_ROOT" "$(verdict 'rm -r -f /' '')"
+assert_contains "E-125: rm --recursive --force /etc → RM_RF_ROOT" "RM_RF_ROOT" "$(verdict 'rm --recursive --force /etc' '')"
+# Legitimate, scoped rm must NOT be root-blocked (no over-broad false positives).
+assert_not_contains "E-125: rm -rf ./build NOT root-blocked"      "RM_RF_ROOT" "$(verdict 'rm -rf ./build' '')"
+assert_not_contains "E-125: rm -rf src/build NOT root-blocked"    "RM_RF_ROOT" "$(verdict 'rm -rf src/build' '')"
+assert_not_contains "E-125: rm -rf /tmp/scratch NOT root-blocked" "RM_RF_ROOT" "$(verdict 'rm -rf /tmp/scratch' '')"
+
 assert_summary

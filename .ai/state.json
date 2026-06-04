@@ -601,10 +601,49 @@
     {
       "id": "E-123",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Extend `safe-exec-mcp` to strictly enforce deployment and branch-merge sovereignty. Block `git merge`, `git push`, `git pull`, `git branch`, `git rebase` as well as deployment scripts (`ssh`, `rsync`, `scp`, `npm publish`, `docker push`) when `caller_role` is `architect`. Acceptance: Verification tests cover all new banned commands; `src/mcp/safe-exec-mcp/index.js` updated per `.ai/blueprints/sovereignty-hardening.md` §Data Model.",
       "created_at": "2026-06-04T19:46:03.578Z",
+      "completed_at": "2026-06-04T20:26:42.317Z",
+      "summary": "safe-exec-mcp branch-merge + deployment sovereignty per sovereignty-hardening.md §Data Model. Extended the E-102 architect filter: caller_role='architect' now [SOVEREIGNTY_BLOCK]s gi …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-124",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement the smart ai-watch delivery model: stateful persistence using a 'delivered' flag, startup backlog drain, single-writer lock, and per-target independent FIFOs per .ai/blueprints/interactive-bridge.md.",
+      "created_at": "2026-06-04T20:29:30.987Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-125",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 3,
+      "description": "Implement a fail-closed pre-execution gate for 'safe-exec' (THREAT_MODEL T-HITL-004) by integrating 'analyze_command' blocks into the execution flow, replacing the current advisory-only setup. Acceptance: Tests verify blocks are enforced and prevent execution. per .ai/blueprints/sovereignty-hardening.md.",
+      "created_at": "2026-06-04T20:29:31.005Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-126",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Consume the compiled Context Cache blob as a prompt-prefix during Claude session initialization to implement the §3.2/3.3 prompt-prefix injection harness-level feature per .ai/blueprints/caching.md.",
+      "created_at": "2026-06-04T20:29:31.010Z",
       "completed_at": null,
       "summary": null,
       "depends_on": [],
@@ -1641,6 +1680,34 @@
       "task_id": "E-123",
       "timestamp": "2026-06-04T20:20:44.494Z",
       "summary": "E-123 (Architect-registered): extends E-102 architect filter — git merge/rebase/push/pull/branch (global) + ssh/rsync/scp/npm publish/docker push (command-position regex, guards .ssh-path/npm-run/mergetool false positives). Engineer/no-role unaffected; AI_OS_SOVEREIGNTY_LOCK=0 rollback. +21 tests, full suite 2532 pass."
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-125",
+      "timestamp": "2026-06-04T21:32:22.530Z",
+      "summary": "No sovereignty violations (architect.md/BRIEF.md untouched; blueprint edits are unstaged Gemini authorship, out of staged scope). E-125 single-source-of-truth honored: runAnalysis() shared by analyze_command tool + --check CLI, only the deliberate narrow catastrophic backstop diverges; --check exits 2 on BLOCK, short-circuits before server.connect; PreToolUse wired idempotently in src/bin/ai on Bash matcher. E-126 --emit-context reuses assembleContext/validateProjectRoot, emits cached prefix block via SessionStart additionalContext per caching.md §3 step3, fail-open. E-124 delivered:false matches §API (no E-124 code staged). Files correctly placed; both new suites green (37/0, 15/0)."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-125",
+      "timestamp": "2026-06-04T21:32:45.756Z",
+      "summary": "No P0. Hook never eval's $CMD (base64+exec-args, injection probes inert); no recursion (hook spawns node/python, not the Bash tool); fail-open-on-analyzer-error is loud+detectable and defensible for T-HITL-004; --emit-context blob scoped to architect.md/blueprints/*.md/registry.json/sqlite-DDL (no .env/secrets, JSON escaping safe). P2: rm -rf $HOME, rm -rf /*, rm -r -f / pass the node analyzer (WARN/PASS not BLOCK) — pre-existing analyzer-coverage gap (RM_RF_ROOT/hasRootPaths untouched by this diff), NOT a new regression; backstop catches $HOME and /* when node is down."
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-125",
+      "timestamp": "2026-06-04T21:39:04.900Z",
+      "summary": "All tests passing (2585/2585; 3 code_execution Docker e2e flakes are pre-existing & env-gated, unrelated to this diff). E-125 pre_tool_use_gate 37/37 — non-tautological (mutation-verified: neutering BLOCK→exit2 fails S02); covers --check CLI + hook, node-free backstop (branch genuinely ran), role-awareness, rollback, quote integrity, tool-scoping. E-126 session_start_cache 15/15 — valid SessionStart JSON, rollback, fail-open. E-124 delivered=false green (note: pre-staged, committed in 32208c9). ai-install registration idempotency behaviourally tested for both hooks. Refactored runAnalysis: safe_exec 49/49 + sovereignty_lock 13/13 no regression. P2 advisory: --check analyzer-error fail-open catch branch untested (low-value defensive path)."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-125",
+      "timestamp": "2026-06-04T22:05:41.188Z",
+      "summary": "Tier 3 sprint E-124/125/126: critic_arch+critic_security+critic_tests all PASS. Deterministic [PATH_TRAVERSAL]=assert.sh test bootstrap + [COVERAGE_GAP]=by-filename mapping → dispositioned false-positives (precedent). SEC P2 (rm -rf $HOME//*/split -r -f slipped the now-load-bearing analyzer) FIXED: hardened hasRootPaths+rmRecursiveForce + hook backstop, +13 tests. Full suite 2598 pass (3 Docker flakes)."
     }
   ],
   "deltas": [
