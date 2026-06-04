@@ -4,10 +4,13 @@
  * Analyzes shell commands for destructive or high-risk patterns before execution.
  * Uses token-based parsing (shell-quote) to detect rm -rf, curl|bash, etc.
  *
- * E-102 (sovereignty-hardening.md §Components 1): also accepts an optional
- * caller_role. When the role is 'architect', destructive implementation git
- * operations and file mutations outside .ai/ and plans/ are BLOCKED with a
- * [SOVEREIGNTY_BLOCK] verdict. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.
+ * E-102/E-123 (sovereignty-hardening.md §Data Model): also accepts an optional
+ * caller_role. When the role is 'architect', these are BLOCKED with a
+ * [SOVEREIGNTY_BLOCK] verdict: destructive implementation git ops + file
+ * mutations outside .ai/ and plans/ (E-102); and merge/branch/remote git ops
+ * (merge/rebase/push/pull/branch) + deployment commands (ssh/rsync/scp/
+ * `npm publish`/`docker push`) which are strictly Engineer tasks (E-123).
+ * Rollback: AI_OS_SOVEREIGNTY_LOCK=0.
  *
  * Tools:
  *   analyze_command(command, caller_role?) → risk assessment with PASS/WARN/BLOCK verdict
@@ -165,6 +168,29 @@ function hasRootPaths(tokens) {
 const FORBIDDEN_ARCHITECT_GIT = ["reset", "revert", "checkout", "clean"];
 const FORBIDDEN_ARCHITECT_OPS = ["rm", "mkdir", "touch"];
 
+// E-123 (sovereignty-hardening.md §Data Model): branch-merge + deployment
+// sovereignty. These git verbs are branch/remote operations (not path-scoped), so
+// they are GLOBALLY forbidden for the Architect — merges, pulls, pushes, rebases
+// and branch management are strictly Engineer tasks.
+const FORBIDDEN_ARCHITECT_GIT_GLOBAL = ["merge", "rebase", "push", "pull", "branch"];
+// Deployment commands the Architect may never run (Engineer territory): single
+// verbs plus two-token forms (npm publish / docker push).
+const FORBIDDEN_ARCHITECT_DEPLOY = ["ssh", "rsync", "scp"];
+const FORBIDDEN_ARCHITECT_DEPLOY_PAIRS = [["npm", "publish"], ["docker", "push"]];
+
+// Matches a verb at a COMMAND position — line start, after a shell separator
+// (; & | newline, backtick, subshell paren), or after a command prefix
+// (sudo/env/…) — not merely as an argument substring, so `cat ~/.ssh/config` does
+// not trip the ssh rule. `tokens` is string-only here (shell operators are
+// stripped upstream), so command-position detection runs against the raw string.
+const CMD_HEAD = "(?:^|[;&|\\n`(]|\\b(?:sudo|env|nohup|time|command|exec|xargs|then|do)\\s+)\\s*";
+function usesCommandVerb(raw, verb) {
+  return new RegExp(CMD_HEAD + verb + "\\b", "i").test(raw);
+}
+function usesCommandPair(raw, a, b) {
+  return new RegExp(CMD_HEAD + a + "\\s+" + b + "\\b", "i").test(raw);
+}
+
 // A path operand the Architect is allowed to touch: within .ai/ or plans/
 // (optionally prefixed with ./). Bare commit-ish refs (HEAD, hashes, branch
 // names) are NOT safe paths, so an unscoped `git reset --hard HEAD` blocks.
@@ -220,6 +246,31 @@ function analyzeSovereignty(tokens, raw) {
       }
     }
   }
+
+  // E-123: globally-forbidden Architect git ops (merge/rebase/push/pull/branch).
+  // These are branch/remote operations, blocked regardless of path scope —
+  // merging and pushing are strictly Engineer tasks.
+  const gitGlobal = new RegExp(`\\bgit\\s+(${FORBIDDEN_ARCHITECT_GIT_GLOBAL.join("|")})\\b`, "i").exec(raw);
+  if (gitGlobal) {
+    const verb = gitGlobal[1].toLowerCase();
+    violations.push({
+      id: `ARCH_GIT_${verb.toUpperCase()}`,
+      message: `git ${verb} is a forbidden Architect operation — merges/branch/remote ops are strictly Engineer tasks`,
+    });
+  }
+
+  // E-123: deployment commands are strictly Engineer territory (ssh/rsync/scp,
+  // npm publish, docker push) — blocked for the Architect at command position.
+  for (const v of FORBIDDEN_ARCHITECT_DEPLOY) {
+    if (usesCommandVerb(raw, v)) {
+      violations.push({ id: `ARCH_DEPLOY_${v.toUpperCase()}`, message: `${v} is a forbidden Architect operation — deployments are strictly Engineer tasks` });
+    }
+  }
+  for (const [a, b] of FORBIDDEN_ARCHITECT_DEPLOY_PAIRS) {
+    if (usesCommandPair(raw, a, b)) {
+      violations.push({ id: `ARCH_DEPLOY_${a.toUpperCase()}_${b.toUpperCase()}`, message: `${a} ${b} is a forbidden Architect operation — deployments are strictly Engineer tasks` });
+    }
+  }
   return violations;
 }
 
@@ -241,7 +292,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           caller_role: {
             type: "string",
             enum: ["architect", "engineer", "tester"],
-            description: "E-102 (sovereignty-hardening.md §Components 1): the requesting Triad role. When 'architect', git reset/revert/checkout/clean and rm -rf/mkdir/touch outside .ai//plans/ are BLOCKED with [SOVEREIGNTY_BLOCK]. Omitting it preserves legacy (role-agnostic) analysis. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.",
+            description: "E-102/E-123 (sovereignty-hardening.md §Data Model): the requesting Triad role. When 'architect', these are BLOCKED with [SOVEREIGNTY_BLOCK]: git reset/revert/checkout/clean and rm -rf/mkdir/touch outside .ai//plans/ (E-102); and — strictly Engineer-only — git merge/rebase/push/pull/branch plus deployment commands ssh/rsync/scp/`npm publish`/`docker push` (E-123). Omitting caller_role preserves legacy (role-agnostic) analysis. Rollback: AI_OS_SOVEREIGNTY_LOCK=0.",
           },
         },
         required: ["command"],
