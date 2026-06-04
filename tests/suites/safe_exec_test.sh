@@ -147,10 +147,61 @@ assert_not_contains "E-102: engineer git checkout src allowed" \
 assert_not_contains "E-102: no caller_role → legacy (no sovereignty)" \
   "[SOVEREIGNTY_BLOCK]" "$(verdict 'git checkout src/foo.js' '')"
 
+# ── E-123: branch-merge + deployment sovereignty (sovereignty-hardening.md §Data Model) ──
+# Merge/branch/remote git ops are globally Engineer-only for the Architect.
+assert_contains "E-123: architect git merge → SOVEREIGNTY_BLOCK" \
+  "[ARCH_GIT_MERGE]" "$(verdict 'git merge feature' architect)"
+assert_contains "E-123: architect git push → SOVEREIGNTY_BLOCK" \
+  "[ARCH_GIT_PUSH]" "$(verdict 'git push origin master' architect)"
+assert_contains "E-123: architect git pull → SOVEREIGNTY_BLOCK" \
+  "[ARCH_GIT_PULL]" "$(verdict 'git pull' architect)"
+assert_contains "E-123: architect git branch → SOVEREIGNTY_BLOCK" \
+  "[ARCH_GIT_BRANCH]" "$(verdict 'git branch -D old' architect)"
+assert_contains "E-123: architect git rebase → SOVEREIGNTY_BLOCK" \
+  "[ARCH_GIT_REBASE]" "$(verdict 'git rebase main' architect)"
+# Merge/remote git ops are blocked even when "scoped" — they are not path ops.
+assert_contains "E-123: architect git push to .ai still blocked (global)" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git push origin .ai' architect)"
+
+# Deployment commands are strictly Engineer territory.
+assert_contains "E-123: architect ssh → SOVEREIGNTY_BLOCK" \
+  "[ARCH_DEPLOY_SSH]" "$(verdict 'ssh deploy@host uptime' architect)"
+assert_contains "E-123: architect rsync → SOVEREIGNTY_BLOCK" \
+  "[ARCH_DEPLOY_RSYNC]" "$(verdict 'rsync -a dist/ host:/srv' architect)"
+assert_contains "E-123: architect scp → SOVEREIGNTY_BLOCK" \
+  "[ARCH_DEPLOY_SCP]" "$(verdict 'scp build.tgz host:/tmp' architect)"
+assert_contains "E-123: architect npm publish → SOVEREIGNTY_BLOCK" \
+  "[ARCH_DEPLOY_NPM_PUBLISH]" "$(verdict 'npm publish --access public' architect)"
+assert_contains "E-123: architect docker push → SOVEREIGNTY_BLOCK" \
+  "[ARCH_DEPLOY_DOCKER_PUSH]" "$(verdict 'docker push myorg/app:latest' architect)"
+# Deployment after a shell separator is still detected at command position.
+assert_contains "E-123: architect chained '&& ssh' detected" \
+  "[ARCH_DEPLOY_SSH]" "$(verdict 'cd /srv && ssh host deploy' architect)"
+
+# Engineer (and no-role) may run all of these — Engineer is the deploy/merge owner.
+assert_not_contains "E-123: engineer git push allowed" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git push origin master' engineer)"
+assert_not_contains "E-123: engineer git merge allowed" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git merge feature' engineer)"
+assert_not_contains "E-123: engineer npm publish allowed" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'npm publish' engineer)"
+assert_not_contains "E-123: no caller_role → legacy (deploy not blocked)" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'ssh host cmd' '')"
+
+# False-positive guards: substrings / unrelated subcommands must NOT trip the gate.
+assert_not_contains "E-123: architect reading .ssh config is not 'ssh' command" \
+  "[ARCH_DEPLOY_SSH]" "$(verdict 'cat ~/.ssh/config' architect)"
+assert_not_contains "E-123: architect 'npm run publish-docs' is not 'npm publish'" \
+  "[ARCH_DEPLOY_NPM_PUBLISH]" "$(verdict 'npm run publish-docs' architect)"
+assert_not_contains "E-123: architect 'git mergetool' is not 'git merge'" \
+  "[ARCH_GIT_MERGE]" "$(verdict 'git mergetool' architect)"
+
 # rollback: AI_OS_SOVEREIGNTY_LOCK=0 disables the architect blocks
 export AI_OS_SOVEREIGNTY_LOCK=0
 assert_not_contains "E-102: rollback flag bypasses sovereignty" \
   "[SOVEREIGNTY_BLOCK]" "$(verdict 'rm -rf src/build' architect)"
+assert_not_contains "E-123: rollback flag bypasses merge/deploy blocks too" \
+  "[SOVEREIGNTY_BLOCK]" "$(verdict 'git push origin master' architect)"
 unset AI_OS_SOVEREIGNTY_LOCK
 
 # caller_role is optional — legacy single-arg calls still PASS clean commands

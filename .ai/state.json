@@ -597,6 +597,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-123",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Extend `safe-exec-mcp` to strictly enforce deployment and branch-merge sovereignty. Block `git merge`, `git push`, `git pull`, `git branch`, `git rebase` as well as deployment scripts (`ssh`, `rsync`, `scp`, `npm publish`, `docker push`) when `caller_role` is `architect`. Acceptance: Verification tests cover all new banned commands; `src/mcp/safe-exec-mcp/index.js` updated per `.ai/blueprints/sovereignty-hardening.md` §Data Model.",
+      "created_at": "2026-06-04T19:46:03.578Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1614,6 +1627,20 @@
       "task_id": "E-123",
       "timestamp": "2026-06-04T17:32:17.137Z",
       "summary": "GOVERNANCE: HALF B reverses E-118 \"skip backlog\" — §35 anti-drift override AUTHORIZED by user (human principal) on 2026-06-04. Adversarially reviewed (3-lens workflow): 3 must-fix bugs found+fixed (MAX_HOLD bash-3.2 abort; MAX_QUEUE evicting undelivered; cross-process double-inject race). 2502 tests pass (3 pre-existing Docker flakes). PENDING: Gemini to reconcile interactive-bridge.md + register E-123."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-123",
+      "timestamp": "2026-06-04T20:20:38.841Z",
+      "summary": "[TIER_2] safe-exec-mcp merge/deploy sovereignty implements sovereignty-hardening.md §Data Model exactly; 2 aligner WARNs dispositioned false-positive (LOG.md gitignored; safe_exec_test covered by the blueprint)."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-123",
+      "timestamp": "2026-06-04T20:20:44.494Z",
+      "summary": "E-123 (Architect-registered): extends E-102 architect filter — git merge/rebase/push/pull/branch (global) + ssh/rsync/scp/npm publish/docker push (command-position regex, guards .ssh-path/npm-run/mergetool false positives). Engineer/no-role unaffected; AI_OS_SOVEREIGNTY_LOCK=0 rollback. +21 tests, full suite 2532 pass."
     }
   ],
   "deltas": [
