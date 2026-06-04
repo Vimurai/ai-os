@@ -104,14 +104,32 @@ assert_status 0 "E-118.04: signal.json valid JSON after reset" \
 assert_contains "E-118.04: queue reset to a single fresh entry" "1" "$(qlen "$SIGNAL")"
 assert_contains "E-118.04: recovered message present" "recovered" "$(qfield "$SIGNAL" 0 message)"
 
-# ── E-118.05: queue is capped (bounded growth) ──────────────────────────────
+# ── E-118.05: bounded growth via DELIVERED-AWARE eviction (E-123) ─────────────
+# E-123 changed the cap from a blind positional front-slice (which could silently
+# drop an UNDELIVERED handoff — the exact bug being fixed) to delivered-aware
+# eviction: undelivered handoffs are NEVER dropped; only the oldest DELIVERED
+# entries are evicted to bound growth.
 rm -f "$SIGNAL"
 for i in $(seq 1 55); do
   call handoff_control "{\"target\":\"claude\",\"message\":\"m${i}\"}" >/dev/null
 done
 cap="$(qlen "$SIGNAL")"
-assert_status 0 "E-118.05: queue capped at <=50 (got ${cap})" bash -c "[ '${cap}' -le 50 ]"
-assert_contains "E-118.05: newest entry retained after rotation" "m55" "$(qfield "$SIGNAL" -1 message)"
+# All 55 are undelivered → none may be evicted (each is a pending handoff).
+assert_status 0 "E-118.05: undelivered handoffs are never evicted (got ${cap})" bash -c "[ '${cap}' -eq 55 ]"
+assert_contains "E-118.05: newest undelivered entry retained" "m55" "$(qfield "$SIGNAL" -1 message)"
+assert_contains "E-118.05: oldest undelivered entry retained (no front-slice loss)" "m1" "$(qfield "$SIGNAL" 0 message)"
+# Mark all 55 delivered, then append one fresh handoff → oldest DELIVERED entries
+# are evicted to bring the queue back within the cap; the new pending one survives.
+python3 - "$SIGNAL" <<'PY'
+import json, sys
+p = sys.argv[1]; d = json.load(open(p))
+for e in d: e["delivered"] = True
+json.dump(d, open(p, "w"), indent=2)
+PY
+call handoff_control '{"target":"gemini","message":"freshest"}' >/dev/null
+cap2="$(qlen "$SIGNAL")"
+assert_status 0 "E-118.05: delivered entries evicted back to cap (got ${cap2})" bash -c "[ '${cap2}' -le 50 ]"
+assert_contains "E-118.05: newest (undelivered) entry survives eviction" "freshest" "$(qfield "$SIGNAL" -1 message)"
 
 cd "${REPO_ROOT}"
 assert_summary

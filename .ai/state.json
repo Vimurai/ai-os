@@ -1600,6 +1600,20 @@
       "task_id": "E-122",
       "timestamp": "2026-06-03T11:33:20.330Z",
       "summary": "Human disposition: NO_LOG_UPDATE false (LOG.md gitignored, updated on disk); ORPHANED_WORK false (ai-watch covered by interactive-bridge.md, aligner doesn't recurse domain blueprints). Precedent E-77/78/79/82/83."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-123",
+      "timestamp": "2026-06-04T17:32:11.126Z",
+      "summary": "[TIER_2] Smart ai-watch — 2 aligner WARNs dispositioned false-positive (LOG.md gitignored; ai-watch covered by interactive-bridge.md, not architect.md)."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-123",
+      "timestamp": "2026-06-04T17:32:17.137Z",
+      "summary": "GOVERNANCE: HALF B reverses E-118 \"skip backlog\" — §35 anti-drift override AUTHORIZED by user (human principal) on 2026-06-04. Adversarially reviewed (3-lens workflow): 3 must-fix bugs found+fixed (MAX_HOLD bash-3.2 abort; MAX_QUEUE evicting undelivered; cross-process double-inject race). 2502 tests pass (3 pre-existing Docker flakes). PENDING: Gemini to reconcile interactive-bridge.md + register E-123."
     }
   ],
   "deltas": [

@@ -1,19 +1,32 @@
 #!/usr/bin/env bash
-# ai-watch — Interactive Bridge tmux watcher (E-115/E-117/E-118, interactive-bridge.md)
+# ai-watch — Interactive Bridge tmux watcher (E-115/E-117/E-118/E-122/E-123, interactive-bridge.md)
 #
 # Polls .ai/signal.json in the CURRENT project and routes queued handoff messages
 # to the target agent's tmux pane via `tmux send-keys`, enabling the Architect⇄
 # Engineer "ping-pong" loop without an API wrapper. The signal queue is written by
 # the task-synchronizer-mcp `handoff_control` tool (E-114/E-118).
 #
-# E-118: .ai/signal.json is a FIFO queue (array). A CURSOR tracks consumed entries
-# (startup backlog is skipped, never replayed). Each entry is injected ONLY when
-# the target pane is idle/ready (busy-state gate); a busy target holds the queue
-# in FIFO order until it frees.
+# Smart delivery (E-123):
+#   - PERSISTENT consumption: each delivered entry is flagged `delivered:true` in
+#     signal.json (keyed by its immutable `timestamp`). A restart neither replays
+#     already-delivered signals nor skips undelivered ones — it resumes exactly.
+#   - STARTUP DRAIN: a pre-existing backlog is processed on startup (not skipped).
+#     Per target, only the LATEST undelivered entry is delivered; older ones are
+#     flagged `superseded`, so a stale duplicate burst is never dumped at once.
+#   - PER-TARGET progress: claude and gemini drain independently — a busy/blocked
+#     gemini never holds up queued claude work (no global head-of-line block).
+#   - BUSY GATE: an entry is injected only when the target pane's foreground is an
+#     agent REPL (idle/ready); otherwise it is HELD (not dropped) and retried.
+#   - SINGLE WRITER: an atomic mkdir lock prevents two watchers in the same
+#     project from double-injecting (stale locks from dead PIDs are reclaimed).
+#   Rollback to the legacy skip-backlog / in-memory-cursor behavior:
+#     AI_WATCH_CURSOR_MODE=legacy  (or AI_WATCH_DRAIN_BACKLOG=0 / AI_WATCH_LOCK=0).
 #
-# Pane resolution (E-117) runs most-specific → most-conventional:
-#   exact title → fuzzy title (CI) → window name (CI) → conventional ordinal.
-#   target "claude" → 1st project pane (base-index agnostic); "gemini" → 2nd.
+# Pane resolution (E-117/E-122) runs most-specific → most-conventional:
+#   exact title → fuzzy title (CI) → window name (CI) → conventional ordinal among
+#   AGENT panes only (plain shells excluded). target "claude" → 1st agent pane;
+#   "gemini" → 2nd. Agent panes are identified by foreground command (node/claude/
+#   gemini or a version string), never bash/zsh/…, per interactive-bridge.md §API.
 #
 # Security:
 #   - Isolation: only panes whose pane_current_path is inside THIS project dir
@@ -36,6 +49,29 @@ SIGNAL="${PROJECT_DIR}/${SIGNAL_REL}"
 # line (or is dropped entirely). Tunable for slow panes; set 0 in tests / unusual
 # environments. Fractional seconds — macOS/BSD and GNU `sleep` both accept them.
 SUBMIT_DELAY="${AI_WATCH_SUBMIT_DELAY:-0.1}"
+
+# E-123 smart-delivery knobs (all reversible — defaults give the smart behavior):
+#   CURSOR_MODE=delivered  persistent per-entry delivered flag (vs legacy in-mem cursor)
+#   DRAIN_BACKLOG=1        process a pre-existing queue on startup (latest per target)
+#   USE_LOCK=1             single-writer mkdir lock per project
+#   MAX_HOLD=0             0 = hold an undeliverable entry forever (keep waiting); >0 =
+#                          expire it after N poll attempts as a last-resort fallback
+CURSOR_MODE="${AI_WATCH_CURSOR_MODE:-delivered}"
+DRAIN_BACKLOG="${AI_WATCH_DRAIN_BACKLOG:-1}"
+USE_LOCK="${AI_WATCH_LOCK:-1}"
+MAX_HOLD="${AI_WATCH_MAX_HOLD:-0}"
+# MAX_HOLD MUST be numeric: it feeds `[[ -gt ]]` / `[[ -ge ]]`, and under `set -u`
+# bash 3.2 ABORTS the whole process on a non-numeric/identifier operand (the abort
+# is not suppressible with 2>/dev/null) — which would silently kill the watcher.
+case "$MAX_HOLD" in ''|*[!0-9]*) MAX_HOLD=0 ;; esac
+LOCK_DIR="${PROJECT_DIR}/.ai/.ai-watch.lock"
+
+# Commands that mean "this pane is an agent REPL ready for input". Override to
+# extend; the version-string heuristic (below) is always also accepted.
+AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini}"
+
+# Targets drained independently, in this order, each poll.
+WATCH_TARGETS="claude gemini"
 
 # ── Preconditions ────────────────────────────────────────────────────────────
 # Guarded inside _preconditions() so the helpers below can be `source`d by the
@@ -64,60 +100,102 @@ _preconditions() {
 # so case-insensitive matching is done with tr.
 _lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
-# Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>"
+# _is_agent_cmd <cmd> → 0 if the command looks like an agent REPL (node/claude/
+# gemini or a version string like "2.1.161"), 1 for plain shells / anything else.
+# SINGLE source of truth shared by resolve_pane (Pass 4) and _pane_ready, so
+# "agent pane" means the same thing for routing and for the busy-gate. Shells are
+# denied first so "gemini" can never resolve to (or be considered ready in) bash.
+_is_agent_cmd() {
+  local c lc r
+  c="$1"
+  [[ -z "$c" ]] && return 1
+  lc="$(_lc "$c")"
+  case "$lc" in
+    bash|zsh|sh|fish|dash|ksh|tcsh|csh|-bash|-zsh|-sh) return 1 ;;
+  esac
+  for r in $AI_WATCH_READY_CMDS; do
+    [[ "$lc" == "$r" ]] && return 0
+  done
+  # Claude Code reports its foreground command as its version string (e.g.
+  # "2.1.161"); the `^` anchor permits build suffixes, 3 groups avoid PIDs/ports.
+  if [[ "$c" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+    return 0
+  fi
+  return 1
+}
+
+# Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>\t<pane_current_command>"
 # for every pane, then keep only those rooted in PROJECT_DIR (isolation §Security).
 _project_panes() {
-  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{pane_title}	#{window_name}	#{pane_current_path}' 2>/dev/null \
-    | while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{pane_title}	#{window_name}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null \
+    | while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
         case "$ppath" in
-          "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" ;;
+          "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" "$pcmd" ;;
         esac
       done
 }
 
 # resolve_pane <target> → prints the pane id, or nothing. Resolution order runs
-# most-specific → most-conventional, per interactive-bridge.md §API (E-117):
+# most-specific → most-conventional, per interactive-bridge.md §API (E-117/E-122):
 #   1. exact pane-title match     (case-sensitive fast path)
 #   2. fuzzy pane-title match     (case-insensitive substring, e.g. "claude-code")
 #   3. window-name match          (case-insensitive substring — exact + fuzzy)
-#   4. conventional ordinal       (claude→1st project pane, gemini→2nd), chosen by
-#      pane-index ORDER not literal value, so it stays correct under tmux
-#      base-index / pane-base-index 1 (panes start at 1, not 0).
+#   4. conventional ordinal among AGENT panes only (E-122): claude→1st, gemini→2nd,
+#      ordered by pane-index (pane-id tiebreak) so it is deterministic and base-
+#      index agnostic. Shells are excluded via _is_agent_cmd, so "gemini" can never
+#      resolve to a bash/zsh pane. TIER B: if no agent pane is identifiable (e.g.
+#      the command column is unavailable), degrade to the all-panes ordinal so
+#      resolution still works.
 resolve_pane() {
-  local target="$1" want_idx="" lc_target ordinal pid pidx ptitle pwin ppath
+  local target="$1" want_idx="" lc_target ordinal has_cmd pid pidx ptitle pwin ppath pcmd
   case "$target" in claude) want_idx=0 ;; gemini) want_idx=1 ;; *) return 1 ;; esac
   lc_target="$(_lc "$target")"
 
   # Pass 1: exact pane-title match.
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
     [[ "$ptitle" == "$target" ]] && { printf '%s' "$pid"; return 0; }
   done < <(_project_panes)
 
   # Pass 2: fuzzy pane-title match (case-insensitive substring).
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
     case "$(_lc "$ptitle")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
   done < <(_project_panes)
 
   # Pass 3: window-name match (case-insensitive substring covers exact + fuzzy).
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
     case "$(_lc "$pwin")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
   done < <(_project_panes)
 
-  # Pass 4: conventional ordinal among project panes, base-index agnostic.
-  # Sort by pane index so "1st pane" is correct whether indices start at 0 or 1.
+  # Pass 4 (E-122): conventional ordinal among AGENT panes only — shells excluded.
+  # has_cmd records whether ANY pane reported a foreground command, so TIER B only
+  # degrades when the command column is unavailable — never misroutes to a shell.
+  has_cmd=0
   ordinal=0
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath; do
-    [[ "$ordinal" -eq "$want_idx" ]] && { printf '%s' "$pid"; return 0; }
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+    [[ -n "$pcmd" ]] && has_cmd=1
+    _is_agent_cmd "$pcmd" || continue
+    if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
     ordinal=$((ordinal + 1))
-  done < <(_project_panes | sort -t$'\t' -k2,2n)
+  done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
+
+  # TIER B degrade: ONLY when no pane reported a command (older tmux / test mocks
+  # without a command field). When commands ARE present but none qualify as an
+  # agent, return nothing rather than route a handoff into a shell.
+  if [[ "$has_cmd" -eq 0 ]]; then
+    ordinal=0
+    while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+      if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
+      ordinal=$((ordinal + 1))
+    done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
+  fi
 
   return 1
 }
 
 # ── Queue parsing (E-118) ─────────────────────────────────────────────────────
-# .ai/signal.json is a FIFO queue (array of {timestamp,target,message}). A legacy
-# flat object (E-114) is treated as a single-entry queue; a corrupt/missing file
-# yields length 0 so the watcher never wedges on bad state (§Execution Constraints).
+# .ai/signal.json is a FIFO queue (array of {timestamp,target,message,...}). A
+# legacy flat object (E-114) is treated as a single-entry queue; a corrupt/missing
+# file yields length 0 so the watcher never wedges on bad state.
 _queue_len() {  # _queue_len → number of queued entries
   python3 - "$SIGNAL" <<'PY' 2>/dev/null || echo 0
 import json, sys
@@ -145,82 +223,336 @@ except Exception:
 PY
 }
 
-# ── Busy-state detection (E-118, §API) ────────────────────────────────────────
-# Inject ONLY when the target pane's foreground command is the agent REPL waiting
-# for input (e.g. `node`/`claude`/`gemini`). When the REPL shells out to run a
-# tool the foreground becomes `bash`/`python`/etc. — busy — and we hold the signal
-# in the queue. Override the ready set with AI_WATCH_READY_CMDS; bypass the whole
-# gate (always-ready) with AI_WATCH_NO_BUSY_CHECK=1 for unusual environments.
-AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini}"
-_pane_ready() {  # _pane_ready <pane_id> → 0 if idle/ready for input, 1 if busy
-  [[ "${AI_WATCH_NO_BUSY_CHECK:-0}" == "1" ]] && return 0
-  local pane="$1" cmd c
-  cmd="$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null)"
-  [[ -z "$cmd" ]] && return 1                 # unknown → treat as busy (safe)
-  for c in $AI_WATCH_READY_CMDS; do
-    [[ "$cmd" == "$c" ]] && return 0
+# ── Persistent consumption (E-123) ────────────────────────────────────────────
+# Delivery state lives IN signal.json: an entry is "pending" for a target when its
+# target matches, it has a non-empty message, and delivered is not true. Identity
+# is the immutable `timestamp` (survives handoff_control's MAX_QUEUE eviction, which
+# is delivered-aware, unlike a positional cursor). Each write re-reads the current
+# file, flips ONLY the matching entry, and replaces it atomically (tmp + os.replace)
+# while holding a short-lived write lock SHARED with handoff_control — so a
+# concurrent MCP append can neither be clobbered nor cause a double-injection.
+
+# _signal_lock / _signal_unlock — short-lived advisory lock co-located with the
+# signal file (".lock"), shared with task-synchronizer-mcp::handoff_control so the
+# watcher's delivered-flag write and the MCP's append are serialised. Bounded spin
+# (~0.5s) then proceed best-effort rather than deadlock (a crash mid-write is rare;
+# writes are idempotent so a missed lock only re-exposes the original tiny race).
+_signal_lock() {  # → 0 if acquired (caller MUST _signal_unlock), 1 if proceeding unlocked
+  local lock="${SIGNAL}.lock" i=0
+  while ! mkdir "$lock" 2>/dev/null; do
+    i=$((i + 1)); [[ "$i" -ge 25 ]] && return 1; sleep 0.02
   done
+  return 0
+}
+_signal_unlock() { rmdir "${SIGNAL}.lock" 2>/dev/null; return 0; }
 
-  # E-121/E-122: Claude Code reports its foreground command as its version string
-  # (e.g. "2.1.161"), so tmux's #{pane_current_command} is a semver, not a REPL
-  # name. Treat a leading N.N.N as ready. The `^` anchor (no trailing `$`) is
-  # deliberate — it permits build suffixes like "2.1.161-rc1"; requiring three
-  # numeric groups avoids matching bare PIDs/ports. This only relaxes the ready
-  # heuristic — injection stays literal (-l --), so a false-positive is benign.
-  if [[ "$cmd" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-    return 0
-  fi
-
-  return 1
+_next_pending_ts() {  # <target> → timestamp of the EARLIEST undelivered entry, else ""
+  TARGET="$1" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+import json, os, sys
+t = os.environ["TARGET"]
+try:
+    d = json.load(open(sys.argv[1]))
+    if isinstance(d, dict): d = [d]
+    if not isinstance(d, list): d = []
+except Exception:
+    d = []
+for e in d:
+    if isinstance(e, dict) and e.get("target") == t and e.get("delivered") is not True and e.get("message"):
+        print(e.get("timestamp", "")); break
+PY
 }
 
-# ── Queue drain (E-118) ───────────────────────────────────────────────────────
-# Process queued entries from the global CURSOR forward in a single pass. Mutates
-# CURSOR. Factored out of the poll loop so the FIFO / busy-hold / no-pane-drop
-# semantics are unit-testable without the infinite `sleep` loop.
+_message_by_ts() {  # <ts> → message of the first undelivered entry with this timestamp
+  TS="$1" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+import json, os, sys
+ts = os.environ["TS"]
+try:
+    d = json.load(open(sys.argv[1]))
+    if isinstance(d, dict): d = [d]
+    if not isinstance(d, list): d = []
+except Exception:
+    d = []
+for e in d:
+    if isinstance(e, dict) and e.get("timestamp", "") == ts and e.get("delivered") is not True:
+        sys.stdout.write(e.get("message", "")); break
+PY
+}
+
+_mark_delivered() {  # <ts> <reason> → flag first undelivered entry with this ts (atomic)
+  local _held=0; _signal_lock && _held=1
+  TS="$1" REASON="$2" PID="$$" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+import json, os, sys, tempfile
+from datetime import datetime, timezone
+path = sys.argv[1]; ts = os.environ["TS"]; reason = os.environ["REASON"]; pid = os.environ["PID"]
+try:
+    d = json.load(open(path))
+    if isinstance(d, dict): d = [d]
+    if not isinstance(d, list): sys.exit(0)
+except Exception:
+    sys.exit(0)
+for e in d:
+    if isinstance(e, dict) and e.get("timestamp", "") == ts and e.get("delivered") is not True:
+        e["delivered"] = True
+        e["delivered_reason"] = reason
+        e["delivered_ts"] = datetime.now(timezone.utc).isoformat()
+        try: e["delivered_by"] = int(pid)
+        except Exception: pass
+        break
+dirn = os.path.dirname(path) or "."
+fd, tmp = tempfile.mkstemp(dir=dirn)
+try:
+    with os.fdopen(fd, "w") as f: json.dump(d, f, indent=2)
+    os.replace(tmp, path)
+except Exception:
+    try: os.unlink(tmp)
+    except Exception: pass
+PY
+  [[ "$_held" -eq 1 ]] && _signal_unlock
+}
+
+_bump_attempt() {  # <ts> → increment persisted attempt counter; prints new count
+  local _held=0; _signal_lock && _held=1
+  TS="$1" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+import json, os, sys, tempfile
+path = sys.argv[1]; ts = os.environ["TS"]
+try:
+    d = json.load(open(path))
+    if isinstance(d, dict): d = [d]
+    if not isinstance(d, list): sys.exit(0)
+except Exception:
+    sys.exit(0)
+n = 0
+for e in d:
+    if isinstance(e, dict) and e.get("timestamp", "") == ts and e.get("delivered") is not True:
+        n = int(e.get("attempts", 0)) + 1
+        e["attempts"] = n
+        break
+if n:
+    dirn = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=dirn)
+    try:
+        with os.fdopen(fd, "w") as f: json.dump(d, f, indent=2)
+        os.replace(tmp, path)
+        print(n)
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+PY
+  [[ "$_held" -eq 1 ]] && _signal_unlock
+}
+
+_reconcile_startup() {  # <drain:1|0> → one-time startup reconciliation of the backlog
+  local _held=0; _signal_lock && _held=1
+  # drain=1: per target keep only the LATEST undelivered entry, flag the earlier
+  #          same-target undelivered ones "superseded" (NOT injected) — prevents a
+  #          stale duplicate burst.
+  # drain=0: flag ALL currently-undelivered entries "skipped-backlog" (the legacy
+  #          skip-on-startup behavior, but persistent).
+  DRAIN="$1" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+import json, os, sys, tempfile
+from datetime import datetime, timezone
+path = sys.argv[1]; drain = os.environ["DRAIN"]
+try:
+    d = json.load(open(path))
+    if isinstance(d, dict): d = [d]
+    if not isinstance(d, list): sys.exit(0)
+except Exception:
+    sys.exit(0)
+changed = False
+now = datetime.now(timezone.utc).isoformat()
+# Backfill a synthetic identity for any entry missing a timestamp so the
+# steady-state delivered-flag tracking (keyed on timestamp) can address it —
+# otherwise such an entry is neither deliverable nor markable (stuck forever).
+for i, e in enumerate(d):
+    if isinstance(e, dict) and not e.get("timestamp"):
+        e["timestamp"] = "backfill-%d-%s" % (i, now); changed = True
+pend = {}
+for i, e in enumerate(d):
+    if isinstance(e, dict) and e.get("delivered") is not True and e.get("message") and e.get("target"):
+        pend.setdefault(e["target"], []).append(i)
+for tgt, idxs in pend.items():
+    mark = idxs if drain == "0" else idxs[:-1]   # drain keeps the latest pending
+    reason = "skipped-backlog" if drain == "0" else "superseded"
+    for i in mark:
+        d[i]["delivered"] = True
+        d[i]["delivered_reason"] = reason
+        d[i]["delivered_ts"] = now
+        changed = True
+if changed:
+    dirn = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=dirn)
+    try:
+        with os.fdopen(fd, "w") as f: json.dump(d, f, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+PY
+  [[ "$_held" -eq 1 ]] && _signal_unlock
+}
+
+# ── Busy-state detection (E-118/E-122, §API) ──────────────────────────────────
+# Inject ONLY when the target pane's foreground command is the agent REPL waiting
+# for input (node/claude/gemini, or Claude Code's version string). When the REPL
+# shells out to run a tool the foreground becomes bash/python/etc. — busy — and we
+# hold the signal. Override the ready set with AI_WATCH_READY_CMDS; bypass the
+# whole gate (always-ready) with AI_WATCH_NO_BUSY_CHECK=1 for unusual environments.
+_pane_ready() {  # _pane_ready <pane_id> → 0 if idle/ready for input, 1 if busy
+  [[ "${AI_WATCH_NO_BUSY_CHECK:-0}" == "1" ]] && return 0
+  local pane="$1" cmd
+  cmd="$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null)"
+  [[ -z "$cmd" ]] && return 1                 # unknown → treat as busy (safe)
+  _is_agent_cmd "$cmd"
+}
+
+# _maybe_expire <ts> <target> <context> → with MAX_HOLD>0, count poll attempts on a
+# held (busy / no-pane) entry and expire it as a last-resort fallback so a target is
+# never wedged forever. With MAX_HOLD=0 (default) this is a no-op — hold and wait.
+_maybe_expire() {
+  # Defensive: a non-numeric MAX_HOLD must never reach arithmetic (bash-3.2 aborts
+  # the process under set -u). Sanitized at startup; re-checked here in case a test
+  # or caller set it directly.
+  case "${MAX_HOLD:-0}" in ''|*[!0-9]*) return 0 ;; esac
+  [[ "$MAX_HOLD" -gt 0 ]] || return 0
+  local n
+  n="$(_bump_attempt "$1")"
+  if [[ -n "$n" && "$n" -ge "$MAX_HOLD" ]]; then
+    _mark_delivered "$1" expired
+    echo "ai-watch: EXPIRED queued signal for '$2' after ${n} attempts (${3}) — giving up." >&2
+  fi
+}
+
+# ── Queue drain (E-123) ───────────────────────────────────────────────────────
+# One delivery pass. For EACH target independently: take its earliest undelivered
+# entry; if the target pane resolves and is ready, inject and flag it delivered;
+# otherwise HOLD it (do not drop) and move to the OTHER target — so a busy/blocked
+# gemini never holds up queued claude work. Per-target FIFO is preserved (always
+# the earliest undelivered for that target). At most one entry per target per pass,
+# so the busy-gate naturally sequences "deliver → wait until free → deliver next".
 _drain_once() {
+  local t ts message pane
+  for t in $WATCH_TARGETS; do
+    ts="$(_next_pending_ts "$t")"
+    [[ -z "$ts" ]] && continue
+    message="$(_message_by_ts "$ts")"
+    if [[ -z "$message" ]]; then
+      _mark_delivered "$ts" malformed; continue   # no message → undeliverable
+    fi
+    pane="$(resolve_pane "$t")"
+    if [[ -z "$pane" ]]; then
+      _maybe_expire "$ts" "$t" "no-pane"; continue # transient missing pane → hold + retry
+    fi
+    if ! _pane_ready "$pane"; then
+      _maybe_expire "$ts" "$t" "busy"; continue    # busy → hold (other target unaffected)
+    fi
+    # -l: send the message LITERALLY (no tmux key-name interpretation, no shell
+    # evaluation here); --: end option parsing so a leading '-' is data. Then
+    # submit with Enter after SUBMIT_DELAY lets the literal text settle.
+    # Delivery is AT-LEAST-ONCE by design: we flag delivered AFTER a successful
+    # send, so a crash in the ~SUBMIT_DELAY window re-delivers on restart (a rare
+    # duplicate keystroke) rather than silently dropping the handoff — losing a
+    # handoff is the failure mode this whole rewrite exists to prevent.
+    tmux send-keys -t "$pane" -l -- "$message"
+    sleep "$SUBMIT_DELAY"
+    tmux send-keys -t "$pane" Enter
+    _mark_delivered "$ts" sent
+    echo "ai-watch: routed → ${t} (${pane}): ${message}"
+  done
+  return 0
+}
+
+# ── Single-writer lock (E-123) ────────────────────────────────────────────────
+# An atomic mkdir lock keyed on the project dir stops two watchers in the same
+# project from double-injecting (and from racing each other's delivered-flag
+# writes). A lock left by a dead watcher (PID not alive) is reclaimed. mkdir is
+# atomic on macOS and bash-3.2 safe; flock is unavailable on macOS by default.
+_acquire_lock() {  # → 0 if acquired (or locking disabled), 1 if a live watcher holds it
+  [[ "$USE_LOCK" != "1" ]] && return 0
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    echo "$$" > "$LOCK_DIR/pid" 2>/dev/null; return 0
+  fi
+  local holder=""
+  [[ -f "$LOCK_DIR/pid" ]] && holder="$(cat "$LOCK_DIR/pid" 2>/dev/null)"
+  if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then
+    return 1                                       # a live watcher already owns it
+  fi
+  # Stale lock (dead/unknown holder). Claim the right to reclaim ATOMICALLY: rename
+  # is atomic, so only the process that wins the mv gets to recreate the lock —
+  # `rm -rf` + `mkdir` are not atomic together and let two reclaimers both believe
+  # they own it. A racing fresh starter would instead win the top-of-function mkdir
+  # and make our recreate fail, so we never double-own.
+  if mv "$LOCK_DIR" "${LOCK_DIR}.stale.$$" 2>/dev/null; then
+    rm -rf "${LOCK_DIR}.stale.$$" 2>/dev/null
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      echo "$$" > "$LOCK_DIR/pid" 2>/dev/null; return 0
+    fi
+  fi
+  return 1
+}
+_release_lock() {  # remove the lock only if WE own it
+  [[ "$USE_LOCK" != "1" ]] && return 0
+  local holder=""
+  [[ -f "$LOCK_DIR/pid" ]] && holder="$(cat "$LOCK_DIR/pid" 2>/dev/null)"
+  [[ "$holder" == "$$" ]] && rm -rf "$LOCK_DIR" 2>/dev/null
+  return 0
+}
+
+# ── Legacy mode (rollback) ────────────────────────────────────────────────────
+# AI_WATCH_CURSOR_MODE=legacy restores the pre-E-123 behavior: an in-memory cursor
+# starting at the current queue length (pre-existing backlog skipped, never
+# replayed), single global FIFO, drop-on-no-pane. No persistence, no lock.
+_legacy_drain_once() {
   local len target message pane
   len="$(_queue_len)"
-  # Queue shrank (rotated/cleared/corrupt) → resync the cursor, never replay.
   [[ "$len" -lt "$CURSOR" ]] && CURSOR="$len"
   while [[ "$CURSOR" -lt "$len" ]]; do
     target="$(_queue_field "$CURSOR" target)"
     message="$(_queue_field "$CURSOR" message)"
-    if [[ -z "$target" || -z "$message" ]]; then
-      # Malformed entry — advance past it so it can't wedge the queue.
-      CURSOR=$((CURSOR + 1)); continue
-    fi
+    if [[ -z "$target" || -z "$message" ]]; then CURSOR=$((CURSOR + 1)); continue; fi
     pane="$(resolve_pane "$target")"
     if [[ -z "$pane" ]]; then
       echo "ai-watch: no pane for target '${target}' in ${PROJECT_DIR} — dropping queued signal #$((CURSOR + 1))." >&2
       CURSOR=$((CURSOR + 1)); continue
     fi
-    # Busy-state gate: if the target REPL is mid-tool, leave the entry queued and
-    # retry next poll. RETURN (don't skip) to preserve FIFO ordering — a later
-    # signal must not overtake a blocked one.
     _pane_ready "$pane" || return 0
-    # -l: send the message LITERALLY (no tmux key-name interpretation, no shell
-    # evaluation here); --: end option parsing so a leading '-' in the message is
-    # data. Then submit with Enter.
     tmux send-keys -t "$pane" -l -- "$message"
-    sleep "$SUBMIT_DELAY"                       # let the literal text settle before Enter (E-121/E-122)
+    sleep "$SUBMIT_DELAY"
     tmux send-keys -t "$pane" Enter
     echo "ai-watch: routed → ${target} (${pane}) #$((CURSOR + 1)): ${message}"
     CURSOR=$((CURSOR + 1))
   done
   return 0
 }
+_legacy_main() {
+  CURSOR=0
+  [[ -f "$SIGNAL" ]] && CURSOR="$(_queue_len)"
+  while true; do
+    [[ -f "$SIGNAL" ]] && _legacy_drain_once
+    sleep "$POLL_INTERVAL"
+  done
+}
 
 # ── Watch loop ───────────────────────────────────────────────────────────────
 main() {
   _preconditions || exit 1
 
-  echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
-  # CURSOR = number of queue entries already handled. Start at the current queue
-  # length so a pre-existing backlog is NOT replayed when the watcher (re)starts.
-  CURSOR=0
-  [[ -f "$SIGNAL" ]] && CURSOR="$(_queue_len)"
+  if ! _acquire_lock; then
+    echo "ai-watch: another watcher is already running for ${PROJECT_DIR} (lock: ${LOCK_DIR}) — exiting." >&2
+    exit 1
+  fi
+  trap '_release_lock' EXIT INT TERM
 
+  echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
+
+  if [[ "$CURSOR_MODE" == "legacy" ]]; then
+    echo "ai-watch: CURSOR_MODE=legacy — pre-existing backlog will be skipped (rollback mode)."
+    _legacy_main
+    return
+  fi
+
+  # Smart mode (E-123): reconcile the startup backlog once (latest per target, or
+  # skip-all if AI_WATCH_DRAIN_BACKLOG=0), then drain per-target each poll.
+  [[ -f "$SIGNAL" ]] && _reconcile_startup "$DRAIN_BACKLOG"
   while true; do
     [[ -f "$SIGNAL" ]] && _drain_once
     sleep "$POLL_INTERVAL"
@@ -228,11 +560,11 @@ main() {
 }
 
 # Run the watch loop only when executed directly. `source`-ing this script
-# exposes the helpers (resolve_pane, _project_panes, _lc, …) to the test suite
-# without launching the infinite loop or tripping the tmux preconditions.
-# Detection uses the `return` idiom rather than $0/BASH_SOURCE comparison: a
-# bare `return` only succeeds inside a sourced file, so its failure means the
-# script was executed (BASH_SOURCE/$0 are unreliable across zsh→bash harnesses).
+# exposes the helpers (resolve_pane, _drain_once, _is_agent_cmd, …) to the test
+# suite without launching the infinite loop, acquiring the lock, or tripping the
+# tmux preconditions. Detection uses the `return` idiom rather than $0/BASH_SOURCE
+# comparison: a bare `return` only succeeds inside a sourced file, so its failure
+# means the script was executed (BASH_SOURCE/$0 are unreliable across zsh→bash).
 if ! (return 0 2>/dev/null); then
   main "$@"
 fi
