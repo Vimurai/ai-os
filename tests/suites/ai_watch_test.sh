@@ -448,4 +448,55 @@ _panes_titleready='%9\t1\tgemini\twin\t/proj\tnode\n'
 assert_contains "E-123.INT: title-matched + ready delivers (real gate)" \
   "%9 -l -- x" "$(_integration_drain '[{"timestamp":"1","target":"gemini","message":"x"}]' "$_panes_titleready")"
 
+# ── E-123: signal handling (Ctrl-C) + --clear (fresh start) ───────────────────
+echo "── E-123: Ctrl-C exit + --clear ────────────────────────────────────"
+
+# SIG (regression): a watch loop MUST exit on SIGINT/SIGTERM. The earlier trap
+# only released the lock without exiting, so the INT handler returned and the loop
+# RESUMED — Ctrl-C appeared to do nothing.
+assert_status 0 "E-123.SIG: INT trap exits (not just releases lock)" grep -qE "trap 'exit 130' INT" "$WATCH"
+assert_status 0 "E-123.SIG: TERM trap exits"                         grep -qE "trap 'exit 143' TERM" "$WATCH"
+assert_status 0 "E-123.SIG: EXIT trap releases the lock"             grep -qE "trap '_release_lock' EXIT" "$WATCH"
+
+# SIG behavioural: run main() (preconditions/lock/tmux mocked) in the background,
+# send a real SIGINT, and assert the process actually terminates.
+_sig_probe() {  # <signal> → EXITED | ALIVE   (set -m so a backgrounded loop gets a
+                # real, non-ignored SIGINT, mirroring a foreground tmux pane)
+  ( set -m 2>/dev/null
+    source "$WATCH" 2>/dev/null
+    _preconditions() { return 0; }
+    _acquire_lock() { return 0; }
+    _release_lock() { return 0; }
+    _reconcile_startup() { return 0; }
+    _drain_once() { return 0; }
+    SIGNAL="$(mktemp)"; printf '[]' > "$SIGNAL"; POLL_INTERVAL=0.2
+    main >/dev/null 2>&1 &
+    local mp=$!
+    sleep 0.5
+    kill "-$1" "$mp" 2>/dev/null
+    local i=0
+    while kill -0 "$mp" 2>/dev/null && [ "$i" -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
+    if kill -0 "$mp" 2>/dev/null; then kill -9 "$mp" 2>/dev/null; echo ALIVE; else echo EXITED; fi
+    rm -f "$SIGNAL" )
+}
+assert_contains "E-123.SIG: SIGINT (Ctrl-C) terminates the watch loop" "EXITED" "$(_sig_probe INT)"
+assert_contains "E-123.SIG: SIGTERM terminates the watch loop"         "EXITED" "$(_sig_probe TERM)"
+
+# CLR: `ai watch --clear` empties the queue for a fresh start, exits 0, no tmux.
+assert_status 0 "E-123.CLR: --clear handled in arg parse" grep -qE '\-\-clear\|clear\)' "$WATCH"
+assert_status 0 "E-123.CLR: _clear_queue helper present"  grep -qE '^_clear_queue\(\)' "$WATCH"
+_clear_probe() {  # → "rc=<n> content=<json>"
+  local d; d="$(mktemp -d)"; mkdir -p "$d/.ai"
+  printf '%s' '[{"timestamp":"1","target":"claude","message":"old"}]' > "$d/.ai/signal.json"
+  ( cd "$d" && bash "$WATCH" --clear >/dev/null 2>&1 )
+  printf 'rc=%s content=%s' "$?" "$(cat "$d/.ai/signal.json")"
+  rm -rf "$d"
+}
+_clr="$(_clear_probe)"
+assert_contains "E-123.CLR: --clear exits 0"       "rc=0"       "$_clr"
+assert_contains "E-123.CLR: --clear empties queue" "content=[]" "$_clr"
+# --clear must NOT require tmux / must not start the watch loop (returns promptly).
+assert_status 0 "E-123.CLR: --clear needs no tmux (a non-AI-OS dir errors cleanly)" \
+  bash -c "cd \"\$(mktemp -d)\" && bash '$WATCH' --clear >/dev/null 2>&1; [ \$? -ne 0 ]"
+
 assert_summary
