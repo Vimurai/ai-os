@@ -29,6 +29,11 @@ assert_contains "S02: ls -la → exit 0 (allow)"          "0" "$(chk 'ls -la')"
 assert_contains "S02: git status → exit 0 (allow)"      "0" "$(chk 'git status')"
 assert_contains "S02: architect git push → exit 2"      "2" "$(chk 'git push origin main' architect)"
 assert_contains "S02: engineer git push → exit 0"       "0" "$(chk 'git push origin main' engineer)"
+# E-127: on the --check CLI too, the bootloader env role overrides the arg.
+assert_contains "S02: env=architect overrides arg=engineer (--check, E-127)" "2" \
+  "$(export AI_OS_CALLER_ROLE=architect; node --no-warnings "$SE" --check 'git push origin main' engineer >/dev/null 2>&1; echo $?)"
+assert_contains "S02: env=engineer overrides arg=architect (--check, E-127)" "0" \
+  "$(export AI_OS_CALLER_ROLE=engineer; node --no-warnings "$SE" --check 'git push origin main' architect >/dev/null 2>&1; echo $?)"
 assert_contains "S02: empty command → exit 0 (fail-open)" "0" "$(chk '')"
 # E-125 hardened forms the gate must now catch (tokenizer-evasive / split flags):
 assert_contains "S02: rm -rf \$HOME → exit 2 (hardened)"   "2" "$(chk 'rm -rf $HOME')"
