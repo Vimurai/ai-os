@@ -499,8 +499,17 @@ if not already_pre:
 # E-126 (caching.md §3.2/§3.3): inject the compiled System Context Cache as a
 # prompt-prefix at session start/resume via a SessionStart hook (the previously-
 # unwired "Agent Invocation" step). Fail-open; rollback: AI_OS_DISABLE_CACHE=1.
-ss_cmd = "bash $HOME/.ai-os/hooks/session-start.sh"
+# E-129 (sovereignty-hardening.md §Security): the hook ALSO mints the tamper-
+# resistant role token; the role is passed as a positional arg ("engineer") so it
+# is baked into the registration, never read from the mutable env.
+ss_script = "bash $HOME/.ai-os/hooks/session-start.sh"
+ss_cmd = ss_script + " engineer"
 ss_hooks = hooks.setdefault("SessionStart", [])
+# Heal a pre-E-129 registration that lacks the role arg (the command string
+# changed, so drop the old-form entry to avoid a duplicate SessionStart hook).
+for entry in ss_hooks:
+    entry["hooks"] = [h for h in entry.get("hooks", []) if h.get("command") != ss_script]
+ss_hooks[:] = [e for e in ss_hooks if e.get("hooks")]
 already_ss = any(
     h.get("command") == ss_cmd
     for entry in ss_hooks
@@ -594,6 +603,15 @@ if os.path.exists(path):
 
 data["mcpServers"] = servers
 
+# E-129 (sovereignty-hardening.md §Security): freeze the Architect role into the
+# safe-exec-mcp server's PER-SERVER spawn env. The long-running server captures
+# this once at spawn, so an in-session `unset/export AI_OS_CALLER_ROLE` in a Bash
+# subprocess cannot reach the running server — the architect's sole enforcement
+# surface (analyze_command) stays authoritative. Defense-in-depth over the global
+# session env (which is also spawn-frozen for the long-running server).
+if "safe-exec-mcp" in servers:
+    servers["safe-exec-mcp"].setdefault("env", {})["AI_OS_CALLER_ROLE"] = "architect"
+
 # E-45: pin gemini-3.1-pro and the May 2026 'steps' Interactions API schema.
 # Honour an explicit env override (GEMINI_MODEL) so the rollback path
 # documented in may-2026-upgrades.md works without re-editing the registry.
@@ -650,6 +668,16 @@ install_global() {
   # Hooks
   chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
   echo "✓ Hooks ready → ${AIOS}/hooks"
+
+  # E-129 (sovereignty-hardening.md §Security): provision the per-machine HMAC key
+  # + runtime dirs for the tamper-resistant role token. getMachineKey() also
+  # lazily creates these, so this is just first-run priming with correct perms.
+  mkdir -p "${HOME}/.ai-os/secrets" "${HOME}/.ai-os/run" 2>/dev/null || true
+  chmod 700 "${HOME}/.ai-os/secrets" "${HOME}/.ai-os/run" 2>/dev/null || true
+  if command -v node >/dev/null 2>&1 && [[ ! -f "${HOME}/.ai-os/secrets/role-hmac.key" ]]; then
+    node -e 'const c=require("node:crypto"),fs=require("fs"),p=process.env.HOME+"/.ai-os/secrets/role-hmac.key"; try{fs.writeFileSync(p,c.randomBytes(32).toString("hex"),{mode:0o600})}catch(e){}' 2>/dev/null || true
+  fi
+  echo "✓ Role-token key ready → ~/.ai-os/secrets (E-129)"
 
   # MCP servers
   if [[ -d "${AIOS}/mcp" ]]; then

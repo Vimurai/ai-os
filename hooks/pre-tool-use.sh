@@ -38,10 +38,12 @@ ti = d.get("tool_input") or {}
 cmd = ti.get("command", "") if isinstance(ti, dict) else ""
 print(tool)
 print(base64.b64encode((cmd or "").encode()).decode())
+print(d.get("session_id", "") or "")   # E-129: tamper-resistant role token key
 ' 2>/dev/null)"
 
 TOOL="$(printf '%s\n' "$PARSED" | sed -n '1p')"
 CMD="$(printf '%s\n' "$PARSED" | sed -n '2p' | base64 --decode 2>/dev/null)"
+SID="$(printf '%s\n' "$PARSED" | sed -n '3p')"   # E-129: session id (from harness, not env)
 
 # Only gate shell execution. Other tools (Read/Write/Edit/MCP/…) pass through.
 [[ "$TOOL" != "Bash" ]] && exit 0
@@ -61,7 +63,10 @@ done
 if [[ -n "$SE" ]] && command -v node >/dev/null 2>&1; then
   # --no-warnings keeps node module-type noise out of the report; report is on
   # stdout, exit code carries the verdict (2 = BLOCK).
-  REPORT="$(node --no-warnings "$SE" --check "$CMD" "$ROLE" 2>/dev/null)"
+  # E-129: pass the session id so --check resolves the role from the HMAC-verified
+  # token (tamper-resistant) rather than the mutable env. Positional role stays
+  # BEFORE the --session flag so argv parsing of the role is unaffected.
+  REPORT="$(node --no-warnings "$SE" --check "$CMD" "$ROLE" --session "$SID" 2>/dev/null)"
   rc=$?
   if [[ "$rc" -eq 2 ]]; then
     {
