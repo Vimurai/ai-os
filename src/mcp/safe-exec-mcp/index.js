@@ -381,6 +381,14 @@ function runAnalysis(raw, callerRole) {
   return { verdict, blocked, warned, sovereignty, report: lines.join("\n") };
 }
 
+// E-127 (sovereignty-hardening.md §Security): the role is TRUSTED from the
+// bootloader-injected environment (AI_OS_CALLER_ROLE, written into the agent's
+// settings.json by `ai install`) OVER the agent-supplied argument — an agent
+// cannot impersonate another Triad role by passing a different caller_role.
+function effectiveRole(argRole) {
+  return process.env.AI_OS_CALLER_ROLE || argRole || "";
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -388,7 +396,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
   }
 
-  const { report } = runAnalysis(args.command, args.caller_role);
+  const { report } = runAnalysis(args.command, effectiveRole(args.caller_role));
   return { content: [{ type: "text", text: report }] };
 });
 
@@ -401,20 +409,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 const _checkIdx = process.argv.indexOf("--check");
 if (_checkIdx !== -1) {
   const cmd = process.argv[_checkIdx + 1] || "";
-  const role = process.argv[_checkIdx + 2] || process.env.AI_OS_CALLER_ROLE || "";
+  const role = effectiveRole(process.argv[_checkIdx + 2]); // E-127: env over arg
   if (!cmd) {
     process.stderr.write("[safe-exec --check] no command provided\n");
-    process.exit(0); // nothing to gate — fail open on empty input
+    process.exit(0); // empty input is not an error — nothing to gate
   }
   let result;
   try {
+    // E-128: fault-injection self-test hook so the suite can verify the
+    // fail-closed guarantee deterministically. SAFE — it can only ADD restriction
+    // (force a block), never bypass the gate, so honouring it from env is harmless.
+    if (process.env.AI_OS_SAFE_EXEC_SELFTEST_THROW === "1") throw new Error("self-test fault injection");
     result = runAnalysis(cmd, role);
   } catch (e) {
-    // Analyzer itself failed — fail OPEN but LOUD so circumvention is detectable
-    // (T-HITL-004): blocking every command on an internal error would brick the
-    // shell. The catastrophic-pattern backstop lives in the hook for defense in depth.
-    process.stderr.write(`[safe-exec --check] analyzer error (failing open): ${e.message}\n`);
-    process.exit(0);
+    // E-128 (sovereignty-hardening.md): the error path is FAIL-CLOSED. An internal
+    // analyzer crash must BLOCK (exit 2), not allow — a fail-open error path would
+    // be a gate-circumvention vector (T-HITL-004: crash the analyzer to bypass it).
+    process.stderr.write(`[safe-exec --check] analyzer error — FAILING CLOSED (blocking): ${e.message}\n`);
+    process.stdout.write(
+      "## safe-exec-mcp Analysis\nVerdict: ✗ BLOCK\n\n" +
+      "### BLOCKED — analyzer error (fail-closed)\n" +
+      "The safe-exec analyzer crashed; the command is blocked rather than allowed " +
+      "(fail-closed, T-HITL-004). Rollback: AI_OS_SAFE_EXEC_GATE=0.\n"
+    );
+    process.exit(2);
   }
   // Report always goes to stdout (clean, no node-warning noise); the EXIT CODE is
   // the machine signal the hook reads — 2 = BLOCK (fail-closed), 0 = allow.

@@ -614,12 +614,12 @@
     {
       "id": "E-124",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement the smart ai-watch delivery model: stateful persistence using a 'delivered' flag, startup backlog drain, single-writer lock, and per-target independent FIFOs per .ai/blueprints/interactive-bridge.md.",
       "created_at": "2026-06-04T20:29:30.987Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-04T22:07:55.631Z",
+      "summary": "Smart ai-watch delivery model per reconciled interactive-bridge.md — persistent delivered flag, startup backlog drain, single-writer lock, per-target FIFOs, delivered-aware eviction, …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -627,12 +627,12 @@
     {
       "id": "E-125",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 3,
       "description": "Implement a fail-closed pre-execution gate for 'safe-exec' (THREAT_MODEL T-HITL-004) by integrating 'analyze_command' blocks into the execution flow, replacing the current advisory-only setup. Acceptance: Tests verify blocks are enforced and prevent execution. per .ai/blueprints/sovereignty-hardening.md.",
       "created_at": "2026-06-04T20:29:31.005Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-04T22:07:58.882Z",
+      "summary": "Fail-closed pre-execution gate (T-HITL-004): PreToolUse hook + safe-exec --check CLI exit-2-block every Bash BLOCK verdict (advisory→enforcing); single source of truth via extracted …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -640,10 +640,36 @@
     {
       "id": "E-126",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Consume the compiled Context Cache blob as a prompt-prefix during Claude session initialization to implement the §3.2/3.3 prompt-prefix injection harness-level feature per .ai/blueprints/caching.md.",
       "created_at": "2026-06-04T20:29:31.010Z",
+      "completed_at": "2026-06-04T22:08:00.696Z",
+      "summary": "Context Cache prompt-prefix injection (caching.md §3 step 3): cache-manager --emit-context CLI + SessionStart hook inject the compiled System Context blob as hookSpecificOutput.addit …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-127",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement bootloader injection for `caller_role` to prevent impersonation per `.ai/blueprints/sovereignty-hardening.md` §Security. Update `_configure_project_claude_settings` and `_configure_project_gemini_settings` in `src/bin/ai` to write `env[\"AI_OS_CALLER_ROLE\"]` as \"engineer\" and \"architect\" respectively. Update `src/mcp/safe-exec-mcp/index.js` `analyze_command` handler to prioritize `process.env.AI_OS_CALLER_ROLE` over the agent-provided argument. Acceptance: tests assert that the bootloader env var overrides the MCP argument.",
+      "created_at": "2026-06-05T08:58:13.901Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-128",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 3,
+      "description": "Harden the `safe-exec --check` error path. Currently, if the analyzer crashes, it exits with 0 (fail-open-but-loud). Change this to exit 2 (fail-closed) so that an internal analyzer error definitively blocks the execution hook, ensuring true fail-closed security per `.ai/blueprints/sovereignty-hardening.md`. Acceptance: tests verify that a mocked analyzer crash results in exit code 2.",
+      "created_at": "2026-06-05T08:58:13.915Z",
       "completed_at": null,
       "summary": null,
       "depends_on": [],
@@ -1708,6 +1734,34 @@
       "task_id": "E-125",
       "timestamp": "2026-06-04T22:05:41.188Z",
       "summary": "Tier 3 sprint E-124/125/126: critic_arch+critic_security+critic_tests all PASS. Deterministic [PATH_TRAVERSAL]=assert.sh test bootstrap + [COVERAGE_GAP]=by-filename mapping → dispositioned false-positives (precedent). SEC P2 (rm -rf $HOME//*/split -r -f slipped the now-load-bearing analyzer) FIXED: hardened hasRootPaths+rmRecursiveForce + hook backstop, +13 tests. Full suite 2598 pass (3 Docker flakes)."
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-128",
+      "timestamp": "2026-06-05T09:35:54.153Z",
+      "summary": "No sovereignty violations (no architect.md/BRIEF.md/blueprint edits). E-127: bootloader injects AI_OS_CALLER_ROLE=engineer (claude writer) / architect (gemini writer) inside the named idempotent settings functions; effectiveRole() prioritises env over arg and is applied consistently in both the analyze_command handler and the --check CLI; single source of truth (runAnalysis) preserved. E-128: --check error path flipped to exit 2 (fail-closed) per blueprint Security/T-HITL-004, minimal and localised; SELFTEST_THROW fault-injection is clearly-scoped (can only ADD restriction, never bypass). All work traces to E-127/E-128 in TASKS.md."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-128",
+      "timestamp": "2026-06-05T09:36:13.365Z",
+      "summary": "No P0 vulns in E-127/E-128. Env-priority effectiveRole() (index.js:389) authoritatively injected (ai:442/624) closes impersonation; SELFTEST_THROW is monotonic-restrictive (force-block only, verified rc=2, no bypass path); fail-closed error path (0->2) strengthens gate w/ AI_OS_SAFE_EXEC_GATE=0 rollback; no E-125 regression (BLOCK exit unchanged, ls=0, empty=0 verified). Residual: architect-session env unset+forge = P2 accepted per blueprint honor-system scope. No secrets/injection/path-traversal."
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-128",
+      "timestamp": "2026-06-05T09:52:19.267Z",
+      "summary": "All tests passing (2609/2612; 3 failures are pre-existing Docker flakes in code_execution_mcp_test.sh, unrelated to diff). E-127: env-override matrix deterministic (each case sets/unsets AI_OS_CALLER_ROLE in a subshell, no leak; no-env legacy arg-fallback proven) + source-contract greps for effectiveRole/bootloader. E-128 S11: fail-closed crash tested at BOTH CLI (--check exit 2) and hook (exit 2) boundaries via AI_OS_SAFE_EXEC_SELFTEST_THROW, with no-crash exit-0 control. P2 advisory: no dedicated env=architect/arg=engineer matrix on bare --check CLI (covered indirectly via shared effectiveRole + MCP-handler matrix). All src/ changes covered."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude",
+      "task_id": "E-128",
+      "timestamp": "2026-06-05T09:54:07.062Z",
+      "summary": "Tier 3 E-127/E-128: critic_arch+critic_security+critic_tests all PASS. E-127 bootloader env-priority role (anti-impersonation) + E-128 fail-closed analyzer-error path. SEC P2 residual (architect session could self-downgrade by unsetting env) is the blueprint's scoped honor-system gap → future session-identity hardening (flagged to Architect), not blocking. Deterministic false-positives (assert.sh PATH_TRAVERSAL, by-filename COVERAGE_GAP) dispositioned. Full suite 2609 pass."
     }
   ],
   "deltas": [

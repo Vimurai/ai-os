@@ -116,4 +116,16 @@ assert_status 0 "S10: registration is idempotent (no duplicate)" \
   python3 -c "import json,sys; s=json.load(open('$S10_DIR/settings.json')); n=sum(1 for e in s['hooks']['PreToolUse'] for hh in e.get('hooks',[]) if 'pre-tool-use.sh' in hh.get('command','')); sys.exit(0 if n==1 else 1)"
 rm -rf "$S10_DIR"
 
+# ── S11 (E-128): analyzer-error path is FAIL-CLOSED (exit 2), not fail-open ────
+# A crashed analyzer must BLOCK, not allow — else crashing it bypasses the gate.
+assert_status 0 "S11: --check error path fails closed" grep -qF 'FAILING CLOSED' "$SE"
+# Deterministic fault injection (safe: can only ADD restriction): a crash → exit 2.
+assert_contains "S11: injected analyzer crash → --check exit 2" "2" \
+  "$(export AI_OS_SAFE_EXEC_SELFTEST_THROW=1; node --no-warnings "$SE" --check 'ls -la' >/dev/null 2>&1; echo $?)"
+assert_contains "S11: no crash → --check exit 0 (normal path intact)" "0" \
+  "$(node --no-warnings "$SE" --check 'ls -la' >/dev/null 2>&1; echo $?)"
+# Through the hook: a crashed analyzer blocks the Bash tool call.
+assert_contains "S11: injected crash → hook BLOCKS (exit 2)" "2" \
+  "$(export AI_OS_SAFE_EXEC_SELFTEST_THROW=1; printf '%s' "$(mkevent Bash 'ls -la')" | bash "$HOOK" >/dev/null 2>&1; echo $?)"
+
 assert_summary
