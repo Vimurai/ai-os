@@ -27,7 +27,7 @@ assert_status 0 "S02: AI_OS_DISABLE_CACHE=1 emits nothing" bash -c \
 
 # ── S03: hook emits VALID SessionStart JSON with the cache in additionalContext ─
 assert_status 0 "S03: hook output is valid SessionStart additionalContext JSON" bash -c "
-  bash '$HOOK' 2>/dev/null | python3 -c '
+  bash '$HOOK' </dev/null 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
 h = d[\"hookSpecificOutput\"]
@@ -38,15 +38,15 @@ assert len(h[\"additionalContext\"]) > 1000, \"non-trivial blob\"
 
 # ── S04: rollback — AI_OS_DISABLE_CACHE=1 → hook emits nothing (no injection) ─
 assert_status 0 "S04: rollback flag → hook emits nothing" bash -c \
-  "[ -z \"\$(AI_OS_DISABLE_CACHE=1 bash '$HOOK' 2>/dev/null)\" ]"
+  "[ -z \"\$(AI_OS_DISABLE_CACHE=1 bash '$HOOK' </dev/null 2>/dev/null)\" ]"
 
 # ── S05: fail-open — node unavailable → hook exits 0, emits nothing (no block) ─
 # A node-free PATH (keep coreutils via /usr/bin:/bin) must not break session start.
 if [[ -x /usr/bin/env ]] && ! PATH="/usr/bin:/bin" command -v node >/dev/null 2>&1; then
   assert_status 0 "S05: no node → hook exits 0 (fail-open)" bash -c \
-    "PATH='/usr/bin:/bin' bash '$HOOK' >/dev/null 2>&1"
+    "PATH='/usr/bin:/bin' bash '$HOOK' </dev/null >/dev/null 2>&1"
   assert_status 0 "S05: no node → hook emits nothing" bash -c \
-    "[ -z \"\$(PATH='/usr/bin:/bin' bash '$HOOK' 2>/dev/null)\" ]"
+    "[ -z \"\$(PATH='/usr/bin:/bin' bash '$HOOK' </dev/null 2>/dev/null)\" ]"
 else
   echo "  (S05 fail-open test skipped — could not construct a node-free PATH)"
 fi

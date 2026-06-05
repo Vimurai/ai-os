@@ -21,6 +21,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { parse } from "shell-quote";
 import { createLogger } from "../shared/logger.js";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("safe-exec-mcp");
@@ -389,6 +393,98 @@ function effectiveRole(argRole) {
   return process.env.AI_OS_CALLER_ROLE || argRole || "";
 }
 
+// ── E-129: tamper-resistant role token (sovereignty-hardening.md §Security) ─────
+// The env var AI_OS_CALLER_ROLE (E-127) is trivially mutable in-session (`unset`/
+// `export`) by a freshly-spawned process like the gate's `--check` CLI. E-129 binds
+// the engineer/--check role to a SESSION TOKEN: a JSON record at ~/.ai-os/run/
+// role-<sid>.lock, HMAC-signed over (role, session_id) with a per-machine key. The
+// gate hook supplies the session id (from the harness PreToolUse payload, not env);
+// `--check` reads + verifies the token and uses its role, IGNORING the live env. An
+// in-session `unset/export` can no longer downgrade the role — forgery now requires
+// reading the 0600 machine key and recomputing the HMAC (tamper-RESISTANT, not
+// tamper-proof: a single-user agent runs as the user, an honest ceiling).
+// Rollback: AI_OS_ROLE_TOKEN=0 (token layer only) or AI_OS_SAFE_EXEC_GATE=0 (gate).
+const _SECRETS_DIR = join(homedir(), ".ai-os", "secrets");
+const _RUN_DIR = join(homedir(), ".ai-os", "run");
+const _KEY_PATH = join(_SECRETS_DIR, "role-hmac.key");
+
+function getMachineKey() {
+  try {
+    if (existsSync(_KEY_PATH)) return readFileSync(_KEY_PATH, "utf8").trim();
+    mkdirSync(_SECRETS_DIR, { recursive: true, mode: 0o700 });
+    const key = randomBytes(32).toString("hex");
+    writeFileSync(_KEY_PATH, key, { mode: 0o600 });
+    return key;
+  } catch {
+    return null; // no key → token unavailable → callers fall back to legacy env
+  }
+}
+
+function signRole(role, sid, key) {
+  return createHmac("sha256", Buffer.from(key, "hex")).update(`v1|${role}|${sid}`).digest("hex");
+}
+
+// Strip anything but a safe token charset so a crafted session id can't traverse
+// out of the run dir.
+function _sanitizeSid(sid) {
+  return String(sid || "").replace(/[^A-Za-z0-9._-]/g, "");
+}
+function tokenPath(sid) {
+  return join(_RUN_DIR, `role-${_sanitizeSid(sid)}.lock`);
+}
+
+function mintToken(role, sid) {
+  const cleanSid = _sanitizeSid(sid);
+  if (!role || !cleanSid) return false;
+  const key = getMachineKey();
+  if (!key) return false;
+  try {
+    mkdirSync(_RUN_DIR, { recursive: true, mode: 0o700 });
+    const rec = JSON.stringify({ v: 1, role, session_id: cleanSid, hmac: signRole(role, cleanSid, key) });
+    const tmp = tokenPath(cleanSid) + ".tmp";
+    writeFileSync(tmp, rec, { mode: 0o600 });
+    renameSync(tmp, tokenPath(cleanSid)); // atomic publish
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Returns the HMAC-verified role for this session id, or null (no/invalid token).
+function verifyToken(sid) {
+  const cleanSid = _sanitizeSid(sid);
+  if (!cleanSid) return null;
+  const key = getMachineKey();
+  if (!key) return null;
+  try {
+    const p = tokenPath(cleanSid);
+    if (!existsSync(p)) return null;
+    const rec = JSON.parse(readFileSync(p, "utf8"));
+    if (!rec || rec.session_id !== cleanSid || typeof rec.role !== "string" || typeof rec.hmac !== "string") return null;
+    const expected = signRole(rec.role, cleanSid, key);
+    const a = Buffer.from(expected, "hex");
+    const b = Buffer.from(rec.hmac, "hex");
+    // timingSafeEqual throws on length mismatch — kept inside try → treated as tamper.
+    if (a.length === b.length && timingSafeEqual(a, b)) return rec.role;
+    process.stderr.write(`[safe-exec] role token for ${cleanSid} failed HMAC verification — ignoring (tamper?).\n`);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// E-129: role resolution for the --check gate path. The HMAC-verified token wins
+// over the (mutable) live env; only when there is no session id, the token layer
+// is rolled back, or no valid token exists do we fall back to the legacy E-127
+// env-over-arg logic — which keeps every pre-E-129 test (none pass --session) green.
+function verifyCheckRole(argRole, sid) {
+  if (process.env.AI_OS_SAFE_EXEC_GATE === "0" || process.env.AI_OS_ROLE_TOKEN === "0") return effectiveRole(argRole);
+  if (!sid) return effectiveRole(argRole); // session-id gate → legacy/back-compat
+  const verified = verifyToken(sid);
+  if (verified) return verified;            // verified role wins; live env IGNORED
+  return effectiveRole(argRole);            // no valid token → legacy fallback
+}
+
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
@@ -400,16 +496,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   return { content: [{ type: "text", text: report }] };
 });
 
-// ── E-125: fail-closed pre-execution gate CLI (sovereignty-hardening.md / T-HITL-004) ──
-// `node index.js --check "<command>" [caller_role]` runs the same analysis the
-// analyze_command tool uses and EXITS 2 on a BLOCK verdict (fail-closed), 0
-// otherwise. hooks/pre-tool-use.sh invokes this on every Bash tool call so a
-// BLOCK is actually PREVENTED, not merely reported (replacing advisory-only).
-// Running in --check mode short-circuits before the stdio server connects.
+// ── E-129: mint a tamper-resistant role token for a session and exit ──────────
+// `node index.js --mint-token <role> <session_id>` is invoked by the SessionStart
+// hook (role baked into which agent's settings registered the hook; sid from the
+// harness payload). Fail-open: never blocks session start.
+const _mintIdx = process.argv.indexOf("--mint-token");
+if (_mintIdx !== -1) {
+  mintToken(process.argv[_mintIdx + 1], process.argv[_mintIdx + 2]);
+  process.exit(0);
+}
+
+// ── E-125/E-129: fail-closed pre-execution gate CLI (sovereignty-hardening.md / T-HITL-004) ──
+// `node index.js --check "<command>" [caller_role] [--session <sid>]` runs the same
+// analysis the analyze_command tool uses and EXITS 2 on a BLOCK verdict (fail-closed),
+// 0 otherwise. hooks/pre-tool-use.sh invokes this on every Bash tool call so a BLOCK
+// is actually PREVENTED, not merely reported. E-129: when --session is supplied the
+// role comes from the HMAC-verified session token (not the mutable env). Running in
+// --check mode short-circuits before the stdio server connects.
 const _checkIdx = process.argv.indexOf("--check");
 if (_checkIdx !== -1) {
   const cmd = process.argv[_checkIdx + 1] || "";
-  const role = effectiveRole(process.argv[_checkIdx + 2]); // E-127: env over arg
+  const _sIdx = process.argv.indexOf("--session");
+  const sid = _sIdx !== -1 ? process.argv[_sIdx + 1] : "";
+  // E-129: token-verified role wins over the live env; no sid → legacy E-127 path.
+  const role = verifyCheckRole(process.argv[_checkIdx + 2], sid);
   if (!cmd) {
     process.stderr.write("[safe-exec --check] no command provided\n");
     process.exit(0); // empty input is not an error — nothing to gate
