@@ -435,6 +435,12 @@ _aios_ws = os.environ.get("AIOS_WORKSPACE", "")
 if _aios_ws:
     env.setdefault("AIOS_WORKSPACE", _aios_ws)
 
+# E-127 (sovereignty-hardening.md §Security): bootloader-inject the Triad role so
+# safe-exec trusts the ENVIRONMENT over the agent-self-reported caller_role
+# (anti-impersonation). This is Claude's project → engineer. Set authoritatively
+# (not setdefault) so a stale/forged value can never linger.
+env["AI_OS_CALLER_ROLE"] = "engineer"
+
 # Permissions: scoped Gemini CLI + registry-driven MCP tools
 perms = data.setdefault("permissions", {})
 allow = perms.get("allow", [])
@@ -611,6 +617,11 @@ if default_model:
     # else: well-formed object with explicit name — leave alone (user override).
 if api_schema and not data.get("interactions_api_schema"):
     data["interactions_api_schema"] = api_schema
+
+# E-127 (sovereignty-hardening.md §Security): bootloader-inject the Triad role so
+# safe-exec trusts the ENVIRONMENT over the agent-self-reported caller_role. This
+# is Gemini's project → architect. Authoritative (not setdefault).
+data.setdefault("env", {})["AI_OS_CALLER_ROLE"] = "architect"
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)

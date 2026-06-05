@@ -29,6 +29,11 @@ assert_contains "S02: ls -la → exit 0 (allow)"          "0" "$(chk 'ls -la')"
 assert_contains "S02: git status → exit 0 (allow)"      "0" "$(chk 'git status')"
 assert_contains "S02: architect git push → exit 2"      "2" "$(chk 'git push origin main' architect)"
 assert_contains "S02: engineer git push → exit 0"       "0" "$(chk 'git push origin main' engineer)"
+# E-127: on the --check CLI too, the bootloader env role overrides the arg.
+assert_contains "S02: env=architect overrides arg=engineer (--check, E-127)" "2" \
+  "$(export AI_OS_CALLER_ROLE=architect; node --no-warnings "$SE" --check 'git push origin main' engineer >/dev/null 2>&1; echo $?)"
+assert_contains "S02: env=engineer overrides arg=architect (--check, E-127)" "0" \
+  "$(export AI_OS_CALLER_ROLE=engineer; node --no-warnings "$SE" --check 'git push origin main' architect >/dev/null 2>&1; echo $?)"
 assert_contains "S02: empty command → exit 0 (fail-open)" "0" "$(chk '')"
 # E-125 hardened forms the gate must now catch (tokenizer-evasive / split flags):
 assert_contains "S02: rm -rf \$HOME → exit 2 (hardened)"   "2" "$(chk 'rm -rf $HOME')"
@@ -115,5 +120,17 @@ assert_status 0 "S10: registration wires Bash→pre-tool-use.sh" \
 assert_status 0 "S10: registration is idempotent (no duplicate)" \
   python3 -c "import json,sys; s=json.load(open('$S10_DIR/settings.json')); n=sum(1 for e in s['hooks']['PreToolUse'] for hh in e.get('hooks',[]) if 'pre-tool-use.sh' in hh.get('command','')); sys.exit(0 if n==1 else 1)"
 rm -rf "$S10_DIR"
+
+# ── S11 (E-128): analyzer-error path is FAIL-CLOSED (exit 2), not fail-open ────
+# A crashed analyzer must BLOCK, not allow — else crashing it bypasses the gate.
+assert_status 0 "S11: --check error path fails closed" grep -qF 'FAILING CLOSED' "$SE"
+# Deterministic fault injection (safe: can only ADD restriction): a crash → exit 2.
+assert_contains "S11: injected analyzer crash → --check exit 2" "2" \
+  "$(export AI_OS_SAFE_EXEC_SELFTEST_THROW=1; node --no-warnings "$SE" --check 'ls -la' >/dev/null 2>&1; echo $?)"
+assert_contains "S11: no crash → --check exit 0 (normal path intact)" "0" \
+  "$(node --no-warnings "$SE" --check 'ls -la' >/dev/null 2>&1; echo $?)"
+# Through the hook: a crashed analyzer blocks the Bash tool call.
+assert_contains "S11: injected crash → hook BLOCKS (exit 2)" "2" \
+  "$(export AI_OS_SAFE_EXEC_SELFTEST_THROW=1; printf '%s' "$(mkevent Bash 'ls -la')" | bash "$HOOK" >/dev/null 2>&1; echo $?)"
 
 assert_summary

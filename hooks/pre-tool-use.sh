@@ -10,9 +10,9 @@
 #
 # Defense in depth (T-HITL-004 "gate circumvention"): if the node analyzer is
 # unavailable, a hardcoded backstop still blocks the most catastrophic patterns,
-# so the gate cannot be silently bypassed by breaking node. Internal analyzer
-# errors fail OPEN but LOUD (blocking every command on error would brick the
-# shell) — the loud stderr makes circumvention detectable.
+# so the gate cannot be silently bypassed by breaking node. If the analyzer is
+# present but CRASHES, `--check` itself exits 2 (FAIL-CLOSED, E-128) and this hook
+# blocks — an internal error can no longer be used to bypass the gate.
 #
 # Rollback / emergency bypass: AI_OS_SAFE_EXEC_GATE=0.
 set -uo pipefail

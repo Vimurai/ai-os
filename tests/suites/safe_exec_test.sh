@@ -122,6 +122,9 @@ c=d.get("content",[{}]); print(c[0].get("text","") if c else "")'
 }
 
 unset AI_OS_SOVEREIGNTY_LOCK 2>/dev/null || true
+# E-127: keep arg-based role tests below deterministic regardless of an ambient
+# bootloader env (the env now takes priority over the caller_role argument).
+unset AI_OS_CALLER_ROLE 2>/dev/null || true
 
 # architect: destructive implementation git ops are SOVEREIGNTY_BLOCK
 assert_contains "E-102: architect git checkout src → SOVEREIGNTY_BLOCK" \
@@ -228,5 +231,21 @@ assert_contains "E-125: rm --recursive --force /etc → RM_RF_ROOT" "RM_RF_ROOT"
 assert_not_contains "E-125: rm -rf ./build NOT root-blocked"      "RM_RF_ROOT" "$(verdict 'rm -rf ./build' '')"
 assert_not_contains "E-125: rm -rf src/build NOT root-blocked"    "RM_RF_ROOT" "$(verdict 'rm -rf src/build' '')"
 assert_not_contains "E-125: rm -rf /tmp/scratch NOT root-blocked" "RM_RF_ROOT" "$(verdict 'rm -rf /tmp/scratch' '')"
+
+# ── E-127: bootloader-injected role OVERRIDES the agent-supplied argument ──────
+# AI_OS_CALLER_ROLE (written into settings.json by `ai install`) is trusted over
+# the caller_role arg — an agent cannot impersonate another Triad role. Each case
+# sets the env explicitly in a subshell so it is deterministic vs ambient env.
+assert_contains "E-127: env=architect beats arg=engineer → SOVEREIGNTY_BLOCK" "[SOVEREIGNTY_BLOCK]" \
+  "$(export AI_OS_CALLER_ROLE=architect; verdict 'git push origin main' engineer)"
+assert_not_contains "E-127: env=engineer beats arg=architect → no block" "[SOVEREIGNTY_BLOCK]" \
+  "$(export AI_OS_CALLER_ROLE=engineer; verdict 'git push origin main' architect)"
+assert_contains "E-127: no env → caller_role arg still honoured (legacy)" "[SOVEREIGNTY_BLOCK]" \
+  "$(unset AI_OS_CALLER_ROLE; verdict 'git push origin main' architect)"
+# Source contract: env-priority + bootloader registration in both settings writers.
+assert_status 0 "E-127: handler resolves role via effectiveRole" grep -qF 'effectiveRole(args.caller_role)' "$SE_SERVER"
+assert_status 0 "E-127: effectiveRole prioritises AI_OS_CALLER_ROLE" grep -qE 'process\.env\.AI_OS_CALLER_ROLE \|\| argRole' "$SE_SERVER"
+assert_status 0 "E-127: claude bootloader injects role=engineer" grep -qF 'env["AI_OS_CALLER_ROLE"] = "engineer"' "${REPO_ROOT}/src/bin/ai"
+assert_status 0 "E-127: gemini bootloader injects role=architect" grep -qF 'AI_OS_CALLER_ROLE"] = "architect"' "${REPO_ROOT}/src/bin/ai"
 
 assert_summary
