@@ -16,8 +16,8 @@ The Triad (Architect, Engineer, Tester) requires sovereign boundaries. Sovereign
    - Responsibility: Update `ai-log` and pre-commit hooks to audit Architect shell commands for sovereignty violations.
 
 ## Data Model
-- `ForbiddenArchitectGit`: `['reset', 'revert', 'checkout', 'clean']` when used with implementation targets (outside `.ai/`, `plans/`).
-- `ForbiddenArchitectOps`: `['rm -rf', 'mkdir', 'touch']` when used outside `.ai/`, `plans/`.
+- `ForbiddenArchitectGit`: `['reset', 'revert', 'checkout', 'clean', 'merge', 'rebase', 'push', 'pull', 'branch']` when used with implementation targets (outside `.ai/`, `plans/`). Merges, pulls, and pushes are globally blocked for the Architect.
+- `ForbiddenArchitectOps`: `['rm -rf', 'mkdir', 'touch', 'ssh', 'rsync', 'scp', 'npm publish', 'docker push']` when used outside `.ai/`, `plans/`. Deployments are strictly Engineer territory.
 - `TaskLock`: `DONE` status tasks require `reopen: true` for any further status mutation.
 
 ## API / Interface Contracts

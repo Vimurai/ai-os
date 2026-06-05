@@ -43,29 +43,26 @@ Simulate rapid user clicks on primary CTAs:
 - Navigate forward/back rapidly — check for state corruption.
 
 ## Vibe Report Output
-Append to `.ai/REVIEWS.md`:
+Use the `mcp__task-synchronizer-mcp__add_stamp` tool to record the verdict:
+
+For success:
+```json
+{
+  "type": "VIBE_CLEARED",
+  "agent": "ux_reviewer",
+  "task_id": null,
+  "summary": "Visual audit PASS. Animations smooth, CLS 0.05, Contrast AA met, Focus rings visible. Lighthouse: Perf 85, A11y 95."
+}
 ```
-[VIBE_REPORT] YYYY-MM-DD | Score: <X/10>
 
-## Visual Audit
-- Animations: <pass/fail — details>
-- CLS: <score>
-- Contrast: <pass/fail — violations listed>
-- Touch targets: <pass/fail>
-- Focus visibility: <pass/fail>
-
-## Lighthouse Scores
-- Performance: <score>
-- Accessibility: <score>
-- Best Practices: <score>
-
-## Stress Test
-- Rapid-click: <pass/fail — any race conditions found>
-- Empty form: <pass/fail>
-- Back/forward: <pass/fail>
-
-## Recommendations
-<Ordered list of issues to fix, P0 first>
+For failure:
+```json
+{
+  "type": "VIBE_BLOCKED",
+  "agent": "ux_reviewer",
+  "task_id": null,
+  "summary": "Visual audit FAIL. Contrast violation on CTA button (3:1). CLS 0.3 on load. Fix before Tier 3 release."
+}
 ```
 
 ## Teardown

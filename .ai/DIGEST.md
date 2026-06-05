@@ -43,3 +43,48 @@
 - 2026-06-02: E-106 telemetry dedup (drop coarse proxy_call, keep granular router row); router instrumentation retained per re-scope — escalation resolved. (Claude)
 - 2026-06-02: E-112 cache-manager wired via post-write hook + --build CLI; E-111 archive ownership consolidated into shared state-db. (Claude)
 - 2026-06-02: E-107..E-110 token-optimization (summary cap, stamp rotation, archive-aware nextId, _INDEX.md generator). (Claude)
+- 2026-06-04: auto-stamped by Stop hook
+- 2026-06-05: auto-stamped by Stop hook
+# DIGEST — AI-OS v2 (Updated: 2026-06-05)
+
+## Product
+- Autonomous operating system for AI coding agents — Architect (Gemini) + Engineer (Claude) + Tester (TestSprite) coordinated through ACID SQLite state, 25 MCP servers, JIT context cache, RBAC-gated skills, NDJSON observability, drop-in installer, Managed Agents cloud reconciliation, Multimodal RAG batch pipeline, cross-project meta-cognition telemetry loop, SEO Topic Cluster Engine, Sovereignty Hardening layer, and Interactive Bridge (tmux ping-pong loop).
+
+## Stack
+- Node.js 22+ (MCP servers, node:sqlite, ESM helpers, fetch), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
+
+## Triad Health
+- Architect (Gemini): ACTIVE — planned v2.0.0 release.
+- Engineer (Claude): Queue EXHAUSTED — E-130 DONE (v2.0.0 released and tagged). Control handed back.
+- Tester (TestSprite): PASS — full suite green (2637 tests); only pre-existing Docker flakes.
+
+## Current Focus
+- NONE OPEN — v2.0.0 successfully shipped. All 32 blueprints fully implemented. Engineer queue is empty.
+
+## Key Decisions
+- D-040: Distributed Stamping for Tier-3 critics.
+- D-039: Structural Diff & Dry-Run Patching.
+- D-038: 200-char cap on task summaries & stamp rotation.
+- D-037: Global Hook-Level Telemetry.
+
+## Known Risks
+- **HMAC token single-user ceiling:** The tamper-resistant role tokens are generated with a 0600 machine key, which an agent running as the user can theoretically read. This is an accepted architectural limit.
+- **Flaky tests:** 3 code_execution Docker e2e tests occasionally flake depending on daemon warmth.
+
+## MCP Servers (25 registered)
+- State: task-synchronizer, orchestrator, archive-manager, memory, memory-manager
+- Code: filesystem, lsp, patch, propose-patch, ast-parser | Safety: safe-exec, context-guardian, risk-analyzer, verification
+- Intelligence: context-invoker, blueprint-aligner, github-bridge, token-budget | Quality: TestSprite, vibe-check, computer-use
+- Interop: advisor, approval | Caching: cache-manager | Compute: code-execution | Routing: mcp-router
+
+## Recent Changes (last 10)
+- 2026-06-05: E-130 v2.0.0 released and tagged. (Claude)
+- 2026-06-05: E-129 Tamper-resistant HMAC role tokens. (Claude)
+- 2026-06-05: E-128 safe-exec --check error path fail-closed. (Claude)
+- 2026-06-05: E-127 safe-exec caller_role bootloader injection. (Claude)
+- 2026-06-04: E-126 cache-manager context injection. (Claude)
+- 2026-06-04: E-125 safe-exec fail-closed pre-execution gate. (Claude)
+- 2026-06-04: E-123 safe-exec-mcp merge/deploy sovereignty. (Claude)
+- 2026-06-04: E-123 ai-watch persistent delivery & backlog drain. (Claude)
+- 2026-06-03: E-122 Formalized ai-watch fixes. (Claude)
+- 2026-06-03: E-119 Automated handoff enforcement. (Claude)

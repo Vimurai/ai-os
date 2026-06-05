@@ -46,7 +46,7 @@ you invoke **at any point during planning**, including mid-blueprint, mid-though
 Every planning session runs through phases. At EACH transition, re-evaluate triggers:
 
 ```
-SEED → CLASSIFY → [prd_writer] → BLUEPRINT → [aligner check] → HANDOVER
+SEED → CLASSIFY → [blueprint-writer] → BLUEPRINT → [aligner check] → HANDOVER
           ↑                           ↑                             ↑
        re-check                   re-check                      re-check
        triggers                   triggers                      triggers
@@ -56,8 +56,8 @@ SEED → CLASSIFY → [prd_writer] → BLUEPRINT → [aligner check] → HANDOVE
 
 | When you discover mid-planning...                          | Pause. Dispatch.              |
 | :--------------------------------------------------------- | :---------------------------- |
-| New feature request received in chat                       | `prd_writer` NOW              |
-| Blueprint section touches auth, secrets, new integrations  | `prd_writer` adds SEC_CLEARED req |
+| New feature request received in chat                       | `blueprint-writer` NOW              |
+| Blueprint section touches auth, secrets, new integrations  | `blueprint-writer` adds SEC_CLEARED req |
 | UX/design validation needed on a new component             | `ux_reviewer` NOW             |
 | Need to understand past decisions / git archaeology        | `repo-oracle` NOW             |
 | Architecture consistency check needed                      | `architectural-aligner` NOW   |
