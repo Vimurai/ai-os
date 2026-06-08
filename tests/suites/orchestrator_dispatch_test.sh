@@ -61,6 +61,12 @@ print("MISSING" if t is None else ",".join(t.get("blocked_by",[])))' <<<"$1"
 OWNER='Engineer (Claude)'
 ARCH='Architect (Gemini)'
 
+# ── T-92.00: run_dispatch is registered in orchestrator allowed-tools (v3.0 W1-T1)
+# so the mcp-router RBAC gate (proxy_call rejects tools absent from allowed-tools)
+# can reach it. Regression guard — it was implemented but unlisted before v3.0. ────
+reg=$(node -e "const r=require('${REPO_ROOT}/src/config/registry.json'); process.stdout.write((r.mcp_servers['orchestrator-mcp']['allowed-tools']||[]).join(','))")
+assert_contains "T-92.00: run_dispatch in registry allowed-tools (router-reachable)" "run_dispatch" "$reg"
+
 # ── T-92.01: empty state (no state.sqlite yet) → idle ────────────────────────
 r=$(call "${ORCH}" run_dispatch "{}")
 assert_contains "T-92.01: idle when no state.sqlite" '"dispatch_mode": "idle"' "$r"

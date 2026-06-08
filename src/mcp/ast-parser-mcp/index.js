@@ -11,6 +11,12 @@
  * Security (blueprint §Security): never indexes secret files (.env*) or
  * node_modules; stays within the resolved workspace root (no path escape);
  * per-file parse timeout + 1 MB size cap bound CPU (DoS).
+ *
+ * NOT DEAD CODE — intentionally absent from registry.json / .mcp.json. This is a
+ * dual-mode binary: the `--generate-map` CLI path is invoked directly by `ai sync`
+ * (src/bin/ai → `node ${AIOS}/mcp/ast-parser-mcp/index.js --generate-map`) to build
+ * .ai/REPO_MAP.md. The MCP-server mode (parse_workspace) is reachable when the SDK
+ * is present. Deleting this breaks REPO_MAP generation.
  */
 
 // E-98: the MCP SDK is imported lazily (server mode only) so the
