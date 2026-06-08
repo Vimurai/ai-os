@@ -19,6 +19,8 @@ Commands:
   ai sync        Re-sync agents, skills, bootloaders (CLAUDE.md, GEMINI.md, .mcp.json)
                  and hooks from ~/.ai-os into the current project
   ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28)
+  ai sync --agents   Map AI-OS agents → native Antigravity subagents in .agents/agents/
+                 (E-140); --clear-agents removes them
   ai doctor [--repair] [--compliance]
                  Diagnose PATH, configs, hooks, MCP; --compliance audits agent
                  frontmatter for Ghost Tools
@@ -1373,6 +1375,37 @@ do_sync() {
       do_sync_github "$@"
       return
     fi
+  done
+
+  # E-140 (native-subagents.md): `ai sync --agents` maps AI-OS agents to native
+  # Antigravity subagent manifests in .agents/agents/; `--clear-agents` removes them.
+  for arg in "$@"; do
+    case "$arg" in
+      --agents|--clear-agents)
+        if [[ ! -d ".ai" ]]; then
+          echo "ai sync ${arg}: no .ai/ here — run from an AI-OS project root." >&2
+          return 1
+        fi
+        local MAPPER=""
+        for c in "src/shared/subagent-mapper.mjs" "${AIOS}/shared/subagent-mapper.mjs"; do
+          [[ -f "$c" ]] && { MAPPER="$c"; break; }
+        done
+        if [[ -z "$MAPPER" ]]; then
+          echo "ai sync ${arg}: subagent-mapper.mjs not found — run: ai install" >&2
+          return 1
+        fi
+        if ! command -v node >/dev/null 2>&1; then
+          echo "ai sync ${arg}: node is required to map subagents." >&2
+          return 1
+        fi
+        if [[ "$arg" == "--clear-agents" ]]; then
+          node "$MAPPER" --clear
+        else
+          node "$MAPPER"
+        fi
+        return $?
+        ;;
+    esac
   done
 
   # Sync project-scoped dirs only — global ~/.claude and ~/.gemini are user-owned (§21)
