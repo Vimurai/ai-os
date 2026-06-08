@@ -313,6 +313,45 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-141",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Relocate procedural workflow files (`digest_updater.md`, `decision_recorder.md` - delete duplicate, `identity_guardian.md`, `aqg-resolver.md`, `review_synthesizer.md`) from `.claude/agents/` and `.gemini/agents/` to `.agents/skills/`. Update any internal references if needed.",
+      "created_at": "2026-06-08T17:20:15.930Z",
+      "completed_at": "2026-06-08T17:56:51.898Z",
+      "summary": "Relocated 5 procedural workflows from agent dirs → .agents/skills/ (native-subagents taxonomy): digest_updater/identity_guardian/aqg-resolver/review_synthesizer → src/agents/skills/< …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-142",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update `src/shared/subagent-mapper.mjs` filtering logic: ensure it only maps files that represent autonomous personas (e.g., `devops_engineer`, critics) to `.agents/agents/`. Ignore files moved to `.agents/skills/` and explicitly filter out any files containing `context: default` or `type: skill` in frontmatter.",
+      "created_at": "2026-06-08T17:20:15.939Z",
+      "completed_at": "2026-06-08T17:56:57.196Z",
+      "summary": "subagent-mapper.mjs: maps ONLY personas — skips frontmatter context:default/type:skill; FIXED output to per-agent subdir .agents/agents/<name>/agent.json (was flat *.json which agy i …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-143",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update `.ai/blueprints/native-subagents.md` and `.ai/blueprints/antigravity-migration.md` to document the strict taxonomy separating AI-OS Skills (in-context procedural workflows) from AI-OS Agents (mapped to Antigravity native subagents), guiding users on how to author new ones for `agy`.",
+      "created_at": "2026-06-08T17:20:15.942Z",
+      "completed_at": "2026-06-08T17:57:02.984Z",
+      "summary": "Documented Skills-vs-Agents taxonomy: native-subagents.md (new §Taxonomy + authoring-for-agy + corrected Data Model source/target) + antigravity-migration.md (Data Model). Skills = i …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1435,6 +1474,13 @@
       "task_id": "E-140",
       "timestamp": "2026-06-08T16:44:48.037Z",
       "summary": "Tier-2 E-132–E-140: architect.md P0 RESOLVED (excluded from commit — Architect-owned §35). FALSE-POSITIVES (DIGEST §16 class): PATH_TRAVERSAL = test `source ../lib/assert.sh` (universal harness pattern, all ~80 suites); UNAPPROVED_DEP = JSON keys roles/architect/provider in roles.json/providers.json (config, not package deps). Full suite 2726/0 (3 pre-existing Docker flakes); adversarial 5-dim review passed (1 symlink fix). COMMIT NOT BLOCKED — manual disposition recorded."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "claude",
+      "task_id": "E-143",
+      "timestamp": "2026-06-08T18:08:25.750Z",
+      "summary": "Tier-2 E-141/142/143: deterministic checks PASS (no P0/P1). Aligner WARN (non-blocking): ORPHANED_WORK on .claude/skills/ai-review, .gemini/GEMINI.md, .gemini/agents/seo_content_generator — sync-time MIRRORS of src/ (activate_agent→activate_skill ref updates for the relocated skills), covered by native-subagents.md taxonomy + architect.md §29 (documented FP class). architect.md/DIGEST/settings excluded (§35). Full suite 2729/0 (3 Docker flakes). COMMIT NOT BLOCKED."
     }
   ],
   "deltas": [

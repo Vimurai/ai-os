@@ -22,7 +22,7 @@ Agent("Run the critic_arch agent to audit the codebase and append its stamp to .
 Agent("Run the critic_security agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
 Agent("Run the critic_tests agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
 Agent("Run blueprint-aligner-mcp align_diff(). Append [ALIGN_PASS] or [ALIGN_FAIL] to .ai/REVIEWS.md")
-# After all 4 complete → activate_agent("review_synthesizer") to write [CRITIC_STAMP]
+# After all 4 complete → activate_skill("review_synthesizer") to write [CRITIC_STAMP]
 ```
 
 Note: `critic_arch`, `critic_security`, and `critic_tests` are materialized agents in
@@ -50,7 +50,7 @@ Example: Implement a new auth endpoint (Tier 3)
 5. activate_skill("ai-test")             ← quality gate
 6. → SPAWN PARALLEL TEAM (handover)
 7. activate_skill("ai-review")           ← pre-commit critic
-8. activate_agent("review_synthesizer")  ← Tier 3 release verdict
+8. activate_skill("review_synthesizer")  ← Tier 3 release verdict
 ```
 
 ## Two Modes of Agent Invocation

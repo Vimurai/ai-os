@@ -1,11 +1,11 @@
 ---
 name: aqg-resolver
 description: Low-context autonomous fixer triggered when the Executor is [LOCKED - AQG FAILED]. Reads test stderr, applies exact file fixes without altering business logic, and re-runs the AQG gate.
+type: skill
 disable-model-invocation: false
 user-invocable: false
 allowed-tools: Read, Edit, Bash, Grep, Glob
-context: fork
-agent: general-purpose
+context: default
 ---
 
 # AQG Resolver

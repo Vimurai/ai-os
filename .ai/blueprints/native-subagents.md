@@ -13,9 +13,9 @@ While AI-OS provides 21+ specialized agents via `context-invoker-mcp`, users run
 3. **Sync Trigger Hook:** Injects the agent definition mapping step into the `ai init` or `ai sync` workflows so they are automatically registered for the user on startup.
 
 ## Data Model
-- **AI-OS Source:** `.agents/skills/*.md` or `context-invoker-mcp` metadata.
-- **Antigravity Target:** Natively defined subagents (in-memory or config files if supported, mapped via API calls).
-Mapping logic format:
+- **AI-OS Source (agents only):** `.claude/agents/*.md` + `.gemini/agents/*.md` — autonomous personas. Procedural workflows are NOT here (see §Taxonomy); they live in `.agents/skills/`.
+- **Antigravity Target:** one **per-agent subdirectory** `.agents/agents/<name>/agent.json` (confirmed by the `agy` "Create New Agents" screen — a flat `<name>.json` is NOT discovered). Global equivalent: `~/.gemini/antigravity-cli/agents/<name>/agent.json`.
+Mapping logic format (define_subagent payload):
 ```json
 {
   "name": "ai-os-critic-arch",
@@ -24,6 +24,28 @@ Mapping logic format:
   "enable_mcp_tools": true
 }
 ```
+
+## Taxonomy: Skills vs Agents (E-141 / E-142)
+AI-OS has two distinct unit types; **only Agents** map to native Antigravity subagents:
+
+- **Skills** — in-context procedural workflows (e.g. `digest_updater`, `decision_recorder`,
+  `identity_guardian`, `aqg-resolver`, `review_synthesizer`). They run in the main
+  conversation, carry `context: default` (and/or `type: skill`) in frontmatter, live in
+  **`.agents/skills/<name>/SKILL.md`**, and are invoked via `activate_skill(...)`. They are
+  **NOT** mapped to native subagents and never appear in the `agy` agents list.
+- **Agents** — autonomous personas (e.g. `devops_engineer`, the `critic_*` reviewers,
+  `chaos_monkey`, `vibe_sentinel`, `security_engineer`). They fork their own context
+  (`context: fork`), live in **`.claude/agents/` / `.gemini/agents/`**, are invoked via
+  `activate_agent(...)`, and ARE mapped → `.agents/agents/<name>/agent.json`.
+
+`subagent-mapper.mjs` enforces the split: it reads only the agent dirs and skips any file
+whose frontmatter has `context: default` or `type: skill`.
+
+### Authoring for `agy`
+- **New agent (persona):** add `.claude/agents/<name>.md` with `context: fork`, then run
+  `ai sync --agents` → it appears as a native subagent.
+- **New skill (procedural):** add `.agents/skills/<name>/SKILL.md` with `context: default`
+  (or `type: skill`); it stays in-context and is never shown as a native subagent.
 
 ## API / Interface Contracts
 - **Input:** Execution of `ai sync --agents` or similar bootloader command.

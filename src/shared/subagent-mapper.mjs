@@ -45,9 +45,13 @@ export function listAgents(agentDirs) {
       if (seen.has(base)) continue; // dedup: an agent defined in multiple dirs maps once
       const path = join(dir, f);
       try { if (!statSync(path).isFile()) continue; } catch { continue; }
-      const fm = parseFrontmatter(readFileSync(path, "utf8"));
-      out.push({ name: fm.name || base, description: fm.description || "" });
       seen.add(base);
+      const fm = parseFrontmatter(readFileSync(path, "utf8"));
+      // E-142 (native-subagents.md taxonomy): only autonomous PERSONAS become native
+      // Antigravity subagents. Skip procedural skills — they carry `context: default`
+      // or `type: skill` and belong in .agents/skills/, not the agent dirs.
+      if (fm.context === "default" || fm.type === "skill") continue;
+      out.push({ name: fm.name || base, description: fm.description || "" });
     }
   }
   return out;
@@ -76,7 +80,11 @@ export function mapAgents(agentDirs, outDir) {
   const names = [];
   for (const agent of listAgents(agentDirs)) {
     const sub = toSubagent(agent);
-    writeFileSync(join(outDir, `${sub.name}.json`), JSON.stringify(sub, null, 2) + "\n", "utf8");
+    // E-142: agy discovers each agent as a per-agent subdir <name>/agent.json (per the
+    // `agy` "Create New Agents" screen: .agents/agents/{agent_name}/), NOT a flat <name>.json.
+    const agentDir = join(outDir, sub.name);
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "agent.json"), JSON.stringify(sub, null, 2) + "\n", "utf8");
     names.push(sub.name);
   }
   return names;
@@ -86,11 +94,11 @@ export function mapAgents(agentDirs, outDir) {
 export function clearAgents(outDir) {
   if (!existsSync(outDir)) return 0;
   let removed = 0;
-  for (const f of readdirSync(outDir)) {
-    if (f.startsWith(MANIFEST_PREFIX) && f.endsWith(".json")) {
-      rmSync(join(outDir, f));
-      removed++;
-    }
+  for (const entry of readdirSync(outDir, { withFileTypes: true })) {
+    if (!entry.name.startsWith(MANIFEST_PREFIX)) continue;
+    const p = join(outDir, entry.name);
+    if (entry.isDirectory()) { rmSync(p, { recursive: true, force: true }); removed++; }  // E-142 subdir format
+    else if (entry.name.endsWith(".json")) { rmSync(p); removed++; }                       // legacy flat (pre-E-142)
   }
   return removed;
 }

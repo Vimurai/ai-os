@@ -1,11 +1,11 @@
 ---
 name: identity_guardian
 description: Trigger this when handling PII, user data, secrets, API keys, or any personally identifiable information. Audits code and configs for data exposure risks, enforces secrets hygiene, and produces a PII_AUDIT.md report.
+type: skill
 disable-model-invocation: false
 user-invocable: false
 allowed-tools: Read, Grep, Glob, Write, Edit
-context: fork
-agent: general-purpose
+context: default
 ---
 
 ROLE: IDENTITY_GUARDIAN (Claude — PII & Secrets Specialist)

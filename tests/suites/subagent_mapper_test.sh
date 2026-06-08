@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# subagent_mapper_test.sh — E-140 (native-subagents.md): `ai sync --agents` maps AI-OS
-# agents (.claude/agents, .gemini/agents) → native Antigravity subagent manifests in
-# .agents/agents/. Covers the payload shape, idempotency, dedup, clear, and E2E.
+# subagent_mapper_test.sh — E-140 / E-142 (native-subagents.md): `ai sync --agents` maps
+# only AI-OS *personas* (.claude/agents, .gemini/agents) → native Antigravity subagents at
+# .agents/agents/<name>/agent.json (per-agent subdir). Procedural skills (frontmatter
+# `context: default` or `type: skill`) are FILTERED OUT (E-142 taxonomy). Covers payload,
+# the taxonomy filter, the subdir format, dedup, idempotency, clear, and E2E.
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
@@ -11,12 +13,12 @@ MAPPER="${REPO_ROOT}/src/shared/subagent-mapper.mjs"
 export AIOS="${HOME}/.ai-os"
 IMPORT="import {toSubagent,mapAgents,clearAgents} from 'file://${MAPPER}'; import {resolve} from 'node:path';"
 
-echo "── Suite: subagent_mapper_test (E-140) ─────────────────────────────"
+echo "── Suite: subagent_mapper_test (E-140/E-142) ───────────────────────"
 
 # T-1: mapper module parses
 assert_status 0 "T-1: subagent-mapper.mjs valid JS" node --check "$MAPPER"
 
-# T-2: toSubagent produces the blueprint define_subagent payload
+# T-2: toSubagent → define_subagent payload (personas delegate to the real agent)
 payload=$(node --input-type=module -e "import {toSubagent} from 'file://${MAPPER}'; process.stdout.write(JSON.stringify(toSubagent({name:'critic_arch',description:'Arch reviewer'})))")
 assert_contains "T-2a: name prefixed ai-os-"            '"name":"ai-os-critic_arch"' "$payload"
 assert_contains "T-2b: enable_mcp_tools true"           '"enable_mcp_tools":true'      "$payload"
@@ -24,41 +26,46 @@ assert_contains "T-2c: system_prompt delegates via activate_agent" "activate_age
 assert_contains "T-2d: system_prompt enforces safe-exec boundary"  "safe-exec-mcp" "$payload"
 assert_contains "T-2e: description carried through" '"description":"Arch reviewer"' "$payload"
 
-# T-3: mapAgents writes manifests; deduped across dirs; idempotent
+# T-3: mapAgents maps ONLY personas, in subdir format; filters skills; dedups; idempotent
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/.claude/agents" "$TMP/.gemini/agents"
-printf -- '---\nname: critic_arch\ndescription: Arch reviewer\n---\nbody\n'       > "$TMP/.claude/agents/critic_arch.md"
-printf -- '---\nname: digest_updater\ndescription: Claude digest\n---\nbody\n'    > "$TMP/.claude/agents/digest_updater.md"
-printf -- '---\nname: digest_updater\ndescription: Gemini digest dup\n---\nbody\n' > "$TMP/.gemini/agents/digest_updater.md"
-printf -- '---\nname: meta_analyst\ndescription: Meta\n---\nbody\n'               > "$TMP/.gemini/agents/meta_analyst.md"
+printf -- '---\nname: critic_arch\ndescription: Arch reviewer\ncontext: fork\n---\nbody\n'  > "$TMP/.claude/agents/critic_arch.md"
+printf -- '---\nname: critic_arch\ndescription: dup\ncontext: fork\n---\nbody\n'             > "$TMP/.gemini/agents/critic_arch.md"   # dedup
+printf -- '---\nname: meta_analyst\ndescription: Meta\ncontext: fork\n---\nbody\n'           > "$TMP/.gemini/agents/meta_analyst.md"
+printf -- '---\nname: digest_updater\ndescription: skill\ntype: skill\ncontext: default\n---\nbody\n' > "$TMP/.claude/agents/digest_updater.md"  # filtered (type:skill)
+printf -- '---\nname: proc_default\ndescription: ctx-default\ncontext: default\n---\nbody\n' > "$TMP/.gemini/agents/proc_default.md"             # filtered (context:default)
 ( cd "$TMP" && node --input-type=module -e "${IMPORT} mapAgents([resolve('.claude/agents'),resolve('.gemini/agents')], resolve('.agents/agents'))" )
-n=$(ls "$TMP/.agents/agents/"*.json 2>/dev/null | wc -l | tr -d ' ')
-assert_contains "T-3a: 3 manifests (critic_arch, digest_updater, meta_analyst — deduped)" "3" "$n"
-assert_status 0 "T-3b: ai-os-critic_arch.json exists" test -f "$TMP/.agents/agents/ai-os-critic_arch.json"
-assert_status 0 "T-3c: single deduped ai-os-digest_updater.json" test -f "$TMP/.agents/agents/ai-os-digest_updater.json"
-dd=$(node -e "process.stdout.write(require('$TMP/.agents/agents/ai-os-digest_updater.json').description)")
-assert_contains "T-3d: dedup keeps first-found (.claude) description" "Claude digest" "$dd"
+ndirs=$(find "$TMP/.agents/agents" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+assert_contains "T-3a: only 2 personas mapped (skills filtered)" "2" "$ndirs"
+assert_status 0 "T-3b: subdir format → ai-os-critic_arch/agent.json" test -f "$TMP/.agents/agents/ai-os-critic_arch/agent.json"
+assert_status 0 "T-3c: ai-os-meta_analyst/agent.json exists"         test -f "$TMP/.agents/agents/ai-os-meta_analyst/agent.json"
+assert_status 1 "T-3d: type:skill FILTERED (no ai-os-digest_updater)"   test -e "$TMP/.agents/agents/ai-os-digest_updater"
+assert_status 1 "T-3e: context:default FILTERED (no ai-os-proc_default)" test -e "$TMP/.agents/agents/ai-os-proc_default"
 ( cd "$TMP" && node --input-type=module -e "${IMPORT} mapAgents([resolve('.claude/agents'),resolve('.gemini/agents')], resolve('.agents/agents'))" )
-n2=$(ls "$TMP/.agents/agents/"*.json 2>/dev/null | wc -l | tr -d ' ')
-assert_contains "T-3e: idempotent re-run still 3 manifests" "3" "$n2"
+ndirs2=$(find "$TMP/.agents/agents" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+assert_contains "T-3f: idempotent re-run still 2 persona subdirs" "2" "$ndirs2"
 
-# T-4: clearAgents removes only ai-os-*.json (leaves hand-authored subagents)
-printf '{"name":"custom"}' > "$TMP/.agents/agents/custom.json"
+# T-4: clearAgents removes ai-os-* subdirs + legacy flat ai-os-*.json, leaves hand-authored
+mkdir -p "$TMP/.agents/agents/custom-keep"; printf '{}' > "$TMP/.agents/agents/custom-keep/agent.json"
+printf '{}' > "$TMP/.agents/agents/ai-os-legacy-flat.json"
 cleared=$(node --input-type=module -e "${IMPORT} process.stdout.write(String(clearAgents('$TMP/.agents/agents')))")
-assert_contains "T-4a: clearAgents removed 3 ai-os manifests" "3" "$cleared"
-assert_status 0 "T-4b: hand-authored custom.json preserved" test -f "$TMP/.agents/agents/custom.json"
-assert_status 1 "T-4c: ai-os manifests gone" test -f "$TMP/.agents/agents/ai-os-critic_arch.json"
+assert_status 0 "T-4a: cleared >=3 (2 subdirs + 1 legacy flat)" bash -c "[ '$cleared' -ge 3 ]"
+assert_status 0 "T-4b: hand-authored custom-keep preserved" test -f "$TMP/.agents/agents/custom-keep/agent.json"
+assert_status 1 "T-4c: ai-os subdir gone"                   test -e "$TMP/.agents/agents/ai-os-critic_arch"
+assert_status 1 "T-4d: legacy flat ai-os-*.json gone"       test -e "$TMP/.agents/agents/ai-os-legacy-flat.json"
 
-# T-5: `ai sync --agents` end-to-end (uses the INSTALLED mapper at ~/.ai-os/shared)
+# T-5: `ai sync --agents` end-to-end (subdir format; uses the INSTALLED mapper)
 PROJ="$(mktemp -d)"; mkdir -p "$PROJ/.ai" "$PROJ/.claude/agents"
-printf -- '---\nname: critic_security\ndescription: Sec auditor\n---\nbody\n' > "$PROJ/.claude/agents/critic_security.md"
+printf -- '---\nname: critic_security\ndescription: Sec auditor\ncontext: fork\n---\nbody\n' > "$PROJ/.claude/agents/critic_security.md"
+printf -- '---\nname: a_skill\ndescription: s\ntype: skill\n---\nbody\n'                      > "$PROJ/.claude/agents/a_skill.md"
 ( cd "$PROJ" && "$AI_BIN" sync --agents >/dev/null 2>&1 )
-assert_status 0 "T-5a: ai sync --agents created the manifest" test -f "$PROJ/.agents/agents/ai-os-critic_security.json"
-assert_status 0 "T-5b: manifest is valid JSON" node -e "JSON.parse(require('fs').readFileSync('$PROJ/.agents/agents/ai-os-critic_security.json','utf8'))"
+assert_status 0 "T-5a: persona → ai-os-critic_security/agent.json" test -f "$PROJ/.agents/agents/ai-os-critic_security/agent.json"
+assert_status 1 "T-5b: type:skill filtered (no ai-os-a_skill)"     test -e "$PROJ/.agents/agents/ai-os-a_skill"
+assert_status 0 "T-5c: manifest valid JSON" node -e "JSON.parse(require('fs').readFileSync('$PROJ/.agents/agents/ai-os-critic_security/agent.json','utf8'))"
 
 # T-6: `ai sync --clear-agents` rollback
 ( cd "$PROJ" && "$AI_BIN" sync --clear-agents >/dev/null 2>&1 )
-assert_status 1 "T-6: ai sync --clear-agents removed the manifest" test -f "$PROJ/.agents/agents/ai-os-critic_security.json"
+assert_status 1 "T-6: clear-agents removed the subdir" test -e "$PROJ/.agents/agents/ai-os-critic_security"
 rm -rf "$PROJ"
 
 # T-7: --agents outside an AI-OS project errors (guard)

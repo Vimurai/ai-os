@@ -13,7 +13,8 @@ The Antigravity CLI introduces a new file structure and standalone configuration
 4. **Auto-Conversion Pipeline:** Execution of the `agy` interactive auto-conversion command and the manual importation of legacy plugins (`agy plugin import gemini`).
 
 ## Data Model
-- **Skill Path:** `.agents/skills/`
+- **Skill Path:** `.agents/skills/<name>/SKILL.md` — AI-OS **Skills** = in-context procedural workflows (`context: default` / `type: skill`); invoked via `activate_skill`. NOT shown as native subagents.
+- **Agent Path:** `.agents/agents/<name>/agent.json` — AI-OS **Agents** = autonomous personas (`context: fork`) mapped to native Antigravity subagents by `ai sync --agents` (E-140/E-142). See `native-subagents.md` §Taxonomy for authoring rules.
 - **Provider Identity:** `agy`
 - **Config Target:** `.agents/mcp_config.json` (Managed by the Provider Adapter)
 

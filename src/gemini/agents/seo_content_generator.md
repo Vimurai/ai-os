@@ -125,7 +125,7 @@ backs the cannibalization guard: no two pages in a cluster may converge.
 
 Activate the existing review surface before returning the blob:
 
-- `activate_agent("identity_guardian")` with the proposed body. Reject the page if the agent reports any PII leak (the keyword may include a brand name with a contact email in long-tail form — must scrub).
+- `activate_skill("identity_guardian")` with the proposed body. Reject the page if the agent reports any PII leak (the keyword may include a brand name with a contact email in long-tail form — must scrub).
 - `activate_agent("critic_security")` for a quick OWASP/secrets sweep against any code snippets the article embedded.
 
 A failed gate returns `{status: "REVIEW_BLOCKED", findings: [...]}`. The

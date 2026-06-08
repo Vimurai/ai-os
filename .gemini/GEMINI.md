@@ -75,7 +75,7 @@ Example: Plan a new auth system (Tier 3)
 3. [write blueprint sections in architect.md]
 4. activate_skill("architectural-aligner") ← validate blueprint consistency
 5. activate_agent("gemini_tasks")          ← record G-## follow-ups
-6. activate_agent("digest_updater")        ← update DIGEST
+6. activate_skill("digest_updater")        ← update DIGEST
 ```
 
 ### Rules

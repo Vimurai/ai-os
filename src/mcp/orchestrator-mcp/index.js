@@ -204,7 +204,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               `## ⚠ DIGEST.md IS STALE (Reactive Memory §24)\n` +
               `Reason: ${reason || "task completed"}\n\n` +
               `**Action**: Regenerate DIGEST.md before proceeding:\n` +
-              `  skill: "ai-digest"  OR  activate_agent('digest_updater')\n\n` +
+              `  skill: "ai-digest"  OR  activate_skill('digest_updater')\n\n` +
               `_Clear the flag after regeneration: set state.digest_stale = false_`
             );
           }
@@ -309,7 +309,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         "## Reactive Memory — DIGEST Update Required\n" +
         `Task ${taskId} is complete. DIGEST.md is now stale.\n\n` +
         "**Action required**: Run the digest_updater agent to refresh DIGEST.md:\n" +
-        "  activate_agent('digest_updater')\n\n" +
+        "  activate_skill('digest_updater')\n\n" +
         "Or use the skill: `skill: \"ai-digest\"`"
       );
 
@@ -481,7 +481,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         lines.push("```");
         lines.push("");
         lines.push("### Phase 3: After all agents complete");
-        lines.push("Invoke `activate_agent('review_synthesizer')` to aggregate stamps and write [CRITIC_STAMP].");
+        lines.push("Invoke `activate_skill('review_synthesizer')` to aggregate stamps and write [CRITIC_STAMP].");
       }
 
       lines.push("");
