@@ -11,6 +11,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { roleFromOwner } from "./state-db.js"; // E-136: provider-agnostic TASKS.md headers
 
 /**
  * Read state.json — returns null if missing, corrupt, or wrong schema version.
@@ -51,15 +52,15 @@ export function regenerateMarkdown(aiDir, state) {
   if (state.tasks.length > 0) {
     const lines = ["# TASKS (Generated from state.json)", ""];
 
-    const byOwner = {};
+    const byRole = {}; // E-136 (role-abstraction.md): group by provider-agnostic role
     for (const t of state.tasks) {
-      const owner = t.owner || "Unassigned";
-      if (!byOwner[owner]) byOwner[owner] = [];
-      byOwner[owner].push(t);
+      const role = roleFromOwner(t.owner);
+      if (!byRole[role]) byRole[role] = [];
+      byRole[role].push(t);
     }
 
-    for (const [owner, tasks] of Object.entries(byOwner)) {
-      lines.push(`## ${owner}`);
+    for (const [role, tasks] of Object.entries(byRole)) {
+      lines.push(`## ${role}`);
       for (const t of tasks) {
         const check = t.status === "DONE" ? "x" : " ";
         const tierStr = t.tier ? ` | Tier: ${t.tier}` : "";

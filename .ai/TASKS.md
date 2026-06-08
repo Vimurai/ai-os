@@ -25,3 +25,30 @@
   Status: DONE 2026-06-05 — Formal release v2.0.0 via release-manager skill. package.json version field added (2.0.0); CHANGELOG.md created (Keep-a-Changelog) headlining the Interactive Bridge + Sovereignty Har …[full in LOG.md]
 - [x] E-131: Draft the official v2.0.0 GitHub Release notes using the \`gh release create\` CLI command. Extract the v2.0.0 section from \`CHANGELOG.md\` to serve as the release notes body. Acceptance: A GitHub release is published for the \`v2.0.0\` tag with the changelog notes. | Tier: 1
   Status: DONE 2026-06-05 — Published the official v2.0.0 GitHub Release via `gh release create v2.0.0 --verify-tag --notes-file` using the extracted CHANGELOG.md v2.0.0 section (67 lines: arcs, BREAKING change …[full in LOG.md]
+- [x] E-132: Move workspace skills from `.gemini/skills/` to `.agents/skills/` per `.ai/blueprints/antigravity-migration.md`. | Tier: 1
+  Status: DONE 2026-06-08 — Framework skills relocation .gemini/skills → .agents/skills (antigravity-migration.md): git mv src+workspace; installer (_install_project + ai sync + install-ai-os.sh) emits .agents/ …[full in LOG.md]
+- [x] E-133: Extract and update MCP configuration into standalone `mcp_config.json` files, transitioning `httpUrl` to `serverUrl` per `.ai/blueprints/antigravity-migration.md`. | Tier: 2
+  Status: DONE 2026-06-08 — Registered agy provider via `ai provider add agy --config-path .agents/mcp_config.json --mcp-key mcpServers` (E-138 adapter); generated .agents/mcp_config.json (25 stdio servers; zer …[full in LOG.md]
+- [x] E-134: Run the `agy` conversion and import legacy plugins via `agy plugin import gemini` per `.ai/blueprints/antigravity-migration.md`. | Tier: 2
+  Status: DONE 2026-06-08 — agy (v1.0.6) bootstrapped (on PATH) + `agy plugin import gemini` ran clean (No gemini extensions found — no legacy plugins to migrate). End-to-end role→agy handoff verified (resolve_ …[full in LOG.md]
+
+## Engineer
+- [x] E-135: Implement `Role Configuration Store` (`.ai/roles.json`) and update `src/bin/ai` to support `ai install` role flag overrides per `.ai/blueprints/role-abstraction.md`. | Tier: 2
+  Status: DONE 2026-06-08 — Role Config Store (role-abstraction.md): src/templates/roles.json default (architect=gemini:1, engineer=claude:0); ensure_ai_templates scaffolds .ai/roles.json; `ai install --archite …[full in LOG.md]
+- [x] E-136: Refactor `task-synchronizer-mcp` to use semantic targets (`engineer`, `architect`) in `handoff_control` while retaining backwards compatibility, and update `TASKS.md` generation to use provider-agnostic headers per `.ai/blueprints/role-abstraction.md`. | Tier: 2
+  Status: DONE 2026-06-08 — Semantic handoff targets + provider-agnostic TASKS.md headers: handoff_control accepts architect/engineer (legacy claude/gemini retained); roleFromOwner() strips '(Provider)' so head …[full in LOG.md]
+- [x] E-137: Update `src/bin/ai-watch` to dynamically parse `.ai/roles.json` and map semantic targets to the correct `tmux` pane identifiers per `.ai/blueprints/role-abstraction.md`. | Tier: 2
+  Status: DONE 2026-06-08 — ai-watch dynamic role→pane routing: _load_roles_mapping parses .ai/roles.json; resolve_pane derives pane ordinal from the role map with legacy fallback (architect=gemini:1/engineer=c …[full in LOG.md]
+- [x] E-138: Implement the **Provider Adapter System** (`.ai/providers.json`) in the bootloader (`src/bin/ai`), allowing seamless registration and configuration of new CLI agents per `.ai/blueprints/role-abstraction.md`. | Tier: 2
+  Status: DONE 2026-06-08 — Provider Adapter System (.ai/providers.json): src/templates/providers.json (claude/agy/gemini); ensure_ai_templates scaffolds it; `ai provider add <name> --config-path <p> --mcp-key …[full in LOG.md]
+- [x] E-139: Execute a basic workflow validation test to confirm the Engineer environment is active and receiving tasks. Acceptance: Acknowledge receipt by marking this task DONE with a short summary, no code changes required. | Tier: 1
+  Status: DONE 2026-06-08 — Workflow validation acknowledged — Engineer environment is active and receiving tasks post-Antigravity-migration. The Interactive Bridge routed this task to the Engineer and it execu …[full in LOG.md]
+- [x] E-140: Implement the `ai sync --agents` mapper to extract AI-OS agent metadata and register them as native Antigravity subagents per `.ai/blueprints/native-subagents.md`. | Tier: 2
+  Status: DONE 2026-06-08 — `ai sync --agents` mapper (native-subagents.md): src/shared/subagent-mapper.mjs maps .claude/agents+.gemini/agents → .agents/agents/ai-os-*.json define_subagent manifests (delegate v …[full in LOG.md]
+
+## Architect (Gemini)
+- [ ] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
+
+## Architect
+- [x] P-42: Draft a blueprint for native Antigravity subagent integration to map AI-OS agents to the Antigravity UI. | Tier: 2
+  Status: DONE 2026-06-08 — Blueprinted native Antigravity subagent integration to .ai/blueprints/native-subagents.md

@@ -12,7 +12,7 @@ This directory holds **auto-generated, PROPOSED** Gemini skills produced by the
 - A staged skill is **untrusted, machine-generated content**. The stager
   statically rejects low-confidence (< 0.7), malformed, path-unsafe, and
   dangerous-content (secrets / `rm -rf` / pipe-to-shell) proposals.
-- **Promotion to an active skill (`.gemini/skills/<name>/`) is gated by a
+- **Promotion to an active skill (`.agents/skills/<name>/`) is gated by a
   Human-in-the-Loop `approval-mcp` review (E-94).** Nothing here should be
   moved out manually without that approval.
 

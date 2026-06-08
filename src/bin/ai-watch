@@ -70,8 +70,16 @@ LOCK_DIR="${PROJECT_DIR}/.ai/.ai-watch.lock"
 # extend; the version-string heuristic (below) is always also accepted.
 AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini}"
 
-# Targets drained independently, in this order, each poll.
-WATCH_TARGETS="claude gemini"
+# Targets drained independently, in this order, each poll. E-136/E-137: semantic
+# roles (engineer/architect) are drained first, then the legacy provider names
+# (claude/gemini) for backwards compatibility. resolve_pane maps each to a pane.
+WATCH_TARGETS="engineer architect claude gemini"
+
+# E-137 (role-abstraction.md): semantic role → "<provider>:<pane>" map, populated by
+# main() from .ai/roles.json via _load_roles_mapping. Empty ⇒ legacy fallback
+# (architect=gemini:1, engineer=claude:0). Pre-declared for `set -u` safety so the
+# sourced helpers (resolve_pane) can reference it before main() runs.
+ROLES_MAPPING="${ROLES_MAPPING:-}"
 
 # ── Preconditions ────────────────────────────────────────────────────────────
 # Guarded inside _preconditions() so the helpers below can be `source`d by the
@@ -135,6 +143,48 @@ _project_panes() {
       done
 }
 
+# ── E-137 (role-abstraction.md): semantic role routing ───────────────────────
+# _load_roles_mapping → "architect:<provider>:<pane>|engineer:<provider>:<pane>"
+# parsed from .ai/roles.json. Prints an empty string when the file is missing or
+# malformed (only entries with a provider AND a NUMERIC pane_identifier are kept),
+# so resolve_pane silently falls back to the legacy mapping (blueprint §Rollback).
+# python3 is already a watcher precondition.
+_load_roles_mapping() {
+  local roles_file="${PROJECT_DIR}/.ai/roles.json"
+  [[ -f "$roles_file" ]] || { printf ''; return 0; }
+  python3 - "$roles_file" <<'PY' 2>/dev/null || printf ''
+import json, sys
+try:
+    roles = (json.load(open(sys.argv[1])) or {}).get("roles", {})
+    parts = []
+    for role in ("architect", "engineer"):
+        r = roles.get(role)
+        if isinstance(r, dict) and r.get("provider") and str(r.get("pane_identifier", "")).isdigit():
+            parts.append("%s:%s:%s" % (role, r["provider"], r["pane_identifier"]))
+    sys.stdout.write("|".join(parts))
+except Exception:
+    sys.stdout.write("")
+PY
+}
+
+# _role_to_provider_pane <role> → "<provider>:<pane>" from ROLES_MAPPING, else the
+# legacy fallback (architect=gemini:1, engineer=claude:0). Returns 1 for non-roles.
+_role_to_provider_pane() {
+  local role="$1" entry
+  if [[ -n "${ROLES_MAPPING:-}" ]]; then
+    for entry in ${ROLES_MAPPING//|/ }; do
+      case "$entry" in
+        "${role}:"*) printf '%s' "${entry#*:}"; return 0 ;;
+      esac
+    done
+  fi
+  case "$role" in
+    architect) printf 'gemini:1' ;;
+    engineer)  printf 'claude:0' ;;
+    *)         return 1 ;;
+  esac
+}
+
 # resolve_pane <target> → prints the pane id, or nothing. Resolution order runs
 # most-specific → most-conventional, per interactive-bridge.md §API (E-117/E-122):
 #   1. exact pane-title match     (case-sensitive fast path)
@@ -148,7 +198,26 @@ _project_panes() {
 #      resolution still works.
 resolve_pane() {
   local target="$1" want_idx="" lc_target ordinal has_cmd pid pidx ptitle pwin ppath pcmd
-  case "$target" in claude) want_idx=0 ;; gemini) want_idx=1 ;; *) return 1 ;; esac
+  # E-137 (role-abstraction.md): a semantic role (architect/engineer) resolves its
+  # pane ordinal via .ai/roles.json (ROLES_MAPPING), falling back to the legacy map
+  # (architect=gemini:1, engineer=claude:0). Provider-name targets keep their fixed
+  # ordinals. The title/window passes still match on the target string, so panes
+  # titled by role ("engineer"/"architect") OR provider ("claude"/"gemini") both
+  # resolve; otherwise the pane_identifier ordinal (Pass 4) routes — disambiguating
+  # two panes of the SAME provider (the dual-Claude case the blueprint calls out).
+  case "$target" in
+    architect|engineer)
+      local mapped; mapped="$(_role_to_provider_pane "$target")" || return 1
+      want_idx="${mapped##*:}"
+      ;;
+    claude) want_idx=0 ;;
+    gemini) want_idx=1 ;;
+    *) return 1 ;;
+  esac
+  # Defensive: want_idx feeds `[[ -eq ]]`, which aborts bash 3.2 under `set -u` on a
+  # non-numeric operand. _load_roles_mapping already filters to numeric panes; this
+  # is belt-and-suspenders against a hand-edited ROLES_MAPPING.
+  case "$want_idx" in ''|*[!0-9]*) return 1 ;; esac
   lc_target="$(_lc "$target")"
 
   # Pass 1: exact pane-title match.
@@ -587,6 +656,16 @@ main() {
   trap 'exit 143' TERM
 
   echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
+
+  # E-137 (role-abstraction.md): load the semantic role→provider:pane map once at
+  # startup. Empty ⇒ legacy fallback (architect=gemini, engineer=claude). A roles.json
+  # edited mid-run is picked up on the next watcher restart (documented limitation).
+  ROLES_MAPPING="$(_load_roles_mapping)"
+  if [[ -n "$ROLES_MAPPING" ]]; then
+    echo "ai-watch: role routing — dynamic from .ai/roles.json (${ROLES_MAPPING})"
+  else
+    echo "ai-watch: role routing — legacy fallback (architect=gemini:1, engineer=claude:0)"
+  fi
 
   if [[ "$CURSOR_MODE" == "legacy" ]]; then
     echo "ai-watch: CURSOR_MODE=legacy — pre-existing backlog will be skipped (rollback mode)."

@@ -6,7 +6,7 @@ user-invocable: true
 allowed-tools: Read, Grep, Glob
 context: default
 agent: default
-source: gemini/skills/ai-seo
+source: agents/skills/ai-seo
 ---
 
 # AI-SEO — AI Engine Optimization (AEO/LLMO)

@@ -228,17 +228,21 @@ _resolve_aios_workspace() {
 # Uses registry.json as source of truth. Preserves user-set env values.
 generate_mcp_json() {
   local DEST_DIR="${1:-.}"
+  # E-138 (role-abstraction.md): optional explicit output path + top-level key so the
+  # Provider Adapter System can emit per-provider MCP configs (e.g. agy →
+  # .agents/mcp_config.json under "mcpServers"). Defaults preserve .mcp.json behaviour.
+  local MCP_FILE="${2:-${DEST_DIR}/.mcp.json}"
+  local MCP_KEY="${3:-mcpServers}"
   local REGISTRY="${AIOS}/config/registry.json"
-  local MCP_FILE="${DEST_DIR}/.mcp.json"
 
   if ! command -v python3 &>/dev/null; then
     [[ -f "${AIOS}/templates/.mcp.json" ]] && cp "${AIOS}/templates/.mcp.json" "$MCP_FILE"
     return
   fi
 
-  python3 - "$REGISTRY" "$MCP_FILE" "$HOME" "$AIOS" <<'PY'
+  python3 - "$REGISTRY" "$MCP_FILE" "$HOME" "$AIOS" "$MCP_KEY" <<'PY'
 import json, sys, os
-registry_path, mcp_path, home, aios = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+registry_path, mcp_path, home, aios, mcp_key = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 
 servers = {
   "filesystem": {
@@ -279,7 +283,7 @@ if os.path.exists(mcp_path):
     try:
         with open(mcp_path) as f:
             existing = json.load(f)
-        for name, cfg in existing.get("mcpServers", {}).items():
+        for name, cfg in existing.get(mcp_key, {}).items():
             if name in servers and "env" in cfg:
                 env = cfg["env"]
                 if env.get("API_KEY", "").strip() not in ("", "your-testsprite-api-key"):
@@ -288,7 +292,7 @@ if os.path.exists(mcp_path):
         pass
 
 with open(mcp_path, "w") as f:
-    json.dump({"mcpServers": servers}, f, indent=2)
+    json.dump({mcp_key: servers}, f, indent=2)
     f.write("\n")
 PY
 }
@@ -317,6 +321,60 @@ strip_gemini_agent_fields() {
   done
 }
 
+# ── E-135 (role-abstraction.md): Role Configuration Store ─────────────────────
+# Decouples functional roles (architect/engineer) from specific CLIs. `ai install`
+# accepts `--architect <provider:pane>` / `--engineer <provider:pane>` overrides and
+# persists them to .ai/roles.json. Defaults preserve the legacy mapping
+# (architect=gemini:1, engineer=claude:0) so existing projects keep working.
+ROLE_ARCHITECT=""
+ROLE_ENGINEER=""
+
+# Parse --architect/--engineer role-override flags into the ROLE_* globals. Format is
+# strict <provider>:<pane> (provider [a-z][a-z0-9_-]*, pane a non-negative integer).
+# Unknown args are ignored; malformed role values abort (exit 2).
+_parse_role_flags() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --architect) ROLE_ARCHITECT="${2:-}"; shift 2 ;;
+      --engineer)  ROLE_ENGINEER="${2:-}";  shift 2 ;;
+      *)           shift ;;
+    esac
+  done
+  local re='^[a-z][a-z0-9_-]*:[0-9]+$'
+  if [[ -n "$ROLE_ARCHITECT" && ! "$ROLE_ARCHITECT" =~ $re ]]; then
+    echo "[ERROR] --architect must be <provider>:<pane> (e.g. claude:1), got '$ROLE_ARCHITECT'" >&2
+    exit 2
+  fi
+  if [[ -n "$ROLE_ENGINEER" && ! "$ROLE_ENGINEER" =~ $re ]]; then
+    echo "[ERROR] --engineer must be <provider>:<pane> (e.g. claude:0), got '$ROLE_ENGINEER'" >&2
+    exit 2
+  fi
+}
+
+# Write .ai/roles.json from the parsed flags (legacy defaults for any role left
+# unspecified). No-op outside a project (.ai/ absent). Values are pre-validated by
+# _parse_role_flags, so direct interpolation is injection-safe.
+_write_roles_json() {
+  [[ -d ".ai" ]] || return 0
+  local arch="${ROLE_ARCHITECT:-gemini:1}" eng="${ROLE_ENGINEER:-claude:0}"
+  local apr="${arch%%:*}" apn="${arch##*:}" epr="${eng%%:*}" epn="${eng##*:}"
+  cat > ".ai/roles.json" <<EOF
+{
+  "roles": {
+    "architect": {
+      "provider": "${apr}",
+      "pane_identifier": "${apn}"
+    },
+    "engineer": {
+      "provider": "${epr}",
+      "pane_identifier": "${epn}"
+    }
+  }
+}
+EOF
+  echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}, engineer=${epr}:${epn})"
+}
+
 ensure_ai_templates() {
   mkdir -p .ai .ai/archive
 
@@ -330,6 +388,8 @@ ensure_ai_templates() {
   ensure_file_if_missing "$T/LOG.md"           ".ai/LOG.md"
   ensure_file_if_missing "$T/architect.md.template" ".ai/architect.md"
   ensure_file_if_missing "$T/state.json"          ".ai/state.json"
+  ensure_file_if_missing "$T/roles.json"          ".ai/roles.json"   # E-135: Role Configuration Store
+  ensure_file_if_missing "$T/providers.json"      ".ai/providers.json" # E-138: Provider Adapter Registry
 
   # .gitignore for sensitive .ai/ files
   if [[ ! -f ".ai/.gitignore" ]]; then
@@ -357,14 +417,21 @@ ensure_ai_templates() {
   _configure_project_claude_settings ".claude"
   echo "Created .claude/ (project-scoped agents + skills + settings.json)"
 
-  # .gemini/ — project-scoped Gemini agents, skills, and settings
-  mkdir -p ".gemini/agents" ".gemini/skills"
+  # .gemini/ — project-scoped Gemini agents and settings.
+  # E-132 (antigravity-migration): workspace skills migrated to .agents/skills/;
+  # agents + GEMINI.md remain in .gemini/ per blueprint §API/Interface Contracts.
+  mkdir -p ".gemini/agents"
   cp -rf "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
   strip_gemini_agent_fields ".gemini/agents"
-  sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
-  sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
   _configure_project_gemini_settings ".gemini"
-  echo "Created .gemini/ (project-scoped agents + skills + settings.json)"
+  echo "Created .gemini/ (project-scoped agents + settings.json)"
+
+  # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
+  # Sources: shared skills + agents-specific skills (formerly src/gemini/skills).
+  mkdir -p ".agents/skills"
+  sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
+  sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
+  echo "Created .agents/ (Antigravity workspace skills)"
 
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
   local C="${AIOS}/copilot"
@@ -649,6 +716,7 @@ PY
 }
 
 install_global() {
+  _parse_role_flags "$@"   # E-135: --architect/--engineer overrides (validated; bad format aborts)
   echo "Preparing AI-OS v2 installation..."
 
   # Copilot CLI
@@ -696,6 +764,15 @@ install_global() {
   if [[ -d "${AIOS}/gemini/agents" ]]; then
     strip_gemini_agent_fields "${AIOS}/gemini/agents"
     echo "✓ Gemini agent frontmatter sanitized (stripped unsupported fields)"
+  fi
+
+  # E-135: persist explicit role overrides to .ai/roles.json when run inside a project.
+  if [[ -n "$ROLE_ARCHITECT" || -n "$ROLE_ENGINEER" ]]; then
+    if [[ -d ".ai" ]]; then
+      _write_roles_json
+    else
+      echo "  ⚠  Role flags given but no .ai/ here — run 'ai init' first, then re-run install with the flags."
+    fi
   fi
 
   echo ""
@@ -1317,13 +1394,17 @@ do_sync() {
     _configure_project_claude_settings ".claude"
     echo "  .claude/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
 
-    mkdir -p ".gemini/agents" ".gemini/skills"
+    mkdir -p ".gemini/agents"
     cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
     strip_gemini_agent_fields ".gemini/agents"
-    sync_skills_20 "${AIOS}/shared/skills" ".gemini/skills"
-    sync_skills_20 "${AIOS}/gemini/skills" ".gemini/skills"
     _configure_project_gemini_settings ".gemini"
-    echo "  .gemini/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
+    echo "  .gemini/ synced (agents + settings.json)"
+
+    # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
+    mkdir -p ".agents/skills"
+    sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
+    sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
+    echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md)"
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
     echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."
@@ -1793,7 +1874,7 @@ search_paths = [
     Path(aios) / "claude" / "skills",
     Path(aios) / "shared" / "skills",
     Path(aios) / "gemini" / "agents",
-    Path(aios) / "gemini" / "skills",  # E-116: Gemini skills included in compliance scan
+    Path(aios) / "agents" / "skills",  # E-132: Antigravity workspace skills (was gemini/skills, E-116)
 ]
 # Also scan project-local if we're in an AI-OS project
 if Path(".ai").exists():
@@ -1801,12 +1882,12 @@ if Path(".ai").exists():
         Path("src/claude/agents"),
         Path("src/claude/skills"),
         Path("src/shared/skills"),
-        Path("src/gemini/skills"),
+        Path("src/agents/skills"),  # E-132: migrated from src/gemini/skills
         # E-118: project-scoped dirs (populated by ai init / ai sync)
         Path(".claude/agents"),
         Path(".claude/skills"),
         Path(".gemini/agents"),
-        Path(".gemini/skills"),
+        Path(".agents/skills"),  # E-132: migrated from .gemini/skills
     ]
 
 violations = []
@@ -1993,6 +2074,94 @@ WARN
   echo "  3. In each project: \`rm .git/hooks/pre-commit\` if it sources hooks/pre-commit.sh"
 }
 
+# ── E-138 (role-abstraction.md): Provider Adapter System ──────────────────────
+# .ai/providers.json maps a CLI provider → { mcp_config_path, mcp_key }. New agents
+# are registered with `ai provider add`, which then generates that provider's MCP
+# config from the server registry. claude/gemini keep their dedicated generators;
+# this enables drop-in providers (e.g. agy → .agents/mcp_config.json) without code.
+
+# Reject a provider config path that escapes the project (blueprint §Security): no
+# absolute paths, no '..' traversal, no '~' home expansion, non-empty.
+_validate_provider_path() {
+  local p="$1"
+  case "$p" in
+    "")    echo "[ERROR] --config-path is required." >&2; return 1 ;;
+    /*)    echo "[ERROR] --config-path must be project-relative, not absolute: $p" >&2; return 1 ;;
+    "~"*)  echo "[ERROR] --config-path must not start with '~': $p" >&2; return 1 ;;
+    *..*)  echo "[ERROR] --config-path must not contain '..' (path traversal): $p" >&2; return 1 ;;
+  esac
+  # Symlink-safe containment: the path must canonicalize to within the project root.
+  # os.path.realpath follows symlinks (including dangling ones), closing the symlink-
+  # escape gap that the string checks alone miss (e.g. a planted in-repo symlink whose
+  # target is outside). python3 is already a framework dependency.
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 - "$p" <<'PY'
+import os, sys
+proj = os.path.realpath(os.getcwd())
+target = os.path.realpath(os.path.join(os.getcwd(), sys.argv[1]))
+sys.exit(0 if (target == proj or target.startswith(proj + os.sep)) else 1)
+PY
+    then
+      echo "[ERROR] --config-path resolves outside the project (symlink escape?): $p" >&2
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# `ai provider add <name> --config-path <path> --mcp-key <key>`
+ai_provider_add() {
+  local sub="${1:-}"; shift || true
+  if [[ "$sub" != "add" ]]; then
+    echo "Usage: ai provider add <name> --config-path <path> [--mcp-key <key>]" >&2
+    return 1
+  fi
+  local name="${1:-}"; shift || true
+  local config_path="" mcp_key="mcpServers"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --config-path) config_path="${2:-}"; shift 2 ;;
+      --mcp-key)     mcp_key="${2:-}";     shift 2 ;;
+      *)             shift ;;
+    esac
+  done
+  if [[ -z "$name" || ! "$name" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+    echo "[ERROR] provider name must match [a-z][a-z0-9_-]*, got '$name'" >&2; return 2
+  fi
+  _validate_provider_path "$config_path" || return 2
+  if [[ -z "$mcp_key" ]]; then
+    echo "[ERROR] --mcp-key must be non-empty." >&2; return 2
+  fi
+  if [[ ! -d ".ai" ]]; then
+    echo "[ERROR] no .ai/ here — run 'ai init' first." >&2; return 1
+  fi
+  local providers_file=".ai/providers.json"
+  [[ -f "$providers_file" ]] || printf '{\n  "providers": {}\n}\n' > "$providers_file"
+  # Safe JSON merge via python3 (no bash string surgery on JSON).
+  if ! python3 - "$providers_file" "$name" "$config_path" "$mcp_key" <<'PY'
+import json, sys
+path, name, cfg, key = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+try:
+    with open(path) as f: data = json.load(f)
+except Exception:
+    data = {}
+if not isinstance(data, dict): data = {}
+data.setdefault("providers", {})
+data["providers"][name] = {"mcp_config_path": cfg, "mcp_key": key}
+with open(path, "w") as f:
+    json.dump(data, f, indent=2); f.write("\n")
+PY
+  then
+    echo "[ERROR] failed to update ${providers_file}." >&2; return 1
+  fi
+  echo "✓ Registered provider '${name}' → ${config_path} (key: ${mcp_key})"
+  # Generate the provider's MCP config now, from the same server registry the other
+  # providers use. The path is validated above, so mkdir -p stays inside the project.
+  mkdir -p "$(dirname "$config_path")"
+  generate_mcp_json "." "$config_path" "$mcp_key"
+  echo "✓ Wrote ${config_path} (${mcp_key} from registry)"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 # E-53: only run the dispatch when bin/ai is executed as a script. Sourcing
@@ -2004,7 +2173,7 @@ fi
 cmd="${1:-}"
 case "$cmd" in
   # Bootloader / installer surface (the only working commands)
-  install)       install_global ;;
+  install)       install_global "${@:2}" ;;
   init)          do_init ;;
   sync)          do_sync "${@:2}" ;;
   doctor)        doctor "${@:2}" ;;
@@ -2012,6 +2181,9 @@ case "$cmd" in
   # E-115 (interactive-bridge.md): the tmux watcher. Delegates to the global
   # ai-watch script so `ai watch` and the bare `ai-watch` binary share one impl.
   watch)         exec "${AIOS}/bin/ai-watch" "${@:2}" ;;
+  # E-138 (role-abstraction.md): register a CLI provider in .ai/providers.json and
+  # generate its MCP config. Usage: ai provider add <name> --config-path <p> --mcp-key <k>
+  provider)      ai_provider_add "${@:2}" ;;
   version|-v|--version) echo "ai-os ${VERSION}" ;;
   ""|help|-h|--help) usage ;;
 

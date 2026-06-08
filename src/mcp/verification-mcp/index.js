@@ -149,8 +149,10 @@ function auditAgent(mdPath, registry) {
   const violations = [];
   const warnings   = [];
 
-  // Check required frontmatter fields — Claude/shared require all 5; Gemini only needs name + description
-  const isGeminiPath = mdPath.includes("/gemini/");
+  // Check required frontmatter fields — Claude/shared require all 5; Gemini/Antigravity
+  // skills need only name + description. E-132: /agents/ (Antigravity workspace skills,
+  // migrated from /gemini/skills) follow the same lenient ruleset as /gemini/.
+  const isGeminiPath = mdPath.includes("/gemini/") || mdPath.includes("/agents/");
   const requiredFields = isGeminiPath
     ? ["name", "description"]
     : ["name", "description", "disable-model-invocation", "user-invocable", "allowed-tools"];
@@ -230,11 +232,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         resolve(cwd, "src", "claude", "skills"),
         resolve(cwd, "src", "shared", "skills"),
         resolve(cwd, "src", "gemini", "agents"),
-        resolve(cwd, "src", "gemini", "skills"),
+        resolve(cwd, "src", "agents", "skills"), // E-132: migrated from src/gemini/skills
         join(aios, "claude", "agents"),
         join(aios, "claude", "skills"),
         join(aios, "gemini", "agents"),
-        join(aios, "gemini", "skills"),
+        join(aios, "agents", "skills"), // E-132: migrated from gemini/skills
         join(aios, "shared", "skills"),
       ];
 

@@ -1,0 +1,16 @@
+{
+  "providers": {
+    "claude": {
+      "mcp_config_path": ".claude.json",
+      "mcp_key": "mcpServers"
+    },
+    "agy": {
+      "mcp_config_path": ".agents/mcp_config.json",
+      "mcp_key": "mcpServers"
+    },
+    "gemini": {
+      "mcp_config_path": ".gemini/settings.json",
+      "mcp_key": "mcp_servers"
+    }
+  }
+}

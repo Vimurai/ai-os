@@ -2,7 +2,7 @@
 # ai_debug_skill_test.sh — Tests for E-43 ai-debug skill TASK_BUDGET upgrade.
 #
 # Verifies the skill body in src/shared/skills (source of truth) and the two
-# tracked mirrors (.claude/skills, .gemini/skills) carry the contract bits
+# tracked mirrors (.claude/skills, .agents/skills) carry the contract bits
 # the workflow-optimizations.md blueprint mandates: 3-cycle budget,
 # BUDGET_EXHAUSTED state, advisor-mcp escalation, hypothesis distinctness.
 
@@ -17,7 +17,7 @@ echo "===== ai_debug_skill_test.sh ====="
 SKILL_FILES=(
   "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md"
   "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md"
-  "${REPO_ROOT}/.gemini/skills/ai-debug/SKILL.md"
+  "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"
 )
 
 echo ""
@@ -71,7 +71,7 @@ echo ""
 echo "  [T-DEBUG-S07] Source-of-truth and mirrors are byte-identical"
 SRC_HASH="$(md5sum "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" | awk '{print $1}')"
 CLAUDE_HASH="$(md5sum "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md" | awk '{print $1}')"
-GEMINI_HASH="$(md5sum "${REPO_ROOT}/.gemini/skills/ai-debug/SKILL.md"  | awk '{print $1}')"
+GEMINI_HASH="$(md5sum "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"  | awk '{print $1}')"
 assert_status 0 ".claude mirror matches src" \
   bash -c "[[ '$SRC_HASH' == '$CLAUDE_HASH' ]]"
 assert_status 0 ".gemini mirror matches src" \

@@ -3,7 +3,7 @@
  *
  * Stages "instincts" extracted by the meta_analyst (recurring successful
  * tool/debug patterns that consistently reach a DONE state) as PROPOSED Gemini
- * skills under .gemini/skills/proposed/.
+ * skills under .agents/skills/proposed/ (E-132: migrated from .gemini/skills/proposed/).
  *
  * Staged skills are INERT by construction: written with
  * `disable-model-invocation: true` and `user-invocable: false` so they can
@@ -122,7 +122,7 @@ export function renderProposedSkill(inst, slug) {
     `     confidence_score:  ${conf}`,
     `     trigger_condition: ${inst.trigger_condition}`,
     "     Pending Human-in-the-Loop approval via approval-mcp (E-94) before activation.",
-    "     Do NOT move to .gemini/skills/ without approval. -->",
+    "     Do NOT move to .agents/skills/ without approval. -->",
     "",
   ].join("\n");
   return `${frontmatter}\n${provenance}${inst.proposed_skill_content.trimEnd()}\n`;
@@ -133,12 +133,12 @@ export function renderProposedSkill(inst, slug) {
  *
  * @param {Array} instincts  Instinct objects (blueprint §Data Model).
  * @param {object} [opts]
- * @param {string} [opts.proposedDir]   Target dir (default: <cwd>/.gemini/skills/proposed).
+ * @param {string} [opts.proposedDir]   Target dir (default: <cwd>/.agents/skills/proposed).
  * @param {number} [opts.minConfidence] Confidence gate (default MIN_CONFIDENCE).
  * @returns {{ staged: Array, skipped: Array, proposedDir: string }}
  */
 export function stageInstincts(instincts, opts = {}) {
-  const proposedDir   = opts.proposedDir || resolve(process.cwd(), ".gemini", "skills", "proposed");
+  const proposedDir   = opts.proposedDir || resolve(process.cwd(), ".agents", "skills", "proposed"); // E-132: was .gemini/skills/proposed
   const minConfidence = opts.minConfidence ?? MIN_CONFIDENCE;
   const list = Array.isArray(instincts) ? instincts : [];
   const staged  = [];

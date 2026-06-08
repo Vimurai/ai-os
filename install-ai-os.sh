@@ -78,6 +78,7 @@ if command -v rsync &>/dev/null; then
   rsync -a --delete "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
   rsync -a --delete "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
   rsync -a --delete "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
+  rsync -a --delete "${REPO_DIR}/src/agents/"     "${AIOS}/agents/"
   rsync -a --delete "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
   rsync -a --delete "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
   rsync -a --delete "${REPO_DIR}/src/config/"     "${AIOS}/config/"
@@ -93,6 +94,7 @@ else
   cp -rf "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
   cp -rf "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
   cp -rf "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
+  cp -rf "${REPO_DIR}/src/agents/"     "${AIOS}/agents/"
   cp -rf "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
   cp -rf "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
   cp -rf "${REPO_DIR}/src/config/"     "${AIOS}/config/"
@@ -142,6 +144,7 @@ purge_orphans() {
 purge_orphans "${REPO_DIR}/src/contracts" "${AIOS}/contracts"
 purge_orphans "${REPO_DIR}/src/claude"    "${AIOS}/claude"
 purge_orphans "${REPO_DIR}/src/gemini"    "${AIOS}/gemini"
+purge_orphans "${REPO_DIR}/src/agents"    "${AIOS}/agents"
 purge_orphans "${REPO_DIR}/src/shared"    "${AIOS}/shared"
 
 # ── 3) PATH setup ─────────────────────────────────────────────────────────────

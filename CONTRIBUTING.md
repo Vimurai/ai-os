@@ -53,7 +53,7 @@ hooks/            # Git and Claude Code hooks
 
 ## Authoring Skills
 
-Skills are Markdown files with YAML frontmatter. They live in `src/shared/skills/<name>/SKILL.md` (shared) or `src/claude/skills/<name>/SKILL.md` / `src/gemini/skills/<name>/SKILL.md` (agent-specific).
+Skills are Markdown files with YAML frontmatter. They live in `src/shared/skills/<name>/SKILL.md` (shared) or `src/claude/skills/<name>/SKILL.md` / `src/agents/skills/<name>/SKILL.md` (agent-specific).
 
 ### Claude skill frontmatter (all 5 fields required)
 

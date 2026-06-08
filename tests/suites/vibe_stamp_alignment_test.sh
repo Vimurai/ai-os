@@ -36,7 +36,7 @@ assert_status 0 "review_synthesizer requires [VIBE_CLEARED]" \
 assert_status 0 "ai-test .claude mirror identical" \
   diff -q "$AI_TEST" "${REPO_ROOT}/.claude/skills/ai-test/SKILL.md"
 assert_status 0 "ai-test .gemini mirror identical" \
-  diff -q "$AI_TEST" "${REPO_ROOT}/.gemini/skills/ai-test/SKILL.md"
+  diff -q "$AI_TEST" "${REPO_ROOT}/.agents/skills/ai-test/SKILL.md"
 assert_status 0 "ai-test ~/.ai-os mirror identical" \
   diff -q "$AI_TEST" "${HOME}/.ai-os/shared/skills/ai-test/SKILL.md"
 

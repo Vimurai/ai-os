@@ -43,7 +43,7 @@ const projectAgentRoots = [];
 if (existsSync(join(cwd, ".ai"))) {
   projectSkillRoots.push(
     join(cwd, ".claude", "skills"),
-    join(cwd, ".gemini", "skills")
+    join(cwd, ".agents", "skills") // E-132: Antigravity workspace skills (was .gemini/skills)
   );
   projectAgentRoots.push(
     join(cwd, ".claude", "agents"),
@@ -73,7 +73,7 @@ if (existsSync(srcBase)) {
   SKILL_ROOTS.push(
     join(srcBase, "shared", "skills"),
     join(srcBase, "claude", "skills"),
-    join(srcBase, "gemini", "skills")
+    join(srcBase, "agents", "skills") // E-132: migrated from src/gemini/skills
   );
   AGENT_ROOTS.push(
     join(srcBase, "claude", "agents"),

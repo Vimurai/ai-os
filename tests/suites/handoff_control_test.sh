@@ -133,5 +133,28 @@ cap2="$(qlen "$SIGNAL")"
 assert_status 0 "E-118.05: delivered entries evicted back to cap (got ${cap2})" bash -c "[ '${cap2}' -le 50 ]"
 assert_contains "E-118.05: newest (undelivered) entry survives eviction" "freshest" "$(qfield "$SIGNAL" -1 message)"
 
+# ── E-136.01: semantic role targets (architect/engineer) are accepted ────────
+# role-abstraction.md: handoff_control now routes by semantic role; ai-watch maps
+# role→pane via .ai/roles.json. The target is persisted verbatim for the watcher.
+rm -f "$SIGNAL"
+r=$(call handoff_control '{"target":"engineer","message":"Execute the OPEN tasks."}')
+assert_contains "E-136.01: HANDOFF accepts semantic target 'engineer'" "[HANDOFF] → engineer" "$r"
+assert_contains "E-136.01: signal persists target=engineer verbatim" "engineer" "$(qfield "$SIGNAL" -1 target)"
+r=$(call handoff_control '{"target":"architect","message":"Engineer done — review the diff."}')
+assert_contains "E-136.01b: HANDOFF accepts semantic target 'architect'" "[HANDOFF] → architect" "$r"
+assert_contains "E-136.01b: signal persists target=architect verbatim" "architect" "$(qfield "$SIGNAL" -1 target)"
+
+# ── E-136.02: legacy provider names still work (backwards compatibility) ─────
+assert_contains "E-136.02: legacy 'claude' target still accepted" "[HANDOFF] → claude" \
+  "$(call handoff_control '{"target":"claude","message":"legacy provider name"}')"
+assert_contains "E-136.02b: legacy 'gemini' target still accepted" "[HANDOFF] → gemini" \
+  "$(call handoff_control '{"target":"gemini","message":"legacy provider name"}')"
+
+# ── E-136.03: genuinely invalid targets are still rejected ───────────────────
+assert_contains "E-136.03: unknown role/provider rejected" "[INVALID_TARGET]" \
+  "$(call handoff_control '{"target":"designer","message":"nope"}')"
+assert_contains "E-136.03b: returns isError on invalid target" "ISERROR" \
+  "$(is_error handoff_control '{"target":"designer","message":"nope"}')"
+
 cd "${REPO_ROOT}"
 assert_summary

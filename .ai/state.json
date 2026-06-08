@@ -161,6 +161,158 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-132",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Move workspace skills from `.gemini/skills/` to `.agents/skills/` per `.ai/blueprints/antigravity-migration.md`.",
+      "created_at": "2026-06-07T20:52:16.747Z",
+      "completed_at": "2026-06-08T14:49:49.343Z",
+      "summary": "Framework skills relocation .gemini/skills → .agents/skills (antigravity-migration.md): git mv src+workspace; installer (_install_project + ai sync + install-ai-os.sh) emits .agents/ …[full in LOG.md]",
+      "depends_on": [
+        "E-137",
+        "E-138"
+      ],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-133",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Extract and update MCP configuration into standalone `mcp_config.json` files, transitioning `httpUrl` to `serverUrl` per `.ai/blueprints/antigravity-migration.md`.",
+      "created_at": "2026-06-07T20:52:16.751Z",
+      "completed_at": "2026-06-08T14:49:54.336Z",
+      "summary": "Registered agy provider via `ai provider add agy --config-path .agents/mcp_config.json --mcp-key mcpServers` (E-138 adapter); generated .agents/mcp_config.json (25 stdio servers; zer …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-134",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Run the `agy` conversion and import legacy plugins via `agy plugin import gemini` per `.ai/blueprints/antigravity-migration.md`.",
+      "created_at": "2026-06-07T20:52:16.753Z",
+      "completed_at": "2026-06-08T14:49:58.995Z",
+      "summary": "agy (v1.0.6) bootstrapped (on PATH) + `agy plugin import gemini` ran clean (No gemini extensions found — no legacy plugins to migrate). End-to-end role→agy handoff verified (resolve_ …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-135",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement `Role Configuration Store` (`.ai/roles.json`) and update `src/bin/ai` to support `ai install` role flag overrides per `.ai/blueprints/role-abstraction.md`.",
+      "created_at": "2026-06-07T21:51:47.960Z",
+      "completed_at": "2026-06-08T12:41:58.307Z",
+      "summary": "Role Config Store (role-abstraction.md): src/templates/roles.json default (architect=gemini:1, engineer=claude:0); ensure_ai_templates scaffolds .ai/roles.json; `ai install --archite …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-136",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `task-synchronizer-mcp` to use semantic targets (`engineer`, `architect`) in `handoff_control` while retaining backwards compatibility, and update `TASKS.md` generation to use provider-agnostic headers per `.ai/blueprints/role-abstraction.md`.",
+      "created_at": "2026-06-07T21:51:47.969Z",
+      "completed_at": "2026-06-08T12:42:05.846Z",
+      "summary": "Semantic handoff targets + provider-agnostic TASKS.md headers: handoff_control accepts architect/engineer (legacy claude/gemini retained); roleFromOwner() strips '(Provider)' so head …[full in LOG.md]",
+      "depends_on": [
+        "E-135"
+      ],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-137",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update `src/bin/ai-watch` to dynamically parse `.ai/roles.json` and map semantic targets to the correct `tmux` pane identifiers per `.ai/blueprints/role-abstraction.md`.",
+      "created_at": "2026-06-07T21:51:47.973Z",
+      "completed_at": "2026-06-08T12:42:10.571Z",
+      "summary": "ai-watch dynamic role→pane routing: _load_roles_mapping parses .ai/roles.json; resolve_pane derives pane ordinal from the role map with legacy fallback (architect=gemini:1/engineer=c …[full in LOG.md]",
+      "depends_on": [
+        "E-136"
+      ],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-138",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the **Provider Adapter System** (`.ai/providers.json`) in the bootloader (`src/bin/ai`), allowing seamless registration and configuration of new CLI agents per `.ai/blueprints/role-abstraction.md`.",
+      "created_at": "2026-06-07T21:57:03.903Z",
+      "completed_at": "2026-06-08T12:42:15.411Z",
+      "summary": "Provider Adapter System (.ai/providers.json): src/templates/providers.json (claude/agy/gemini); ensure_ai_templates scaffolds it; `ai provider add <name> --config-path <p> --mcp-key …[full in LOG.md]",
+      "depends_on": [
+        "E-135"
+      ],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "P-41",
+      "owner": "Architect (Gemini)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping.",
+      "created_at": "2026-06-08T15:04:42.039Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-139",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Execute a basic workflow validation test to confirm the Engineer environment is active and receiving tasks. Acceptance: Acknowledge receipt by marking this task DONE with a short summary, no code changes required.",
+      "created_at": "2026-06-08T15:09:22.364Z",
+      "completed_at": "2026-06-08T15:10:41.725Z",
+      "summary": "Workflow validation acknowledged — Engineer environment is active and receiving tasks post-Antigravity-migration. The Interactive Bridge routed this task to the Engineer and it execu …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "P-42",
+      "owner": "Architect",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Draft a blueprint for native Antigravity subagent integration to map AI-OS agents to the Antigravity UI.",
+      "created_at": "2026-06-08T15:15:43.333Z",
+      "completed_at": "2026-06-08T15:15:56.361Z",
+      "summary": "Blueprinted native Antigravity subagent integration to .ai/blueprints/native-subagents.md",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-140",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the `ai sync --agents` mapper to extract AI-OS agent metadata and register them as native Antigravity subagents per `.ai/blueprints/native-subagents.md`.",
+      "created_at": "2026-06-08T15:15:56.369Z",
+      "completed_at": "2026-06-08T15:55:25.953Z",
+      "summary": "`ai sync --agents` mapper (native-subagents.md): src/shared/subagent-mapper.mjs maps .claude/agents+.gemini/agents → .agents/agents/ai-os-*.json define_subagent manifests (delegate v …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1276,6 +1428,13 @@
       "task_id": "E-129",
       "timestamp": "2026-06-05T12:10:34.401Z",
       "summary": "Tier 3 E-129 (tamper-resistant role token): design judge-panel + adversarial workflow (SOUND) then impl reviewed by critic_arch+critic_security+critic_tests — all PASS, no P0/P1/must_fix. HMAC session token defeats in-session AI_OS_CALLER_ROLE mutation on the --check path; architect hardened via frozen per-server spawn env. Single-user key-read ceiling documented (honest, not a regression). +26 tests; back-compat preserved (none pass --session); full suite 2637. Deterministic false-positives dispositioned."
+    },
+    {
+      "type": "ALIGN_FAIL",
+      "agent": "claude",
+      "task_id": "E-140",
+      "timestamp": "2026-06-08T16:44:48.037Z",
+      "summary": "Tier-2 E-132–E-140: architect.md P0 RESOLVED (excluded from commit — Architect-owned §35). FALSE-POSITIVES (DIGEST §16 class): PATH_TRAVERSAL = test `source ../lib/assert.sh` (universal harness pattern, all ~80 suites); UNAPPROVED_DEP = JSON keys roles/architect/provider in roles.json/providers.json (config, not package deps). Full suite 2726/0 (3 pre-existing Docker flakes); adversarial 5-dim review passed (1 symlink fix). COMMIT NOT BLOCKED — manual disposition recorded."
     }
   ],
   "deltas": [
@@ -1356,6 +1515,6 @@
       "created_at": "2026-06-02 12:38:06"
     }
   ],
-  "digest_stale": true,
-  "digest_stale_reason": "P-2 marked DONE — Accepted Claude's token-bottleneck proposals; authored .ai/blueprints/token-optimization.md and registered E-107, E-108, E-109. Updated GEMINI.md with the Subagent-Audit-First pattern. Project focus updated to sovereignty + telemetry hardening."
+  "digest_stale": false,
+  "digest_stale_reason": null
 }

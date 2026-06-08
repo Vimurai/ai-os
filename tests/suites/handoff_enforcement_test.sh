@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 HANDOFF="${REPO_ROOT}/src/shared/skills/ai-handoff/SKILL.md"
 TASK_CLAUDE="${REPO_ROOT}/src/shared/skills/ai-task/SKILL.md"
-TASK_GEMINI="${REPO_ROOT}/src/gemini/skills/ai-task/SKILL.md"
+TASK_GEMINI="${REPO_ROOT}/src/agents/skills/ai-task/SKILL.md"
 
 echo "===== handoff_enforcement_test.sh (E-119) ====="
 
@@ -63,11 +63,11 @@ chk_mirror() { # chk_mirror <canonical> <mirror>
   fi
 }
 chk_mirror "$HANDOFF" "${REPO_ROOT}/.claude/skills/ai-handoff/SKILL.md"
-chk_mirror "$HANDOFF" "${REPO_ROOT}/.gemini/skills/ai-handoff/SKILL.md"
+chk_mirror "$HANDOFF" "${REPO_ROOT}/.agents/skills/ai-handoff/SKILL.md"
 chk_mirror "$HANDOFF" "${HOME}/.ai-os/shared/skills/ai-handoff/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${REPO_ROOT}/.claude/skills/ai-task/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${HOME}/.ai-os/shared/skills/ai-task/SKILL.md"
-chk_mirror "$TASK_GEMINI" "${REPO_ROOT}/.gemini/skills/ai-task/SKILL.md"
-chk_mirror "$TASK_GEMINI" "${HOME}/.ai-os/gemini/skills/ai-task/SKILL.md"
+chk_mirror "$TASK_GEMINI" "${REPO_ROOT}/.agents/skills/ai-task/SKILL.md"
+chk_mirror "$TASK_GEMINI" "${HOME}/.ai-os/agents/skills/ai-task/SKILL.md"
 
 assert_summary

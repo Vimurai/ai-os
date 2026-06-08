@@ -135,7 +135,7 @@ keyed by sha256 so the operator can review.
 ## Step 6 — QA against seo_content_checklist
 
 Activate the existing `seo_content_checklist` skill (already in repo
-under `src/gemini/skills/seo_content_checklist/`) against the rendered
+under `src/agents/skills/seo_content_checklist/`) against the rendered
 article. Surface any failed items in the returned `metadata.qa_failures`
 array — the caller decides whether to publish anyway.
 

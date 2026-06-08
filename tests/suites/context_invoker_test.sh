@@ -61,11 +61,11 @@ _assert_contains \
   "$SOURCE" \
   '".claude", "skills"'
 
-# T-02: .gemini/skills appears in SKILL_ROOTS definition
+# T-02: .agents/skills appears in SKILL_ROOTS definition (E-132: migrated from .gemini/skills)
 _assert_contains \
-  "T-02: .gemini/skills in SKILL_ROOTS" \
+  "T-02: .agents/skills in SKILL_ROOTS" \
   "$SOURCE" \
-  '".gemini", "skills"'
+  '".agents", "skills"'
 
 # T-03: .claude/agents appears in AGENT_ROOTS definition
 _assert_contains \
@@ -111,8 +111,8 @@ _assert_file_contains "T-09: compliance audit includes .gemini/agents" \
 _assert_file_contains "T-10: compliance audit includes .claude/skills" \
   "$AI_BIN" 'Path(".claude/skills")'
 
-_assert_file_contains "T-11: compliance audit includes .gemini/skills" \
-  "$AI_BIN" 'Path(".gemini/skills")'
+_assert_file_contains "T-11: compliance audit includes .agents/skills" \
+  "$AI_BIN" 'Path(".agents/skills")'
 
 # ── Test 12: ANTI-DRIFT check present in compliance audit (E-121) ─────────────
 _assert_file_contains "T-12: ANTI-DRIFT PROTOCOL check in compliance audit" \

@@ -72,7 +72,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       inputSchema: {
         type: "object",
         properties: {
-          target:  { type: "string", enum: ["claude", "gemini"], description: "Which agent to wake: 'claude' (Engineer, pane 0) or 'gemini' (Architect, pane 1)." },
+          target:  { type: "string", enum: ["architect", "engineer", "claude", "gemini"], description: "Which agent to wake. Prefer semantic roles 'architect' / 'engineer' (E-136) — ai-watch resolves them to a provider+pane via .ai/roles.json. Legacy provider names 'claude' (pane 0) / 'gemini' (pane 1) remain supported for backwards compatibility." },
           message: { type: "string", description: "Message to inject into the target pane, e.g. 'Planning complete. Execute OPEN tasks.'" },
         },
         required: ["target", "message"],

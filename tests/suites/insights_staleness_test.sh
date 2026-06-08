@@ -276,7 +276,7 @@ echo "  [T-INS-S10] ~/.ai-os mirrors byte-identical"
 assert_status 0 "insights-staleness.mjs mirror"   diff -q "$PROBE"   "${HOME}/.ai-os/shared/insights-staleness.mjs"
 assert_status 0 "ai-preflight SKILL.md mirror"    diff -q "$SKILL_SRC" "${HOME}/.ai-os/shared/skills/ai-preflight/SKILL.md"
 assert_status 0 "ai-preflight .claude mirror"     diff -q "$SKILL_SRC" "${REPO_ROOT}/.claude/skills/ai-preflight/SKILL.md"
-assert_status 0 "ai-preflight .gemini mirror"     diff -q "$SKILL_SRC" "${REPO_ROOT}/.gemini/skills/ai-preflight/SKILL.md"
+assert_status 0 "ai-preflight .gemini mirror"     diff -q "$SKILL_SRC" "${REPO_ROOT}/.agents/skills/ai-preflight/SKILL.md"
 
 echo ""
 assert_summary

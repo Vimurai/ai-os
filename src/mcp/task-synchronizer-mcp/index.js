@@ -495,8 +495,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // message before `tmux send-keys`.
     case "handoff_control": {
       const target = args.target;
-      if (target !== "claude" && target !== "gemini") {
-        return { content: [{ type: "text", text: "✗ [INVALID_TARGET] target must be 'claude' or 'gemini'." }], isError: true };
+      // E-136 (role-abstraction.md): accept semantic roles (architect/engineer) AND the
+      // legacy provider names (claude/gemini). ai-watch resolves either to a tmux pane via
+      // .ai/roles.json (E-137), so the target is persisted to signal.json exactly as sent.
+      const VALID_TARGETS = new Set(["architect", "engineer", "claude", "gemini"]);
+      if (!VALID_TARGETS.has(target)) {
+        return { content: [{ type: "text", text: "✗ [INVALID_TARGET] target must be a semantic role ('architect'|'engineer') or a provider name ('claude'|'gemini')." }], isError: true };
       }
       const message = typeof args.message === "string" ? args.message.trim() : "";
       if (!message) {

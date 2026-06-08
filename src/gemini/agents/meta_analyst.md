@@ -253,7 +253,7 @@ src/shared/instinct-stager.mjs → stageInstincts(instincts, { proposedDir })
 ```
 
 `stageInstincts` writes each accepted instinct to
-`.gemini/skills/proposed/<slug>/SKILL.md` with `disable-model-invocation:
+`.agents/skills/proposed/<slug>/SKILL.md` with `disable-model-invocation:
 true` + `user-invocable: false` + `status: proposed`, so a staged skill
 can NEVER fire before approval. It returns `{ staged, skipped }` — surface
 the skip reasons (low confidence, malformed, unsafe id, dangerous
@@ -261,7 +261,7 @@ content) so the operator can see what was filtered.
 
 ### Hard rules for this mode
 
-- NEVER write into `.gemini/skills/` directly — only the `proposed/`
+- NEVER write into `.agents/skills/` directly — only the `proposed/`
   staging area, and only via `stageInstincts`.
 - NEVER promote a proposed skill to active. Promotion is gated by the
   Human-in-the-Loop `approval-mcp` flow (E-94).

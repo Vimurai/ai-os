@@ -18,20 +18,20 @@ ctx() { grep -E '^context:' "$1" 2>/dev/null | head -1 | awk '{print $2}'; }
 for s in ai-digest trigger-audit ai-sync-state; do
   assert_contains "T-100: $s source is default" "default" "$(ctx "${REPO_ROOT}/src/shared/skills/$s/SKILL.md")"
   assert_contains "T-100: $s .claude exec copy is default" "default" "$(ctx "${REPO_ROOT}/.claude/skills/$s/SKILL.md")"
-  assert_contains "T-100: $s .gemini copy is default" "default" "$(ctx "${REPO_ROOT}/.gemini/skills/$s/SKILL.md")"
+  assert_contains "T-100: $s .gemini copy is default" "default" "$(ctx "${REPO_ROOT}/.agents/skills/$s/SKILL.md")"
 done
 assert_contains "T-100: ai-compact source is default"   "default" "$(ctx "${REPO_ROOT}/src/claude/skills/ai-compact/SKILL.md")"
 assert_contains "T-100: ai-compact .claude copy default" "default" "$(ctx "${REPO_ROOT}/.claude/skills/ai-compact/SKILL.md")"
 
 # ── Review/audit orchestrators legitimately keep context: fork ───────────────
 assert_contains "T-100: ai-review stays fork (review orchestrator)" "fork" "$(ctx "${REPO_ROOT}/src/claude/skills/ai-review/SKILL.md")"
-assert_contains "T-100: architectural-aligner stays fork" "fork" "$(ctx "${REPO_ROOT}/src/gemini/skills/architectural-aligner/SKILL.md")"
+assert_contains "T-100: architectural-aligner stays fork" "fork" "$(ctx "${REPO_ROOT}/src/agents/skills/architectural-aligner/SKILL.md")"
 
 # ── Critic personas (agents) legitimately keep fork (parallel-spawnable) ─────
 assert_contains "T-100: critic_clean_code agent stays fork" "fork" "$(ctx "${REPO_ROOT}/src/claude/agents/critic_clean_code.md")"
 
 # ── `context: local` (invalid Claude Code value) must appear NOWHERE ─────────
-local_hits=$(grep -rlE "^context:[[:space:]]*local" "${REPO_ROOT}/src/shared/skills" "${REPO_ROOT}/src/claude/skills" "${REPO_ROOT}/src/gemini/skills" "${REPO_ROOT}/.claude/skills" "${REPO_ROOT}/.gemini/skills" 2>/dev/null | wc -l | tr -d ' ')
+local_hits=$(grep -rlE "^context:[[:space:]]*local" "${REPO_ROOT}/src/shared/skills" "${REPO_ROOT}/src/claude/skills" "${REPO_ROOT}/src/agents/skills" "${REPO_ROOT}/.claude/skills" "${REPO_ROOT}/.agents/skills" 2>/dev/null | wc -l | tr -d ' ')
 assert_contains "T-100: no invalid 'context: local' anywhere" "0" "$local_hits"
 
 # ── No operational skill still forks ─────────────────────────────────────────
