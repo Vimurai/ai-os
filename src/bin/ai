@@ -19,8 +19,10 @@ Commands:
   ai sync        Re-sync agents, skills, bootloaders (CLAUDE.md, GEMINI.md, .mcp.json)
                  and hooks from ~/.ai-os into the current project
   ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28)
-  ai sync --agents   Map AI-OS agents → native Antigravity subagents in .agents/agents/
-                 (E-140); --clear-agents removes them
+  ai provider install-plugin agy
+                 Install AI-OS personas as a native Antigravity plugin (E-144).
+                 agy shows custom subagents only via installed plugins; run once
+                 per machine after installing the Antigravity CLI.
   ai doctor [--repair] [--compliance]
                  Diagnose PATH, configs, hooks, MCP; --compliance audits agent
                  frontmatter for Ghost Tools
@@ -434,6 +436,11 @@ ensure_ai_templates() {
   sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
   sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
   echo "Created .agents/ (Antigravity workspace skills)"
+
+  # E-144 (native-subagents.md, reconciled): native agy subagents are NOT loaded from
+  # loose workspace .agents/agents/ files — agy only registers them via an installed
+  # plugin (`ai provider install-plugin agy`). The former project-scoped copy here was
+  # a dead write and has been removed. Skills above DO auto-load from .agents/skills/.
 
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
   local C="${AIOS}/copilot"
@@ -1377,36 +1384,10 @@ do_sync() {
     fi
   done
 
-  # E-140 (native-subagents.md): `ai sync --agents` maps AI-OS agents to native
-  # Antigravity subagent manifests in .agents/agents/; `--clear-agents` removes them.
-  for arg in "$@"; do
-    case "$arg" in
-      --agents|--clear-agents)
-        if [[ ! -d ".ai" ]]; then
-          echo "ai sync ${arg}: no .ai/ here — run from an AI-OS project root." >&2
-          return 1
-        fi
-        local MAPPER=""
-        for c in "src/shared/subagent-mapper.mjs" "${AIOS}/shared/subagent-mapper.mjs"; do
-          [[ -f "$c" ]] && { MAPPER="$c"; break; }
-        done
-        if [[ -z "$MAPPER" ]]; then
-          echo "ai sync ${arg}: subagent-mapper.mjs not found — run: ai install" >&2
-          return 1
-        fi
-        if ! command -v node >/dev/null 2>&1; then
-          echo "ai sync ${arg}: node is required to map subagents." >&2
-          return 1
-        fi
-        if [[ "$arg" == "--clear-agents" ]]; then
-          node "$MAPPER" --clear
-        else
-          node "$MAPPER"
-        fi
-        return $?
-        ;;
-    esac
-  done
+  # E-144 (native-subagents.md, reconciled): the former `ai sync --agents` mapper
+  # (E-140) wrote loose .agents/agents/ manifests that agy never reads — it was a
+  # dead path and has been retired. Native agy subagents now ship as a plugin:
+  #   ai provider install-plugin agy   (installs globally, once per machine)
 
   # Sync project-scoped dirs only — global ~/.claude and ~/.gemini are user-owned (§21)
   if [[ -d ".ai" ]]; then
@@ -1438,6 +1419,10 @@ do_sync() {
     sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
     sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
     echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md)"
+
+    # E-144 (native-subagents.md, reconciled): native agy subagents ship as a plugin,
+    # installed globally via `ai provider install-plugin agy` — agy never reads loose
+    # workspace .agents/agents/ files. The former per-sync copy was dead and removed.
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
     echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."
@@ -1537,6 +1522,22 @@ doctor() {
     done
     echo ""
   fi
+
+  # E-144: Antigravity native subagents ship as a GLOBAL plugin (~/.gemini/config/
+  # plugins/ai-os/). Report install state — agy lists custom agents only when this
+  # plugin is installed; loose workspace .agents/agents/ files are never scanned.
+  echo "Antigravity (agy native subagents):"
+  if ! command -v agy >/dev/null 2>&1; then
+    echo "  - agy not on PATH (skip — install Antigravity to use native subagents)"
+  else
+    local _agy_plugin="${HOME}/.gemini/config/plugins/ai-os/agents"
+    if [[ -d "$_agy_plugin" ]]; then
+      echo "  ✓ ai-os plugin installed: $(ls "$_agy_plugin" 2>/dev/null | wc -l | tr -d ' ') subagents"
+    else
+      echo "  ✗ ai-os plugin NOT installed — run: ai provider install-plugin agy"
+    fi
+  fi
+  echo ""
 
   echo "Hooks:"
   if [[ -f "${HOME}/.ai-os/hooks/stop-hook.sh" ]]; then
@@ -2195,6 +2196,33 @@ PY
   echo "✓ Wrote ${config_path} (${mcp_key} from registry)"
 }
 
+# E-144 (native-subagents.md, reconciled): install the AI-OS personas into Antigravity
+# as a native plugin. agy registers custom subagents ONLY from installed plugins
+# (`agy plugin install <dir>` → ~/.gemini/config/plugins/ai-os/ → visible in /agents);
+# loose workspace .agents/agents/ files are never scanned. The plugin source is built
+# by src/shared/plugin-builder.mjs and shipped under <root>/agents/plugin/. The install
+# target is GLOBAL/user-scoped, so this is an explicit, idempotent, once-per-machine
+# command (not auto-run by ai init/sync). Re-running overwrites the installed plugin.
+agy_plugin_install() {
+  local plugin_dir=""
+  for c in "src/agents/plugin" "${AIOS}/agents/plugin"; do
+    [[ -f "$c/plugin.json" && -d "$c/agents" ]] && { plugin_dir="$c"; break; }
+  done
+  if [[ -z "$plugin_dir" ]]; then
+    echo "[ERROR] ai-os agy plugin not found (src/agents/plugin or ${AIOS}/agents/plugin)." >&2
+    echo "        Build it with: node \"${AIOS}/shared/plugin-builder.mjs\"  (or run: ai install)" >&2
+    return 1
+  fi
+  if ! command -v agy >/dev/null 2>&1; then
+    echo "[ERROR] agy (Antigravity CLI) not found on PATH." >&2
+    echo "        Install Antigravity, then re-run: ai provider install-plugin agy" >&2
+    return 1
+  fi
+  local abs; abs="$(cd "$plugin_dir" && pwd)"
+  echo "Installing ai-os agy plugin from ${abs} ..."
+  agy plugin install "$abs"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 # E-53: only run the dispatch when bin/ai is executed as a script. Sourcing
@@ -2216,7 +2244,13 @@ case "$cmd" in
   watch)         exec "${AIOS}/bin/ai-watch" "${@:2}" ;;
   # E-138 (role-abstraction.md): register a CLI provider in .ai/providers.json and
   # generate its MCP config. Usage: ai provider add <name> --config-path <p> --mcp-key <k>
-  provider)      ai_provider_add "${@:2}" ;;
+  # E-144: `ai provider install-plugin agy` installs AI-OS personas as a native agy plugin.
+  provider)
+    case "${2:-}" in
+      install-plugin) agy_plugin_install "${@:3}" ;;
+      *)              ai_provider_add "${@:2}" ;;
+    esac
+    ;;
   version|-v|--version) echo "ai-os ${VERSION}" ;;
   ""|help|-h|--help) usage ;;
 
