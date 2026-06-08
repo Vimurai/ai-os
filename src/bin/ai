@@ -379,6 +379,49 @@ EOF
   echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}, engineer=${epr}:${epn})"
 }
 
+# v3.0 (W3-T3): single source for scaffolding/refreshing the project-scoped agent
+# dirs (.claude/, .gemini/, .agents/) from the installed mirror. Collapses the
+# duplicated blocks in ensure_ai_templates (init) and do_sync (sync). $1 selects
+# the user-facing wording only ("init" → "Created …", "sync" → indented "… synced");
+# the filesystem operations are identical. Antigravity native subagents are NOT
+# synced here — they ship as an installed plugin (`ai provider install-plugin agy`).
+_sync_workspace_dirs() {
+  local mode="${1:-sync}"
+
+  mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
+  cp -f "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
+  sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
+  sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
+  _configure_project_claude_settings ".claude"
+  if [[ "$mode" == "init" ]]; then
+    echo "Created .claude/ (project-scoped agents + skills + settings.json)"
+  else
+    echo "  .claude/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
+  fi
+
+  # E-132 (antigravity-migration): workspace skills migrated to .agents/skills/;
+  # Gemini agents + GEMINI.md remain in .gemini/ per blueprint §API/Interface Contracts.
+  mkdir -p ".gemini/agents"
+  cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
+  strip_gemini_agent_fields ".gemini/agents"
+  _configure_project_gemini_settings ".gemini"
+  if [[ "$mode" == "init" ]]; then
+    echo "Created .gemini/ (project-scoped agents + settings.json)"
+  else
+    echo "  .gemini/ synced (agents + settings.json)"
+  fi
+
+  # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
+  mkdir -p ".agents/skills"
+  sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
+  sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
+  if [[ "$mode" == "init" ]]; then
+    echo "Created .agents/ (Antigravity workspace skills)"
+  else
+    echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md)"
+  fi
+}
+
 ensure_ai_templates() {
   mkdir -p .ai .ai/archive
 
@@ -413,34 +456,8 @@ ensure_ai_templates() {
   cp -f "$T/GEMINI.md" "GEMINI.md"
   echo "Updated GEMINI.md (project bootloader)"
 
-  # .claude/ — project-scoped Claude agents, skills, and settings
-  mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
-  cp -rf "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
-  sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
-  sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
-  _configure_project_claude_settings ".claude"
-  echo "Created .claude/ (project-scoped agents + skills + settings.json)"
-
-  # .gemini/ — project-scoped Gemini agents and settings.
-  # E-132 (antigravity-migration): workspace skills migrated to .agents/skills/;
-  # agents + GEMINI.md remain in .gemini/ per blueprint §API/Interface Contracts.
-  mkdir -p ".gemini/agents"
-  cp -rf "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
-  strip_gemini_agent_fields ".gemini/agents"
-  _configure_project_gemini_settings ".gemini"
-  echo "Created .gemini/ (project-scoped agents + settings.json)"
-
-  # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
-  # Sources: shared skills + agents-specific skills (formerly src/gemini/skills).
-  mkdir -p ".agents/skills"
-  sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
-  sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
-  echo "Created .agents/ (Antigravity workspace skills)"
-
-  # E-144 (native-subagents.md, reconciled): native agy subagents are NOT loaded from
-  # loose workspace .agents/agents/ files — agy only registers them via an installed
-  # plugin (`ai provider install-plugin agy`). The former project-scoped copy here was
-  # a dead write and has been removed. Skills above DO auto-load from .agents/skills/.
+  # .claude/, .gemini/, .agents/ — project-scoped agent dirs (v3.0 W3-T3: shared helper).
+  _sync_workspace_dirs init
 
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
   local C="${AIOS}/copilot"
@@ -1401,28 +1418,10 @@ do_sync() {
     # Always regenerate .mcp.json to pick up new servers (preserves user env values)
     generate_mcp_json "." && echo "  .mcp.json updated (MCP server registry)"
 
-    mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
-    cp -f "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
-    sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
-    sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
-    _configure_project_claude_settings ".claude"
-    echo "  .claude/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
-
-    mkdir -p ".gemini/agents"
-    cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
-    strip_gemini_agent_fields ".gemini/agents"
-    _configure_project_gemini_settings ".gemini"
-    echo "  .gemini/ synced (agents + settings.json)"
-
-    # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
-    mkdir -p ".agents/skills"
-    sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
-    sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
-    echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md)"
-
-    # E-144 (native-subagents.md, reconciled): native agy subagents ship as a plugin,
-    # installed globally via `ai provider install-plugin agy` — agy never reads loose
-    # workspace .agents/agents/ files. The former per-sync copy was dead and removed.
+    # .claude/, .gemini/, .agents/ — project-scoped agent dirs (v3.0 W3-T3: shared helper).
+    # Native agy subagents ship as an installed plugin (ai provider install-plugin agy),
+    # not loose .agents/agents/ files — so they are not synced here.
+    _sync_workspace_dirs sync
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
     echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."
