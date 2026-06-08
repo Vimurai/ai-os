@@ -98,6 +98,25 @@ export function isTestHelperFile(filePath) {
   return /^tests\/(suites|lib)\/[^/]+\.sh$/.test(filePath || "");
 }
 
+// v3.0 W4-T8 (aligner-hardening.md §Phase-2 context engine): internal
+// path-construction introspector. A `..` quoted literal passed to a Node path
+// API (resolve/join/relative/normalize/dirname) is internal path math — e.g.
+// `resolve(SCRIPT_DIR, "../..")` to derive a repo root — NOT a capability
+// bypass. This is distinct from the E-42 module-specifier whitelist (which only
+// covers from/require/import). Fail-closed safeguards preserved: this NEVER
+// whitelists a line that also references a sensitive absolute path
+// (/etc/, /root/, /home/<user>/.), so `resolve("/etc/passwd")`,
+// `readFile("/etc/shadow")`, and shell traversal like `cat ../../etc/passwd`
+// all still FAIL.
+const SENSITIVE_ABS_RE = /(?:\/etc\/|\/root\/|\/home\/\w+\/\.)/;
+const PATH_BUILDER_RE =
+  /\b(?:resolve|join|relative|normalize|dirname)\s*\([^)]*(["'])\.\.(?:\/[^"']*)?\1/;
+export function isInternalPathBuilder(line) {
+  if (typeof line !== "string") return false;
+  if (SENSITIVE_ABS_RE.test(line)) return false; // sensitive abs path → never whitelist
+  return PATH_BUILDER_RE.test(line);
+}
+
 const server = new Server(
   { name: "blueprint-aligner-mcp", version: "1.0.0" },
   { capabilities: { tools: {} } }
@@ -477,6 +496,7 @@ const ALIGNMENT_RULES = [
         for (const line of lines) {
           if (!traversalRe.test(line)) continue;
           if (moduleSpecifierRe.test(line)) continue; // E-42 ESM/CJS whitelist
+          if (isInternalPathBuilder(line)) continue;  // v3.0 W4-T8: resolve/join("..") path math
           // E-55: skip when the only hit is inside a backtick code span
           // (JSDoc/markdown inline code reference). If the line still has
           // the pattern OUTSIDE the backticks, it's real code — flag it.
