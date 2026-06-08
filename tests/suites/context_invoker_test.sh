@@ -154,5 +154,17 @@ _assert_file_contains "T-19: pre-commit.sh has check_architect_src_comodificatio
 _assert_file_contains "T-20: pre-commit.sh warns on architect.md + src/ co-stage" \
   "$PRECOMMIT" "ARCH_WARN"
 
+# ── Test 21 (v3.0 W2-T3): Claude-scoped gate skills exist + are reachable ────
+# dependency_gate / ci_gate are Claude-only mid-task triggers (CLAUDE.md). They
+# resolve because SKILL_ROOTS includes src/claude/skills + ~/.ai-os/claude/skills.
+for gate in dependency_gate ci_gate; do
+  assert_status 0 "T-21: ${gate} SKILL.md present (Claude-scoped)" \
+    test -f "${REPO_ROOT}/src/claude/skills/${gate}/SKILL.md"
+done
+_assert_file_contains "T-21: SKILL_ROOTS includes src/claude/skills (gate skills reachable)" \
+  "$INVOKER_JS" 'join(srcBase, "claude", "skills")'
+_assert_file_contains "T-21: SKILL_ROOTS includes ~/.ai-os/claude/skills (installed gates reachable)" \
+  "$INVOKER_JS" 'join(HOME, ".ai-os", "claude", "skills")'
+
 echo ""
 assert_summary
