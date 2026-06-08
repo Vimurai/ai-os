@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AI-OS v3.2 Installer — thin copier
+# AI-OS v3.0.0 Installer — thin copier
 # Source files live in src/; this script copies them to ~/.ai-os/ and sets up PATH.
 
 # Guard: require real bash (NOT bash invoked as `sh`).
@@ -62,7 +62,7 @@ if [[ "${AI_OS_SKIP_NODE_CHECK:-0}" != "1" ]]; then
   echo "✓ Node.js ${_node_version} detected (Node 22+ required)"
 fi
 
-echo "AI-OS v3.2 installer"
+echo "AI-OS v3.0.0 installer"
 echo "Source: ${REPO_DIR}/src"
 echo "Target: ${AIOS}"
 echo ""
@@ -222,7 +222,7 @@ echo "Running: ai install (global configs + hooks + settings.json) ..."
 cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AI-OS v3.2 installed at: ${AIOS}
+  AI-OS v3.0.0 installed at: ${AIOS}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Next steps:
