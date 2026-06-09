@@ -61,7 +61,7 @@ SEED → CLASSIFY → [blueprint-writer] → BLUEPRINT → [aligner check] → H
 | UX/design validation needed on a new component             | `ux_reviewer` NOW             |
 | Need to understand past decisions / git archaeology        | `repo-oracle` NOW             |
 | Architecture consistency check needed                      | `architectural-aligner` NOW   |
-| Follow-up G-## tasks identified after planning             | `gemini_tasks` AFTER          |
+| Follow-up G-## tasks identified after planning             | `ai-task` AFTER          |
 | DIGEST is stale after major design changes                 | `digest_updater` AFTER        |
 | New project init or Memory Palace stale                    | `memory_curator` NOW          |
 
@@ -74,7 +74,7 @@ Example: Plan a new auth system (Tier 3)
 2. activate_agent("blueprint-writer")            ← Gate 1 — classify + write P-## tasks
 3. [write blueprint sections in architect.md]
 4. activate_skill("architectural-aligner") ← validate blueprint consistency
-5. activate_agent("gemini_tasks")          ← record G-## follow-ups
+5. activate_skill("ai-task")          ← record G-## follow-ups
 6. activate_skill("digest_updater")        ← update DIGEST
 ```
 
@@ -106,7 +106,7 @@ Do NOT respond manually when a skill/agent exists for the task.
 | :-------------------------------------------------------------------------- | :------------------------ |
 | UI/UX changes need validation, or `skill: ai-test --vibe` requested        | `ux_reviewer`             |
 | New project initialized (`ai init`), or Memory Palace is stale             | `memory_curator`          |
-| Follow-up Gemini-domain tasks needed after planning session                | `gemini_tasks`            |
+| Follow-up Gemini-domain tasks needed after planning session                | `ai-task`            |
 | DIGEST.md is stale after major design changes                              | `digest_updater`          |
 
 ### Examples of correct auto-dispatch
@@ -115,7 +115,7 @@ Do NOT respond manually when a skill/agent exists for the task.
 User: "review the architecture"          → activate_skill("arch-review")  ← NOT manual review
 User: "why did we choose this DB?"       → activate_skill("repo-oracle")  ← NOT manual search
 User: "run vibe tests"                   → activate_agent("ux_reviewer")  ← NOT manual check
-After writing P-## tasks                 → activate_agent("gemini_tasks") ← record follow-ups
+After writing P-## tasks                 → activate_skill("ai-task") ← record follow-ups
 ```
 
 ## Sovereign Planning Protocol (MANDATORY)

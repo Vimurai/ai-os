@@ -48,8 +48,8 @@ For each keyword found, record the corresponding mandatory dispatch:
 | `.github/`, `Dockerfile`, `docker-compose`, `workflow`, `CI`, `.yml` in CI path | `ci_gate` (MANDATORY) |
 | new `app.get`, `app.post`, `router.`, `@app.route`, `func.*Handler`, new API endpoint | `obs_baseline` (MANDATORY) |
 | task marked Tier: 3 in TASKS.md | `security_engineer` + `ai-review` (MANDATORY) |
-| architectural decision keyword: `chose`, `decided`, `using X instead of Y`, `rationale` | `decision_recorder` (ADVISORY) |
-| E-## task completed | `claude_tasks` + `digest_updater` (MANDATORY on completion) |
+| architectural decision keyword: `chose`, `decided`, `using X instead of Y`, `rationale` | `decision-recorder` (ADVISORY) |
+| E-## task completed | `ai-task` + `digest_updater` (MANDATORY on completion) |
 
 ---
 
@@ -63,7 +63,7 @@ for evidence of dispatch:
 - `dependency_gate` → look for `dependency_gate`, `DECISIONS.md`
 - `ci_gate` → look for `ci_gate`, `DEVOPS.md`
 - `obs_baseline` → look for `obs_baseline`, `[OBS]`
-- `decision_recorder` → look for `decision_recorder`, `DECISIONS.md`, `D-###`
+- `decision-recorder` → look for `decision-recorder`, `DECISIONS.md`, `D-###`
 - `ai-review` → look for `[CRITIC_STAMP]`, `[ARCH_PASS]`, `[SEC_PASS]`
 
 Mark each dispatch as **DISPATCHED** or **OUTSTANDING**.
@@ -112,7 +112,7 @@ Before writing `Status: DONE` to TASKS.md, verify:
 
 1. If Tier 3 task → `[SEC_PASS]` or `[SECURITY]` entry must exist in LOG.md or REVIEWS.md
 2. If any new files were created in `src/` → LOG.md must have been updated this session
-3. If architectural decision was made → `decision_recorder` must have been dispatched
+3. If architectural decision was made → `decision-recorder` must have been dispatched
 
 If any check fails → output `[TRIGGER_AUDIT] POST_FLIGHT_BLOCKED` and dispatch missing agents before marking DONE.
 
