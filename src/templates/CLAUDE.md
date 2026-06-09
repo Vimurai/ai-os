@@ -44,7 +44,7 @@ When a request matches a skill trigger — load and follow it. Never skip gates.
 Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `skill: "ai-compact"` or executing `/compact` to distill your session history.
 
 ## Mid-Task Triggers
-If you touch auth/secrets → `skill: "security_engineer"`
+If you touch auth/secrets → `activate_agent("security_engineer")` (it is an agent, not a skill — E-148)
 If you add a dependency → `skill: "dependency_gate"`
 If you modify CI/CD → `skill: "ci_gate"`
 If a test is failing → `skill: "ai-debug"` (LOCKED until green)
