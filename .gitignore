@@ -44,3 +44,8 @@ testsprite_tests/
 
 # Interactive Bridge runtime lock (ephemeral, like signal.json) — never track.
 .ai/.ai-watch.lock/
+
+# E-145 (self-learning-arc): Memory Palace runtime artifacts — the candidate index
+# (palace-index.json, refreshed each `ai sync`), the embeddings, and the multimodal-RAG
+# dead-letter queue. All regenerated; never tracked.
+.ai/memory/

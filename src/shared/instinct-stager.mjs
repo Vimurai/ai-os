@@ -41,6 +41,10 @@ const DANGEROUS_PATTERNS = [
   { name: "aws-key",         re: /AKIA[0-9A-Z]{16}/ },
   { name: "private-key",     re: /-----BEGIN[ A-Z]*PRIVATE KEY-----/ },
   { name: "generic-secret",  re: /(?:api[_-]?key|secret|token|password)\s*[:=]\s*["'][^"']{8,}/i },
+  // E-145 (Tier-3 review hardening): close two empirical evasions of the denylist.
+  // The HITL approval gate remains authoritative — this is defence-in-depth only.
+  { name: "cmd-subst",       re: /\$\(/ },                                              // $(...) command substitution
+  { name: "env-secret-exfil", re: /\$\{?[A-Z_]*(?:SECRET|KEY|TOKEN|PASSWORD|CREDENTIAL)/ }, // $AWS_SECRET_ACCESS_KEY-style exfil
 ];
 
 // A staged skill dir name must be a safe kebab-case slug — no path separators,

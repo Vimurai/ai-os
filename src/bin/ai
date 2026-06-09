@@ -188,6 +188,36 @@ _generate_repo_map() {
   fi
 }
 
+# E-145 (self-learning-arc, W5-T1): refresh the Memory Palace candidate index during
+# sync so the multimodal-RAG memory layer stays current. API-FREE BY DESIGN — this only
+# SCANS the workspace for eligible artifacts (memory-batch-scanner) and writes the candidate
+# manifest to .ai/memory/palace-index.json. The actual embedding into the Memory Palace is
+# the memory_curator agent's job (it has API access in a session) — a sync hook must never
+# require network/keys. Fail-open; AI_OS_DISABLE_MEMORY_PALACE=1 is the escape hatch.
+_generate_memory_palace() {
+  [[ "${AI_OS_DISABLE_MEMORY_PALACE:-}" == "1" ]] && { echo "  ⚠ Memory Palace index skipped (AI_OS_DISABLE_MEMORY_PALACE=1)"; return 0; }
+  command -v node >/dev/null 2>&1 || { echo "  ⚠ node not found — skipping Memory Palace index" >&2; return 0; }
+  local scanner=""
+  for c in "src/shared/memory-batch-scanner.mjs" "${AIOS}/shared/memory-batch-scanner.mjs"; do
+    [[ -f "$c" ]] && { scanner="$c"; break; }
+  done
+  [[ -z "$scanner" ]] && { echo "  ⚠ memory-batch-scanner.mjs not found — skipping Memory Palace index" >&2; return 0; }
+  # Every command below is guarded so a filesystem error can NEVER abort do_sync
+  # under `set -euo pipefail` (fail-open is the load-bearing invariant — E-145 W5-T1).
+  mkdir -p ".ai/memory" 2>/dev/null || { echo "  ⚠ cannot create .ai/memory — skipping Memory Palace index" >&2; return 0; }
+  if node "$scanner" --scan . > ".ai/memory/palace-index.json.tmp" 2>/dev/null; then
+    mv -f ".ai/memory/palace-index.json.tmp" ".ai/memory/palace-index.json" 2>/dev/null || true
+    # palace-index.json is the sync-time CANDIDATE manifest (observability + a fresh
+    # input the memory_curator agent MAY read). The curator currently runs its own
+    # scan when it embeds; wiring it to consume this manifest is an Architect call
+    # (scan-on-sync is a §35 seam, not yet in a blueprint — flagged for ratification).
+    echo "  ✓ .ai/memory/palace-index.json refreshed (Memory Palace candidate manifest)"
+  else
+    rm -f ".ai/memory/palace-index.json.tmp" 2>/dev/null || true
+    echo "  ⚠ Memory Palace scan failed — non-fatal (sync continues)" >&2
+  fi
+}
+
 # E-112 (caching.md §3.1): rebuild the cache-manager System Context cache during
 # sync so the cache-manager-mcp is actually exercised in a live flow (it was
 # built but never invoked). Fail-open; AI_OS_DISABLE_CACHE=1 is the escape hatch.
@@ -1457,6 +1487,11 @@ do_sync() {
 
   # E-98: regenerate the AST repository map (.ai/REPO_MAP.md) for preflight.
   _generate_repo_map
+
+  # E-145 (self-learning-arc, W5-T1): refresh the Memory Palace candidate index.
+  # `|| true` is belt-and-suspenders — the function is internally fail-open, and this
+  # guarantees a future unguarded edit still can't abort sync under `set -e`.
+  _generate_memory_palace || true
 
   echo "Done."
 }

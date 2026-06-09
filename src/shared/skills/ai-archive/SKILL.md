@@ -30,6 +30,28 @@ check_workspace()
 
 If workspace is DIRTY: resolve all open tasks first. Do NOT archive.
 
+## Pre-Archive: Instinct Extraction (E-145 self-learning-arc, W5-T2)
+
+The session history (LOG.md, REVIEWS.md) is the learning substrate — capture recurring
+successful patterns as PROPOSED skills BEFORE archiving moves it away. This is the
+**capture** stage of the self-learning loop (the activation stage is human-gated, below).
+
+1. Invoke the meta_analyst's off-band Instinct-Extraction mode:
+   ```
+   activate_agent("meta_analyst")   ← runs extract_instincts over .ai/LOG.md + .ai/REVIEWS.md
+   ```
+2. meta_analyst clusters recurring successful tool/workflow patterns and stages each via
+   `stageInstincts(...)` (`src/shared/instinct-stager.mjs`) into
+   `.agents/skills/proposed/<slug>/SKILL.md` — **inert** by construction
+   (`disable-model-invocation: true`, `user-invocable: false`, `status: proposed`;
+   dangerous-content statically rejected; confidence ≥ 0.7).
+3. Staged skills do NOTHING until a human approves them via
+   `skill: ai-review-proposed-skills` (HITL, `approval-mcp`-gated). Auto-**staging** is safe;
+   auto-**activation** never happens here.
+
+Best-effort: if `meta_analyst` is unavailable or telemetry/logs are empty, SKIP silently —
+instinct extraction must NEVER block or fail the archive.
+
 ## Archive Steps
 
 This skill performs the archive operation directly (the previous `ai archive`
