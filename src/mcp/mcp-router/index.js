@@ -34,6 +34,7 @@
  *     the 50ms overhead budget is exceeded under real load.
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -539,5 +540,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 log("info", "startup", `${SERVICE} v${VERSION} starting`, {
   domains: Object.keys(DOMAINS).length,
 });
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

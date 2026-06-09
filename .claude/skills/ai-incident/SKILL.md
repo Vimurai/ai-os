@@ -5,7 +5,7 @@ disable-model-invocation: false
 user-invocable: true
 context: default
 agent: default
-allowed-tools: ["Bash"]
+allowed-tools: Bash
 ---
 
 # AI-Incident — Cross-Project Anomaly Recorder
