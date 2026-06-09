@@ -358,3 +358,34 @@ The database integrity architecture requires robust schema alterations. By using
 - **Transactional Safety**: Executing migrations as self-contained Node scripts ensures that the script halts safely on validation errors and executes the `DOWN` script within the same boundary.
 
 ---
+
+## D-044 — Conditional MCP Server Connections for Test Import Safety
+
+**Date**: 2026-06-09
+**Task**: E-160 (Prevent test hang)
+**Decision**: Wrap the top-level `server.connect()` and `StdioServerTransport` instantiation inside all custom MCP servers (especially `blueprint-aligner-mcp`) in an `isMain` detection check so that importing these modules in unit tests does not block waiting for stdin.
+
+### Why needed
+Unit tests like `blueprint_aligner_test.sh` import helper functions (e.g. `parseDiffByFile`, `isMarkdownFile`, `isTestHelperFile`) directly from the MCP server entry points (e.g., `src/mcp/blueprint-aligner-mcp/index.js`). Because the server connection was unconditionally established in the global module scope, importing the module started the StdioServerTransport, causing tests to hang indefinitely in interactive terminal sessions where stdin remains open.
+
+### Constraints driving this decision
+- **Test Suitability**: Test suites must run successfully in all environments (interactive terminals, CI, background run-command tasks) without hanging or requiring specific stdin redirection (like `< /dev/null`).
+- **Zero Impact on Production**: The MCP servers must still function exactly as before when launched directly via `node`.
+
+---
+
+## D-045 — Resilient Agent/Skill Invocation and Auto-Decision Rules
+
+**Date**: 2026-06-09
+**Task**: E-161 / E-162 (Agent Invocation Robustness)
+**Decision**: Standardize and write guidelines into CLAUDE.md / GEMINI.md for automatic, dynamic skill and agent selection. Instruct the models to dynamically choose:
+1. Native Antigravity tools (like `invoke_subagent` and `define_subagent`) when running in the `agy` runtime.
+2. Custom MCP-backed tools (`activate_agent`, `activate_skill`) when running in Claude Code or Gemini CLI.
+3. Automatically evaluate and decide when to run a skill (procedural workflow) vs. delegate to an agent (persona).
+
+### Why needed
+When running under `agy` (Antigravity), standard MCP tools (from `context-invoker-mcp`) are not reliably exposed, leading to permission or missing-tool errors that terminate execution. Providing resilient instructions allows agents to use native `invoke_subagent` tools instead of falling back to failing MCP calls, while guiding them to automatically use these tools at appropriate times.
+
+### Constraints driving this decision
+- **Resilience**: The platform must survive missing MCP tools by using native primitives.
+- **Autonomy**: The agents must take initiative in deciding when to run reviews, audits, preflights, and logs without requiring manual user commands.

@@ -32,6 +32,31 @@ Skills are context-heavy. When you finish using a skill (like a critic review or
 - Before ANY write tool call: verify the target is `.ai/` or `plans/`. If not — STOP.
 - If asked to implement: decline and redirect to Claude (the Engineer).
 
+## Skill vs Agent — Auto-Selection & Resilient Invocation (§36 — E-162, agent-invocation-robustness.md)
+Decide WHICH unit to run, then HOW to invoke it for the current runtime. Do this in
+your thinking step — zero added latency, never trial-and-error a tool that may not exist.
+
+**WHICH — skill vs agent:**
+- **Skill** (procedural, in-context): a planning workflow you perform in *this* session —
+  e.g. `blueprint-writer`, `task-planner`, `decision-recorder`, `ai-handoff`, `ai-task`.
+  Choose a skill when the work is a procedure you should carry out yourself.
+- **Agent** (persona, forked context): an autonomous specialist that runs in an isolated
+  sub-session and reports back — e.g. `ux_reviewer`, `architectural-aligner`, the
+  `critic_*` reviewers. Choose an agent when you need an independent expert whose work
+  must NOT pollute your planning context. (Agents still obey the Forbidden Zone — they
+  advise; only Claude writes source.)
+
+**HOW — environment-aware, resilient tool selection (inspect your own toolset first):**
+1. If a native subagent tool (`invoke_subagent` / `define_subagent`) is exposed → you are
+   in **Antigravity (`agy`)**; invoke agents with `invoke_subagent`.
+2. Else if MCP tools are exposed → invoke agents with `activate_agent` and skills with
+   `activate_skill`.
+3. If neither is available → fall back to the CLI script or print the manual steps.
+
+Never call a tool that is not in your current toolset — it throws and aborts the turn.
+Do not assume MCP is present (agy may not expose it, especially if Antigravity auth has
+lapsed — see Handing Off below), and do not assume `invoke_subagent` exists outside agy.
+
 ## Mid-Planning Triggers
 If blueprint touches auth/secrets → add SEC_CLEARED requirement
 If UX/design validation needed → dispatch `ux_reviewer`

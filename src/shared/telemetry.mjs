@@ -44,6 +44,10 @@ import { fileURLToPath } from "node:url";
 
 export const TELEMETRY_SERVICE = "telemetry";
 export const TELEMETRY_DB_PATH = resolve(homedir(), ".ai-os", "telemetry.sqlite");
+// E-155 (telemetry-hardening.md §Components 3): token-budget-mcp records per-call
+// token usage here (report_cost → usage.sqlite). The task-velocity aggregator
+// reads it READ-ONLY to sum tokens + turns for a task at completion.
+export const USAGE_DB_PATH = resolve(homedir(), ".ai-os", "usage.sqlite");
 
 const SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 // E-154 (telemetry-hardening.md §Data Model): the status enum explicitly captures
@@ -290,6 +294,45 @@ export function recordTaskVelocity(payload, opts) {
     return;
   }
   setImmediate(() => _doRecordTaskVelocity(payload, opts));
+}
+
+// E-155: aggregate per-task token usage recorded by token-budget-mcp and write a
+// task_velocity row. Invoked at the canonical DONE transition (task-synchronizer
+// update_task_status) so the metric is captured reliably at completion — the row
+// is ALWAYS written (0/0 when no usage was reported), closing the prior gap where
+// recordTaskVelocity was exported but never wired to task completion. The usage
+// DB is opened read-only and any failure is swallowed: telemetry never breaks
+// task state. Writes synchronously by default (single INSERT + one indexed read,
+// well under the <5ms budget) so the metric is durable before the handler returns.
+export function recordTaskVelocityForTask(payload, opts) {
+  if (_isDisabled()) return;
+  const task_id = typeof payload?.task_id === "string" ? payload.task_id.trim() : "";
+  if (!task_id) { _logErr("missing-task-id", null); return; }
+
+  let turn_count = 0;
+  let tokens_consumed = 0;
+  try {
+    const usagePath = opts?.usage_db_path || USAGE_DB_PATH;
+    if (existsSync(usagePath)) {
+      const udb = new DatabaseSync(usagePath, { readOnly: true });
+      try {
+        const r = udb
+          .prepare("SELECT COUNT(*) AS turns, COALESCE(SUM(tokens), 0) AS tokens FROM usage WHERE task_id = ?")
+          .get(task_id);
+        turn_count = Number(r?.turns) || 0;
+        tokens_consumed = Number(r?.tokens) || 0;
+      } finally {
+        udb.close();
+      }
+    }
+  } catch (e) {
+    _logErr("aggregate-usage-failed", e.message);
+  }
+
+  recordTaskVelocity(
+    { task_id, turn_count, tokens_consumed },
+    { db_path: opts?.db_path, sync: opts?.sync !== false }
+  );
 }
 
 // Read-side: SQL aggregates for the meta_analyst agent (E-85) and the
