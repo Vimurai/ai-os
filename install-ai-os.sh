@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AI-OS v3.2 Installer — thin copier
+# AI-OS v3.0.0 Installer — thin copier
 # Source files live in src/; this script copies them to ~/.ai-os/ and sets up PATH.
 
 # Guard: require real bash (NOT bash invoked as `sh`).
@@ -62,7 +62,7 @@ if [[ "${AI_OS_SKIP_NODE_CHECK:-0}" != "1" ]]; then
   echo "✓ Node.js ${_node_version} detected (Node 22+ required)"
 fi
 
-echo "AI-OS v3.2 installer"
+echo "AI-OS v3.0.0 installer"
 echo "Source: ${REPO_DIR}/src"
 echo "Target: ${AIOS}"
 echo ""
@@ -78,6 +78,7 @@ if command -v rsync &>/dev/null; then
   rsync -a --delete "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
   rsync -a --delete "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
   rsync -a --delete "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
+  rsync -a --delete "${REPO_DIR}/src/agents/"     "${AIOS}/agents/"
   rsync -a --delete "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
   rsync -a --delete "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
   rsync -a --delete "${REPO_DIR}/src/config/"     "${AIOS}/config/"
@@ -93,6 +94,7 @@ else
   cp -rf "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
   cp -rf "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
   cp -rf "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
+  cp -rf "${REPO_DIR}/src/agents/"     "${AIOS}/agents/"
   cp -rf "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
   cp -rf "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
   cp -rf "${REPO_DIR}/src/config/"     "${AIOS}/config/"
@@ -142,7 +144,27 @@ purge_orphans() {
 purge_orphans "${REPO_DIR}/src/contracts" "${AIOS}/contracts"
 purge_orphans "${REPO_DIR}/src/claude"    "${AIOS}/claude"
 purge_orphans "${REPO_DIR}/src/gemini"    "${AIOS}/gemini"
+purge_orphans "${REPO_DIR}/src/agents"    "${AIOS}/agents"
 purge_orphans "${REPO_DIR}/src/shared"    "${AIOS}/shared"
+
+# E-144 (native-subagents.md, reconciled): the retired loose-file mapper used to
+# mirror src/agents/agents/ here. That dir is gone; purge_orphans only sweeps
+# top-level files, and the cp fallback path doesn't --delete, so remove any stale
+# mirror explicitly. Native subagents now ship as the agy plugin under agents/plugin/.
+rm -rf "${AIOS}/agents/agents"
+
+# E-144: best-effort install of the AI-OS personas as a native Antigravity plugin.
+# agy registers custom subagents only via installed plugins (global, user-scoped).
+# Non-fatal when agy is absent (most users won't have the Antigravity CLI).
+if command -v agy >/dev/null 2>&1 && [[ -f "${AIOS}/agents/plugin/plugin.json" ]]; then
+  if agy plugin install "${AIOS}/agents/plugin" >/dev/null 2>&1; then
+    echo "✓ Installed ai-os agy plugin (native Antigravity subagents)"
+  else
+    echo "ℹ agy plugin install failed — retry later with: ai provider install-plugin agy"
+  fi
+else
+  echo "ℹ agy not found — after installing Antigravity, run: ai provider install-plugin agy"
+fi
 
 # ── 3) PATH setup ─────────────────────────────────────────────────────────────
 
@@ -200,7 +222,7 @@ echo "Running: ai install (global configs + hooks + settings.json) ..."
 cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  AI-OS v3.2 installed at: ${AIOS}
+  AI-OS v3.0.0 installed at: ${AIOS}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Next steps:

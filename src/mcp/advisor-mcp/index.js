@@ -27,6 +27,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { execFileSync } from "child_process";
 import { readFileSync, appendFileSync, existsSync } from "fs";
 import { resolve, join } from "path";
@@ -200,6 +201,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 // ── Tool dispatcher ───────────────────────────────────────────────────────────
 
+instrument(server, "advisor-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const start = Date.now();

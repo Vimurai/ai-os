@@ -71,8 +71,8 @@ export function activateContent(content, meta = {}) {
  *
  * @param {string} slug
  * @param {object} opts
- * @param {string} opts.proposedDir         Staging dir (…/.gemini/skills/proposed).
- * @param {string} opts.activeDir           Active skills dir (…/.gemini/skills).
+ * @param {string} opts.proposedDir         Staging dir (…/.agents/skills/proposed).
+ * @param {string} opts.activeDir           Active skills dir (…/.agents/skills).
  * @param {object} opts.decision            approval-mcp result: { status, id, ... }.
  * @returns {{ promoted: boolean, slug: string, activePath?: string, reason?: string }}
  */

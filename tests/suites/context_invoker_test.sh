@@ -61,11 +61,11 @@ _assert_contains \
   "$SOURCE" \
   '".claude", "skills"'
 
-# T-02: .gemini/skills appears in SKILL_ROOTS definition
+# T-02: .agents/skills appears in SKILL_ROOTS definition (E-132: migrated from .gemini/skills)
 _assert_contains \
-  "T-02: .gemini/skills in SKILL_ROOTS" \
+  "T-02: .agents/skills in SKILL_ROOTS" \
   "$SOURCE" \
-  '".gemini", "skills"'
+  '".agents", "skills"'
 
 # T-03: .claude/agents appears in AGENT_ROOTS definition
 _assert_contains \
@@ -111,8 +111,8 @@ _assert_file_contains "T-09: compliance audit includes .gemini/agents" \
 _assert_file_contains "T-10: compliance audit includes .claude/skills" \
   "$AI_BIN" 'Path(".claude/skills")'
 
-_assert_file_contains "T-11: compliance audit includes .gemini/skills" \
-  "$AI_BIN" 'Path(".gemini/skills")'
+_assert_file_contains "T-11: compliance audit includes .agents/skills" \
+  "$AI_BIN" 'Path(".agents/skills")'
 
 # ── Test 12: ANTI-DRIFT check present in compliance audit (E-121) ─────────────
 _assert_file_contains "T-12: ANTI-DRIFT PROTOCOL check in compliance audit" \
@@ -153,6 +153,18 @@ _assert_file_contains "T-19: pre-commit.sh has check_architect_src_comodificatio
 
 _assert_file_contains "T-20: pre-commit.sh warns on architect.md + src/ co-stage" \
   "$PRECOMMIT" "ARCH_WARN"
+
+# ── Test 21 (v3.0 W2-T3): Claude-scoped gate skills exist + are reachable ────
+# dependency_gate / ci_gate are Claude-only mid-task triggers (CLAUDE.md). They
+# resolve because SKILL_ROOTS includes src/claude/skills + ~/.ai-os/claude/skills.
+for gate in dependency_gate ci_gate; do
+  assert_status 0 "T-21: ${gate} SKILL.md present (Claude-scoped)" \
+    test -f "${REPO_ROOT}/src/claude/skills/${gate}/SKILL.md"
+done
+_assert_file_contains "T-21: SKILL_ROOTS includes src/claude/skills (gate skills reachable)" \
+  "$INVOKER_JS" 'join(srcBase, "claude", "skills")'
+_assert_file_contains "T-21: SKILL_ROOTS includes ~/.ai-os/claude/skills (installed gates reachable)" \
+  "$INVOKER_JS" 'join(HOME, ".ai-os", "claude", "skills")'
 
 echo ""
 assert_summary

@@ -7,10 +7,10 @@ Spawn a team automatically when 2+ independent workstreams exist:
 | Scenario | Spawn these agents in parallel |
 | :------- | :----------------------------- |
 | Tier 3 pre-commit review | `critic_arch` + `critic_security` + `critic_tests` + `blueprint-aligner` |
-| Post-implementation handover | `claude_tasks` + `digest_updater` + `decision_recorder` |
+| Post-implementation handover | `ai-task` + `digest_updater` + `decision-recorder` |
 | Security audit (Tier 3) | `security_engineer` + `identity_guardian` |
 | Vibe & chaos audit | `chaos_monkey` + `vibe_sentinel` |
-| Full session end | `claude_tasks` + `digest_updater` + `ai-review` |
+| Full session end | `ai-task` + `digest_updater` + `ai-review` |
 
 ## How to Spawn
 
@@ -22,7 +22,7 @@ Agent("Run the critic_arch agent to audit the codebase and append its stamp to .
 Agent("Run the critic_security agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
 Agent("Run the critic_tests agent to audit the codebase and append its stamp to .ai/REVIEWS.md")
 Agent("Run blueprint-aligner-mcp align_diff(). Append [ALIGN_PASS] or [ALIGN_FAIL] to .ai/REVIEWS.md")
-# After all 4 complete → activate_agent("review_synthesizer") to write [CRITIC_STAMP]
+# After all 4 complete → activate_skill("review_synthesizer") to write [CRITIC_STAMP]
 ```
 
 Note: `critic_arch`, `critic_security`, and `critic_tests` are materialized agents in
@@ -31,9 +31,9 @@ Do NOT use ad-hoc prompts — the Agent tool will load agent instructions automa
 
 ```
 # Post-task handover team — all 3 run simultaneously
-Agent("Run claude_tasks agent: record completed E-## task in .ai/TASKS.md")
+activate_skill("ai-task")  # record completed E-## task (replaces the retired claude_tasks agent — E-148)
 Agent("Run digest_updater agent: regenerate .ai/DIGEST.md from current state")
-Agent("Run decision_recorder agent: extract and record any decisions from this session")
+activate_skill("decision-recorder")  # record decisions (now the decision-recorder skill, not an agent — E-141/E-148)
 ```
 
 ## Agent/Skill Chaining (Sequential)
@@ -50,7 +50,7 @@ Example: Implement a new auth endpoint (Tier 3)
 5. activate_skill("ai-test")             ← quality gate
 6. → SPAWN PARALLEL TEAM (handover)
 7. activate_skill("ai-review")           ← pre-commit critic
-8. activate_agent("review_synthesizer")  ← Tier 3 release verdict
+8. activate_skill("review_synthesizer")  ← Tier 3 release verdict
 ```
 
 ## Two Modes of Agent Invocation

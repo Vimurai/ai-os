@@ -12,6 +12,7 @@
 - **Principal Architect (Gemini)**: Owns `.ai/blueprints/` and `TASKS.md`. Responsible for architectural design, strategy, and producing P-## tasks. Blocked from writing source code via the ANTI-DRIFT Protocol.
 - **Lead Engineer (Claude)**: Owns `src/` and `tests/`. Responsible for execution, fuzzy patching, and resolving E-## tasks. Blocked from altering sovereign blueprints.
 - **Quality/QA (TestSprite)**: Owns `REVIEWS.md` and `LOG.md`. Responsible for vibe checks, chaos testing, and structural validation.
+- **Specialist Extensions (20 Native Agents)**: The ecosystem includes 20 native plugin agents. Key specialists include the `performance_engineer`, `db_architect`, `dependency_manager`, and `sre_responder` (read-only incident triage).
 
 ## 3. Interaction Flows (Zero-Friction Workflow)
 - **Planning**: User prompts Gemini -> Gemini researches, writes domain blueprint, and emits P-## tasks to the SQLite store.
@@ -50,13 +51,14 @@
 - **Error Handling**: Graceful degradation to manual `cat .ai/TASKS.md` if all tools fail.
 - **Security**: Fallback tools must adhere to the same path-traversal restrictions as the primary orchestrator.
 
-## 31. Cross-Project Memory Palace
-- **Concept**: A centralized RAG service (`memory-manager-mcp`) that allows multiple projects to share high-level architectural signatures.
+## 31. Cross-Project Memory Palace & Self-Learning Arc
+- **Concept**: A centralized RAG service (`memory-manager-mcp`) that allows multiple projects to share high-level architectural signatures. Integrated with a complete Self-Learning Arc triggered JIT.
 - **Data Model**: `Signature: { project_name, tag, summary, architect_v, timestamp }`. Storage: `~/.ai-os/memory/signatures.json`.
 - **API Contract**:
   - `export_signature(summary, tags)`: Called during `ai archive`.
   - `query_signatures(tags)`: Called during `ai init` to suggest patterns.
-- **Security**: Signatures must NOT contain secrets, PII, or internal logic. Only high-level "Lore" and "Patterns".
+- **Self-Learning Activation**: The arc involves candidate manifest writing on sync (scan-on-sync seam), `meta_analyst` instinct extraction on archive, and a HITL gate via `approval-mcp` to promote PROPOSED skills. The seam manifest remains purely an observability artifact; `memory_curator` background agent remains sovereign and scans independently.
+- **Security**: Signatures must NOT contain secrets, PII, or internal logic. Only high-level "Lore" and "Patterns". Fail-closed autonomy invariant: no self-activation of proposed skills without human `approval-mcp` approval.
 
 ## 32. Verification Audit
 - **Concept**: Automated system to verify that declared agent capabilities in YAML frontmatter match actual system configurations.

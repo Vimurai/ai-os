@@ -46,7 +46,10 @@ export const TELEMETRY_SERVICE = "telemetry";
 export const TELEMETRY_DB_PATH = resolve(homedir(), ".ai-os", "telemetry.sqlite");
 
 const SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-const STATUS_VALUES = new Set(["SUCCESS", "ERROR"]);
+// E-154 (telemetry-hardening.md §Data Model): the status enum explicitly captures
+// SUCCESS, ERROR, and TIMEOUT so the global interceptor (E-153) can record an accurate
+// failure dimension (the INSIGHTS report found it was previously 100% SUCCESS).
+const STATUS_VALUES = new Set(["SUCCESS", "ERROR", "TIMEOUT"]);
 
 let _cachedDb = null;
 let _cachedPath = null;
@@ -105,6 +108,11 @@ function _openDb(pathOverride) {
   }
   _ensureDir(targetPath);
   const db = new DatabaseSync(targetPath);
+  // E-153/E-154 (Tier-3 review): WAL + busy_timeout (matching state-db.js) so the now-23
+  // in-house MCP servers writing this single shared DB don't serialise on a global lock or
+  // hit SQLITE_BUSY — which also de-risks the migration window below. NORMAL sync keeps the
+  // off-hot-path deferred write cheap. Best-effort: a pragma failure must not break telemetry.
+  try { db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 2000;"); } catch { /* pragma best-effort */ }
   // Per blueprint §Components 1 — two tables, idempotent CREATE.
   db.exec(`
     CREATE TABLE IF NOT EXISTS tool_executions (
@@ -113,7 +121,7 @@ function _openDb(pathOverride) {
       session_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
       execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0),
-      status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR')),
+      status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT')),
       timestamp TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS task_velocity (
@@ -128,6 +136,60 @@ function _openDb(pathOverride) {
     CREATE INDEX IF NOT EXISTS idx_task_velocity_timestamp
       ON task_velocity(timestamp);
   `);
+  // E-154 migration → TIMEOUT-capable schema. Existing DBs carry the old 2-value CHECK, which
+  // `CREATE TABLE IF NOT EXISTS` cannot update — a TIMEOUT insert would fail it.
+  // ATOMICITY (Tier-3 review P1): db.exec() autocommits PER statement, so a crash AFTER the
+  // RENAME would strand rows in _tool_executions_old while the leading CREATE IF NOT EXISTS
+  // resurrects an empty table the guard then reads as already-migrated → silent data loss.
+  // Fixes: (a) the whole migration runs inside BEGIN IMMEDIATE/COMMIT so a mid-sequence failure
+  // rolls the RENAME back atomically; (b) any _tool_executions_old stranded by a crash under the
+  // OLD (pre-fix) code is recovered and merged back. Idempotent + fail-open.
+  try {
+    const orphan = db.prepare(
+      "SELECT 1 AS x FROM sqlite_master WHERE type='table' AND name='_tool_executions_old'"
+    ).get();
+    const meta = db.prepare(
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='tool_executions'"
+    ).get();
+    const ddl = meta && typeof meta.sql === "string" ? meta.sql : "";
+    const needsMigration = ddl && !ddl.includes("TIMEOUT");
+    if (orphan || needsMigration) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        if (orphan) {
+          // Prior crash left rows behind; the live table was just (re)created empty by the
+          // leading CREATE IF NOT EXISTS. Merge stranded rows back (coerce any unknown status
+          // to ERROR so the new CHECK accepts them; dedupe by PK), then drop the orphan.
+          db.exec(
+            "INSERT OR IGNORE INTO tool_executions " +
+            "SELECT id, project_hash, session_id, tool_name, execution_time_ms, " +
+            "CASE WHEN status IN ('SUCCESS','ERROR','TIMEOUT') THEN status ELSE 'ERROR' END, timestamp " +
+            "FROM _tool_executions_old; " +
+            "DROP TABLE _tool_executions_old;"
+          );
+        } else {
+          db.exec(
+            "ALTER TABLE tool_executions RENAME TO _tool_executions_old; " +
+            "CREATE TABLE tool_executions (" +
+            "id TEXT PRIMARY KEY, project_hash TEXT NOT NULL, session_id TEXT NOT NULL, " +
+            "tool_name TEXT NOT NULL, execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0), " +
+            "status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT')), timestamp TEXT NOT NULL); " +
+            "INSERT INTO tool_executions " +
+            "SELECT id, project_hash, session_id, tool_name, execution_time_ms, status, timestamp " +
+            "FROM _tool_executions_old; " +
+            "DROP TABLE _tool_executions_old; " +
+            "CREATE INDEX IF NOT EXISTS idx_tool_executions_timestamp ON tool_executions(timestamp);"
+          );
+        }
+        db.exec("COMMIT");
+      } catch (inner) {
+        try { db.exec("ROLLBACK"); } catch { /* nothing to roll back */ }
+        throw inner;
+      }
+    }
+  } catch (e) {
+    _logErr("timeout-status-migration-failed", e.message);
+  }
   _cachedDb = db;
   _cachedPath = targetPath;
   return db;

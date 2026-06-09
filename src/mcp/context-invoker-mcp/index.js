@@ -13,6 +13,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { readFileSync, openSync, readSync, closeSync, existsSync, readdirSync } from "fs";
 import { resolve, join, sep } from "path";
 import { homedir } from "os";
@@ -43,7 +44,7 @@ const projectAgentRoots = [];
 if (existsSync(join(cwd, ".ai"))) {
   projectSkillRoots.push(
     join(cwd, ".claude", "skills"),
-    join(cwd, ".gemini", "skills")
+    join(cwd, ".agents", "skills") // E-132: Antigravity workspace skills (was .gemini/skills)
   );
   projectAgentRoots.push(
     join(cwd, ".claude", "agents"),
@@ -73,7 +74,7 @@ if (existsSync(srcBase)) {
   SKILL_ROOTS.push(
     join(srcBase, "shared", "skills"),
     join(srcBase, "claude", "skills"),
-    join(srcBase, "gemini", "skills")
+    join(srcBase, "agents", "skills") // E-132: migrated from src/gemini/skills
   );
   AGENT_ROOTS.push(
     join(srcBase, "claude", "agents"),
@@ -235,6 +236,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+instrument(server, "context-invoker-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 

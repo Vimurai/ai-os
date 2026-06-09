@@ -244,14 +244,16 @@ const state = {
 // Inline regenerateMarkdown logic (from task-synchronizer-mcp)
 const tasksPath = resolve(aiDir, 'TASKS.md');
 const lines = ['# TASKS (Generated from state.json)', ''];
-const byOwner = {};
+// E-136 (role-abstraction.md): provider-agnostic headers — strip the provider suffix to the role.
+const roleOf = (o) => String(o || 'Unassigned').split(' (')[0].trim() || 'Unassigned';
+const byRole = {};
 for (const t of state.tasks) {
-  const owner = t.owner || 'Unassigned';
-  if (!byOwner[owner]) byOwner[owner] = [];
-  byOwner[owner].push(t);
+  const role = roleOf(t.owner);
+  if (!byRole[role]) byRole[role] = [];
+  byRole[role].push(t);
 }
-for (const [owner, tasks] of Object.entries(byOwner)) {
-  lines.push('## ' + owner);
+for (const [role, tasks] of Object.entries(byRole)) {
+  lines.push('## ' + role);
   for (const t of tasks) {
     const check = t.status === 'DONE' ? 'x' : ' ';
     const tierStr = t.tier ? ' | Tier: ' + t.tier : '';
@@ -278,8 +280,9 @@ fs.writeFileSync(reviewsPath, stampLines.join('\n'), 'utf8');
 # Verify TASKS.md has expected structure
 md_tasks=$(cat "${MD_DIR}/TASKS.md")
 assert_contains "T-02.08a: TASKS.md has header" "Generated from state.json" "$md_tasks"
-assert_contains "T-02.08b: TASKS.md has Engineer section" "## Engineer (Claude)" "$md_tasks"
-assert_contains "T-02.08c: TASKS.md has Architect section" "## Architect (Gemini)" "$md_tasks"
+assert_contains "T-02.08b: TASKS.md has provider-agnostic Engineer section" "## Engineer" "$md_tasks"
+assert_contains "T-02.08c: TASKS.md has provider-agnostic Architect section" "## Architect" "$md_tasks"
+assert_not_contains "T-02.08b2: header is provider-agnostic (no '(Claude)' suffix)" "## Engineer (Claude)" "$md_tasks"
 assert_contains "T-02.08d: TASKS.md has done checkbox" "[x] E-1" "$md_tasks"
 assert_contains "T-02.08e: TASKS.md has open checkbox" "[ ] E-2" "$md_tasks"
 assert_contains "T-02.08f: TASKS.md has tier info" "Tier: 2" "$md_tasks"

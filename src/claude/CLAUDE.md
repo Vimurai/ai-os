@@ -50,7 +50,7 @@ For multi-agent parallel work (critic teams, handover teams), read: `src/contrac
 
 ## Mid-Execution Triggers
 
-If you discover mid-task that you need a new dependency, are touching auth/secrets, or modifying CI config — **pause and load the relevant skill** (`dependency_gate`, `security_engineer`, `ci_gate`). Don't skip gates.
+If you discover mid-task that you need a new dependency, are touching auth/secrets, or modifying CI config — **pause and load the relevant gate**: `skill: dependency_gate`, `activate_agent("security_engineer")` (an agent, not a skill — E-148), or `skill: ci_gate`. Don't skip gates.
 
 ## Emergency Recovery (§30 — Bootloader Resilience)
 

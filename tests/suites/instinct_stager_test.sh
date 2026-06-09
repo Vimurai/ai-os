@@ -85,7 +85,7 @@ assert_contains "T-93.10: references the stager"        "instinct-stager.mjs"   
 assert_contains "T-93.10: HITL gate forward-ref (E-94)" "approval-mcp"             "$meta"
 
 # ── T-93.11: staging area is documented in source ────────────────────────────
-assert_exists "${REPO_ROOT}/src/gemini/skills/proposed/README.md"
+assert_exists "${REPO_ROOT}/src/agents/skills/proposed/README.md"
 
 rm -rf "$(dirname "${PDIR}")"
 assert_summary

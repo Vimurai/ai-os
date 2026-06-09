@@ -49,7 +49,7 @@ assert_contains "T-98.05d: documents rollback flag"  "AI_OS_DISABLE_REPO_MAP" "$
 
 # ── T-98.06: ai-preflight SKILL mirrors are byte-identical ───────────────────
 assert_status 0 "T-98.06a: .claude mirror identical" diff -q "${PREFLIGHT}" "${REPO_ROOT}/.claude/skills/ai-preflight/SKILL.md"
-assert_status 0 "T-98.06b: .gemini mirror identical" diff -q "${PREFLIGHT}" "${REPO_ROOT}/.gemini/skills/ai-preflight/SKILL.md"
+assert_status 0 "T-98.06b: .gemini mirror identical" diff -q "${PREFLIGHT}" "${REPO_ROOT}/.agents/skills/ai-preflight/SKILL.md"
 
 # ── T-98.07: grammars are vendored, tree-sitter-wasms is NOT a runtime dep ───
 ext=$(cat "${EXTRACTOR}")

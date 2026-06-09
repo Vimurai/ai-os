@@ -18,6 +18,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { chromium } from "@playwright/test";
 import { createLogger } from "../shared/logger.js";
 
@@ -109,6 +110,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 // ── Tool implementations ──────────────────────────────────────────────────────
 
+instrument(server, "vibe-check-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 

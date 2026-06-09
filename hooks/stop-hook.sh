@@ -82,7 +82,7 @@ if [[ -n "$STALE_REASON" ]]; then
 ║                                                              ║
 ║  Regenerate DIGEST.md before the next session:              ║
 ║    skill: "ai-digest"                                        ║
-║    or: activate_agent('digest_updater')                      ║
+║    or: activate_skill('digest_updater')                      ║
 ╚══════════════════════════════════════════════════════════════╝
 
 WARN

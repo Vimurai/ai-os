@@ -212,6 +212,17 @@ export function readState(db) {
 }
 
 /**
+ * E-136 (role-abstraction.md): derive the provider-agnostic semantic role from an
+ * owner string for TASKS.md section headers. "Engineer (Claude)" -> "Engineer",
+ * "Architect (Gemini)" -> "Architect", bare "Engineer" -> "Engineer". state.json
+ * retains the full owner string; only the generated TASKS.md header is normalized,
+ * so a CLI swap (e.g. Gemini -> Antigravity) never churns the section headers.
+ */
+export function roleFromOwner(owner) {
+  return String(owner || "Unassigned").split(" (")[0].trim() || "Unassigned";
+}
+
+/**
  * Regenerate the three backwards-compat views: TASKS.md, REVIEWS.md, state.json.
  * Must be called after every SQLite mutation so file-based consumers stay in sync.
  */
@@ -222,15 +233,15 @@ export function regenerateViews(aiDir, db) {
   if (state.tasks.length > 0) {
     const tasksPath = resolve(aiDir, "TASKS.md");
     const lines = ["# TASKS (Generated from state.json)", ""];
-    const byOwner = {};
+    const byRole = {}; // E-136 (role-abstraction.md): group by provider-agnostic role
     for (const t of state.tasks) {
-      const owner = t.owner || "Unassigned";
-      if (!byOwner[owner]) byOwner[owner] = [];
-      byOwner[owner].push(t);
+      const role = roleFromOwner(t.owner);
+      if (!byRole[role]) byRole[role] = [];
+      byRole[role].push(t);
     }
-    for (const [owner, ownerTasks] of Object.entries(byOwner)) {
-      lines.push(`## ${owner}`);
-      for (const t of ownerTasks) {
+    for (const [role, roleTasks] of Object.entries(byRole)) {
+      lines.push(`## ${role}`);
+      for (const t of roleTasks) {
         const check   = t.status === "DONE" ? "x" : " ";
         const tierStr = t.tier ? ` | Tier: ${t.tier}` : "";
         lines.push(`- [${check}] ${t.id}: ${t.description}${tierStr}`);

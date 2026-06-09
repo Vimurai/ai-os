@@ -40,6 +40,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { spawn } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, join, isAbsolute } from "node:path";
@@ -138,6 +139,12 @@ function proxyOneShot({ command, args, env }, method, params, timeoutMs) {
       PATH: process.env.PATH || "",
       HOME: process.env.HOME || "",
       ...(env && typeof env === "object" ? env : {}),
+      // E-153/E-154 (Tier-3 review P1): the proxied child server is itself telemetry-
+      // instrumented now, so letting it record would DOUBLE-count every routed call — the
+      // router already writes the granular `<server>.<tool>` row below (E-84/E-106, the
+      // single source of truth for proxied calls). Force-disable telemetry in the child
+      // (after the spread so it always wins) to preserve the de-dup contract.
+      AI_TELEMETRY_DISABLE: "1",
     };
     const child = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -308,6 +315,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+instrument(server, "mcp-router", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const t0 = Date.now();

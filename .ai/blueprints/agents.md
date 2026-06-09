@@ -37,7 +37,6 @@ The AI-OS ecosystem divides cognitive labor across specialized agents and dynami
 
 ## 3. Lead Engineer (Claude)
 ### Agents
-- **`claude_tasks`**: Records follow-up E-## tasks after execution work.
 - **`aqg-resolver`**: Low-context autonomous fixer for failed tests.
 - **`digest_updater`**: Regenerates `DIGEST.md` using JIT reads.
 - **`devops_engineer`**: Establishes CI/CD pipelines and observability.
@@ -46,14 +45,18 @@ The AI-OS ecosystem divides cognitive labor across specialized agents and dynami
 - **`chaos_monkey`**: Stress-tests UI interactions to find edge cases.
 - **`critic_security`**: Deterministic security auditor (OWASP/secrets).
 - **`task_validator`**: Validates P-## dependency chains to prevent circular loops.
-- **`identity_guardian`**: Audits handling of PII and user data.
 - **`security_engineer`**: Produces `SECURITY.md`, enforces capability boundaries, and (E-44) runs active OWASP Top 10 pen-test payloads inside `code-execution-mcp` for any new input boundary.
 - **`critic_arch`**: Architecture reviewer comparing git diff against `architect.md`.
-- **`review_synthesizer`**: Aggregates audit stamps into a Release Readiness Report.
-- **`decision_recorder`**: Parses `LOG.md` and chat context for D-### decisions.
+
+> Retired (E-146): `claude_tasks` → use `skill: ai-task` (unified task lifecycle).
+> Relocated to Skills (E-141/E-148): `identity_guardian`, `review_synthesizer`,
+> `decision_recorder` (→ `decision-recorder` skill). See the Skills list below.
 
 ### Skills
 - **`ai-compact`**: Distills conversation history into "Active Context" to save tokens.
+- **`identity_guardian`**: Audits handling of PII, secrets, and user data (E-148 — was listed as an agent).
+- **`review_synthesizer`**: Aggregates Tier-3 audit stamps into a Release Readiness Report (E-148 — was listed as an agent).
+- **`decision-recorder`**: Captures architectural decisions into `DECISIONS.md` as D-### entries (E-141 — was the `decision_recorder` agent).
 - **`ai-review`**: Runs a tier-aware critic review before committing.
 - **`bug-reproducer`**: Enforces empirical validation with isolated repro scripts.
 - **`ci_gate`**: Gate required before changing CI/CD pipelines.

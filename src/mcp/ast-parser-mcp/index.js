@@ -11,6 +11,12 @@
  * Security (blueprint §Security): never indexes secret files (.env*) or
  * node_modules; stays within the resolved workspace root (no path escape);
  * per-file parse timeout + 1 MB size cap bound CPU (DoS).
+ *
+ * NOT DEAD CODE — intentionally absent from registry.json / .mcp.json. This is a
+ * dual-mode binary: the `--generate-map` CLI path is invoked directly by `ai sync`
+ * (src/bin/ai → `node ${AIOS}/mcp/ast-parser-mcp/index.js --generate-map`) to build
+ * .ai/REPO_MAP.md. The MCP-server mode (parse_workspace) is reachable when the SDK
+ * is present. Deleting this breaks REPO_MAP generation.
  */
 
 // E-98: the MCP SDK is imported lazily (server mode only) so the
@@ -21,6 +27,8 @@ import { resolve, relative, join, dirname, sep } from "node:path";
 import { languageForFile, extractFromSource } from "./extractor.mjs";
 import { rankSymbols } from "./repo-mapper.mjs";
 import { serializeRepoMap } from "./serializer.mjs";
+// E-153 (telemetry-hardening.md): global telemetry interceptor (SDK-free — schema injected).
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 
 const MAX_FILE_BYTES = 1_000_000; // skip files > 1 MB (DoS / minified bundles)
 const DEFAULT_MAX_FILES = 2000;
@@ -220,6 +228,7 @@ if (process.argv.includes("--generate-map")) {
   const { CallToolRequestSchema, ListToolsRequestSchema } = await import("@modelcontextprotocol/sdk/types.js");
   const server = new Server({ name: "ast-parser-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  instrument(server, "ast-parser-mcp", CallToolRequestSchema);
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     try {

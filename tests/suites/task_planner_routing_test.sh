@@ -12,8 +12,8 @@ source "${SCRIPT_DIR}/../lib/assert.sh"
 
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-SKILL_SRC="${REPO_ROOT}/src/gemini/skills/task-planner/SKILL.md"
-SKILL_MIRROR="${HOME}/.ai-os/gemini/skills/task-planner/SKILL.md"
+SKILL_SRC="${REPO_ROOT}/src/agents/skills/task-planner/SKILL.md"
+SKILL_MIRROR="${HOME}/.ai-os/agents/skills/task-planner/SKILL.md"
 
 echo "===== task_planner_routing_test.sh ====="
 

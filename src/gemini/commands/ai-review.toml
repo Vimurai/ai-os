@@ -1,2 +1,0 @@
-description = "Run a Gemini Architectural Audit of the codebase against architect.md. Reviews implemented features for blueprint alignment, orphaned work, ambiguous sections, and top architectural risks. Replaces the removed `ai review gemini` shell command (E-34)."
-prompt = "Please activate the 'ai-review' skill and run the Architectural Audit."

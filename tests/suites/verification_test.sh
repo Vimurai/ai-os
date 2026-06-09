@@ -58,7 +58,7 @@ audit_agent() {
       return false;
     }
     const mdPath = '${path_hint}';
-    const isGeminiPath = mdPath.includes('/gemini/');
+    const isGeminiPath = mdPath.includes('/gemini/') || mdPath.includes('/agents/'); // E-132: /agents/ = lenient (mirrors src/mcp/verification-mcp)
     const requiredFields = isGeminiPath
       ? ['name','description']
       : ['name','description','disable-model-invocation','user-invocable','allowed-tools'];
@@ -171,9 +171,9 @@ assert_contains "T-05.06d: list-form valid tools PASS" "PASS" "$result"
 # inlined helpers above can't silently diverge from src/mcp/verification-mcp).
 assert_status 0 "T-05.06e: real parseFrontmatter handles list-form" \
   grep -q 'keyOnly' "$VERIFY_MCP"
-# T-05.06f: default scan now covers gemini skills + installed-mirror skills.
-assert_status 0 "T-05.06f: scan includes src/gemini/skills" \
-  grep -qE '"src", *"gemini", *"skills"|src.*gemini.*skills' "$VERIFY_MCP"
+# T-05.06f: default scan covers Antigravity workspace skills (E-132: src/agents/skills).
+assert_status 0 "T-05.06f: scan includes src/agents/skills" \
+  grep -qE '"src", *"agents", *"skills"|src.*agents.*skills' "$VERIFY_MCP"
 
 # T-05.07: Bulk scan of src/claude/agents/ — zero CRITICAL violations
 AGENTS_DIR="${REPO_ROOT}/src/claude/agents"
@@ -249,6 +249,12 @@ assert_contains "T-05.08: Gemini skill missing Claude fields → PASS (not WARN)
 assert_not_contains "T-05.08b: disable-model-invocation not required for Gemini" "MISSING_FIELD:disable-model-invocation" "$result"
 assert_not_contains "T-05.08c: user-invocable not required for Gemini" "MISSING_FIELD:user-invocable" "$result"
 assert_not_contains "T-05.08d: allowed-tools not required for Gemini" "MISSING_FIELD:allowed-tools" "$result"
+
+# T-05.08e (E-132): an /agents/ (Antigravity) skill follows the SAME lenient ruleset
+# as /gemini/ — the migrated workspace skills must not be misclassified as Claude skills.
+result=$(audit_agent "$GEMINI_MINIMAL" "/agents/skills/blueprint-writer/SKILL.md")
+assert_contains "T-05.08e: /agents/ skill missing Claude fields → PASS (lenient like gemini)" "PASS" "$result"
+assert_not_contains "T-05.08f: disable-model-invocation not required for /agents/ skills" "MISSING_FIELD:disable-model-invocation" "$result"
 
 # T-05.09: Gemini skill missing name → WARN (name is always required)
 GEMINI_NO_NAME='---

@@ -10,7 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 HANDOFF="${REPO_ROOT}/src/shared/skills/ai-handoff/SKILL.md"
 TASK_CLAUDE="${REPO_ROOT}/src/shared/skills/ai-task/SKILL.md"
-TASK_GEMINI="${REPO_ROOT}/src/gemini/skills/ai-task/SKILL.md"
+TASK_GEMINI="${REPO_ROOT}/src/agents/skills/ai-task/SKILL.md"
 
 echo "===== handoff_enforcement_test.sh (E-119) ====="
 
@@ -35,8 +35,12 @@ assert_status 0 "E-119.S02: claude ai-task cites E-119" \
   grep -qF 'E-119' "$TASK_CLAUDE"
 assert_status 0 "E-119.S02: handoff_control in claude ai-task allowed-tools" \
   grep -qE '^allowed-tools:.*handoff_control' "$TASK_CLAUDE"
-assert_status 0 "E-119.S02: claude ai-task targets gemini on hand-back" \
-  grep -qE 'target:[[:space:]]*"gemini"' "$TASK_CLAUDE"
+# E-158 (cli-agnostic-handoff): the hand-back now targets the semantic role 'architect'
+# (provider-agnostic — the Architect runtime is agy, not literally gemini) via the
+# shell `ai handoff architect` primitive, with handoff_control({target:"architect"}) as
+# the equivalent fallback. Either form satisfies the "engineer wakes the architect" invariant.
+assert_status 0 "E-119.S02: claude ai-task targets the architect on hand-back" \
+  grep -qE 'ai handoff architect|target:[[:space:]]*"architect"' "$TASK_CLAUDE"
 
 # ── S03: ai-task (Gemini) mandates handoff to Claude at session completion ────
 assert_status 0 "E-119.S03: gemini ai-task hand-off step is MANDATORY" \
@@ -63,11 +67,11 @@ chk_mirror() { # chk_mirror <canonical> <mirror>
   fi
 }
 chk_mirror "$HANDOFF" "${REPO_ROOT}/.claude/skills/ai-handoff/SKILL.md"
-chk_mirror "$HANDOFF" "${REPO_ROOT}/.gemini/skills/ai-handoff/SKILL.md"
+chk_mirror "$HANDOFF" "${REPO_ROOT}/.agents/skills/ai-handoff/SKILL.md"
 chk_mirror "$HANDOFF" "${HOME}/.ai-os/shared/skills/ai-handoff/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${REPO_ROOT}/.claude/skills/ai-task/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${HOME}/.ai-os/shared/skills/ai-task/SKILL.md"
-chk_mirror "$TASK_GEMINI" "${REPO_ROOT}/.gemini/skills/ai-task/SKILL.md"
-chk_mirror "$TASK_GEMINI" "${HOME}/.ai-os/gemini/skills/ai-task/SKILL.md"
+chk_mirror "$TASK_GEMINI" "${REPO_ROOT}/.agents/skills/ai-task/SKILL.md"
+chk_mirror "$TASK_GEMINI" "${HOME}/.ai-os/agents/skills/ai-task/SKILL.md"
 
 assert_summary

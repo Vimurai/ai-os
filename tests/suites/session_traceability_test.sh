@@ -191,7 +191,7 @@ echo "  [T-SES-S04] ai-log skill body"
 for f in \
   "${REPO_ROOT}/src/shared/skills/ai-log/SKILL.md" \
   "${REPO_ROOT}/.claude/skills/ai-log/SKILL.md" \
-  "${REPO_ROOT}/.gemini/skills/ai-log/SKILL.md"; do
+  "${REPO_ROOT}/.agents/skills/ai-log/SKILL.md"; do
 
   assert_status 0 "${f#${REPO_ROOT}/} exists" test -f "$f"
   assert_status 0 "${f##*/skills/ai-log/} mentions CLAUDE_CODE_SESSION_ID" \
@@ -207,7 +207,7 @@ done
 # Mirror identity.
 SRC_HASH="$(md5sum "${REPO_ROOT}/src/shared/skills/ai-log/SKILL.md" | awk '{print $1}')"
 CLA_HASH="$(md5sum "${REPO_ROOT}/.claude/skills/ai-log/SKILL.md"     | awk '{print $1}')"
-GEM_HASH="$(md5sum "${REPO_ROOT}/.gemini/skills/ai-log/SKILL.md"     | awk '{print $1}')"
+GEM_HASH="$(md5sum "${REPO_ROOT}/.agents/skills/ai-log/SKILL.md"     | awk '{print $1}')"
 assert_status 0 ".claude mirror = src" bash -c "[[ '$SRC_HASH' == '$CLA_HASH' ]]"
 assert_status 0 ".gemini mirror = src" bash -c "[[ '$SRC_HASH' == '$GEM_HASH' ]]"
 

@@ -104,7 +104,7 @@ Expected stamps after all complete:
 
 Do NOT write `[CRITIC_STAMP]` manually. Instead, invoke `review_synthesizer`:
 ```
-activate_agent("review_synthesizer")
+activate_skill("review_synthesizer")
 ```
 
 `review_synthesizer` reads all distributed stamps (`[ARCH_PASS]`, `[SEC_PASS]`, `[TESTS_PASS]`,

@@ -214,7 +214,7 @@ ai doctor                     # confirms MCP, hooks, pre-commit are wired
 What `ai sync` does (and does not do):
 - ✅ Updates `CLAUDE.md` and `GEMINI.md` bootloaders to the current version.
 - ✅ Regenerates `.mcp.json` from `~/.ai-os/config/registry.json` (preserves your `TestSprite` API key).
-- ✅ Refreshes `.claude/agents/`, `.claude/skills/`, `.gemini/agents/`, `.gemini/skills/` and the `_SKILLS_INDEX.md` files.
+- ✅ Refreshes `.claude/agents/`, `.claude/skills/`, `.gemini/agents/`, `.agents/skills/` and the `_SKILLS_INDEX.md` files.
 - ✅ Re-installs git hooks under `~/.ai-os/hooks/`.
 - ❌ Does **not** touch `.ai/architect.md`, `.ai/BRIEF.md`, `.ai/TASKS.md`, `.ai/DIGEST.md`, or anything you authored. Your project memory is yours.
 

@@ -511,4 +511,37 @@ test_dependency_scope "E-55: package.json dep flagged" \
 test_dependency_scope "E-55: nested package.json (workspace) dep flagged" \
   "src/mcp/foo/package.json" "+    \"@scope/lib\": \"^2.0.0\"," "flag"
 
+# ── v3.0 W4-T8: internal path-builder introspector (isInternalPathBuilder) ────
+# resolve/join("..") path math must NOT trip CAPABILITIES_BYPASS, but sensitive
+# absolute paths + shell traversal must still FAIL. Tests the REAL exported fn.
+ALIGNER="${REPO_ROOT}/src/mcp/blueprint-aligner-mcp/index.js"
+test_path_builder() {
+  local label="$1" line="$2" expect="$3"  # expect: whitelist|flag
+  local result
+  result=$(node --input-type=module -e "
+import { isInternalPathBuilder } from 'file://${ALIGNER}';
+const line = $(printf '%s' "$line" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))');
+process.stdout.write(isInternalPathBuilder(line) ? 'whitelist' : 'flag');
+" 2>/dev/null || echo "error")
+  if [[ "$result" == "$expect" ]]; then _pass "$label"; else _fail "$label (expected $expect, got $result)"; fi
+}
+
+# FP cases that motivated W4-T8 — must be whitelisted.
+test_path_builder "W4-T8: resolve(SCRIPT_DIR, '../..') whitelisted" \
+  '  const repoRoot = resolve(SCRIPT_DIR, "../..");' 'whitelist'
+test_path_builder "W4-T8: join(base, '../x') whitelisted" \
+  '  const p = join(base, "../x");' 'whitelist'
+test_path_builder "W4-T8: single-quoted resolve('../..') whitelisted" \
+  "  const r = resolve(dir, '../..');" 'whitelist'
+
+# Must STILL flag (fail-closed preserved).
+test_path_builder "W4-T8: resolve('/etc/passwd') NOT whitelisted (sensitive abs)" \
+  '  const r = resolve("/etc/passwd");' 'flag'
+test_path_builder "W4-T8: readFile('/etc/shadow') NOT whitelisted" \
+  '  readFile("/etc/shadow");' 'flag'
+test_path_builder "W4-T8: shell cat ../../etc/passwd NOT whitelisted (no path-builder)" \
+  '  exec("cat ../../etc/passwd");' 'flag'
+test_path_builder "W4-T8: bare string-concat ../ NOT whitelisted" \
+  '  const p = base + "../../secret";' 'flag'
+
 assert_summary

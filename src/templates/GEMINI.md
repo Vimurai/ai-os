@@ -42,6 +42,23 @@ After any architectural decision → `activate_skill({ skill_name: "decision-rec
 After completing a planning session → `activate_skill({ skill_name: "ai-task" })`
 Before switching to Claude → `activate_skill({ skill_name: "ai-handoff" })`
 
+## Handing Off to the Engineer (MANDATORY — E-158, agy-reliable)
+After you register tasks (`task-planner`) or finish a planning turn, you MUST hand
+control to the Engineer so it wakes and executes — the ping-pong loop does **not**
+advance on its own. Registering tasks without handing off strands the sprint.
+
+In the **agy (Antigravity)** runtime, custom MCP tools (`handoff_control`) and
+MCP-backed skills are NOT dependably exposed to you — especially if your Antigravity
+auth has lapsed. **Do not rely on them for the handoff.** Use the shell command via
+`run_command`, which always works:
+```
+ai handoff engineer "Planned E-##..E-## (<scope>). Execute the OPEN queue."
+```
+This writes the same locked `.ai/signal.json` entry the MCP tool would (so `ai watch`
+wakes the Engineer pane). Always emit it — never assume a human will press the key.
+The roles `engineer`/`architect` are provider-agnostic; `ai handoff architect "..."`
+summons you back.
+
 ## Project-Scoped Rules
 Full Principal Architect rules are managed in `GEMINI.md` within this project.
 

@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# mcp_telemetry_test.sh — E-153 (telemetry-hardening.md §Components 1): the global
+# telemetry interceptor `withTelemetry()` that wraps every MCP server's CallTool handler.
+#
+# Proves: canonical mcp__<server>__<tool> naming, accurate SUCCESS/ERROR classification
+# (E-154: a thrown exception OR an `{isError:true}` result both record ERROR), result
+# pass-through, exception propagation, non-negative latency, and the hard invariant that a
+# telemetry failure NEVER breaks or alters the wrapped tool's result.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/assert.sh"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+echo "── Suite: mcp_telemetry_test (E-153 / E-154) ───────────────────────"
+
+# Run all behavioural scenarios in one node process with an INJECTED recorder (no real
+# telemetry DB is touched). Emits one `key=value` token per line for assert_contains.
+OUT="$(HELPER_URL="file://${REPO_ROOT}/src/shared/mcp-telemetry.mjs" node --input-type=module <<'NODE'
+const { withTelemetry, toolNameFor, statusForResult } = await import(process.env.HELPER_URL);
+
+const reqFor = (name) => ({ params: { name } });
+let captured = null;
+const rec = (p) => { captured = p; };
+
+// 1. SUCCESS path — normal result, recorder sees SUCCESS + canonical name + latency.
+captured = null;
+const okHandler = withTelemetry("task-synchronizer-mcp", async () => ({ content: [{ type: "text", text: "ok" }] }), { record: rec });
+const okRes = await okHandler(reqFor("add_task"));
+console.log("name=" + captured.tool_name);
+console.log("ok_status=" + captured.status);
+console.log("ok_returned=" + (okRes && okRes.content ? "true" : "false"));
+console.log("latency_int=" + (Number.isInteger(captured.execution_time_ms) && captured.execution_time_ms >= 0 ? "true" : "false"));
+
+// 2. Tool-level error result ({isError:true}) → ERROR, but result still returned.
+captured = null;
+const errResHandler = withTelemetry("safe-exec-mcp", async () => ({ content: [], isError: true }), { record: rec });
+const errRes = await errResHandler(reqFor("analyze_command"));
+console.log("errresult_status=" + captured.status);
+console.log("errresult_returned=" + (errRes && errRes.isError ? "true" : "false"));
+
+// 3. Thrown exception → ERROR recorded AND the exception propagates unchanged.
+captured = null;
+let threw = false, propagated = false;
+const throwHandler = withTelemetry("db-architect-mcp", async () => { throw new Error("boom"); }, { record: rec });
+try { await throwHandler(reqFor("migrate")); } catch (e) { propagated = (e.message === "boom"); }
+console.log("throw_status=" + (captured ? captured.status : "NONE"));
+console.log("throw_propagated=" + propagated);
+
+// 4. Telemetry failure must NEVER break the tool — recorder throws, result still returns.
+const badRec = () => { throw new Error("telemetry down"); };
+const robustHandler = withTelemetry("orchestrator-mcp", async () => ({ content: [{ type: "text", text: "fine" }] }), { record: badRec });
+let robustOk = false;
+try { const r = await robustHandler(reqFor("run_review")); robustOk = !!(r && r.content); } catch { robustOk = false; }
+console.log("telemetry_fail_safe=" + robustOk);
+
+// 5. Pure helpers: missing tool name → ...__unknown; statusForResult mapping.
+console.log("name_missing=" + toolNameFor("x-mcp", {}));
+console.log("status_ok=" + statusForResult({ content: [] }));
+console.log("status_err=" + statusForResult({ isError: true }));
+
+// 6. instrument(): the rollout mechanism. A fake Server whose setRequestHandler is patched;
+//    CallTool handlers get wrapped (recorder fires), non-CallTool handlers pass through.
+const { instrument } = await import(process.env.HELPER_URL);
+const calls = [];
+const fakeServer = { _h: new Map(), setRequestHandler(schema, h) { this._h.set(schema, h); } };
+const CALLTOOL = { kind: "CallTool" };
+const LISTTOOLS = { kind: "ListTools" };
+instrument(fakeServer, "demo-mcp", CALLTOOL, { record: (p) => calls.push(p) });
+fakeServer.setRequestHandler(CALLTOOL, async (req) => ({ content: [], isError: req.params.name === "boom" }));
+fakeServer.setRequestHandler(LISTTOOLS, async () => ({ tools: ["passthrough"] }));
+await fakeServer._h.get(CALLTOOL)({ params: { name: "ok" } });
+await fakeServer._h.get(CALLTOOL)({ params: { name: "boom" } });
+const listRes = await fakeServer._h.get(LISTTOOLS)();
+console.log("instrument_calltool_count=" + calls.length);
+console.log("instrument_names=" + calls.map((c) => c.tool_name).join(","));
+console.log("instrument_statuses=" + calls.map((c) => c.status).join(","));
+console.log("instrument_listtools_untouched=" + (listRes.tools[0] === "passthrough" ? "true" : "false"));
+NODE
+)"
+
+echo "$OUT"
+echo "── assertions ──"
+assert_contains "153.01: canonical mcp__server__tool name"        "name=mcp__task-synchronizer-mcp__add_task" "$OUT"
+assert_contains "153.02: normal result records SUCCESS"           "ok_status=SUCCESS"        "$OUT"
+assert_contains "153.03: result passed through unchanged"         "ok_returned=true"         "$OUT"
+assert_contains "153.04: latency is a non-negative integer"       "latency_int=true"         "$OUT"
+assert_contains "154.01: {isError:true} result records ERROR"     "errresult_status=ERROR"   "$OUT"
+assert_contains "154.01b: error result still returned to caller"  "errresult_returned=true"  "$OUT"
+assert_contains "154.02: thrown handler records ERROR"            "throw_status=ERROR"       "$OUT"
+assert_contains "154.02b: thrown exception propagates unchanged"  "throw_propagated=true"    "$OUT"
+assert_contains "153.05: telemetry failure never breaks the tool" "telemetry_fail_safe=true" "$OUT"
+assert_contains "153.06: missing tool name → __unknown"           "name_missing=mcp__x-mcp__unknown" "$OUT"
+assert_contains "153.07: statusForResult(ok)=SUCCESS"             "status_ok=SUCCESS"        "$OUT"
+assert_contains "153.07b: statusForResult(isError)=ERROR"         "status_err=ERROR"         "$OUT"
+assert_contains "153.08: instrument() wraps both CallTool calls"  "instrument_calltool_count=2" "$OUT"
+assert_contains "153.08b: instrument() names both tools"          "instrument_names=mcp__demo-mcp__ok,mcp__demo-mcp__boom" "$OUT"
+assert_contains "153.08c: instrument() classifies SUCCESS+ERROR"  "instrument_statuses=SUCCESS,ERROR" "$OUT"
+assert_contains "153.08d: instrument() leaves ListTools untouched" "instrument_listtools_untouched=true" "$OUT"
+
+assert_summary

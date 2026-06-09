@@ -94,9 +94,9 @@
       "path": "src/mcp/orchestrator-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["run_preflight", "run_handover", "run_review"],
+      "allowed-tools": ["run_preflight", "run_handover", "run_review", "run_dispatch"],
       "disable-model-invocation": false,
-      "_note": "Deterministic workflow execution (P-38): replaces LLM-interpreted skills with programmatic orchestration"
+      "_note": "Deterministic workflow execution (P-38): replaces LLM-interpreted skills with programmatic orchestration. run_dispatch (E-92) is a read-only DAG dispatch planner — listed so mcp-router proxy_call can reach it."
     },
     "memory-manager-mcp": {
       "path": "src/mcp/memory-manager-mcp/index.js",

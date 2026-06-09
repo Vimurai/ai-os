@@ -12,7 +12,7 @@ source "${SCRIPT_DIR}/../lib/assert.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 AI_TEST="${REPO_ROOT}/src/shared/skills/ai-test/SKILL.md"
-SYNTH="${REPO_ROOT}/src/claude/agents/review_synthesizer.md"
+SYNTH="${REPO_ROOT}/src/agents/skills/review_synthesizer/SKILL.md"  # E-141: relocated agent→skill
 
 echo "===== vibe_stamp_alignment_test.sh (E-113) ====="
 
@@ -36,7 +36,7 @@ assert_status 0 "review_synthesizer requires [VIBE_CLEARED]" \
 assert_status 0 "ai-test .claude mirror identical" \
   diff -q "$AI_TEST" "${REPO_ROOT}/.claude/skills/ai-test/SKILL.md"
 assert_status 0 "ai-test .gemini mirror identical" \
-  diff -q "$AI_TEST" "${REPO_ROOT}/.gemini/skills/ai-test/SKILL.md"
+  diff -q "$AI_TEST" "${REPO_ROOT}/.agents/skills/ai-test/SKILL.md"
 assert_status 0 "ai-test ~/.ai-os mirror identical" \
   diff -q "$AI_TEST" "${HOME}/.ai-os/shared/skills/ai-test/SKILL.md"
 

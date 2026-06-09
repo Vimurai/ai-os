@@ -37,6 +37,14 @@ except Exception:
 tool_name = d.get("tool_name") or ""
 if not tool_name:
     sys.exit(0)
+# E-154 (telemetry-hardening.md): MCP tools (mcp__<server>__<tool>) are now recorded
+# SERVER-SIDE by the global telemetry interceptor (E-153, src/shared/mcp-telemetry.mjs)
+# with accurate SUCCESS/ERROR status. Skip them here so a single MCP call is counted ONCE.
+# The hook remains the sole recorder for harness built-ins (Bash/Read/Edit/...). Trade-off:
+# third-party MCP servers we cannot instrument (filesystem/memory/...) lose hook telemetry —
+# an accepted gap (we cannot instrument code we do not own; they are rarely used).
+if tool_name.startswith("mcp__"):
+    sys.exit(0)
 tr = d.get("tool_response") or {}
 status = "ERROR" if tr.get("isError") else "SUCCESS"
 exec_ms = tr.get("duration_ms")
