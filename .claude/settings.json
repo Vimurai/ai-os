@@ -3,7 +3,8 @@
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "CLAUDE_THINKING_BUDGET_TOKENS": "0",
     "CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN": "1",
-    "AIOS_WORKSPACE": "/Users/emirkovacevic/Documents/develompment/cli_apps/ai-os-v2"
+    "AIOS_WORKSPACE": "/Users/emirkovacevic/Documents/develompment/cli_apps/ai-os-v2",
+    "AI_OS_CALLER_ROLE": "engineer"
   },
   "permissions": {
     "allow": [
@@ -73,7 +74,8 @@
       "mcp__mcp-router__list_domains",
       "mcp__mcp-router__activate_domain",
       "mcp__mcp-router__proxy_call",
-      "mcp__code-execution-mcp__execute_code"
+      "mcp__code-execution-mcp__execute_code",
+      "mcp__orchestrator-mcp__run_dispatch"
     ]
   },
   "hooks": {
@@ -104,6 +106,28 @@
           {
             "type": "command",
             "command": "bash $HOME/.ai-os/hooks/post-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.ai-os/hooks/pre-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.ai-os/hooks/session-start.sh engineer"
           }
         ]
       }

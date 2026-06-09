@@ -1,21 +1,21 @@
 # Antigravity Native Subagents
 
 ## Goal & Architecture
-**Goal:** Map the existing AI-OS framework specialized agents (e.g., `critic_arch`, `decision_recorder`) to native Antigravity subagents so they are visible and invokable directly from the Antigravity CLI's native agent UI.
-**Architecture:** Create a synchronization script or MCP tool that reads the AI-OS agent registry (via `context-invoker-mcp` or `.agents/skills/`) and registers them dynamically in the current Antigravity workspace using the native `define_subagent` capability or manifest files.
+**Goal:** Map the existing AI-OS framework specialized agents (e.g., `critic_arch`, `chaos_monkey`) to native Antigravity subagents so they are visible and invokable directly from the Antigravity CLI's native agent UI.
+**Architecture:** Create a plugin builder (`src/shared/plugin-builder.mjs`) that reads the AI-OS agent registry (markdown personas) and compiles them into a native Antigravity plugin (`src/agents/plugin`). This plugin is then installed to the user's global plugin directory (`~/.gemini/config/plugins/ai-os/`).
 
 ## Core Concept
-While AI-OS provides 21+ specialized agents, users running the Antigravity (`agy`) provider see an empty "agents" list if they rely on loose files. Antigravity expects subagents to be natively defined in its own plugin format. This integration bridges that gap by systematically mapping AI-OS agents to an Antigravity plugin via `src/shared/plugin-builder.mjs`.
+While AI-OS provides 20 specialized agents, users running the Antigravity (`agy`) provider see an empty "agents" list if they rely on loose files. Antigravity expects custom subagents to be natively defined in its own plugin format. This integration bridges that gap by systematically mapping AI-OS agents to an Antigravity plugin via `src/shared/plugin-builder.mjs`.
 
 ## Components
-1. **Plugin Builder:** Extracts the name, description, and system prompt for each agent from the AI-OS source directories.
-2. **Antigravity Definition Mapper:** Translates the extracted data into a unified `ai-os` plugin containing the subagents.
-3. **Sync Trigger Hook:** Injects the agent definition mapping step into the `ai install` or `ai sync` workflows so the plugin is automatically built and registered for the user.
+1. **Plugin Builder:** Extracts the name, description, and system prompt for each agent from the AI-OS source directories (`src/claude/agents/*.md` and `src/gemini/agents/*.md`).
+2. **Antigravity Definition Mapper:** Translates the extracted data into a unified `ai-os` plugin containing the subagents as `agent.json` manifests.
+3. **Sync Trigger Hook:** Injects the plugin installation step into the `ai install` or `ai sync` workflows so the plugin is automatically built and registered.
 
 ## Data Model
-- **AI-OS Source (agents only):** `.claude/agents/*.md` + `.gemini/agents/*.md` — autonomous personas. Procedural workflows are NOT here (see §Taxonomy); they live in `.agents/skills/`.
-- **Antigravity Target:** one **per-agent subdirectory** `.agents/agents/<name>/agent.json` (confirmed by the `agy` "Create New Agents" screen — a flat `<name>.json` is NOT discovered). Global equivalent: `~/.gemini/antigravity-cli/agents/<name>/agent.json`.
-Mapping logic format (define_subagent payload):
+- **AI-OS Source (agents only):** `src/claude/agents/*.md` + `src/gemini/agents/*.md` — autonomous personas. Procedural workflows are NOT here (see §Taxonomy); they live in `src/agents/skills/`.
+- **Antigravity Target:** An installed Antigravity plugin located at `~/.gemini/config/plugins/ai-os/`. The `plugin-builder.mjs` compiles agents into subdirectories under `agents/<name>/agent.json` within the plugin structure.
+Mapping logic format (agent.json payload):
 ```json
 {
   "name": "ai-os-critic-arch",
@@ -28,23 +28,23 @@ Mapping logic format (define_subagent payload):
 ## Taxonomy: Skills vs Agents (E-141 / E-142)
 AI-OS has two distinct unit types; **only Agents** map to native Antigravity subagents:
 
-- **Skills** — in-context procedural workflows (e.g. `digest_updater`, `decision_recorder`,
+- **Skills** — in-context procedural workflows (e.g. `digest_updater`, `ai-migration`,
   `identity_guardian`, `aqg-resolver`, `review_synthesizer`). They run in the main
   conversation, carry `context: default` (and/or `type: skill`) in frontmatter, live in
-  **`.agents/skills/<name>/SKILL.md`**, and are invoked via `activate_skill(...)`. They are
+  **`src/agents/skills/<name>/SKILL.md`**, and are invoked via `activate_skill(...)`. They are
   **NOT** mapped to native subagents and never appear in the `agy` agents list.
 - **Agents** — autonomous personas (e.g. `devops_engineer`, the `critic_*` reviewers,
-  `chaos_monkey`, `vibe_sentinel`, `security_engineer`). They fork their own context
-  (`context: fork`), live in **`.claude/agents/` / `.gemini/agents/`**, are invoked via
-  `activate_agent(...)`, and ARE mapped → `.agents/agents/<name>/agent.json`.
+  `chaos_monkey`, `db_architect`, `dependency_manager`). They fork their own context
+  (`context: fork`), live in **`src/claude/agents/` / `src/gemini/agents/`**, are invoked via
+  `activate_agent(...)`, and ARE mapped → `~/.gemini/config/plugins/ai-os/agents/<name>/agent.json`.
 
-`subagent-mapper.mjs` enforces the split: it reads only the agent dirs and skips any file
+`plugin-builder.mjs` enforces the split: it reads only the agent dirs and skips any file
 whose frontmatter has `context: default` or `type: skill`.
 
 ### Authoring for `agy`
-- **New agent (persona):** add `.claude/agents/<name>.md` with `context: fork`, then run
-  `ai sync --agents` → it appears as a native subagent.
-- **New skill (procedural):** add `.agents/skills/<name>/SKILL.md` with `context: default`
+- **New agent (persona):** add `src/claude/agents/<name>.md` with `context: fork`, then run
+  `ai sync --agents` → it appears as a native subagent in the plugin.
+- **New skill (procedural):** add `src/agents/skills/<name>/SKILL.md` with `context: default`
   (or `type: skill`); it stays in-context and is never shown as a native subagent.
 
 ## API / Interface Contracts
