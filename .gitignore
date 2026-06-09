@@ -16,6 +16,11 @@ src/templates/.mcp.json
 # API_KEY env slot, so it is gitignored (blueprint §Security).
 .agents/mcp_config.json
 
+# E-156 (test-harness-isolation): ephemeral test MCP config. tests/run.sh writes
+# it inside a private temp dir and a trap removes it on exit; this is a safety net
+# in case a suite ever drops one at the repo root.
+.mcp.test.json
+
 # SQLite WAL/SHM sidecar files (must not be committed; can be half-flushed)
 .ai/state.sqlite-shm
 .ai/state.sqlite-wal

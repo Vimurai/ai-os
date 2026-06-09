@@ -12,6 +12,7 @@
  * Run:     node index.js (stdio transport — registered in .mcp.json)
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -459,5 +460,7 @@ async function getPerformanceMetrics(url, timeoutMs) {
 
 // ── Start server ──────────────────────────────────────────────────────────────
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

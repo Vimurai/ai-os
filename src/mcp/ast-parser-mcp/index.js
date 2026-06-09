@@ -22,6 +22,7 @@
 // E-98: the MCP SDK is imported lazily (server mode only) so the
 // `--generate-map` CLI path used by the `ai sync` hook stays dependency-light —
 // it needs only web-tree-sitter + the vendored grammars, no SDK.
+import { isMainModule } from "../shared/is-main.mjs";
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, relative, join, dirname, sep } from "node:path";
 import { languageForFile, extractFromSource } from "./extractor.mjs";
@@ -237,5 +238,7 @@ if (process.argv.includes("--generate-map")) {
       return { content: [{ type: "text", text: `[PARSE_ERROR] ${e.message}` }], isError: true };
     }
   });
-  await server.connect(new StdioServerTransport());
+  if (isMainModule(import.meta.url)) {
+    await server.connect(new StdioServerTransport());
+  }
 }

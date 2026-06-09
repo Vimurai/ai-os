@@ -3,7 +3,7 @@ name: ai-preflight
 description: Use activate_skill with this name at the start of every session in an AI-OS project. Executes the DIGEST-first read order (DIGEST → TASKS.md → architect.md if needed) and stamps SESSION.md.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Glob, Bash, mcp__task-synchronizer-mcp__verify_markdown_sync, Skill
+allowed-tools: Read, Glob, Bash, mcp__task-synchronizer-mcp__verify_markdown_sync
 context: default
 agent: default
 ---

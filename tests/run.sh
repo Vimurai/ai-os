@@ -18,6 +18,30 @@ else
   C_OK=""; C_FAIL=""; C_RESET=""
 fi
 
+# ── E-156 / E-157: Test harness isolation ────────────────────────────────────
+# Generate an ephemeral .mcp.test.json inside a private temp dir so suites never
+# read or mutate the tracked production .mcp.json, and expose it via
+# MCP_CONFIG_PATH (respected by MCP loaders that opt in). A trap tears the temp
+# dir down on ANY exit — success, failure, or interrupt (EXIT/INT/TERM) — so the
+# git working tree is left clean.
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TEST_TMPDIR="$(mktemp -d "${TMPDIR:-/tmp}/aios-test.XXXXXX")"
+MCP_TEST_CONFIG="${TEST_TMPDIR}/.mcp.test.json"
+
+_aios_test_cleanup() {
+  rm -rf "$TEST_TMPDIR" 2>/dev/null || true
+  rm -f "${REPO_ROOT}/.mcp.test.json" 2>/dev/null || true  # belt-and-suspenders
+}
+trap _aios_test_cleanup EXIT INT TERM
+
+# Base the test config on the current .mcp.json (a sandbox copy). Skip silently
+# when no production config exists yet (e.g. CI before `ai mcp-setup`).
+if [[ -f "${REPO_ROOT}/.mcp.json" ]]; then
+  cp "${REPO_ROOT}/.mcp.json" "$MCP_TEST_CONFIG"
+  export MCP_CONFIG_PATH="$MCP_TEST_CONFIG"
+fi
+export AIOS_TEST_TMPDIR="$TEST_TMPDIR"
+
 # ── Discovery (bash 3 compatible) ────────────────────────────────────────────
 SUITES=()
 while IFS= read -r f; do SUITES+=("$f"); done < <(find "$SUITES_DIR" -name "$PATTERN" | sort)

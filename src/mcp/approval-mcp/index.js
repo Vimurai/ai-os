@@ -28,6 +28,7 @@
  *   { timestamp, level, service:"approval-mcp", tool, latency_ms, error? }
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -379,5 +380,7 @@ log("info", "startup", `approval-mcp v${VERSION} ready`, {
   tty_available: isTTYAvailable(),
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

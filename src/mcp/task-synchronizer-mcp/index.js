@@ -20,6 +20,7 @@
  *   append_tasks(tasks)                 → (legacy) appends to TASKS.md
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -36,6 +37,9 @@ import { emitHandoff } from "../../shared/signal-handoff.mjs";
 // setRequestHandler so EVERY CallTool invocation records a SUCCESS/ERROR row (closing the
 // all-SUCCESS blindness the INSIGHTS report surfaced), not just the rare proxy_call'd ones.
 import { instrument } from "../../shared/mcp-telemetry.mjs";
+// E-155 (telemetry-hardening.md §Components 3): record task_velocity at the
+// canonical DONE transition so completion metrics are captured reliably.
+import { recordTaskVelocityForTask } from "../../shared/telemetry.mjs";
 import { createLogger } from "../shared/logger.js";
 // E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
 // no side effects at module load), but every call site goes through
@@ -453,6 +457,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (args.status === "DONE") {
         db.prepare("UPDATE tasks SET status = ?, completed_at = ?, summary = ? WHERE id = ?")
           .run(args.status, new Date().toISOString(), storedSummary, args.id);
+        // E-155: capture task_velocity at completion (aggregates token usage from
+        // token-budget's usage.sqlite). Fire-and-forget — never blocks state.
+        recordTaskVelocityForTask({ task_id: args.id });
       } else {
         db.prepare("UPDATE tasks SET status = ? WHERE id = ?").run(args.status, args.id);
       }
@@ -941,5 +948,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

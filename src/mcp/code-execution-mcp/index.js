@@ -35,6 +35,7 @@
  *   { timestamp, level, service:"code-execution-mcp", tool, latency_ms, ... }
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -387,5 +388,7 @@ log("info", "startup", `${SERVICE} v${VERSION} starting`, {
   docker_reason: startupProbe.reason || null,
   languages: Object.keys(LANGUAGES),
 });
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

@@ -26,6 +26,7 @@
  *   { timestamp, level, service:"computer-use-mcp", tool, latency_ms, error? }
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -451,5 +452,7 @@ log("info", "startup", `computer-use-mcp v${VERSION} ready`, {
 
 // ── Start server ──────────────────────────────────────────────────────────────
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

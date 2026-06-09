@@ -16,6 +16,7 @@
  *   analyze_command(command, caller_role?) → risk assessment with PASS/WARN/BLOCK verdict
  */
 
+import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -552,5 +553,7 @@ if (_checkIdx !== -1) {
   process.exit(result.verdict === "BLOCK" ? 2 : 0);
 }
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+if (isMainModule(import.meta.url)) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}

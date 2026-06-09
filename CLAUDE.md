@@ -43,6 +43,30 @@ When a request matches a skill trigger — load and follow it. Never skip gates.
 **CRITICAL: The Ephemeral Skill Pattern (Token Saver)**
 Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `skill: "ai-compact"` or executing `/compact` to distill your session history.
 
+## Skill vs Agent — Auto-Selection & Resilient Invocation (§36 — E-161, agent-invocation-robustness.md)
+Decide WHICH unit to run, then HOW to invoke it for the current runtime. Do this in
+your thinking step — zero added latency, never trial-and-error a tool that may not exist.
+
+**WHICH — skill vs agent:**
+- **Skill** (procedural, in-context): a workflow you perform in *this* conversation —
+  e.g. `ai-preflight`, `ai-task`, `ai-handoff`, `ai-debug`, `ai-review`, `commit-crafter`.
+  Choose a skill when the work is a procedure you should carry out yourself.
+- **Agent** (persona, forked context): an autonomous specialist that runs in an isolated
+  sub-session and reports back — e.g. `critic_arch`, `critic_security`, `critic_tests`,
+  `db_architect`, `dependency_manager`, `chaos_monkey`, `security_engineer`. Choose an
+  agent when you need an independent expert whose work must NOT pollute your context.
+
+**HOW — environment-aware, resilient tool selection (inspect your own toolset first):**
+1. If a native subagent tool (`invoke_subagent` / `define_subagent`) is exposed → you are
+   in **Antigravity (`agy`)**; invoke agents with `invoke_subagent`.
+2. Else if MCP tools are exposed → invoke agents with `activate_agent`
+   (context-invoker-mcp) and skills with the **Skill tool** / `activate_skill`.
+3. If neither is available → fall back to the CLI script or print the manual steps.
+
+Never call a tool that is not in your current toolset — it throws and aborts the task.
+Do not assume MCP is present (agy may not expose it), and do not assume `invoke_subagent`
+exists outside agy. Match the path to the tools you actually have.
+
 ## Mid-Task Triggers
 If you touch auth/secrets → `activate_agent("security_engineer")` (it is an agent, not a skill — E-148)
 If you add a dependency → `skill: "dependency_gate"`
