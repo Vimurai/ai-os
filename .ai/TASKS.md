@@ -31,6 +31,24 @@
   Status: DONE 2026-06-08 — Registered agy provider via `ai provider add agy --config-path .agents/mcp_config.json --mcp-key mcpServers` (E-138 adapter); generated .agents/mcp_config.json (25 stdio servers; zer …[full in LOG.md]
 - [x] E-134: Run the `agy` conversion and import legacy plugins via `agy plugin import gemini` per `.ai/blueprints/antigravity-migration.md`. | Tier: 2
   Status: DONE 2026-06-08 — agy (v1.0.6) bootstrapped (on PATH) + `agy plugin import gemini` ran clean (No gemini extensions found — no legacy plugins to migrate). End-to-end role→agy handoff verified (resolve_ …[full in LOG.md]
+- [x] E-144: Refactor `ensure_ai_templates` in `src/bin/ai` to copy agents from the framework source directly to `.agents/agents/` inside the project workspace instead of `.claude/agents/` and `.gemini/agents/`. This ensures agents are project-scoped and properly discovered by Antigravity during `ai init` per `.ai/blueprints/native-subagents.md`. Ensure that `E-144` and `E-145` are completed alongside this to complete the migration. | Tier: 2
+  Status: DONE 2026-06-08 — agy native subagents shipped as an INSTALLED PLUGIN, not loose .agents/agents/ files (empirically: agy registers custom subagents only via plugins). Added src/shared/plugin-builder.m …[full in LOG.md]
+- [x] E-145: Self-Learning Activation Arc: Wire W5-T1, W5-T2, and W5-T3 into the live system. Implement `_generate_memory_palace` in `do_sync` (fail-open), invoke `meta_analyst` instinct extraction in `ai-archive`, and implement the `ai-review-proposed-skills` HITL skill (using `approval-mcp`). [Architect ref E-147] | Tier: 3
+  Status: DONE 2026-06-09 — Self-learning arc wired: _generate_memory_palace (fail-open) in do_sync, instinct extraction in ai-archive, ai-review-proposed-skills HITL skill (approval-mcp→promoteSkill). Tier-3 r …[full in LOG.md]
+- [x] E-146: Broken Agent Refs Cleanup: Retire `gemini_tasks` and `claude_tasks` and update `decision_recorder` references to use `activate_skill` instead of `activate_agent`. Update references in `GEMINI.md`, `contracts/06_AGENT_TEAMS`, and `trigger-audit`. [Architect ref E-148] | Tier: 1
+  Status: DONE 2026-06-09 — Retired gemini_tasks/claude_tasks → activate_skill("ai-task"); decision_recorder agent → activate_skill("decision-recorder"). Fixed broken activate_agent targets in GEMINI.md, contra …[full in LOG.md]
+- [x] E-147: Resolve `ai-review` name collision: Rename the Architect's audit skill (`src/agents/skills/ai-review`) to `arch-review` to prevent shadowing by the Engineer's `critic-review` skill. Update all internal references. [Architect ref E-149] | Tier: 1
+  Status: DONE 2026-06-09 — Renamed Architect audit skill ai-review → arch-review (src + .agents workspace + mirror + gemini command + GEMINI.md triggers); Engineer's ai-review kept. Resolves context-invoker sh …[full in LOG.md]
+- [x] E-148: Update taxonomy and documentation tasks (W6-T6, W6-T8, W6-T1, W5-T9). Move `identity_guardian`/`review_synthesizer` to Skills in `agents.md`, specify `security_engineer` as an agent in CLAUDE/GEMINI.md, and resolve auto-author constraints. [Architect ref E-150] | Tier: 2
+  Status: DONE 2026-06-09 — Taxonomy/docs: identity_guardian+review_synthesizer Agents→Skills in agents.md (+decision_recorder/claude_tasks retirement notes); security_engineer fixed to activate_agent across CL …[full in LOG.md]
+- [x] E-149: Implement Performance & Profiling Architecture (`performance_engineer` agent + `ai-profile` skill) per `.ai/blueprints/performance-profiling.md`. [Architect ref E-151] | Tier: 3
+  Status: DONE 2026-06-09 — performance_engineer agent + ai-profile skill (sandbox profiling → OPTIMIZATION_REPORT.md). In agy plugin. performance-mcp server deferred/flagged. Suite 2784/0. [=Architect ref E-151]
+- [x] E-150: Implement Database & State Integrity Architecture (`db_architect` agent + `ai-migration` skill) per `.ai/blueprints/database-integrity.md`. [Architect ref E-152] | Tier: 3
+  Status: DONE 2026-06-09 — db_architect agent + ai-migration skill (node:sqlite + schema-validator + mandatory DOWN scripts + identity_guardian PII audit). In agy plugin. Suite 2784/0. [=Architect ref E-152]
+- [x] E-151: Implement Autonomous Dependency Maintenance (`dependency_manager` agent + `ai-upgrade` skill) per `.ai/blueprints/dependency-maintenance.md`. [Architect ref E-153] | Tier: 3
+  Status: DONE 2026-06-09 — dependency_manager agent + ai-upgrade skill (npm+TestSprite+git branch; cannot bypass critic_security/CVE). In agy plugin. Suite 2784/0. [=Architect ref E-153]
+- [x] E-152: Implement Automated Incident Response (`sre_responder` agent + `ai-triage` skill) per `.ai/blueprints/automated-incident-response.md`. [Architect ref E-154] | Tier: 3
+  Status: DONE 2026-06-09 — sre_responder agent + ai-triage skill (READ-ONLY over incidents.ndjson via incident-aggregate → plans E-## via add_task, never edits code). In agy plugin. Suite 2784/0. [=Architect ref E-154]
 
 ## Engineer
 - [x] E-135: Implement `Role Configuration Store` (`.ai/roles.json`) and update `src/bin/ai` to support `ai install` role flag overrides per `.ai/blueprints/role-abstraction.md`. | Tier: 2
@@ -53,7 +71,8 @@
   Status: DONE 2026-06-08 — Documented Skills-vs-Agents taxonomy: native-subagents.md (new §Taxonomy + authoring-for-agy + corrected Data Model source/target) + antigravity-migration.md (Data Model). Skills = i …[full in LOG.md]
 
 ## Architect (Gemini)
-- [ ] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
+- [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
+  Status: DONE 2026-06-09 — Post-migration audit completed via Engineer's pre-verified inputs. All tests remain green (2784/0), semantic role routing across panes is confirmed, and relocated skills are resolved …[full in LOG.md]
 
 ## Architect
 - [x] P-42: Draft a blueprint for native Antigravity subagent integration to map AI-OS agents to the Antigravity UI. | Tier: 2

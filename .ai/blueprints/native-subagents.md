@@ -5,12 +5,12 @@
 **Architecture:** Create a synchronization script or MCP tool that reads the AI-OS agent registry (via `context-invoker-mcp` or `.agents/skills/`) and registers them dynamically in the current Antigravity workspace using the native `define_subagent` capability or manifest files.
 
 ## Core Concept
-While AI-OS provides 21+ specialized agents via `context-invoker-mcp`, users running the Antigravity (`agy`) provider see an empty "agents" list in their UI because Antigravity expects subagents to be natively defined in its own format. This integration bridges that gap by systematically mapping AI-OS agents to Antigravity subagents upon initialization or sync.
+While AI-OS provides 21+ specialized agents, users running the Antigravity (`agy`) provider see an empty "agents" list if they rely on loose files. Antigravity expects subagents to be natively defined in its own plugin format. This integration bridges that gap by systematically mapping AI-OS agents to an Antigravity plugin via `src/shared/plugin-builder.mjs`.
 
 ## Components
-1. **Agent Registry Parser:** Extracts the name, description, and system prompt (or skill invocation hook) for each agent from the `context-invoker-mcp` logic or `skills` directory.
-2. **Antigravity Definition Mapper:** Translates the extracted data into the `define_subagent` payload format or the specific folder structure (`.agents/agents/`) required by Antigravity CLI.
-3. **Sync Trigger Hook:** Injects the agent definition mapping step into the `ai init` or `ai sync` workflows so they are automatically registered for the user on startup.
+1. **Plugin Builder:** Extracts the name, description, and system prompt for each agent from the AI-OS source directories.
+2. **Antigravity Definition Mapper:** Translates the extracted data into a unified `ai-os` plugin containing the subagents.
+3. **Sync Trigger Hook:** Injects the agent definition mapping step into the `ai install` or `ai sync` workflows so the plugin is automatically built and registered for the user.
 
 ## Data Model
 - **AI-OS Source (agents only):** `.claude/agents/*.md` + `.gemini/agents/*.md` — autonomous personas. Procedural workflows are NOT here (see §Taxonomy); they live in `.agents/skills/`.

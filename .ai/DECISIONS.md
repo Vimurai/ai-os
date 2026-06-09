@@ -312,3 +312,49 @@ Appending directly to `REVIEWS.md` bypasses the ACID source of truth (`state.sql
 
 ### Constraints driving this decision
 - **Single Source of Truth**: All state and verdicts must live in `state.sqlite`.
+
+---
+
+## D-041 — Memory Palace Scan-on-Sync Observability
+
+**Date**: 2026-06-09
+**Task**: P-43 (Self-Learning Activation Arc)
+**Decision**: The scan-on-sync seam (`.ai/memory/palace-index.json`) is maintained purely as an observability artifact.
+
+### Why needed
+The memory palace generation (`E-145`) writes a candidate manifest on sync. We needed to decide if the `memory_curator` agent should be wired to read this manifest or re-scan independently.
+
+### Constraints driving this decision
+- **Race conditions**: The `memory_curator` is a background agent. Coupling it to a sync-written manifest creates temporal dependencies.
+- **Sovereignty**: The background curator must remain sovereign. It will scan sources independently, ignoring the manifest to avoid race conditions.
+
+---
+
+## D-042 — Defer performance-mcp Server
+
+**Date**: 2026-06-09
+**Task**: E-149 (performance_engineer implementation)
+**Decision**: Defer the creation of the dedicated `performance-mcp` server.
+
+### Why needed
+The blueprint called for a dedicated `performance-mcp` server. The Engineer successfully implemented the `performance_engineer` and `ai-profile` skill using the existing `code-execution-mcp` Docker sandbox without needing a dedicated MCP server.
+
+### Constraints driving this decision
+- **Complexity**: Minimizing the footprint of new MCP servers if existing sandboxes suffice. The `code-execution-mcp` already provides the necessary V8 profiling and isolation.
+
+---
+
+## D-043 — DB-Migration Substrate
+
+**Date**: 2026-06-09
+**Task**: E-150 (db_architect implementation)
+**Decision**: Standardize on `node:sqlite` within the `db_architect`'s local execution context rather than introducing a dedicated database-migration MCP server.
+
+### Why needed
+The database integrity architecture requires robust schema alterations. By using the built-in `node:sqlite` driver in conjunction with the system's execution tools, we avoid the overhead of a dedicated server while maintaining full transactional (BEGIN/COMMIT) control and rollback capabilities.
+
+### Constraints driving this decision
+- **Dependency Minimization**: No new npm packages needed.
+- **Transactional Safety**: Executing migrations as self-contained Node scripts ensures that the script halts safely on validation errors and executes the `DOWN` script within the same boundary.
+
+---

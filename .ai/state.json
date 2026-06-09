@@ -265,12 +265,12 @@
     {
       "id": "P-41",
       "owner": "Architect (Gemini)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping.",
       "created_at": "2026-06-08T15:04:42.039Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-09T13:25:03.373Z",
+      "summary": "Post-migration audit completed via Engineer's pre-verified inputs. All tests remain green (2784/0), semantic role routing across panes is confirmed, and relocated skills are resolved …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -349,6 +349,123 @@
       "created_at": "2026-06-08T17:20:15.942Z",
       "completed_at": "2026-06-08T17:57:02.984Z",
       "summary": "Documented Skills-vs-Agents taxonomy: native-subagents.md (new §Taxonomy + authoring-for-agy + corrected Data Model source/target) + antigravity-migration.md (Data Model). Skills = i …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-144",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor `ensure_ai_templates` in `src/bin/ai` to copy agents from the framework source directly to `.agents/agents/` inside the project workspace instead of `.claude/agents/` and `.gemini/agents/`. This ensures agents are project-scoped and properly discovered by Antigravity during `ai init` per `.ai/blueprints/native-subagents.md`. Ensure that `E-144` and `E-145` are completed alongside this to complete the migration.",
+      "created_at": "2026-06-08T18:59:49.465Z",
+      "completed_at": "2026-06-08T20:51:15.237Z",
+      "summary": "agy native subagents shipped as an INSTALLED PLUGIN, not loose .agents/agents/ files (empirically: agy registers custom subagents only via plugins). Added src/shared/plugin-builder.m …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-145",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Self-Learning Activation Arc: Wire W5-T1, W5-T2, and W5-T3 into the live system. Implement `_generate_memory_palace` in `do_sync` (fail-open), invoke `meta_analyst` instinct extraction in `ai-archive`, and implement the `ai-review-proposed-skills` HITL skill (using `approval-mcp`). [Architect ref E-147]",
+      "created_at": "2026-06-09T10:48:08.615Z",
+      "completed_at": "2026-06-09T12:52:47.496Z",
+      "summary": "Self-learning arc wired: _generate_memory_palace (fail-open) in do_sync, instinct extraction in ai-archive, ai-review-proposed-skills HITL skill (approval-mcp→promoteSkill). Tier-3 r …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-146",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Broken Agent Refs Cleanup: Retire `gemini_tasks` and `claude_tasks` and update `decision_recorder` references to use `activate_skill` instead of `activate_agent`. Update references in `GEMINI.md`, `contracts/06_AGENT_TEAMS`, and `trigger-audit`. [Architect ref E-148]",
+      "created_at": "2026-06-09T10:48:19.586Z",
+      "completed_at": "2026-06-09T11:46:05.053Z",
+      "summary": "Retired gemini_tasks/claude_tasks → activate_skill(\"ai-task\"); decision_recorder agent → activate_skill(\"decision-recorder\"). Fixed broken activate_agent targets in GEMINI.md, contra …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-147",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Resolve `ai-review` name collision: Rename the Architect's audit skill (`src/agents/skills/ai-review`) to `arch-review` to prevent shadowing by the Engineer's `critic-review` skill. Update all internal references. [Architect ref E-149]",
+      "created_at": "2026-06-09T10:48:30.206Z",
+      "completed_at": "2026-06-09T11:20:28.721Z",
+      "summary": "Renamed Architect audit skill ai-review → arch-review (src + .agents workspace + mirror + gemini command + GEMINI.md triggers); Engineer's ai-review kept. Resolves context-invoker sh …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-148",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update taxonomy and documentation tasks (W6-T6, W6-T8, W6-T1, W5-T9). Move `identity_guardian`/`review_synthesizer` to Skills in `agents.md`, specify `security_engineer` as an agent in CLAUDE/GEMINI.md, and resolve auto-author constraints. [Architect ref E-150]",
+      "created_at": "2026-06-09T10:48:30.302Z",
+      "completed_at": "2026-06-09T13:10:45.344Z",
+      "summary": "Taxonomy/docs: identity_guardian+review_synthesizer Agents→Skills in agents.md (+decision_recorder/claude_tasks retirement notes); security_engineer fixed to activate_agent across CL …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-149",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Implement Performance & Profiling Architecture (`performance_engineer` agent + `ai-profile` skill) per `.ai/blueprints/performance-profiling.md`. [Architect ref E-151]",
+      "created_at": "2026-06-09T10:48:30.369Z",
+      "completed_at": "2026-06-09T13:23:03.273Z",
+      "summary": "performance_engineer agent + ai-profile skill (sandbox profiling → OPTIMIZATION_REPORT.md). In agy plugin. performance-mcp server deferred/flagged. Suite 2784/0. [=Architect ref E-151]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-150",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Implement Database & State Integrity Architecture (`db_architect` agent + `ai-migration` skill) per `.ai/blueprints/database-integrity.md`. [Architect ref E-152]",
+      "created_at": "2026-06-09T10:48:30.451Z",
+      "completed_at": "2026-06-09T13:23:03.358Z",
+      "summary": "db_architect agent + ai-migration skill (node:sqlite + schema-validator + mandatory DOWN scripts + identity_guardian PII audit). In agy plugin. Suite 2784/0. [=Architect ref E-152]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-151",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Implement Autonomous Dependency Maintenance (`dependency_manager` agent + `ai-upgrade` skill) per `.ai/blueprints/dependency-maintenance.md`. [Architect ref E-153]",
+      "created_at": "2026-06-09T10:48:31.856Z",
+      "completed_at": "2026-06-09T13:23:03.424Z",
+      "summary": "dependency_manager agent + ai-upgrade skill (npm+TestSprite+git branch; cannot bypass critic_security/CVE). In agy plugin. Suite 2784/0. [=Architect ref E-153]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-152",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Implement Automated Incident Response (`sre_responder` agent + `ai-triage` skill) per `.ai/blueprints/automated-incident-response.md`. [Architect ref E-154]",
+      "created_at": "2026-06-09T10:48:33.273Z",
+      "completed_at": "2026-06-09T13:23:04.112Z",
+      "summary": "sre_responder agent + ai-triage skill (READ-ONLY over incidents.ndjson via incident-aggregate → plans E-## via add_task, never edits code). In agy plugin. Suite 2784/0. [=Architect ref E-154]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -1481,6 +1598,62 @@
       "task_id": "E-143",
       "timestamp": "2026-06-08T18:08:25.750Z",
       "summary": "Tier-2 E-141/142/143: deterministic checks PASS (no P0/P1). Aligner WARN (non-blocking): ORPHANED_WORK on .claude/skills/ai-review, .gemini/GEMINI.md, .gemini/agents/seo_content_generator — sync-time MIRRORS of src/ (activate_agent→activate_skill ref updates for the relocated skills), covered by native-subagents.md taxonomy + architect.md §29 (documented FP class). architect.md/DIGEST/settings excluded (§35). Full suite 2729/0 (3 Docker flakes). COMMIT NOT BLOCKED."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner",
+      "task_id": "E-144",
+      "timestamp": "2026-06-08T21:15:36.469Z",
+      "summary": "[TIER_2] P0 CAPABILITIES_BYPASS cleared (FP: resolve(SCRIPT_DIR,'../..') → dirname twice). Remaining ORPHANED_WORK warn (plugin-builder.mjs, src/agents/plugin/, install-ai-os.sh) DISPOSITIONED: these are the agy-plugin reconciliation; native-subagents.md/architect.md update is the Architect's pending task (handoff #27). E-145 deletions stay HELD."
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-145",
+      "timestamp": "2026-06-09T12:22:18.433Z",
+      "summary": "No sovereignty violations (architect.md/BRIEF.md untouched). _generate_memory_palace is fail-open (guards in tested contexts, tmp-file+mv avoids partial writes, AI_OS_DISABLE_MEMORY_PALACE honored, locator chain correct); mirrors E-98/E-112 pattern. Skill docs reference real signatures (listProposedSkills/promoteSkill/stageInstincts, request_approval). Auto-activation impossible: promoteSkill independently re-verifies status==='APPROVED'. P2: naked mkdir -p/mv under set -e (theoretical only)."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-145",
+      "timestamp": "2026-06-09T12:23:31.054Z",
+      "summary": "No P0/P1. Auto-activation impossible: promoteSkill is fail-closed on status==='APPROVED' (empirically verified vs REJECTED/NON_TTY/lowercase/non-string/no-decision), re-scans dangerous content + refuses clobber + rejects traversal slugs; staged proposals inert (disable-model-invocation/user-invocable/status:proposed); memory scanner excludes .env/secrets/gitignored, basename-only output; approval-mcp TTY-gated. P2: dangerous-content scanner is best-effort regex (evadable via $()/env-exfil) — HITL human-read is the real boundary, not the scanner."
+    },
+    {
+      "type": "TESTS_FAIL",
+      "agent": "critic_tests",
+      "task_id": "E-145",
+      "timestamp": "2026-06-09T12:28:01.966Z",
+      "summary": "_generate_memory_palace (src/bin/ai) ships untested in staged diff: its test (tests/suites/memory_palace_sync_test.sh, 10/10 green) is UNTRACKED and not staged — committing E-145 as-is leaves new src/ logic with zero committed coverage. Fix: git add the test into the E-145 commit. (Suite 2741/2743; 2 fails in code_execution_mcp_test.sh are pre-existing/env, unrelated to E-145.) — COMMIT BLOCKED"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "e145-tier3-review",
+      "task_id": "E-145",
+      "timestamp": "2026-06-09T12:52:18.284Z",
+      "summary": "[TIER_3] Self-learning arc PASS-WITH-FIXES. Autonomy invariant VERIFIED fail-closed (3 layers: inert staging, APPROVED-gated promote, human-TTY-only approval — no self-activation possible). P0 (untracked test) + P1 (T-6/T-7 fail-open tests, handshake comment) + P2 (naked mkdir/mv hardened, denylist +cmd-subst/env-exfil) all fixed. Suite 2758/0. Handshake scan-on-sync flagged as §35 Architect-ratification item."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-152",
+      "timestamp": "2026-06-09T13:22:04.266Z",
+      "summary": "No P0 (instruction docs; no secret/injection/traversal). Canonical personas honor SoC, but 4 P1 autonomy/gate gaps: plugin artifacts drop code-execution-mcp sandbox + add host write_file (perf_engineer/db_architect/dependency_manager), sre_responder plugin gains schedule/search_web, critic_security & identity_guardian gates named-but-never-invoked."
+    },
+    {
+      "type": "ARCH_FAIL",
+      "agent": "critic_arch",
+      "task_id": "E-150",
+      "timestamp": "2026-06-09T13:22:08.829Z",
+      "summary": "TOOL VALIDITY FAIL: db_architect declares ghost tool mcp__context-guardian-mcp__check_role_access (registry allows only check_workspace) — §32 CRITICAL. Plus code-execution-mcp called with unsupported languages sql/bash/javascript (whitelist is python|typescript only) in db_architect, ai-migration, ai-profile; and add_task invoked with invented params (title/assignee/assigned_to/status/priority; missing required 'owner') in sre_responder, dependency_manager, ai-upgrade. No sovereignty violation. COMMIT BLOCKED on ghost tool."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "e149-152-tier3-review",
+      "task_id": null,
+      "timestamp": "2026-06-09T13:54:48.009Z",
+      "summary": "[TIER_3] 4 specialist agents: initial verdict FAIL (Ghost Tool + invalid add_task/execute_code calls) → all P0/P1 fixed in follow-up 00b0fd0 (Ghost Tool removed + identity_guardian added; add_task schema; execute_code→typescript; real critic_security gate; handoff_control rollback; honest perf-mcp deferral; least-privilege plugin toolNames). sre_responder confirmed read-only, no schedule/web surface. Suite 2784/0. Now PASS."
     }
   ],
   "deltas": [
