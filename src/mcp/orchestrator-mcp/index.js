@@ -12,6 +12,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
@@ -142,6 +143,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+instrument(server, "orchestrator-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const cwd = process.cwd();

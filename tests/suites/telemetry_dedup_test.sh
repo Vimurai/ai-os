@@ -59,4 +59,11 @@ assert_contains "S03: NO_DEDUP=1 keeps the coarse proxy_call row" "mcp__mcp-rout
 CNT2="$(node -e "const{DatabaseSync}=require('node:sqlite');console.log(new DatabaseSync('${TMP}/d2.sqlite').prepare('SELECT COUNT(*) n FROM tool_executions').get().n)" 2>/dev/null)"
 assert_status 0 "S03: all 3 rows kept under rollback" bash -c "[ \"$CNT2\" -eq 3 ]"
 
+# ── S04: E-153/E-154 (Tier-3 review P1) — every in-house MCP server is now telemetry-
+# instrumented, so a proxied child would DOUBLE-count the router's granular row. The router
+# must force-disable telemetry in the spawned child env so the router's row stays the single
+# source of truth for proxied calls (preserving the E-106 dedup contract end-to-end).
+assert_status 0 "S04: proxied child env force-disables telemetry (no server-side double-count)" \
+  grep -qE 'AI_TELEMETRY_DISABLE: *"1"' "${REPO_ROOT}/src/mcp/mcp-router/index.js"
+
 assert_summary

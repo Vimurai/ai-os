@@ -41,6 +41,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { DatabaseSync } from "node:sqlite";
 import {
   readFileSync,
@@ -376,6 +377,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+instrument(server, "cache-manager-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const t0 = Date.now();

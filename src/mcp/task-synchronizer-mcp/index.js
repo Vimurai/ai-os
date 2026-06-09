@@ -23,11 +23,19 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmdirSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
+// E-158 (cli-agnostic-handoff): shared handoff primitive — the SAME locked signal.json
+// append is used by this MCP tool AND by the provider-agnostic `ai handoff` CLI so the
+// queue/lock/eviction semantics can never drift between the two callers.
+import { emitHandoff } from "../../shared/signal-handoff.mjs";
+// E-153 (telemetry-hardening.md): global telemetry interceptor — instrument() patches
+// setRequestHandler so EVERY CallTool invocation records a SUCCESS/ERROR row (closing the
+// all-SUCCESS blindness the INSIGHTS report surfaced), not just the rare proxy_call'd ones.
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { createLogger } from "../shared/logger.js";
 // E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
 // no side effects at module load), but every call site goes through
@@ -217,6 +225,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }),
 }));
 
+instrument(server, "task-synchronizer-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const aiDir = resolve(process.cwd(), ".ai");
@@ -494,68 +503,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // Constraints). This MCP only writes JSON (no shell) — the watcher escapes the
     // message before `tmux send-keys`.
     case "handoff_control": {
-      const target = args.target;
-      // E-136 (role-abstraction.md): accept semantic roles (architect/engineer) AND the
-      // legacy provider names (claude/gemini). ai-watch resolves either to a tmux pane via
-      // .ai/roles.json (E-137), so the target is persisted to signal.json exactly as sent.
-      const VALID_TARGETS = new Set(["architect", "engineer", "claude", "gemini"]);
-      if (!VALID_TARGETS.has(target)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_TARGET] target must be a semantic role ('architect'|'engineer') or a provider name ('claude'|'gemini')." }], isError: true };
+      // E-158 (cli-agnostic-handoff): the queue/lock/eviction semantics live in the
+      // shared signal-handoff helper so this MCP tool and the `ai handoff` CLI can never
+      // drift. Behaviour is byte-for-byte the historical handoff_control — entry shape
+      // { timestamp, target, message, delivered:false }, INVALID_TARGET/EMPTY_MESSAGE
+      // validation, FIFO append, shared ".lock", and delivered-aware eviction.
+      const _hres = emitHandoff({ aiDir, target: args.target, message: args.message });
+      if (!_hres.ok) {
+        const _txt = _hres.code === "INVALID_TARGET"
+          ? "✗ [INVALID_TARGET] target must be a semantic role ('architect'|'engineer') or a provider name ('claude'|'gemini')."
+          : _hres.code === "EMPTY_MESSAGE"
+          ? "✗ [EMPTY_MESSAGE] a non-empty message is required."
+          : _hres.code === "SIGNAL_WRITE_FAILED"
+          ? `✗ [SIGNAL_WRITE_FAILED] ${_hres.error}`
+          : `✗ [HANDOFF_FAILED] ${_hres.error}`;
+        return { content: [{ type: "text", text: _txt }], isError: true };
       }
-      const message = typeof args.message === "string" ? args.message.trim() : "";
-      if (!message) {
-        return { content: [{ type: "text", text: "✗ [EMPTY_MESSAGE] a non-empty message is required." }], isError: true };
-      }
-      // delivered:false makes the pending state explicit per interactive-bridge.md
-      // §API (E-124). ai-watch treats absent OR false identically as undelivered,
-      // so this is purely for self-documenting queue state / blueprint fidelity.
-      const entry = { timestamp: new Date().toISOString(), target, message, delivered: false };
-      const signalPath = resolve(aiDir, "signal.json");
-      const lockPath = signalPath + ".lock";
-      const MAX_QUEUE = 50; // bound growth — `ai watch` consumes via per-entry delivered flags.
-      // Short-lived write lock SHARED with ai-watch's _signal_lock (same ".lock"
-      // path) so this append and the watcher's delivered-flag write are serialised
-      // — neither clobbers the other (interactive-bridge.md §Execution Constraints).
-      // Bounded synchronous spin (~0.5s) then proceed best-effort rather than block
-      // the MCP. Atomics.wait gives a sync sleep without busy-spinning the loop.
-      const _sleepMs = (ms) => { try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch { /* SAB unavailable → no wait */ } };
-      let _lockHeld = false;
-      for (let i = 0; i < 25; i++) {
-        try { mkdirSync(lockPath); _lockHeld = true; break; } catch { _sleepMs(20); }
-      }
-      try {
-        let queue = [];
-        if (existsSync(signalPath)) {
-          try {
-            const parsed = JSON.parse(readFileSync(signalPath, "utf8"));
-            if (Array.isArray(parsed)) queue = parsed;
-            else if (parsed && typeof parsed === "object") queue = [parsed]; // legacy → queue
-          } catch { queue = []; } // corrupt → safely reset rather than throw
-        }
-        queue.push(entry);
-        // Bound growth WITHOUT ever dropping an undelivered handoff: evict only the
-        // OLDEST delivered entries (delivered === true). If undelivered entries alone
-        // exceed MAX_QUEUE (a stuck/absent agent), the queue is allowed to exceed the
-        // cap rather than silently lose a pending signal.
-        if (queue.length > MAX_QUEUE) {
-          const deliveredOverflow = queue.filter((e) => e && e.delivered === true).length;
-          let toDrop = Math.min(queue.length - MAX_QUEUE, deliveredOverflow);
-          if (toDrop > 0) {
-            queue = queue.filter((e) => {
-              if (toDrop > 0 && e && e.delivered === true) { toDrop--; return false; }
-              return true;
-            });
-          }
-        }
-        try {
-          writeFileSync(signalPath, JSON.stringify(queue, null, 2) + "\n", "utf8");
-        } catch (e) {
-          return { content: [{ type: "text", text: `✗ [SIGNAL_WRITE_FAILED] ${e.message}` }], isError: true };
-        }
-        return { content: [{ type: "text", text: `✓ [HANDOFF] → ${target} (queued #${queue.length}): ${message}\n  signal: ${signalPath}` }] };
-      } finally {
-        if (_lockHeld) { try { rmdirSync(lockPath); } catch { /* already gone */ } }
-      }
+      return { content: [{ type: "text", text: `✓ [HANDOFF] → ${_hres.target} (queued #${_hres.queueLength}): ${_hres.message}\n  signal: ${_hres.signalPath}` }] };
     }
 
     // ── set_project_focus ─────────────────────────────────────────────────────

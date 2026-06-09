@@ -34,6 +34,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { DatabaseSync } from "node:sqlite";
 import * as readline from "node:readline";
 import { mkdirSync, existsSync } from "node:fs";
@@ -242,6 +243,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 // ── Tool dispatcher ───────────────────────────────────────────────────────────
 
+instrument(server, "approval-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const start = Date.now();

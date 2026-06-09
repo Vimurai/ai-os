@@ -128,6 +128,31 @@ Report:
 > "N tasks written to TASKS.md: [E-## list]. All passed quality gate.
 >  Framework-routed: [E-## list, or 'none']."
 
+## Step 7 — Hand Off to the Engineer (MANDATORY)
+
+Creating tasks is only half the loop — the Engineer is **not** polling the queue;
+it must be *woken*. After the tasks are registered (Step 5), ALWAYS emit a handoff so
+control routes to the Engineer. This is **non-optional** and mirrors the Engineer's
+mandatory hand-back (`skill: ai-task` Step 4): the autonomous ping-pong loop only
+advances if each side hands off when its turn ends. Registering tasks without handing
+off is the failure that strands a planned sprint (and leaves the Engineer idle).
+
+Emit it with the **shell command** — it works from ANY runtime, including agy:
+```
+ai handoff engineer "Planned E-##..E-## (<one-line scope>). Execute the OPEN queue."
+```
+
+Why the shell command rather than `mcp__task-synchronizer-mcp__handoff_control`: the
+agy (Antigravity) Architect runtime does **not** dependably expose/invoke custom
+project MCP servers to the model (especially when its Antigravity auth has lapsed),
+so `ai handoff` — a plain `run_command` — is the reliable primitive. It writes the
+exact same locked `.ai/signal.json` entry the MCP tool would (E-158,
+cli-agnostic-handoff). If `ai watch` is not running, the signal harmlessly stays
+queued for the next watcher start — so always emit it; never assume a human will
+press the key.
+
+Then report: "Planned N tasks and handed control to the Engineer."
+
 ## What NOT to Do
 
 - Do NOT write tasks without a tier
@@ -138,3 +163,9 @@ Report:
   `ai-os-v2/src/**`) into a downstream project's queue — set
   `is_framework_task: true` per Step 4 so the MCP routes them to the
   canonical AI-OS clone.
+- Do NOT end a planning turn WITHOUT handing off to the Engineer (Step 7).
+  Registered-but-un-handed-off tasks strand the loop — the Engineer never wakes.
+- Do NOT hand-edit `TASKS.md`. `add_task` is the source of truth and regenerates
+  the file from `state.sqlite`; lines you type directly are silently wiped by
+  `verify_markdown_sync` on the next sync (the "lost tasks after state-sync drift"
+  failure). Always create tasks through `add_task`.

@@ -469,6 +469,84 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-153",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Implement the Global Telemetry Interceptor and wire it into the MCP transport layer per .ai/blueprints/telemetry-hardening.md.",
+      "created_at": "2026-06-09T18:00:34.723Z",
+      "completed_at": "2026-06-09T21:33:44.359Z",
+      "summary": "Global Telemetry Interceptor (src/shared/mcp-telemetry.mjs withTelemetry+instrument) rolled out to all 23 MCP servers; Tier-3 adversarial review PASS (findings fixed). Full suite 283 …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-154",
+      "owner": "Engineer",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Refactor error capturing to properly log the ERROR state into telemetry.sqlite per .ai/blueprints/telemetry-hardening.md.",
+      "created_at": "2026-06-09T18:00:35.434Z",
+      "completed_at": "2026-06-09T21:33:49.323Z",
+      "summary": "Telemetry error capture: interceptor records SUCCESS/ERROR/TIMEOUT; post-tool-use.sh skips mcp__ (server-side dedup); telemetry.mjs TIMEOUT schema + atomic in-place migration (txn + …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-155",
+      "owner": "Engineer",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Fix the task_velocity aggregator so it reliably records metrics at task completion per .ai/blueprints/telemetry-hardening.md.",
+      "created_at": "2026-06-09T18:00:36.180Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-156",
+      "owner": "Engineer",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement .mcp.test.json generation and isolated config loading in tests/run.sh per .ai/blueprints/test-harness-isolation.md.",
+      "created_at": "2026-06-09T18:00:36.208Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-157",
+      "owner": "Engineer",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Add robust bash trap cleanup logic to remove test artifacts from run.sh per .ai/blueprints/test-harness-isolation.md.",
+      "created_at": "2026-06-09T18:00:36.218Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-158",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the provider-agnostic `ai handoff <role> [msg]` CLI + shared src/shared/signal-handoff.mjs helper; route task-synchronizer handoff_control through it; add auto-handoff (task-planner Step 7 + ai-task Step 4) and agy-reliable GEMINI.md guidance, per cli-agnostic-handoff. Fixes agy's unreliable MCP-tool invocation by making handoff shell-native.",
+      "created_at": "2026-06-09T21:33:27.800Z",
+      "completed_at": "2026-06-09T21:33:55.154Z",
+      "summary": "Provider-agnostic `ai handoff` CLI + src/shared/signal-handoff.mjs; handoff_control routes through it; auto-handoff in task-planner Step 7 + ai-task Step 4 + GEMINI.md. Fixes agy's u …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1654,6 +1732,20 @@
       "task_id": null,
       "timestamp": "2026-06-09T13:54:48.009Z",
       "summary": "[TIER_3] 4 specialist agents: initial verdict FAIL (Ghost Tool + invalid add_task/execute_code calls) → all P0/P1 fixed in follow-up 00b0fd0 (Ghost Tool removed + identity_guardian added; add_task schema; execute_code→typescript; real critic_security gate; handoff_control rollback; honest perf-mcp deferral; least-privilege plugin toolNames). sre_responder confirmed read-only, no schedule/web surface. Suite 2784/0. Now PASS."
+    },
+    {
+      "type": "INSIGHTS_GENERATED",
+      "agent": "meta_analyst",
+      "task_id": null,
+      "timestamp": "2026-06-09T17:51:14.258Z",
+      "summary": "INSIGHTS.md refreshed — 11487 rows / 19 tools / 7 projects analysed, 0 recommendations (steady). Flagged 3 coverage gaps: status uniformly SUCCESS (error dim blind), task_velocity 1 row, safe-exec gate in only 1/7 projects."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "critic_arch+critic_security+critic_tests",
+      "task_id": null,
+      "timestamp": "2026-06-09T21:34:43.846Z",
+      "summary": "[TIER_3] E-153/E-154 telemetry interceptor (23-server rollout) + E-158 handoff: 6-critic adversarial review PASS-WITH-FIXES. Confirmed+fixed: P1 migration silent-data-loss (now txn+orphan-recovery+WAL), P1 proxy double-count (child AI_TELEMETRY_DISABLE), P2 migration test gap (telemetry_migration_test 10/0), P3 extra-arg/statusForResult/WAL. rollout-consistency+perf+security dims PASS. Suite 2838/0 +3 Docker flakes."
     }
   ],
   "deltas": [

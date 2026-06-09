@@ -67,14 +67,15 @@ Read `.ai/TASKS.md` and report any remaining open E-## tasks.
   "ping-pong" loop only continues if you emit a handoff signal. Either:
   - run `skill: "ai-handoff"` (preferred — writes COMM.md **and** emits the bridge
     signal), or
-  - at minimum, emit the signal directly:
+  - at minimum, emit the signal directly with the **shell command** — the same
+    provider-agnostic primitive the Architect uses, reliable from any runtime (E-158):
     ```
-    mcp__task-synchronizer-mcp__handoff_control({
-      target: "gemini",
-      message: "Engineer queue exhausted. <one-line of what shipped>. Please review and plan next."
-    })
+    ai handoff architect "Engineer queue exhausted. <one-line of what shipped>. Please review and plan next."
     ```
-  Then report: "All Engineer tasks complete. Handed control to the Architect (Gemini)."
+    (`mcp__task-synchronizer-mcp__handoff_control({ target: "architect", message: ... })`
+    is an equivalent fallback. Use the semantic role `architect`, not `gemini` — the
+    Architect runtime is now provider-agnostic, e.g. agy.)
+  Then report: "All Engineer tasks complete. Handed control to the Architect."
 
 If `ai watch` is not running the signal is a harmless no-op (it stays queued for
 the next watcher start), so always emit it — never assume a human will press the key.

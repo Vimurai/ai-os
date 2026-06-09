@@ -35,8 +35,12 @@ assert_status 0 "E-119.S02: claude ai-task cites E-119" \
   grep -qF 'E-119' "$TASK_CLAUDE"
 assert_status 0 "E-119.S02: handoff_control in claude ai-task allowed-tools" \
   grep -qE '^allowed-tools:.*handoff_control' "$TASK_CLAUDE"
-assert_status 0 "E-119.S02: claude ai-task targets gemini on hand-back" \
-  grep -qE 'target:[[:space:]]*"gemini"' "$TASK_CLAUDE"
+# E-158 (cli-agnostic-handoff): the hand-back now targets the semantic role 'architect'
+# (provider-agnostic — the Architect runtime is agy, not literally gemini) via the
+# shell `ai handoff architect` primitive, with handoff_control({target:"architect"}) as
+# the equivalent fallback. Either form satisfies the "engineer wakes the architect" invariant.
+assert_status 0 "E-119.S02: claude ai-task targets the architect on hand-back" \
+  grep -qE 'ai handoff architect|target:[[:space:]]*"architect"' "$TASK_CLAUDE"
 
 # ── S03: ai-task (Gemini) mandates handoff to Claude at session completion ────
 assert_status 0 "E-119.S03: gemini ai-task hand-off step is MANDATORY" \

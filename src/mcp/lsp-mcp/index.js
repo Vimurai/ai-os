@@ -21,6 +21,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { existsSync, readFileSync, statSync } from "fs";
 import { resolve, dirname, relative } from "path";
 import { createRequire } from "module";
@@ -174,6 +175,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+instrument(server, "lsp-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const cwd = process.cwd();

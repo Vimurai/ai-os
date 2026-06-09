@@ -344,8 +344,14 @@ assert_status 0 "E-123.S21: signal write-lock helpers present" grep -qE '^_signa
 assert_status 0 "E-123.S21: writers acquire the signal lock"   grep -qF '_signal_lock && _held=1' "$WATCH"
 assert_status 0 "E-123.S21: MAX_HOLD sanitised to numeric-only" grep -qF 'MAX_HOLD=0 ;; esac' "$WATCH"
 assert_status 0 "E-123.S21: stale lock reclaimed via atomic mv" grep -qF 'mv "$LOCK_DIR" "${LOCK_DIR}.stale.$$"' "$WATCH"
-assert_status 0 "E-123.S21: handoff_control shares the .lock + delivered-aware eviction" \
-  grep -qE 'signalPath \+ "\.lock"' "${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
+# E-158 (cli-agnostic-handoff): the shared signal lock + delivered-aware eviction were
+# extracted into src/shared/signal-handoff.mjs so the MCP tool AND the `ai handoff` CLI
+# use ONE implementation. Assert the invariant at its new home + that handoff_control
+# delegates to it (rather than carrying its own copy of the lock logic).
+assert_status 0 "E-123.S21: shared signal .lock + delivered-aware eviction live in signal-handoff.mjs" \
+  grep -qE 'signalPath \+ "\.lock"' "${REPO_ROOT}/src/shared/signal-handoff.mjs"
+assert_status 0 "E-123.S21: handoff_control routes through the shared emitHandoff helper" \
+  grep -qF 'emitHandoff(' "${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
 
 # MH: non-numeric MAX_HOLD must NOT abort the watcher (bash-3.2 arithmetic trap).
 _maxhold_env_probe() {  # <env_value> → "mh=<v> rc=<r>"

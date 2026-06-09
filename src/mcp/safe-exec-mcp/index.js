@@ -19,6 +19,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { parse } from "shell-quote";
 import { createLogger } from "../shared/logger.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
@@ -485,6 +486,7 @@ function verifyCheckRole(argRole, sid) {
   return effectiveRole(argRole);            // no valid token → legacy fallback
 }
 
+instrument(server, "safe-exec-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 

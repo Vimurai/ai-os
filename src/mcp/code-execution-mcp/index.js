@@ -41,6 +41,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { createLogger } from "../shared/logger.js";
 
@@ -298,6 +299,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+instrument(server, "code-execution-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const t0 = Date.now();

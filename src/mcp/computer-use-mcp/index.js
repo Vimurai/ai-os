@@ -32,6 +32,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { execSync, execFileSync } from "child_process";
 import { existsSync, mkdirSync, unlinkSync } from "fs";
 import { tmpdir } from "os";
@@ -338,6 +339,7 @@ function _validateKey(args) {
   return null;
 }
 
+instrument(server, "computer-use-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
   const start = Date.now();

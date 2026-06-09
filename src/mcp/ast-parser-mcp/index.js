@@ -27,6 +27,8 @@ import { resolve, relative, join, dirname, sep } from "node:path";
 import { languageForFile, extractFromSource } from "./extractor.mjs";
 import { rankSymbols } from "./repo-mapper.mjs";
 import { serializeRepoMap } from "./serializer.mjs";
+// E-153 (telemetry-hardening.md): global telemetry interceptor (SDK-free — schema injected).
+import { instrument } from "../../shared/mcp-telemetry.mjs";
 
 const MAX_FILE_BYTES = 1_000_000; // skip files > 1 MB (DoS / minified bundles)
 const DEFAULT_MAX_FILES = 2000;
@@ -226,6 +228,7 @@ if (process.argv.includes("--generate-map")) {
   const { CallToolRequestSchema, ListToolsRequestSchema } = await import("@modelcontextprotocol/sdk/types.js");
   const server = new Server({ name: "ast-parser-mcp", version: "1.0.0" }, { capabilities: { tools: {} } });
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  instrument(server, "ast-parser-mcp", CallToolRequestSchema);
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     try {
