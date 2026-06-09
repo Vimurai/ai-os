@@ -1,6 +1,6 @@
 ---
 name: ai-upgrade
-description: Triggered periodically or on `npm audit` failures to bump packages and run test suites. Calls dependency_manager for complex migrations. Produces upgrade branches and test reports.
+description: Triggered periodically or on `npm audit` failures to bump packages and run test suites. Calls dependency_manager for complex migrations. Produces upgrade branches and test reports. Routes all dependency changes through critic_security before merge.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Grep, Glob, mcp__task-synchronizer-mcp__add_task, mcp__context-invoker-mcp__activate_agent, mcp__mcp-router__proxy_call
@@ -99,14 +99,30 @@ For **backwards-compatible** patches/minor updates (no breaking changes):
 
 1. Create branch: `git checkout -b upgrade/<package>-<version>`
 2. Bump: `npm install <package>@<version>`
-3. Commit lock file: `git add package-lock.json && git commit -m "chore: bump <package> to <version>"`
-4. Run tests:
+3. Run security gate before committing:
+```
+mcp__context-invoker-mcp__activate_agent({
+  agent_name: "critic_security",
+  arguments: {
+    scope: "simple_upgrade",
+    package: "<package>",
+    version: "<version>",
+    description: "Quick audit of backwards-compatible patch/minor upgrade"
+  }
+})
+```
+4. Wait for critic_security clearance. If PASS, continue:
+   ```bash
+   git add package-lock.json
+   git commit -m "chore: bump <package> to <version>"
+   ```
+5. Run tests:
    ```bash
    npm run test
    npm run lint
    ```
-5. If tests pass → push branch: `git push origin upgrade/<package>-<version>`
-6. Report completion in task summary
+6. If tests pass → push branch: `git push origin upgrade/<package>-<version>`
+7. Report completion in task summary
 
 ---
 
@@ -130,7 +146,7 @@ Produce a summary entry in `.ai/LOG.md`:
 ```
 YYYY-MM-DD | ai-upgrade | Execute | Processed <N> outdated packages
   - CRITICAL: <package> (v1→v2) — dispatched to dependency_manager
-  - HIGH: <package> (v1.0→v1.1) — inline upgrade, tests PASS
+  - HIGH: <package> (v1.0→v1.1) — inline upgrade, tests PASS, critic_security PASS
   - Status: <N> upgrades completed, <M> pending review
 ```
 
@@ -142,11 +158,11 @@ If **any** branch was created:
 
 ```
 mcp__task-synchronizer-mcp__add_task({
-  id: "P-<seq>",
-  title: "Review dependency upgrades",
-  description: "Verify all upgrade branches: <list branches>. Check for regressions, peer-dependency conflicts, and lock file integrity.",
-  priority: "high",
-  assignee: "lead_engineer"
+  owner: "Engineer (Claude)",
+  prefix: "P",
+  tier: 2,
+  description: "Review dependency upgrades: verify all upgrade branches (<list branches>). Check for regressions, peer-dependency conflicts, lock file integrity, and critic_security clearance.",
+  depends_on: []
 })
 ```
 
@@ -194,6 +210,8 @@ Next check: Scheduled for <+7 days>
 - **Never** force-upgrade unmaintained packages without human review (create P-##)
 - **Never** skip tests — a passing test suite is the gate before pushing
 - **Never** commit `.env` or secrets files (use `.gitignore`)
+- **Never** commit dependency changes without critic_security clearance (mandatory gate)
 - **Always** dispatch `dependency_manager` for major-version upgrades
 - **Always** validate lock file integrity after upgrades
+- **Always** route dependency commits through commit-crafter (project git identity)
 - **Append** upgrade summary to `.ai/LOG.md` after completion

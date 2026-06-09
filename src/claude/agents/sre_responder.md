@@ -96,24 +96,19 @@ For each remediation, call `task-synchronizer-mcp::add_task` to queue a new E-##
 
 ```
 mcp__task-synchronizer-mcp__add_task({
-  id: "<next available E-##>",
-  title: "<concise fix title>",
-  description: "<link to POSTMORTEM.md section> — Recurring: <stack_signature> (count=N). Task: <what needs to be fixed>.",
-  status: "OPEN",
-  assigned_to: "Claude",
+  owner: "Engineer (Claude)",
+  description: "Remediation for recurring incident <stack_signature> (count=<N>). See .ai/POSTMORTEM.md#<section-anchor>. Task: <what needs to be fixed>. Acceptance criteria: <criteria from postmortem>.",
+  prefix: "E",
   tier: 2,
   depends_on: []
 })
 ```
 
-**Guidelines for title**:
-- Short and actionable: "Add circuit-breaker to task-synchronizer-mcp" not "Fix task sync"
-- Max 60 chars
-
 **Guidelines for description**:
-- Link the postmortem section (markdown anchor)
-- State the incident count and root cause
+- Link the postmortem section (markdown anchor reference)
+- State the incident count and root cause key
 - Include acceptance criteria from the postmortem
+- Make the description self-contained (no separate "title" field)
 
 **Tier assignment**:
 - Tier 1 (trivial fix): syntax error, obvious typo, simple retry logic

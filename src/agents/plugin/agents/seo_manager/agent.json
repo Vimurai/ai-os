@@ -17,8 +17,7 @@
         "view_file",
         "list_dir",
         "read_url_content",
-        "search_web",
-        "schedule"
+        "search_web"
       ],
       "systemPromptConfig": {
         "includeSections": [

@@ -15,10 +15,7 @@
         "find_by_name",
         "grep_search",
         "view_file",
-        "list_dir",
-        "read_url_content",
-        "search_web",
-        "schedule"
+        "list_dir"
       ],
       "systemPromptConfig": {
         "includeSections": [

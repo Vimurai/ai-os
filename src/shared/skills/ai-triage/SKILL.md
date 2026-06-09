@@ -3,7 +3,7 @@ name: ai-triage
 description: Runs daily or when incidents.ndjson crosses a size threshold. Invokes sre_responder agent to analyze recurring failures, draft post-mortems, and queue remediation tasks.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Bash, Read, mcp__context-invoker-mcp__activate_agent, mcp__task-synchronizer-mcp__get_state
+allowed-tools: Bash, Read, mcp__context-invoker-mcp__activate_agent, mcp__task-synchronizer-mcp__get_state, mcp__context-invoker-mcp__handoff_control
 context: default
 agent: default
 ---
@@ -93,7 +93,7 @@ After sre_responder completes, check the result:
    tail -3 .ai/LOG.md | grep -i "SRE_PASS\|SRE_FAIL"
    ```
 
-## Phase 3 — Notify and Log
+## Phase 3 — Notify, Log, and Rollback Handler
 
 After triage completes:
 
@@ -112,6 +112,16 @@ After triage completes:
    ```
    YYYY-MM-DD HH:MM | ai-triage (skill) | <action> | <incident summary>
    ```
+
+4. **If a task is marked as false-positive** (user dispute or validation failure):
+   Use `handoff_control` to escalate for Architect review:
+   ```
+   mcp__context-invoker-mcp__handoff_control({
+     target: "gemini",
+     message: "False-positive task rejection from ai-triage: <task_id> — <reason>. POSTMORTEM: <postmortem_section>. Please review root cause and confirm incident threshold should be adjusted."
+   })
+   ```
+   This initiates a handoff to the Architect for policy review rather than Engineer remediation.
 
 ## Rollback & Escalation
 

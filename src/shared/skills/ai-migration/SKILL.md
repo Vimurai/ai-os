@@ -15,6 +15,9 @@ Current schema version: !grep "^- Schema" .ai/DIGEST.md 2>/dev/null | head -1 ||
 Open migrations: !ls -1 src/db/migrations/*.up.sql 2>/dev/null | wc -l | tr -d ' '
 Last migration: !ls -1t src/db/migrations/*.up.sql 2>/dev/null | head -1 | xargs basename
 
+## PREREQUISITE: Deferred Substrate
+**NOTE**: The directory `src/db/migrations/` and the schema versioning table (`schema_migrations`) are a DEFERRED substrate — they do not yet exist in the baseline. The canonical state repository is `.ai/state.sqlite` via `src/mcp/shared/state-db.js`. This skill guides authoring migration files using the `.up.sql`/`.down.sql` convention (superseding any `.sql`/`.js` pairs from the blueprint). Deployment will apply migrations to both the filesystem versioning store and the production state database.
+
 ## When to Invoke
 
 - Adding a new column, table, or index to `state.sqlite` or `telemetry.sqlite`
@@ -97,7 +100,7 @@ After db_architect returns the migration pair, manually review:
 
 ## Step 5 — Test Rollback (Sandbox)
 
-Before committing, simulate a rollback in the sandbox:
+Before committing, simulate a rollback in the sandbox using TypeScript with node:sqlite DatabaseSync:
 
 ```bash
 # Extract the UP and DOWN scripts
@@ -106,21 +109,38 @@ cat src/db/migrations/<YYYYMMDD_HHmmss>.down.sql
 
 # Test UP then DOWN in a fresh sandbox container
 mcp__code-execution-mcp__execute_code({
-  language: "bash",
-  code: "
-    # Create a temporary SQLite database
-    sqlite3 /tmp/test.db << 'SQL'
-    .read src/db/schema.sql
-    -- Now apply the migration
-    .read src/db/migrations/<YYYYMMDD_HHmmss>.up.sql
-    -- Verify the schema changed
-    .schema
-    -- Now apply the DOWN
-    .read src/db/migrations/<YYYYMMDD_HHmmss>.down.sql
-    -- Verify schema reverted
-    .schema
-    SQL
-  ",
+  language: "typescript",
+  code: `
+import DatabaseSync from 'better-sqlite3';
+import fs from 'fs';
+
+// Create a temporary test database
+const testDb = new DatabaseSync('/tmp/test-migration.db');
+
+// Load the baseline schema
+const baselineSchema = fs.readFileSync('src/db/schema.sql', 'utf8');
+testDb.exec(baselineSchema);
+
+// Load and apply the UP migration
+const upMigration = fs.readFileSync('src/db/migrations/<YYYYMMDD_HHmmss>.up.sql', 'utf8');
+testDb.exec(upMigration);
+console.log('UP migration applied');
+
+// Verify the schema changed (check for new table/column)
+const tables = testDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+console.log('Tables after UP:', tables);
+
+// Apply the DOWN migration
+const downMigration = fs.readFileSync('src/db/migrations/<YYYYMMDD_HHmmss>.down.sql', 'utf8');
+testDb.exec(downMigration);
+console.log('DOWN migration applied');
+
+// Verify schema reverted
+const tablesAfterDown = testDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+console.log('Tables after DOWN:', tablesAfterDown);
+
+testDb.close();
+  `,
   timeout_ms: 5000
 })
 ```

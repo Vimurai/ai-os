@@ -28,12 +28,14 @@ import { fileURLToPath } from "node:url";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 
-// agy's default tool grant + prompt sections, copied verbatim from agy's own
-// `define_subagent` output (brain/<conv>/.agents/agents/probe_canonical/agent.json).
-const BASE_TOOLS = [
-  "send_message", "find_by_name", "grep_search", "view_file",
-  "list_dir", "read_url_content", "search_web", "schedule",
-];
+// LEAST-PRIVILEGE tool grant (E-149..E-152 Tier-3 review hardening). agy's
+// `define_subagent` default grants the full set incl. schedule/search_web; that is an
+// autonomy + injection surface a read-only agent (e.g. sre_responder, which ingests
+// untrusted incident logs) must not carry. So every subagent gets only the READ set by
+// default; web (search_web/read_url_content), schedule (cron), and write tools are
+// OPT-IN, derived from the persona's allowed-tools + description.
+const READ_TOOLS  = ["send_message", "find_by_name", "grep_search", "view_file", "list_dir"];
+const WEB_TOOLS   = ["read_url_content", "search_web"];
 const WRITE_TOOLS = ["write_file", "replace_file_content"];
 const INCLUDE_SECTIONS = [
   "user_information", "mcp_servers", "skills",
@@ -60,7 +62,20 @@ export function parseAgent(content) {
 export function toSubagent(fm, body, base) {
   const name = fm.name || base;
   const tools = (fm["allowed-tools"] || "").toLowerCase();
+  const desc = (fm.description || "").toLowerCase();
+  const hay = tools + " " + desc;
   const canWrite = /\b(write|edit|notebookedit)\b/.test(tools);
+  // Opt-in: only grant web/schedule when the persona signals it needs them, so a
+  // read-only agent (e.g. sre_responder) never carries cron/external-fetch surface.
+  const wantsWeb = /\b(websearch|webfetch|web_?search|read_url|browser|fetch|http|seo|research|url|docs?)\b/.test(hay);
+  // `schedule` is cron/autonomy surface — grant ONLY when the persona's allowed-tools
+  // explicitly lists it (never inferred from cadence words like "daily" in a description,
+  // which describe the SKILL's external trigger, not an agent tool need). E-149..E-152 review.
+  const wantsSchedule = /\bschedule\b/.test(tools);
+  const toolNames = [...READ_TOOLS];
+  if (wantsWeb) toolNames.push(...WEB_TOOLS);
+  if (wantsSchedule) toolNames.push("schedule");
+  if (canWrite) toolNames.push(...WRITE_TOOLS);
   return {
     name,
     description: fm.description || "",
@@ -70,7 +85,7 @@ export function toSubagent(fm, body, base) {
         systemPromptSections: [
           { title: "Agent System Instructions", content: body.trim() },
         ],
-        toolNames: canWrite ? [...BASE_TOOLS, ...WRITE_TOOLS] : [...BASE_TOOLS],
+        toolNames,
         systemPromptConfig: { includeSections: [...INCLUDE_SECTIONS] },
       },
     },

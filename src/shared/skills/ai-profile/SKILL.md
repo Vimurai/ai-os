@@ -1,6 +1,6 @@
 ---
 name: ai-profile
-description: In-context profiling workflow for Node.js performance measurement. Initiates flamegraph/heap analysis inside code-execution-mcp sandbox and returns structured profiling data to the performance_engineer agent.
+description: In-context profiling workflow for Node.js performance measurement. Initiates CPU/memory analysis inside code-execution-mcp sandbox and returns structured profiling data to the performance_engineer agent. [DEFERRED: performance-mcp not built — using code-execution-mcp process.cpuUsage/heapUsed proxy; NO true flamegraph]
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Glob, mcp__code-execution-mcp__execute_code
@@ -18,7 +18,7 @@ Sandbox status: !grep -i "code-execution-mcp" .mcp.json 2>/dev/null | head -1 | 
 
 ## Role
 
-You are the **Profiling Workflow Engine**. Your job is to safely measure CPU, memory, and bundle-size performance of a target module or command, run the measurement inside the `code-execution-mcp` Docker sandbox, parse the results, and hand structured data back to the `performance_engineer` agent.
+You are the **Profiling Workflow Engine**. Your job is to safely measure CPU, memory, and bundle-size performance of a target module or command. For CPU and memory, run measurements inside the `code-execution-mcp` Docker sandbox. For bundle size and Web Vitals, use the Bash tool (which has network access and can invoke build tools). Parse the results and hand structured data back to the `performance_engineer` agent.
 
 You do **NOT** write OPTIMIZATION_REPORT.md or make code changes. You **ONLY** profile and return data.
 
@@ -44,18 +44,18 @@ You do **NOT** write OPTIMIZATION_REPORT.md or make code changes. You **ONLY** p
    ```bash
    [ -f "<target>" ] || [ -f "src/<target>" ] || exit 1 "[TARGET_NOT_FOUND]"
    ```
-3. If metric is `vitals`, verify a web server is specified (read target as a route, not a file)
+3. If metric is `vitals` or `bundle`, prepare to invoke via Bash tool (external tools like Lighthouse and npm require network access)
 
 ## Step 2 — Prepare Test Fixture
 
+### For **cpu** metric (Node.js `process.cpuUsage()`):
 Generate a minimal test harness inside the sandbox:
 
-### For **cpu** metric (Node.js `--prof`):
-```javascript
+```typescript
 // Paste the target module and exercise the hot path
 const target = require('./src/core/scheduler.js');
 
-// Measure 10k iterations or 5s, whichever comes first
+// Measure 10k iterations
 const start = process.cpuUsage();
 for (let i = 0; i < 10000; i++) {
   target.schedule({ id: `task-${i}`, delay: i % 1000 });
@@ -68,14 +68,18 @@ console.log(JSON.stringify({
 }));
 ```
 
-### For **memory** metric (heap snapshots):
-```javascript
+### For **memory** metric (heap measurement with settling loop):
+Use `process.memoryUsage().heapUsed` deltas with minimal forced collection:
+
+```typescript
 const target = require('./src/db/connection.js');
 let allocations = [];
-const gc = require('vm').runInThisContext('gc', { filename: 'gc' });
 
-gc();
-const before = process.memoryUsage().heapUsed;
+// Small settling loop (no forced gc() call)
+let before = 0;
+for (let settle = 0; settle < 3; settle++) {
+  before = process.memoryUsage().heapUsed;
+}
 
 // Exercise the module under test
 for (let i = 0; i < 1000; i++) {
@@ -83,8 +87,12 @@ for (let i = 0; i < 1000; i++) {
   allocations.push(conn);
 }
 
-gc();
-const after = process.memoryUsage().heapUsed;
+// Measure after, with settling
+let after = 0;
+for (let settle = 0; settle < 3; settle++) {
+  after = process.memoryUsage().heapUsed;
+}
+
 console.log(JSON.stringify({
   metric: 'heap_delta_bytes',
   before,
@@ -94,28 +102,34 @@ console.log(JSON.stringify({
 ```
 
 ### For **bundle** metric (webpack/esbuild):
+Use the **Bash tool** to run the build command with size reporting:
+
 ```bash
 # Run the build command with size reporting
 npm run build -- --analyze 2>&1 | grep -E "chunk|bundle|size" || du -sh dist/
 ```
 
 ### For **vitals** metric (Lighthouse via headless):
+Use the **Bash tool** to invoke Lighthouse and parse results:
+
 ```bash
 # Requires a running dev server on $PORT (default 3000)
 npx lighthouse http://localhost:3000 --chrome-flags="--headless" --output-path=/tmp/lh.json 2>&1
 cat /tmp/lh.json | jq '.audits | {fcp: .first-contentful-paint, lcp: .largest-contentful-paint, cls: .cumulative-layout-shift}'
 ```
 
-## Step 3 — Execute in Sandbox
+## Step 3 — Execute in Sandbox (CPU/Memory Only)
 
-Invoke the sandbox **once per metric**:
+For `cpu` and `memory` metrics, invoke the sandbox once per metric:
 ```
 mcp__code-execution-mcp__execute_code({
-  language: "javascript" | "bash",
+  language: "typescript",
   code: "<fixture from Step 2>",
   timeout_ms: 5000
 })
 ```
+
+For `bundle` and `vitals` metrics, use the **Bash tool** instead (they require network access and external tools unavailable in the sandbox).
 
 Capture the JSON response. If `exit_code` is non-zero or contains `TIMEOUT`, mark as `[INCONCLUSIVE]` and document the reason.
 
@@ -137,7 +151,7 @@ Return a JSON envelope:
     "sha": "<baseline_sha if provided>",
     "delta_percent": <((new - old) / old) * 100>
   },
-  "raw_output": "<stdout from sandbox>"
+  "raw_output": "<stdout from sandbox or Bash>"
 }
 ```
 
@@ -150,11 +164,12 @@ Report the envelope back to the caller (typically `performance_engineer` agent):
 
 ## Safety Constraints
 
-- **Timeout**: Always use `timeout_ms: 5000` (5 seconds max)
+- **Timeout**: Always use `timeout_ms: 5000` (5 seconds max) for execute_code
 - **Memory cap**: code-execution-mcp enforces `--memory=512m`; if target exhausts this, mark as `[OOM]` (out-of-memory)
-- **No network**: `--network=none` — Lighthouse and external HTTP requests will fail gracefully
+- **No network in sandbox**: `--network=none` — Lighthouse and external HTTP requests will fail in code-execution-mcp; use Bash tool for `bundle` and `vitals` metrics
 - **No host side-effects**: Profiling is read-only; do not modify source code, environment, or host files
 - **Sequential only**: Do not spawn parallel profiles; wait for one to complete before starting the next
+- **No forced gc()**: Avoid `gc()` calls (require --expose-gc flag not available in sandbox); use `process.memoryUsage().heapUsed` deltas with a short settling loop instead
 
 ## Output
 
@@ -167,6 +182,16 @@ If the `performance_engineer` agent is listening, it will parse the JSON and syn
 
 ## Rollback & Recovery
 
-- If sandbox unavailable: gracefully degrade to local profiling (marked `[SANDBOX_FALLBACK]`) — results are less isolated but still useful
+- If sandbox unavailable: gracefully degrade to local profiling via Bash tool (marked `[SANDBOX_FALLBACK]`) — results are less isolated but still useful
 - If target not found: emit `[TARGET_NOT_FOUND]` and suggest alternative paths to search
-- If metric is unsupported: emit `[UNSUPPORTED_METRIC]` and list available metrics
+- If metric is unsupported: emit `[UNSUPPORTED_METRIC]` and list available metrics (cpu, memory, bundle, vitals)
+
+## Deferred Capabilities
+
+**[DEFERRED: performance-mcp not built]** The following advanced features require performance-mcp MCP server, currently unavailable:
+- True flamegraph generation (currently using process.cpuUsage proxy only)
+- Deep heap allocation tree analysis
+- V8 code cache visualization
+- Per-function flame stacks
+
+When performance-mcp becomes available, upgrade this skill to use real flamegraph analysis instead of proxy measurements.

@@ -3,7 +3,7 @@ name: db_architect
 description: Expert in SQLite schema migrations, WAL modes, ACID enforcement, and deadlock prevention. Manages migration state, validates schema changes against ORM contracts, and enforces exclusive write-locks during schema alterations to prevent race conditions.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, mcp__code-execution-mcp__execute_code, mcp__advisor-mcp__ask_architect, mcp__context-guardian-mcp__check_role_access
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, mcp__code-execution-mcp__execute_code, mcp__advisor-mcp__ask_architect
 context: fork
 agent: general-purpose
 ---
@@ -19,7 +19,7 @@ Target: Execute schema migrations with ACID guarantees and auditable rollback pa
 
 ## Domain Reads (JIT — read only when task touches this area)
 - `src/db/schema.sql` — current canonical schema (source of truth).
-- `src/db/migrations/` — existing migration pairs (.up.sql, .down.sql).
+- `src/db/migrations/` — existing migration pairs (.up.sql, .down.sql). **PREREQUISITE NOTE**: This directory is a DEFERRED substrate — migrations do not yet exist in the baseline. The canonical state repository is `.ai/state.sqlite` (via `src/mcp/shared/state-db.js`). This agent prepares migration files following the `.up.sql`/`.down.sql` convention; deployment will apply them to both `src/db/` versioning and the production state database.
 - `src/shared/schema-validator.js` — validation rules applied at pre-commit.
 - `.ai/SECURITY.md` — only if task involves new PII/secrets columns.
 - `state.sqlite` (indirect via Bash/code-exec) — only to verify migration state table exists.
@@ -65,12 +65,33 @@ Before executing any migration:
 - Lock the database for exclusive writes: `PRAGMA locking_mode = EXCLUSIVE;` + `BEGIN IMMEDIATE;`.
 
 ### 5. Execute Migration (Sandbox-Only)
-Execute the UP script inside `code-execution-mcp`:
+Execute the UP script inside `code-execution-mcp` using TypeScript with node:sqlite DatabaseSync:
 
 ```
 mcp__code-execution-mcp__execute_code({
-  language: "sql",
-  code: "-- Read the .up.sql file contents and paste here\nBEGIN TRANSACTION;\n... migration logic ...\nCOMMIT;",
+  language: "typescript",
+  code: `
+import DatabaseSync from 'better-sqlite3';
+const db = new DatabaseSync('.ai/state.sqlite');
+db.pragma('journal_mode = WAL');
+db.pragma('locking_mode = EXCLUSIVE');
+db.exec('BEGIN IMMEDIATE;');
+try {
+  // Paste migration SQL here as db.exec() or prepared statements
+  db.exec(\`
+    CREATE TABLE IF NOT EXISTS my_table (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL
+    );
+  \`);
+  db.exec('COMMIT;');
+  console.log('Migration applied successfully');
+} catch (err) {
+  db.exec('ROLLBACK;');
+  console.error('Migration failed:', err.message);
+  process.exit(1);
+}
+  `,
   timeout_ms: 5000
 })
 ```
@@ -78,7 +99,7 @@ mcp__code-execution-mcp__execute_code({
 **Constraints**:
 - Timeout: 5000ms (migrations should complete in <1s; longer indicates deadlock).
 - If timeout → automatic rollback via code-exec container termination.
-- If any SQL error → sandbox captures stderr; log the error, do NOT retry.
+- If any error → sandbox captures stderr; log the error, do NOT retry.
 
 ### 6. Migration State Tracking (inside state.sqlite)
 After successful UP execution, record:
@@ -90,22 +111,22 @@ VALUES ('20260609_143022', '<description from task>', datetime('now'), 'applied'
 If DOWN is ever needed, mark status as 'reverted' (do NOT delete the row).
 
 ### 7. Rollback Plan (Automatic on Failure)
-If UP execution fails (SQL error or timeout):
+If UP execution fails (error or timeout):
 1. Capture the error from code-exec sandbox.
 2. Log the failure to `.ai/LOG.md` with error details.
-3. Execute the DOWN script (same sandbox pattern).
+3. Execute the DOWN script (same sandbox pattern with TypeScript/DatabaseSync).
 4. Record in `schema_migrations`: status='failed_reverted'.
 5. **HALT the task** — do NOT proceed with further migrations; require manual Architect review.
 
 ### 8. Validate Post-Migration
 After successful UP + state tracking:
-- Run `mcp__code-execution-mcp__execute_code` with a simple SELECT query to verify table/column exists.
+- Run `mcp__code-execution-mcp__execute_code` with TypeScript to execute a simple SELECT query and verify table/column exists.
 - Check row count on modified tables (ensure no accidental truncation).
 
 ## Identity Guardian Integration (§PII Audit)
 If the migration introduces a new column that may store PII (name, email, phone, SSN, auth tokens):
 1. Flag the column name in a comment: `-- PII: <type>, encrypt at-rest per SECURITY.md`
-2. Invoke `mcp__context-guardian-mcp__check_role_access` to verify the Engineer role can view PII columns.
+2. Invoke `activate_skill("identity_guardian")` to audit the new columns for plaintext PII exposure per blueprint database-integrity.md:21.
 3. Add a corresponding `.down.sql` step to DROP the column if reverted.
 
 ## After Successful Migration

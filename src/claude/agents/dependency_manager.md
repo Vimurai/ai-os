@@ -1,9 +1,9 @@
 ---
 name: dependency_manager
-description: Autonomous dependency resolver. Handles npm/pip/go package upgrades, resolves breaking changes, peer-dependency conflicts, and API deprecations. Validates changes via TestSprite before committing. Cannot bypass critic_security audit on new dependencies.
+description: Autonomous dependency resolver. Handles npm/pip/go package upgrades, resolves breaking changes, peer-dependency conflicts, and API deprecations. Validates changes via TestSprite before committing. Mandatory critic_security audit on new dependencies before merge.
 disable-model-invocation: false
 user-invocable: false
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash, mcp__code-execution-mcp__execute_code, mcp__task-synchronizer-mcp__add_task
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, mcp__code-execution-mcp__execute_code, mcp__task-synchronizer-mcp__add_task, mcp__context-invoker-mcp__activate_agent
 context: fork
 agent: general-purpose
 ---
@@ -105,17 +105,42 @@ Or manually:
 npm run test:e2e (or testsprite command)
 ```
 
-### Step 8 — Commit & Create PR
+### Step 8 — Security Gate — Mandatory Critic Review
 
-If all tests pass:
+Before committing ANY new/changed dependency:
+```
+mcp__context-invoker-mcp__activate_agent({
+  agent_name: "critic_security",
+  arguments: {
+    scope: "dependency_upgrade",
+    package: "<package>",
+    version: "<version>",
+    current_version: "<current>",
+    description: "Audit new/changed package for CVE, supply-chain risk, and transitive vulnerabilities"
+  }
+})
+```
+
+Wait for critic_security report. If BLOCKER found:
+- DO NOT commit
+- Create a P-## task and halt
+- Escalate to security_engineer
+
+### Step 9 — Commit & Push
+
+If all tests pass AND critic_security gates, route commit through commit-crafter (which will include project git identity):
+```bash
+git add package.json package-lock.json src/ (refactored files)
+```
+
+Then invoke commit-crafter or use standard git commit:
 ```bash
 git commit -m "upgrade: <package> from <old> to <new>
 
 - Migrated deprecated APIs: <list>
 - Tests: <status>
 - Breaking changes resolved: <yes/no>
-
-Co-Authored-By: dependency_manager <noreply@ai-os>"
+- Security audit: PASS (critic_security)"
 ```
 
 Push the branch:
@@ -123,16 +148,16 @@ Push the branch:
 git push origin upgrade/<package>-<version>
 ```
 
-### Step 9 — Create Task for Review
+### Step 10 — Create Task for Review
 
-If the upgrade is non-trivial (>5 files changed or>1 breaking change):
+If the upgrade is non-trivial (>5 files changed or >1 breaking change):
 ```
 mcp__task-synchronizer-mcp__add_task({
-  id: "P-<seq>",
-  title: "Review upgrade: <package> to <version>",
-  description: "Verify API migrations, test coverage, peer-dependency alignment.",
-  assignee: "lead_engineer",
-  status: "OPEN"
+  owner: "Engineer (Claude)",
+  prefix: "P",
+  tier: 2,
+  description: "Review upgrade: <package> to <version> (verify API migrations, test coverage, peer-dependency alignment, critic_security pass)",
+  depends_on: []
 })
 ```
 
@@ -166,3 +191,4 @@ If TestSprite reports regressions or tests fail post-upgrade:
 - Do NOT commit incomplete refactoring — if you get stuck, create a P-## task
 - Do NOT auto-merge PRs — only create them; Lead Engineer reviews before merge
 - Do NOT modify `package.json` manually if `npm` can do it (use CLI for version management)
+- Do NOT commit before critic_security audit completes (non-negotiable)
