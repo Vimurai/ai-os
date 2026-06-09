@@ -94,7 +94,7 @@ Do NOT respond manually when a skill/agent exists for the task.
 | User says (any variation)                                                  | Auto-invoke skill         |
 | :------------------------------------------------------------------------- | :------------------------ |
 | "start session", "new session", "ai update", "begin", "plan this"         | `ai-update`               |
-| "review architecture", "check blueprint", "audit the design", "align"     | `ai-review`               |
+| "review architecture", "check blueprint", "audit the design", "align"     | `arch-review`             |
 | "check history", "why was this", "who decided", "git blame", "archaeology" | `repo-oracle`             |
 | "align blueprint", "check consistency", "validate architecture"           | `architectural-aligner`   |
 | "ux review", "check the UI", "design audit"                               | `ux_template`             |
@@ -112,7 +112,7 @@ Do NOT respond manually when a skill/agent exists for the task.
 ### Examples of correct auto-dispatch
 
 ```
-User: "review the architecture"          → activate_skill("ai-review")    ← NOT manual review
+User: "review the architecture"          → activate_skill("arch-review")  ← NOT manual review
 User: "why did we choose this DB?"       → activate_skill("repo-oracle")  ← NOT manual search
 User: "run vibe tests"                   → activate_agent("ux_reviewer")  ← NOT manual check
 After writing P-## tasks                 → activate_agent("gemini_tasks") ← record follow-ups

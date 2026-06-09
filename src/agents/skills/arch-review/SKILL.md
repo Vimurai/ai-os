@@ -1,6 +1,6 @@
 ---
-name: ai-review
-description: Use activate_skill with this name when the user requests an architectural review, before a major commit, or when checking blueprint alignment. Audits the codebase against architect.md for orphaned work, deviations, and top architectural risks.
+name: arch-review
+description: Use activate_skill with this name when the user requests an architectural review, before a major commit, or when checking blueprint alignment. Audits the codebase against architect.md for orphaned work, deviations, and top architectural risks. (Renamed from ai-review to avoid colliding with the Engineer's tier-aware critic-review skill — E-149.)
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Grep, Glob
