@@ -26,7 +26,7 @@
 #   exact title → fuzzy title (CI) → window name (CI) → conventional ordinal among
 #   AGENT panes only (plain shells excluded). target "claude" → 1st agent pane;
 #   "gemini" → 2nd. Agent panes are identified by foreground command (node/claude/
-#   gemini or a version string), never bash/zsh/…, per interactive-bridge.md §API.
+#   gemini/agy or a version string), never bash/zsh/…, per interactive-bridge.md §API.
 #
 # Security:
 #   - Isolation: only panes whose pane_current_path is inside THIS project dir
@@ -68,7 +68,10 @@ LOCK_DIR="${PROJECT_DIR}/.ai/.ai-watch.lock"
 
 # Commands that mean "this pane is an agent REPL ready for input". Override to
 # extend; the version-string heuristic (below) is always also accepted.
-AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini}"
+# E-134/v3.0: `agy` (Antigravity CLI) is the Architect provider post-migration —
+# without it the agy pane is treated as a non-agent and architect/gemini handoffs
+# never resolve a pane (the bridge silently drops them).
+AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini agy}"
 
 # Targets drained independently, in this order, each poll. E-136/E-137: semantic
 # roles (engineer/architect) are drained first, then the legacy provider names
@@ -109,7 +112,7 @@ _preconditions() {
 _lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 # _is_agent_cmd <cmd> → 0 if the command looks like an agent REPL (node/claude/
-# gemini or a version string like "2.1.161"), 1 for plain shells / anything else.
+# gemini/agy or a version string like "2.1.161"), 1 for plain shells / anything else.
 # SINGLE source of truth shared by resolve_pane (Pass 4) and _pane_ready, so
 # "agent pane" means the same thing for routing and for the busy-gate. Shells are
 # denied first so "gemini" can never resolve to (or be considered ready in) bash.
@@ -135,7 +138,7 @@ _is_agent_cmd() {
 # Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>\t<pane_current_command>"
 # for every pane, then keep only those rooted in PROJECT_DIR (isolation §Security).
 _project_panes() {
-  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{pane_title}	#{window_name}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null \
+  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{?pane_title,#{pane_title},-}	#{?window_name,#{window_name},-}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null \
     | while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
         case "$ppath" in
           "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" "$pcmd" ;;

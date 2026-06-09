@@ -129,6 +129,25 @@ _PANES='%1\t1\tt1\twin\t/p\t2.1.161\n%2\t2\tt2\twin\t/p\tnode\n%33\t3\tt3\twin\t
 assert_contains "E-122.R1: claude → 1st agent pane (%1 version cmd)" "%1" "$(_resolve claude)"
 assert_contains "E-122.R2: gemini → 2nd agent pane (%2 node, NOT %34 zsh)" "%2" "$(_resolve gemini)"
 
+# v3.0 (E-134 post-migration): the Architect runs `agy` (Antigravity CLI). Without
+# agy in the agent-command set the agy pane was treated as a shell and architect/
+# gemini handoffs resolved to NOTHING (the live bug: handoffs stuck delivered:false).
+_PANES='%1\t1\tt1\twin\t/p\t2.1.168\n%2\t2\tt2\twin\t/p\tagy\n%33\t3\tt3\twin\t/p\tbash\n'
+assert_contains "E-134: gemini → agy pane (%2), not dropped"      "%2" "$(_resolve gemini)"
+assert_contains "E-134: architect → agy pane (%2) via legacy map" "%2" "$(_resolve architect)"
+assert_contains "E-134: claude still → 1st agent (%1) past agy"   "%1" "$(_resolve claude)"
+
+# v3.0 (E-134): agy panes carry an EMPTY pane_title. The tmux -F format MUST guard
+# empty title/window with a placeholder — otherwise `IFS=$'\t' read` collapses the
+# resulting consecutive tabs (tab is whitespace-class) and shifts pane_current_path
+# out of position, so the PROJECT_DIR filter silently drops the agy pane (the live
+# bug: handoffs to the Architect stuck delivered:false). Structural guard — a real
+# empty-title repro needs live tmux (absent in CI).
+assert_status 0 "E-134: _project_panes guards empty pane_title (agy has none)" \
+  grep -qF '#{?pane_title,#{pane_title}' "$WATCH"
+assert_status 0 "E-134: _project_panes guards empty window_name" \
+  grep -qF '#{?window_name,#{window_name}' "$WATCH"
+
 # All eligible panes are shells (command column present) → no misroute, empty.
 _PANES='%5\t1\tt\twin\t/p\tbash\n%6\t2\tt\twin\t/p\tzsh\n'
 _r_allsh="$(_resolve gemini)"
@@ -156,6 +175,7 @@ _ready_probe() {  # _ready_probe <cmd> <bypass:0|1> → "READY"|"BUSY"
     if _pane_ready "%X"; then echo READY; else echo BUSY; fi )
 }
 assert_contains "E-118.B7: node → READY"   "READY" "$(_ready_probe node 0)"
+assert_contains "E-134: agy → READY (Antigravity Architect pane)" "READY" "$(_ready_probe agy 0)"
 assert_contains "E-118.B7: bash → BUSY"    "BUSY"  "$(_ready_probe bash 0)"
 assert_contains "E-118.B7: python → BUSY"  "BUSY"  "$(_ready_probe python3 0)"
 assert_contains "E-118.B7: bypass → READY" "READY" "$(_ready_probe bash 1)"
