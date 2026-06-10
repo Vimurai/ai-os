@@ -1435,6 +1435,10 @@ do_sync() {
     fi
   done
 
+  # E-165 (agy-subagent-robustness.md): OAuth token pre-flight, so a lapsed Antigravity
+  # login surfaces here rather than mid-subagent. Non-fatal (warn-only).
+  verify_auth_token
+
   # E-144 (native-subagents.md, reconciled): the former `ai sync --agents` mapper
   # (E-140) wrote loose .agents/agents/ manifests that agy never reads — it was a
   # dead path and has been retired. Native agy subagents now ship as a plugin:
@@ -2240,6 +2244,40 @@ PY
   echo "✓ Wrote ${config_path} (${mcp_key} from registry)"
 }
 
+# E-165 (agy-subagent-robustness.md): serialized OAuth token pre-flight. agy subagents
+# run in forked sandboxes that each need a live Google OAuth token in
+# ~/.gemini/oauth_creds.json; when it is expired/expiring, parallel spawns race on the
+# refresh and the subagent dies ("Agent execution terminated due to error"). This check
+# serializes via an atomic mkdir lock and verifies the token BEFORE subagents spawn,
+# warning the user to re-authenticate if it is missing or expiring within 5 minutes.
+# Fail-open: it never halts the CLI (rollback per blueprint §Rollback). Disable with
+# AI_OS_SKIP_TOKEN_CHECK=1.
+verify_auth_token() {
+  [[ "${AI_OS_SKIP_TOKEN_CHECK:-0}" == "1" ]] && return 0
+  command -v python3 >/dev/null 2>&1 || return 0   # can't parse JSON → skip silently
+  local creds="${HOME}/.gemini/oauth_creds.json"
+  local lock="${HOME}/.gemini/.ai-os-token.lock"
+  if [[ ! -f "$creds" ]]; then
+    echo "[AUTH_WARN] Not logged into Antigravity (no ~/.gemini/oauth_creds.json) — agy subagents will fail until you sign in." >&2
+    return 0
+  fi
+  # Atomic mkdir lock: if another ai process is already checking, skip (it handles it).
+  mkdir "$lock" 2>/dev/null || return 0
+  local now_ms exp_ms
+  now_ms=$(python3 -c 'import time; print(int(time.time()*1000))')
+  exp_ms=$(python3 -c "import json
+try:
+    print(int(json.load(open('$creds')).get('expiry_date', 0)))
+except Exception:
+    print(0)")
+  # Refresh window: warn if the token is absent/expired or expiring within 5 minutes.
+  if [[ "${exp_ms:-0}" -le $(( now_ms + 300000 )) ]]; then
+    echo "[AUTH_WARN] Antigravity OAuth token expired or expiring within 5m — re-authenticate before running agy subagents, or they fail with \"Agent execution terminated due to error\"." >&2
+  fi
+  rmdir "$lock" 2>/dev/null || true
+  return 0
+}
+
 # E-144 (native-subagents.md, reconciled): install the AI-OS personas into Antigravity
 # as a native plugin. agy registers custom subagents ONLY from installed plugins
 # (`agy plugin install <dir>` → ~/.gemini/config/plugins/ai-os/ → visible in /agents);
@@ -2265,6 +2303,18 @@ agy_plugin_install() {
   local abs; abs="$(cd "$plugin_dir" && pwd)"
   echo "Installing ai-os agy plugin from ${abs} ..."
   agy plugin install "$abs"
+  # E-165: verify the OAuth token now so a lapsed login surfaces here, not mid-subagent.
+  verify_auth_token
+  # E-164: agy may record a second 'ai-os' import (e.g. a prior `agy plugin import`),
+  # and the duplicate makes subagent selection fail. Collapse to a single registration.
+  local self_dir; self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local pb=""
+  for c in "${self_dir}/../shared/plugin-builder.mjs" "${AIOS}/shared/plugin-builder.mjs" "src/shared/plugin-builder.mjs"; do
+    [[ -f "$c" ]] && { pb="$c"; break; }
+  done
+  if [[ -n "$pb" ]] && command -v node >/dev/null 2>&1; then
+    node "$pb" --dedupe-imports || echo "[WARN] import_manifest dedup skipped (non-fatal)." >&2
+  fi
 }
 
 # E-158 (cli-agnostic-handoff): provider-agnostic handoff primitive. Writes the SAME

@@ -15,7 +15,8 @@
         "find_by_name",
         "grep_search",
         "view_file",
-        "list_dir"
+        "list_dir",
+        "mcp__task-synchronizer-mcp__add_stamp"
       ],
       "systemPromptConfig": {
         "includeSections": [

@@ -389,3 +389,36 @@ When running under `agy` (Antigravity), standard MCP tools (from `context-invoke
 ### Constraints driving this decision
 - **Resilience**: The platform must survive missing MCP tools by using native primitives.
 - **Autonomy**: The agents must take initiative in deciding when to run reviews, audits, preflights, and logs without requiring manual user commands.
+
+---
+
+## D-046 — Antigravity Subagent Execution Robustness
+
+**Date**: 2026-06-10
+**Task**: E-163, E-164, E-165
+**Decision**: Resolve native subagent runtime failures under the `agy` provider by:
+1. Harvesting all referenced `mcp__*` tools from agent instructions and frontmatter to populate the subagent's `toolNames` in `agent.json`.
+2. Deduplicating duplicate `ai-os` plugin imports in `~/.gemini/config/import_manifest.json`.
+3. Performing a synchronous, serialized Google OAuth token refresh check in the parent CLI bootloader preflight before concurrent subagents are spawned.
+
+### Why needed
+Custom subagents (like `critic_arch`) were failing with execution termination errors because:
+- They lacked permission to call MCP tools (such as `add_stamp`) because the generator omitted `mcp__*` tools from the subagent's `toolNames` manifest.
+- The `ai-os` plugin was registered twice in `import_manifest.json` (from both `local-install` and `antigravity`), causing runtime namespace collisions.
+- Concurrent subagent spawns were racing to refresh expired OAuth tokens in `oauth_creds.json`, causing write collisions and authentication failures.
+
+### Alternatives considered
+1. **Direct credentials injection into the subagent sandbox**: Rejected because the subagent sandbox has strict path-traversal and file-writing restrictions, and injecting raw secrets violates security policies.
+2. **Serializing subagent execution**: Rejected because it increases total execution time and limits parallel performance (like running critics in parallel).
+3. **Synchronous pre-refresh + dynamic tool harvesting**: Selected because pre-refresh avoids races entirely, and dynamic tool harvesting allows critics to securely call their required stamp tools without wildcards.
+
+### Constraints driving this decision
+- **Security**: Subagents must follow least-privilege, and raw Google credentials must not be exposed to the sandbox.
+- **Concurrency**: Parallel critics must be supported without file write race conditions.
+
+### Impact
+- Unlocks: `E-163`, `E-164`, `E-165` tasks.
+- Risk if wrong: Race conditions could still occur if tokens expire mid-execution, but a 5-minute pre-expiry buffer mitigates this.
+
+### Rollback
+Remove the token refresh pre-check and revert to the static `toolNames` list in `plugin-builder.mjs`.
