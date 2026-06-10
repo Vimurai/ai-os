@@ -17,7 +17,11 @@
         "view_file",
         "list_dir",
         "write_file",
-        "replace_file_content"
+        "replace_file_content",
+        "mcp__code-execution-mcp__execute_code",
+        "mcp__task-synchronizer-mcp__add_task",
+        "mcp__context-invoker-mcp__activate_agent",
+        "mcp__mcp-router__proxy_call"
       ],
       "systemPromptConfig": {
         "includeSections": [

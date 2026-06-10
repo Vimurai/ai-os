@@ -25,6 +25,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, statSync, rmSync } from "node:fs";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -76,6 +77,15 @@ export function toSubagent(fm, body, base) {
   if (wantsWeb) toolNames.push(...WEB_TOOLS);
   if (wantsSchedule) toolNames.push("schedule");
   if (canWrite) toolNames.push(...WRITE_TOOLS);
+  // E-163 (agy-subagent-robustness.md): harvest the mcp__<server>__<tool> identifiers
+  // the persona declares in allowed-tools or references in its instructions, and grant
+  // exactly those — agy maps MCP tools under this name and a subagent that isn't granted
+  // them (e.g. critic_arch needing mcp__task-synchronizer-mcp__add_stamp) fails at runtime.
+  // Match the ORIGINAL (not lower-cased) text so mixed-case servers (mcp__TestSprite__*)
+  // survive. Least-privilege: only what the persona names — never a wildcard.
+  const mcpSource = `${fm["allowed-tools"] || ""}\n${body}`;
+  const mcpTools = mcpSource.match(/mcp__[A-Za-z0-9_-]+/g) || [];
+  toolNames.push(...mcpTools);
   return {
     name,
     description: fm.description || "",
@@ -85,7 +95,7 @@ export function toSubagent(fm, body, base) {
         systemPromptSections: [
           { title: "Agent System Instructions", content: body.trim() },
         ],
-        toolNames,
+        toolNames: [...new Set(toolNames)],
         systemPromptConfig: { includeSections: [...INCLUDE_SECTIONS] },
       },
     },
@@ -154,13 +164,77 @@ export function buildPlugin(repoRoot, outDir) {
   return agents.map((a) => a.name);
 }
 
-// CLI entry — only when run directly (sourcing for tests must not build). Builds the
-// fixed target derived from this script's location; no arbitrary path args (tests
-// drive custom dirs through the exported buildPlugin()).
+/**
+ * E-164 (agy-subagent-robustness.md): collapse duplicate plugin registrations in agy's
+ * import_manifest.json. agy can register the same plugin name more than once (e.g. an
+ * `agy plugin install` → source "local-install" PLUS an `agy plugin import` → source
+ * "antigravity"), and the collision makes subagent selection fail. Keep ONE import per
+ * name — preferring source "local-install" (the full installed plugin) — and drop the
+ * rest, preserving first-seen order and passing any nameless entry through untouched.
+ * Idempotent and fail-open: a missing or malformed manifest is left as-is.
+ *
+ * @param {string} manifestPath absolute path to import_manifest.json
+ * @returns {{changed:boolean, removed?:number, reason?:string}}
+ */
+export function deduplicateImports(manifestPath) {
+  if (!existsSync(manifestPath)) return { changed: false, reason: "no-manifest" };
+  let data;
+  try {
+    data = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (e) {
+    return { changed: false, reason: `parse-error: ${e.message}` };
+  }
+  const imports = Array.isArray(data.imports) ? data.imports : [];
+
+  // Choose the single best import per name (prefer the full installed plugin).
+  const best = new Map();
+  for (const imp of imports) {
+    const name = imp && imp.name;
+    if (!name) continue;
+    const cur = best.get(name);
+    if (!cur || (imp.source === "local-install" && cur.source !== "local-install")) best.set(name, imp);
+  }
+  // Rebuild in first-seen order: emit each name once (its chosen import); pass through
+  // any entry without a name untouched.
+  const emitted = new Set();
+  const result = [];
+  for (const imp of imports) {
+    const name = imp && imp.name;
+    if (!name) { result.push(imp); continue; }
+    if (emitted.has(name)) continue;
+    emitted.add(name);
+    result.push(best.get(name));
+  }
+
+  if (result.length === imports.length) return { changed: false, reason: "no-duplicates" };
+  data.imports = result;
+  writeFileSync(manifestPath, JSON.stringify(data, null, 2) + "\n", "utf8");
+  return { changed: true, removed: imports.length - result.length };
+}
+
+// Default location of agy's plugin import manifest.
+export const IMPORT_MANIFEST_PATH = resolve(homedir(), ".gemini", "config", "import_manifest.json");
+
+// CLI entry — only when run directly (sourcing for tests must not build).
+//   (default)            build the fixed plugin target from the framework personas
+//   --dedupe-imports [p] collapse duplicate ai-os imports in import_manifest.json
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
-  // repo root = two levels up from src/shared/ (dirname twice, no traversal literal).
-  const repoRoot = dirname(dirname(SCRIPT_DIR));
-  const outDir = resolve(repoRoot, "src/agents/plugin");
-  const names = buildPlugin(repoRoot, outDir);
-  process.stdout.write(`ai-os plugin built at ${outDir}\n  ${names.length} agents: ${names.join(", ")}\n`);
+  const argv = process.argv.slice(2);
+  const dedupeIdx = argv.indexOf("--dedupe-imports");
+  if (dedupeIdx !== -1) {
+    const next = argv[dedupeIdx + 1];
+    const manifestPath = next && !next.startsWith("--") ? resolve(next) : IMPORT_MANIFEST_PATH;
+    const r = deduplicateImports(manifestPath);
+    process.stdout.write(
+      r.changed
+        ? `import_manifest deduped: removed ${r.removed} duplicate import(s) → ${manifestPath}\n`
+        : `import_manifest unchanged (${r.reason}) → ${manifestPath}\n`,
+    );
+  } else {
+    // repo root = two levels up from src/shared/ (dirname twice, no traversal literal).
+    const repoRoot = dirname(dirname(SCRIPT_DIR));
+    const outDir = resolve(repoRoot, "src/agents/plugin");
+    const names = buildPlugin(repoRoot, outDir);
+    process.stdout.write(`ai-os plugin built at ${outDir}\n  ${names.length} agents: ${names.join(", ")}\n`);
+  }
 }

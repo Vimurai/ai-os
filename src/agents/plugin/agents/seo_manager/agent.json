@@ -17,7 +17,11 @@
         "view_file",
         "list_dir",
         "read_url_content",
-        "search_web"
+        "search_web",
+        "mcp__task-synchronizer-mcp__add_topic_seed",
+        "mcp__task-synchronizer-mcp__add_task",
+        "mcp__task-synchronizer-mcp__get_state",
+        "mcp__task-synchronizer-mcp__update_task_status"
       ],
       "systemPromptConfig": {
         "includeSections": [
