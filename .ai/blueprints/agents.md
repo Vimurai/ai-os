@@ -21,14 +21,15 @@ The AI-OS ecosystem divides cognitive labor across specialized agents and dynami
 
 ### Agents
 - **`docs-architect`**: Audits public docs against `architect.md` to detect drift.
-- **`gemini_tasks`**: Updates the Gemini section of `TASKS.md` (G-## tasks).
 - **`knowledge_architect`**: Cross-project RAG and Memory Palace management.
 - **`memory_curator`**: Builds the Memory Palace index from local digests.
 - **`ux_reviewer`**: Automated visual audit of the UI (Playwright/Lighthouse).
 - **`digest_updater`**: Updates `DIGEST.md` cache after Gemini-domain changes.
 
+> Retired (E-146): `gemini_tasks` → use `skill: ai-task` (unified, provider-agnostic task lifecycle).
+
 ### Skills
-- **`ai-review`**: Audits the codebase against `architect.md` for orphaned work and deviations.
+- **`arch-review`**: Audits the codebase against `architect.md` for orphaned work and deviations (renamed from `ai-review` in E-147 to stop shadowing the Engineer's `ai-review`).
 - **`architectural-aligner`**: Validates blueprint compliance before Tier 2/3 commits.
 - **`repo-oracle`**: Git archaeology for historical awareness and past decisions.
 - **`ux_template`**: Generates structured UX documentation for views.

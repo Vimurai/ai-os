@@ -93,6 +93,15 @@
   Status: DONE 2026-06-10 — import_manifest.json deduplication in plugin-builder.mjs. Merged PR #15.
 - [x] E-165: Implement serialized OAuth token pre-refresh check in `src/bin/ai` preflight to serialize and execute token refresh before parallel subagents are spawned, preventing write races per `.ai/blueprints/agy-subagent-robustness.md`. | Tier: 2
   Status: DONE 2026-06-10 — serialized OAuth token preflight verify_auth_token in src/bin/ai. Merged PR #15.
+- [x] E-166: Correct better-sqlite3 imports and pragma usage to native node:sqlite DatabaseSync in src/claude/agents/db_architect.md and src/shared/skills/ai-migration/SKILL.md. | Tier: 2
+  Status: DONE 2026-06-10 — node:sqlite migration in db_architect.md + ai-migration SKILL.md (source + 3 runtime mirrors + regenerated plugin manifest). Replaced better-sqlite3 import with node:sqlite DatabaseS …[full in LOG.md]
+- [x] E-167: Add ~/.agents/skills/ and ~/.ai-os/agents/skills/ to SKILL_ROOTS in src/mcp/context-invoker-mcp/index.js. | Tier: 2
+  Status: DONE 2026-06-10 — Added ~/.agents/skills and ~/.ai-os/agents/skills to SKILL_ROOTS in context-invoker-mcp. Project .agents/skills already covered (line 48). context_invoker 24/0.
+- [ ] E-168: Fix { readOnly: true } parameter to { readonly: true } in src/shared/telemetry.mjs. | Tier: 2
+- [x] E-169: Extend sovereignty validation to block writes to .ai/blueprints/ in src/mcp/orchestrator-mcp/index.js and critic_arch template. | Tier: 2
+  Status: DONE 2026-06-10 — run_review Check 3 now blocks the whole .ai/blueprints/ tree (dir-prefix match) + critic_arch template updated (source/mirror/manifest). Regression-guard tests added. robustness 39/0 …[full in LOG.md]
+- [x] E-170: Resolve documentation drift: (a) update CONTRIBUTING.md line 41 to show agents/skills, (b) fix src/bin/ai line 2397 deprecated warning to guide users to arch-review, and (c) update .ai/blueprints/agents.md to retire gemini_tasks and rename ai-review to arch-review. | Tier: 2
+  Status: DONE 2026-06-10 — Doc drift fixed: CONTRIBUTING gemini/skills to agents/skills; ai review deprecation now points to arch-review; agents.md retired gemini_tasks and renamed Architect ai-review to arch-review.
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2

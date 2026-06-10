@@ -363,9 +363,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         checks.push({ id: "PATH_TRAVERSAL", severity: "P0", status: "FAIL", detail: traversalMatches[0] });
       }
 
-      // Check 3: Blueprint alignment — architect-owned files modified
-      const geminiFiles = [".ai/architect.md", ".ai/BRIEF.md"];
-      const sovereigntyViolations = geminiFiles.filter(f => diff.includes(`a/${f}`) || diff.includes(`b/${f}`));
+      // Check 3: Blueprint alignment — architect-owned files & the blueprint tree (E-169).
+      // Exact architect-owned files PLUS everything under .ai/blueprints/ are sovereign:
+      // the Engineer must not author them (anti-drift §35). Directory entries are matched
+      // as path prefixes so any file beneath .ai/blueprints/ trips the gate.
+      const sovereignExact = [".ai/architect.md", ".ai/BRIEF.md"];
+      const sovereignDirs = [".ai/blueprints/"];
+      const sovereigntyViolations = [
+        ...sovereignExact.filter(f => diff.includes(`a/${f}`) || diff.includes(`b/${f}`)),
+        ...sovereignDirs.filter(d => diff.includes(`a/${d}`) || diff.includes(`b/${d}`)),
+      ];
       if (sovereigntyViolations.length > 0) {
         checks.push({ id: "SOVEREIGNTY_VIOLATION", severity: "P0", status: "FAIL", detail: sovereigntyViolations.join(", ") });
       }
