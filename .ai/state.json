@@ -759,12 +759,12 @@
     {
       "id": "E-175",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement deep environment and permission validation in src/bin/ai doctor --env, checking Node version, global binaries, and directory read/write bits.",
       "created_at": "2026-06-10T20:02:53.078Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-10T21:48:52.413Z",
+      "summary": "ai doctor --env: _run_env_diagnostics in src/bin/ai — Node 22+, git/gh/tmux/npx, Docker, R/W bits on ~/.ai-os & .ai, state-db write; exits 1 on critical fail. Wires E-176 mcp-tester. …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -772,12 +772,12 @@
     {
       "id": "E-176",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement the MCP Connection Tester (src/shared/mcp-tester.mjs) to spawn each registered MCP server, test tools/list connectivity, and integrate it into ai doctor.",
       "created_at": "2026-06-10T20:02:54.543Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-10T21:48:56.867Z",
+      "summary": "New src/shared/mcp-tester.mjs: pure-node stdio client spawns each .mcp.json server, initialize+tools/list only (never tools/call), curated env (no token leak), parallel w/ per-server …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -785,12 +785,12 @@
     {
       "id": "E-177",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Refactor the context cache assembler in cache-manager-mcp to automatically compact/prune done task records older than 7 days when the total character count exceeds 20,000 characters.",
       "created_at": "2026-06-10T20:02:59.049Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-10T21:49:00.909Z",
+      "summary": "cache-manager assembleContext compaction: when blob >20000 chars, evict stale (>7d) blueprints oldest-first (files never deleted, still tracked). REINTERPRETED: cache holds blueprint …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []

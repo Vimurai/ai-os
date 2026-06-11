@@ -111,9 +111,12 @@
   Status: DONE 2026-06-10 — Added _checkWritable() W_OK preflight probe in telemetry.mjs _openDb (+ fail-open _ensureDir); logs telemetry-db-not-writable and never throws. ~/.ai-os mirror synced. telemetry_test …[full in LOG.md]
 - [x] E-174: Remove deprecated references to prd_writer from .ai/DIGEST.md to keep documentation accurate. | Tier: 1
   Status: DONE 2026-06-10 — Removed deprecated prd_writer reference from .ai/DIGEST.md Known Risks line 26. Suite 2879/0.
-- [ ] E-175: Implement deep environment and permission validation in src/bin/ai doctor --env, checking Node version, global binaries, and directory read/write bits. | Tier: 2
-- [ ] E-176: Implement the MCP Connection Tester (src/shared/mcp-tester.mjs) to spawn each registered MCP server, test tools/list connectivity, and integrate it into ai doctor. | Tier: 2
-- [ ] E-177: Refactor the context cache assembler in cache-manager-mcp to automatically compact/prune done task records older than 7 days when the total character count exceeds 20,000 characters. | Tier: 2
+- [x] E-175: Implement deep environment and permission validation in src/bin/ai doctor --env, checking Node version, global binaries, and directory read/write bits. | Tier: 2
+  Status: DONE 2026-06-10 — ai doctor --env: _run_env_diagnostics in src/bin/ai — Node 22+, git/gh/tmux/npx, Docker, R/W bits on ~/.ai-os & .ai, state-db write; exits 1 on critical fail. Wires E-176 mcp-tester. …[full in LOG.md]
+- [x] E-176: Implement the MCP Connection Tester (src/shared/mcp-tester.mjs) to spawn each registered MCP server, test tools/list connectivity, and integrate it into ai doctor. | Tier: 2
+  Status: DONE 2026-06-10 — New src/shared/mcp-tester.mjs: pure-node stdio client spawns each .mcp.json server, initialize+tools/list only (never tools/call), curated env (no token leak), parallel w/ per-server …[full in LOG.md]
+- [x] E-177: Refactor the context cache assembler in cache-manager-mcp to automatically compact/prune done task records older than 7 days when the total character count exceeds 20,000 characters. | Tier: 2
+  Status: DONE 2026-06-10 — cache-manager assembleContext compaction: when blob >20000 chars, evict stale (>7d) blueprints oldest-first (files never deleted, still tracked). REINTERPRETED: cache holds blueprint …[full in LOG.md]
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2

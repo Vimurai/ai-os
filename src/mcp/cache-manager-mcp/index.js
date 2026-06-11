@@ -183,37 +183,66 @@ function readSqliteSchema(projectRoot) {
 
 // ── Cache assembly ────────────────────────────────────────────────────────────
 
+// E-177 (doctor-and-cache-optimizations.md §Components 3): hot-cache compaction.
+// When the assembled System Context blob exceeds CACHE_CHAR_LIMIT, blueprint
+// documents older than STALE_BLUEPRINT_AGE_MS are omitted from the cached blob
+// (oldest-first, only as many as needed to drop under the limit).
+//
+// REINTERPRETATION (flagged to the Architect): the task says "prune done task records
+// older than 7 days", but this cache assembles blueprint docs + the state.sqlite SCHEMA —
+// it holds NO task records. The faithful analog of the stated goal ("prune old history,
+// keep a clean hot path") is to evict stale *blueprint history*. Files are NEVER deleted
+// from disk and stay tracked for staleness — only the cached blob is trimmed, so a fresh
+// build_cache always reflects the live tree.
+const CACHE_CHAR_LIMIT       = 20000;
+const STALE_BLUEPRINT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Render the System Context blob from a chosen subset of entries. */
+function renderContextBlob(projectRoot, allEntries, included, schemaSection, omittedCount) {
+  const header = [
+    `=== AI-OS SYSTEM CONTEXT CACHE ===`,
+    `Built: ${new Date().toISOString()}`,
+    `Source: ${projectRoot}`,
+    `Files: ${included.length}/${allEntries.length} (+ state.sqlite schema)`,
+  ];
+  if (omittedCount > 0) {
+    header.push(
+      `Compacted: ${omittedCount} stale blueprint(s) older than 7d omitted ` +
+      `(blob exceeded ${CACHE_CHAR_LIMIT} chars — run build_cache for the full set)`
+    );
+  }
+  header.push("");
+  return [
+    header.join("\n"),
+    ...included.map((e) => e.section),
+    schemaSection,
+    `=== END SYSTEM CONTEXT ===`,
+  ].join("\n");
+}
+
 /**
  * Build the System Context blob from the payload files.
  * Returns { blob: string, fileRecords: Array<{path,mtime_ms,size_bytes,role}> }
  */
 function assembleContext(projectRoot) {
   const payloadFiles = discoverPayloadFiles(projectRoot);
-  const sections = [];
-  const fileRecords = [];
-
-  sections.push(`=== AI-OS SYSTEM CONTEXT CACHE ===`);
-  sections.push(`Built: ${new Date().toISOString()}`);
-  sections.push(`Source: ${projectRoot}`);
-  sections.push(`Files: ${payloadFiles.length} (+ state.sqlite schema)`);
-  sections.push("");
+  const entries = [];      // { path, role, mtime_ms, section }
+  const fileRecords = [];  // EVERY discovered file — tracked even if compacted out of the blob
 
   for (const { path, role } of payloadFiles) {
     try {
       const stat = statSync(path);
       const content = readFileSync(path, "utf8");
       const label = path.replace(projectRoot + "/", "");
+      const mtime_ms = Math.round(stat.mtimeMs);
 
-      sections.push(`--- ${label} (${role}) ---`);
-      sections.push(content.trimEnd());
-      sections.push("");
-
-      fileRecords.push({
+      entries.push({
         path,
-        mtime_ms:   Math.round(stat.mtimeMs),
-        size_bytes: stat.size,
         role,
+        mtime_ms,
+        section: `--- ${label} (${role}) ---\n${content.trimEnd()}\n`,
       });
+      fileRecords.push({ path, mtime_ms, size_bytes: stat.size, role });
     } catch (e) {
       log("warn", "assemble", `Skipping unreadable file: ${path}`, {
         error: e.message,
@@ -221,15 +250,32 @@ function assembleContext(projectRoot) {
     }
   }
 
-  // SQLite schema (not a regular file — derived from DB read)
+  // SQLite schema (not a regular file — derived from DB read).
   const schema = readSqliteSchema(projectRoot);
-  sections.push(`--- .ai/state.sqlite (schema) ---`);
-  sections.push(schema);
-  sections.push("");
+  const schemaSection = `--- .ai/state.sqlite (schema) ---\n${schema}\n`;
 
-  sections.push(`=== END SYSTEM CONTEXT ===`);
+  // Render with everything first.
+  let included = entries.slice();
+  let blob = renderContextBlob(projectRoot, entries, included, schemaSection, 0);
 
-  return { blob: sections.join("\n"), fileRecords };
+  // E-177: compact stale blueprint history when over the char budget. Only blueprint-role
+  // files older than 7 days are candidates; architect/registry/schema are never evicted.
+  if (blob.length > CACHE_CHAR_LIMIT) {
+    const now = Date.now();
+    const staleOldestFirst = entries
+      .filter((e) => e.role === "blueprint" && (now - e.mtime_ms) > STALE_BLUEPRINT_AGE_MS)
+      .sort((a, b) => a.mtime_ms - b.mtime_ms);
+
+    const omit = new Set();
+    for (const e of staleOldestFirst) {
+      omit.add(e.path);
+      included = entries.filter((x) => !omit.has(x.path));
+      blob = renderContextBlob(projectRoot, entries, included, schemaSection, omit.size);
+      if (blob.length <= CACHE_CHAR_LIMIT) break;
+    }
+  }
+
+  return { blob, fileRecords };
 }
 
 // ── Staleness check ───────────────────────────────────────────────────────────
