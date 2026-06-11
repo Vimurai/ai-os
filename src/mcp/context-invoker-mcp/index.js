@@ -58,8 +58,10 @@ const SKILL_ROOTS = [
   ...projectSkillRoots,
   join(HOME, ".claude", "skills"),
   join(HOME, ".gemini", "skills"),
+  join(HOME, ".agents", "skills"), // E-167: workspace skills migrated to .agents/skills (E-132)
   join(HOME, ".ai-os", "shared", "skills"),
   join(HOME, ".ai-os", "claude", "skills"),
+  join(HOME, ".ai-os", "agents", "skills"), // E-167: installed-framework mirror of agents/skills
 ];
 
 const AGENT_ROOTS = [

@@ -111,7 +111,7 @@ cat src/db/migrations/<YYYYMMDD_HHmmss>.down.sql
 mcp__code-execution-mcp__execute_code({
   language: "typescript",
   code: `
-import DatabaseSync from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 
 // Create a temporary test database

@@ -288,6 +288,15 @@ assert_contains "P-11: blueprints pointer in run_preflight" \
 assert_contains "P-11: .md filter present in run_review" \
   ".endsWith(\".md\")" "$ORCH"
 
+# ── E-169: run_review sovereignty blocks the whole .ai/blueprints/ tree ───────
+# Regression guard: the Engineer must not author Architect-owned blueprints. The
+# sovereignty check must cover the .ai/blueprints/ directory prefix (not just the
+# exact architect.md / BRIEF.md files) so any file beneath it trips a P0 FAIL.
+assert_contains "E-169: run_review still blocks architect.md (regression guard)" \
+  ".ai/architect.md" "$ORCH"
+assert_contains "E-169: run_review blocks the .ai/blueprints/ tree" \
+  ".ai/blueprints/" "$ORCH"
+
 if command -v node &>/dev/null; then
   TMPDIR_P11=$(mktemp -d)
   mkdir -p "${TMPDIR_P11}/.ai/blueprints"

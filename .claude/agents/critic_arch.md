@@ -20,7 +20,7 @@ Target: Stamp via `mcp__task-synchronizer-mcp__add_stamp` (never write `.ai/REVI
 ## Checklist (evaluate each — all must pass for [ARCH_PASS])
 
 ### 1. Domain Sovereignty (§12)
-- Claude MUST NOT modify Architect-owned files: `.ai/architect.md`, `.ai/BRIEF.md`.
+- Claude MUST NOT modify Architect-owned files: `.ai/architect.md`, `.ai/BRIEF.md`, or anything under `.ai/blueprints/` (the entire blueprint tree is Architect-authored — E-169).
 - If the diff touches these files, this is an automatic **FAIL**.
 
 ### 2. Blueprint Coverage

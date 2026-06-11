@@ -71,10 +71,10 @@ Execute the UP script inside `code-execution-mcp` using TypeScript with node:sql
 mcp__code-execution-mcp__execute_code({
   language: "typescript",
   code: `
-import DatabaseSync from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 const db = new DatabaseSync('.ai/state.sqlite');
-db.pragma('journal_mode = WAL');
-db.pragma('locking_mode = EXCLUSIVE');
+db.exec('PRAGMA journal_mode = WAL;');
+db.exec('PRAGMA locking_mode = EXCLUSIVE;');
 db.exec('BEGIN IMMEDIATE;');
 try {
   // Paste migration SQL here as db.exec() or prepared statements

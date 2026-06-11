@@ -638,6 +638,71 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-166",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Correct better-sqlite3 imports and pragma usage to native node:sqlite DatabaseSync in src/claude/agents/db_architect.md and src/shared/skills/ai-migration/SKILL.md.",
+      "created_at": "2026-06-10T11:58:33.559Z",
+      "completed_at": "2026-06-10T14:22:33.354Z",
+      "summary": "node:sqlite migration in db_architect.md + ai-migration SKILL.md (source + 3 runtime mirrors + regenerated plugin manifest). Replaced better-sqlite3 import with node:sqlite DatabaseS …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-167",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Add ~/.agents/skills/ and ~/.ai-os/agents/skills/ to SKILL_ROOTS in src/mcp/context-invoker-mcp/index.js.",
+      "created_at": "2026-06-10T11:58:34.694Z",
+      "completed_at": "2026-06-10T14:22:33.574Z",
+      "summary": "Added ~/.agents/skills and ~/.ai-os/agents/skills to SKILL_ROOTS in context-invoker-mcp. Project .agents/skills already covered (line 48). context_invoker 24/0.",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-168",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Fix { readOnly: true } parameter to { readonly: true } in src/shared/telemetry.mjs.",
+      "created_at": "2026-06-10T11:58:36.873Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-169",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Extend sovereignty validation to block writes to .ai/blueprints/ in src/mcp/orchestrator-mcp/index.js and critic_arch template.",
+      "created_at": "2026-06-10T11:58:38.750Z",
+      "completed_at": "2026-06-10T14:22:33.787Z",
+      "summary": "run_review Check 3 now blocks the whole .ai/blueprints/ tree (dir-prefix match) + critic_arch template updated (source/mirror/manifest). Regression-guard tests added. robustness 39/0 …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-170",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Resolve documentation drift: (a) update CONTRIBUTING.md line 41 to show agents/skills, (b) fix src/bin/ai line 2397 deprecated warning to guide users to arch-review, and (c) update .ai/blueprints/agents.md to retire gemini_tasks and rename ai-review to arch-review.",
+      "created_at": "2026-06-10T11:58:43.003Z",
+      "completed_at": "2026-06-10T14:22:34.033Z",
+      "summary": "Doc drift fixed: CONTRIBUTING gemini/skills to agents/skills; ai review deprecation now points to arch-review; agents.md retired gemini_tasks and renamed Architect ai-review to arch-review.",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -1837,6 +1902,13 @@
       "task_id": null,
       "timestamp": "2026-06-09T21:34:43.846Z",
       "summary": "[TIER_3] E-153/E-154 telemetry interceptor (23-server rollout) + E-158 handoff: 6-critic adversarial review PASS-WITH-FIXES. Confirmed+fixed: P1 migration silent-data-loss (now txn+orphan-recovery+WAL), P1 proxy double-count (child AI_TELEMETRY_DISABLE), P2 migration test gap (telemetry_migration_test 10/0), P3 extra-arg/statusForResult/WAL. rollout-consistency+perf+security dims PASS. Suite 2838/0 +3 Docker flakes."
+    },
+    {
+      "type": "ARCH_AUDIT",
+      "agent": "gemini-architect",
+      "task_id": null,
+      "timestamp": "2026-06-10T11:58:44.866Z",
+      "summary": "June 2026 Architectural Audit completed: 5 critical alignment/drift flaws identified; created E-166..E-170."
     }
   ],
   "deltas": [

@@ -32,7 +32,7 @@ assert_contains "usage references removed 'test' (migration map)" "test" "$out"
 
 # Removed commands emit a deprecation message and exit 1
 out=$("$AI_BIN" review 2>&1 || true)
-assert_contains "ai review prints deprecation pointer to skill" "skill: ai-review" "$out"
+assert_contains "ai review prints deprecation pointer to skill" "skill: arch-review" "$out"
 assert_status 1 "ai review exits 1 (deprecated)" "$AI_BIN" review
 
 out=$("$AI_BIN" test 2>&1 || true)

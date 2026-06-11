@@ -2394,7 +2394,7 @@ case "$cmd" in
   preflight)     _show_deprecated "preflight" "skill: ai-preflight  (auto-runs at every session start)" ;;
   digest)        _show_deprecated "digest" "skill: ai-digest" ;;
   archive)       _show_deprecated "archive" "skill: ai-archive" ;;
-  review)        _show_deprecated "review" "skill: ai-review" ;;
+  review)        _show_deprecated "review" "skill: arch-review  (Architect codebase audit; ai-review was renamed in E-147)" ;;
   test)          _show_deprecated "test" "skill: ai-test  (use --vibe arg inside the skill for chaos audit)" ;;
   where)         _show_deprecated "where" "echo \"\$HOME/.ai-os\"  (install root is fixed)" ;;
 
