@@ -411,4 +411,42 @@ const mdFiles = readdirSync(blueprintsDir).filter(n => n.endsWith('.md'));
 if (mdFiles.length === 0) { console.error('No blueprints found'); process.exit(1); }
 JS
 
+# ── T-CACHE-S13: E-177 hot-cache compaction (stale blueprints over 20k chars) ──
+echo ""
+echo "  [T-CACHE-S13] E-177 compaction — stale blueprints pruned when blob > 20k"
+
+# Source contract (BSD-grep-safe patterns: no \s, no unescaped parens).
+assert_status 0 "CACHE_CHAR_LIMIT 20000 threshold" \
+  grep -qE 'CACHE_CHAR_LIMIT *= *20000' "$SERVER"
+assert_status 0 "7-day staleness window" \
+  grep -qE 'STALE_BLUEPRINT_AGE_MS *= *7 \* 24' "$SERVER"
+assert_status 0 "only blueprint-role files are compaction candidates" \
+  grep -qE 'role === "blueprint".*mtime_ms' "$SERVER"
+assert_status 0 "oldest-first eviction order" \
+  grep -qE 'a\.mtime_ms - b\.mtime_ms' "$SERVER"
+assert_status 0 "emits a Compacted marker" \
+  grep -q 'Compacted:' "$SERVER"
+
+# Behavioural: craft a project whose full blob exceeds 20k, with old + recent blueprints.
+# Uses --emit-context (assembles + prints WITHOUT touching the real ~/.ai-os/cache.sqlite).
+CBOX="$(mktemp -d)"
+mkdir -p "${CBOX}/.ai/blueprints"
+printf 'ARCHITECT DOC\n%s\n' "$(head -c 400 /dev/zero | tr '\0' 'A')" > "${CBOX}/.ai/architect.md"
+for i in 1 2 3 4 5 6; do
+  printf '# Blueprint %s\n%s\n' "$i" "$(head -c 5000 /dev/zero | tr '\0' 'B')" > "${CBOX}/.ai/blueprints/bp_${i}.md"
+done
+# bp_1..bp_4 are stale (>7d, Jan 2026); bp_5,bp_6 recent (now).
+for i in 1 2 3 4; do touch -t 202601010000 "${CBOX}/.ai/blueprints/bp_${i}.md"; done
+
+CBLOB="$( cd "${CBOX}" && node "$SERVER" --emit-context 2>/dev/null )"
+CLEN=${#CBLOB}
+
+assert_status 0 "compacted blob fits the 20k budget" bash -c "[[ $CLEN -le 20000 ]]"
+assert_contains "blob carries the Compacted marker" "Compacted:"     "$CBLOB"
+assert_contains "architect doc is never evicted"    "ARCHITECT DOC"  "$CBLOB"
+assert_contains "recent blueprint retained (bp_6)"  "Blueprint 6"    "$CBLOB"
+assert_not_contains "oldest stale blueprint evicted (bp_1)" "Blueprint 1" "$CBLOB"
+
+rm -rf "$CBOX"
+
 assert_summary

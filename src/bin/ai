@@ -23,9 +23,10 @@ Commands:
                  Install AI-OS personas as a native Antigravity plugin (E-144).
                  agy shows custom subagents only via installed plugins; run once
                  per machine after installing the Antigravity CLI.
-  ai doctor [--repair] [--compliance]
+  ai doctor [--repair] [--compliance] [--env]
                  Diagnose PATH, configs, hooks, MCP; --compliance audits agent
-                 frontmatter for Ghost Tools
+                 frontmatter for Ghost Tools; --env deep-checks Node/binaries/
+                 permissions and live MCP connectivity (exit 1 on critical fail)
   ai uninstall   Remove the global ~/.ai-os install (project .ai/ stays)
   ai handoff <role> [message]
                  Hand control to the other agent via the bridge (role =
@@ -1507,15 +1508,23 @@ do_sync() {
 doctor() {
   local REPAIR=0
   local COMPLIANCE=0
+  local ENVCHECK=0
   for arg in "$@"; do
     [[ "$arg" == "--repair" ]]     && REPAIR=1
     [[ "$arg" == "--compliance" ]] && COMPLIANCE=1
+    [[ "$arg" == "--env" ]]        && ENVCHECK=1
   done
 
   # E-109: --compliance audit mode (§32 verification-mcp)
   if [[ "$COMPLIANCE" -eq 1 ]]; then
     _run_compliance_audit
     return 0
+  fi
+
+  # E-175: --env deep environment + connectivity check (doctor-and-cache-optimizations.md)
+  if [[ "$ENVCHECK" -eq 1 ]]; then
+    _run_env_diagnostics
+    return $?
   fi
 
   # v3.0: REPAIR is 0/1 — ${REPAIR:+} would fire on the string "0" (non-empty),
@@ -1899,6 +1908,101 @@ for name, info in d.get('mcp_servers', {}).items():
     echo ""
     echo "Repair complete. Run: ai doctor to verify."
   fi
+}
+
+# E-175: Deep environment & connectivity diagnostics (doctor-and-cache-optimizations.md
+# §Components 1-2). Verifies the host can actually run AI-OS — Node 22+, essential
+# global binaries, Docker sandbox capability, read/write bits on the framework + project
+# state dirs — then probes live MCP connectivity via the E-176 mcp-tester. Exits 1 if any
+# CRITICAL check fails (Node version, state-db write access, ~/.ai-os access, MCP boot);
+# missing-but-optional tooling (gh/tmux/docker) is a non-fatal [WARN]. Budget: < 2.0s.
+_run_env_diagnostics() {
+  echo "AI-OS v${VERSION} — doctor (--env: deep environment & connectivity)"
+  echo ""
+  local fail=0
+
+  # Node version — 22+ required (node:sqlite, structuredClone, native test runner).
+  if command -v node >/dev/null 2>&1; then
+    local nv major
+    nv="$(node --version 2>/dev/null)"      # e.g. v26.0.0
+    major="${nv#v}"; major="${major%%.*}"
+    if [[ "${major:-0}" =~ ^[0-9]+$ ]] && [[ "${major:-0}" -ge 22 ]]; then
+      echo "  [OK]   node version (${nv})"
+    else
+      echo "  [FAIL] node version (${nv:-unknown}) — Node 22+ required"; fail=1
+    fi
+  else
+    echo "  [FAIL] node not found — Node 22+ required"; fail=1
+  fi
+
+  # Essential global binaries. git is critical; the rest degrade gracefully → [WARN].
+  for bin in git gh tmux npx; do
+    if command -v "$bin" >/dev/null 2>&1; then
+      echo "  [OK]   ${bin} on PATH"
+    elif [[ "$bin" == "git" ]]; then
+      echo "  [FAIL] ${bin} not found (required)"; fail=1
+    else
+      echo "  [WARN] ${bin} not found (recommended)"
+    fi
+  done
+
+  # Docker sandbox (code-execution-mcp) — non-fatal: the framework boots without it.
+  if command -v docker >/dev/null 2>&1; then
+    if docker info >/dev/null 2>&1; then
+      echo "  [OK]   docker execution (daemon reachable)"
+    else
+      echo "  [WARN] docker installed but daemon unreachable (code-execution sandbox disabled)"
+    fi
+  else
+    echo "  [WARN] docker not found (code-execution sandbox unavailable)"
+  fi
+
+  # Read/write permission bits on the framework + project state dirs.
+  for d in "${HOME}/.ai-os" ".ai"; do
+    if [[ -d "$d" ]]; then
+      if [[ -r "$d" && -w "$d" ]]; then
+        echo "  [OK]   ${d} read/write access"
+      else
+        echo "  [FAIL] ${d} not read/writable (permission bits)"; fail=1
+      fi
+    elif [[ "$d" == ".ai" ]]; then
+      echo "  [WARN] ${d} not present (not inside an AI-OS project dir)"
+    else
+      echo "  [FAIL] ${d} missing — run: ai install"; fail=1
+    fi
+  done
+
+  # State database write access — critical per blueprint §API exit policy.
+  if [[ -f ".ai/state.sqlite" ]]; then
+    if [[ -w ".ai/state.sqlite" ]]; then
+      echo "  [OK]   state database write access"
+    else
+      echo "  [FAIL] state database not writable (.ai/state.sqlite)"; fail=1
+    fi
+  fi
+
+  # E-176: live MCP connectivity probe (tools/list handshake). Locator chain mirrors
+  # the telemetry/incident helpers: dev tree → installed mirror → cwd fallback.
+  echo ""
+  echo "MCP connectivity (tools/list handshake):"
+  local tester="" self_dir
+  self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  for c in "${self_dir}/../shared/mcp-tester.mjs" "${AIOS}/shared/mcp-tester.mjs" "src/shared/mcp-tester.mjs"; do
+    [[ -f "$c" ]] && { tester="$c"; break; }
+  done
+  if [[ -n "$tester" ]] && [[ -f ".mcp.json" ]] && command -v node >/dev/null 2>&1; then
+    node "$tester" --config .mcp.json --timeout 2000 || fail=1
+  else
+    echo "  — skipped (mcp-tester, .mcp.json, or node unavailable)"
+  fi
+
+  echo ""
+  if [[ "$fail" -eq 0 ]]; then
+    echo "✓ Environment OK — all critical checks passed."
+    return 0
+  fi
+  echo "✗ Environment has critical failures (see [FAIL] above)."
+  return 1
 }
 
 # E-109: Compliance audit — scan agent/skill YAML frontmatter vs registry + .mcp.json (§32)
