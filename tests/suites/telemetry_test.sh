@@ -589,6 +589,48 @@ done
 assert_status 0 "hook warm-path under 250ms wallclock (sync slack budget)" \
   bash -c "[[ $ELAPSED_MS_MAX -lt 250 ]]"
 
+# ── T-TEL-S18: writable preflight probe — warns + fails open (E-173) ──────────
+echo ""
+echo "  [T-TEL-S18] non-writable telemetry path → structured warning + fail-open"
+
+# Source contract: accessSync-based writability probe + structured warn code.
+assert_status 0 "imports accessSync from node:fs" \
+  grep -qE 'accessSync' "$TELEMETRY"
+assert_status 0 "writability probe checks W_OK" \
+  grep -qE 'fsConstants\.W_OK|constants\.W_OK|W_OK' "$TELEMETRY"
+assert_status 0 "emits telemetry-db-not-writable warning code" \
+  grep -qF 'telemetry-db-not-writable' "$TELEMETRY"
+
+# Behavioural: point the helper at a file under a read-only dir. The probe must log
+# the warning AND the record call must not throw (fail-open → node rc 0). Skipped when
+# running as root (perm bits are ignored → probe cannot fail).
+SBOX_RO="$(mktemp -d)"
+RO_DIR="${SBOX_RO}/locked"
+mkdir -p "$RO_DIR"
+chmod 000 "$RO_DIR"
+
+if [[ "$(id -u)" -ne 0 ]] && ! ( : > "${RO_DIR}/.wtest" ) 2>/dev/null; then
+  STDERR_RO="$(node -e "
+import('${TELEMETRY}').then(async (m) => {
+  m.recordToolExecution({
+    project_root: '/p', session_id: 's-ro', tool_name: 'srv.tool',
+    execution_time_ms: 1, status: 'SUCCESS',
+  }, { sync: true, db_path: '${RO_DIR}/telemetry.sqlite' });
+  m.resetTelemetryCache();
+}).catch(e => { console.error('THREW:' + e.message); process.exit(3); });
+" 2>&1 1>/dev/null)"
+  RC_RO=$?
+  assert_status 0 "record call fails open (rc 0) on read-only path" \
+    bash -c "[[ $RC_RO -eq 0 ]]"
+  assert_contains "structured warning logged for non-writable path" \
+    "telemetry-db-not-writable" "$STDERR_RO"
+  assert_not_contains "no unhandled throw propagated to caller" "THREW:" "$STDERR_RO"
+else
+  echo "    (skipped behavioural read-only probe — running as root or dir is writable)"
+fi
+# Restore perms so mktemp cleanup can remove the sandbox.
+chmod 755 "$RO_DIR" 2>/dev/null || true
+
 # ── T-TEL-S10: ~/.ai-os mirrors byte-identical ────────────────────────────────
 echo ""
 echo "  [T-TEL-S10] ~/.ai-os mirrors byte-identical"

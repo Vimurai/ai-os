@@ -23,7 +23,7 @@
 ## Known Risks
 - **safe-exec fail-closed implemented** — E-125/E-128 hardened gate (THREAT_MODEL T-HITL-004), resolving prior risk.
 - **HMAC token single-user ceiling:** The tamper-resistant role tokens are generated with a 0600 machine key, which an agent running as the user can theoretically read. This is an accepted architectural limit.
-- **Architect follow-ups (COMM.md)** — ux_reviewer.md L48 still emits [VIBE_REPORT] (E-113 aligned ai-test only); prd_writer Gate-1 agent referenced but absent.
+- **Architect follow-ups (COMM.md)** — ux_reviewer.md L48 still emits [VIBE_REPORT] (E-113 aligned ai-test only).
 - **Flaky tests:** 3 code_execution Docker e2e tests occasionally flake depending on daemon warmth.
 
 ## MCP Servers
@@ -45,3 +45,4 @@
 - 2026-06-03: E-122 Formalized ai-watch fixes (.ai/TASKS.md).- 2026-06-08: auto-stamped by Stop hook
 - 2026-06-08: auto-stamped by Stop hook
 - 2026-06-09: auto-stamped by Stop hook
+- 2026-06-10: auto-stamped by Stop hook

@@ -4,7 +4,7 @@ description: "Automated visual audit of the UI using Playwright and Lighthouse. 
 ---
 
 ROLE: UX_REVIEWER (Gemini Vision + Playwright)
-Target: `.ai/REVIEWS.md` (append Vibe Report section)
+Target: Record the verdict via `mcp__task-synchronizer-mcp__add_stamp` (D-040). NEVER append to `.ai/REVIEWS.md` directly — it is a regenerated view of the SQLite stamps table, so hand-appended sections are clobbered on the next regeneration.
 Trigger: `skill: ai-test` with --vibe
 
 ## Preflight

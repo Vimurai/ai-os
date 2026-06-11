@@ -37,7 +37,7 @@
 
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, accessSync, constants as fsConstants } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -96,6 +96,25 @@ function _ensureDir(path) {
   }
 }
 
+// E-173 (June 2026 audit follow-up): preflight writability probe for telemetry.sqlite.
+// If ~/.ai-os/ (or an already-existing telemetry.sqlite) is not writable — read-only
+// mount, hostile perms, full/locked volume — emit ONE structured warning instead of
+// letting DatabaseSync surface an opaque error deep inside a record() call. FAIL-OPEN:
+// telemetry is best-effort instrumentation, so a non-writable path must NEVER block the
+// host agent; this only improves the diagnostic and returns a boolean for the caller.
+function _checkWritable(targetPath) {
+  try {
+    // Probe the db file itself if it exists (need W_OK to write rows), otherwise the
+    // parent dir (need W_OK to create the file). _ensureDir() already tried to mkdir it.
+    const probe = existsSync(targetPath) ? targetPath : dirname(targetPath);
+    accessSync(probe, fsConstants.W_OK);
+    return true;
+  } catch (e) {
+    _logErr("telemetry-db-not-writable", `${targetPath}: ${e.code || e.message}`);
+    return false;
+  }
+}
+
 function _openDb(pathOverride) {
   // Path override exists so tests can point the helper at a sandbox file
   // without HOME hacks. Production callers leave pathOverride undefined
@@ -110,7 +129,11 @@ function _openDb(pathOverride) {
     _cachedDb = null;
     _cachedPath = null;
   }
-  _ensureDir(targetPath);
+  // E-173: best-effort dir creation + writability preflight. Both are FAIL-OPEN — a
+  // read-only/unwritable path logs a clear warning but does not throw here; the
+  // DatabaseSync open below is already wrapped by every caller's try/catch.
+  try { _ensureDir(targetPath); } catch (e) { _logErr("telemetry-dir-create-failed", e.message); }
+  _checkWritable(targetPath);
   const db = new DatabaseSync(targetPath);
   // E-153/E-154 (Tier-3 review): WAL + busy_timeout (matching state-db.js) so the now-23
   // in-house MCP servers writing this single shared DB don't serialise on a global lock or

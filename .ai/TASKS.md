@@ -97,11 +97,23 @@
   Status: DONE 2026-06-10 — node:sqlite migration in db_architect.md + ai-migration SKILL.md (source + 3 runtime mirrors + regenerated plugin manifest). Replaced better-sqlite3 import with node:sqlite DatabaseS …[full in LOG.md]
 - [x] E-167: Add ~/.agents/skills/ and ~/.ai-os/agents/skills/ to SKILL_ROOTS in src/mcp/context-invoker-mcp/index.js. | Tier: 2
   Status: DONE 2026-06-10 — Added ~/.agents/skills and ~/.ai-os/agents/skills to SKILL_ROOTS in context-invoker-mcp. Project .agents/skills already covered (line 48). context_invoker 24/0.
-- [ ] E-168: Fix { readOnly: true } parameter to { readonly: true } in src/shared/telemetry.mjs. | Tier: 2
+- [x] E-168: Fix { readOnly: true } parameter to { readonly: true } in src/shared/telemetry.mjs. | Tier: 2
+  Status: DONE 2026-06-10 — INVALIDATED — verified false positive. node:sqlite uses camelCase readOnly (capital O); lowercase readonly is ignored and defaults to read-write mode. Current code in telemetry.mjs is correct.
 - [x] E-169: Extend sovereignty validation to block writes to .ai/blueprints/ in src/mcp/orchestrator-mcp/index.js and critic_arch template. | Tier: 2
   Status: DONE 2026-06-10 — run_review Check 3 now blocks the whole .ai/blueprints/ tree (dir-prefix match) + critic_arch template updated (source/mirror/manifest). Regression-guard tests added. robustness 39/0 …[full in LOG.md]
 - [x] E-170: Resolve documentation drift: (a) update CONTRIBUTING.md line 41 to show agents/skills, (b) fix src/bin/ai line 2397 deprecated warning to guide users to arch-review, and (c) update .ai/blueprints/agents.md to retire gemini_tasks and rename ai-review to arch-review. | Tier: 2
   Status: DONE 2026-06-10 — Doc drift fixed: CONTRIBUTING gemini/skills to agents/skills; ai review deprecation now points to arch-review; agents.md retired gemini_tasks and renamed Architect ai-review to arch-review.
+- [x] E-171: Update tests/suites/cli_test.sh line 35 to assert against the renamed skill 'skill: arch-review' instead of the legacy 'skill: ai-review'. | Tier: 1
+  Status: DONE 2026-06-10 — Updated cli_test.sh:35 assertion from 'skill: ai-review' to 'skill: arch-review' to match the E-170 deprecation-pointer rename. Suite now PASS=18 FAIL=0 (was 17/1).
+- [x] E-172: Update src/gemini/agents/ux_reviewer.md and its mirror .gemini/agents/ux_reviewer.md to specify that visual audit verdicts are recorded via the add_stamp tool (D-040 compliance), and rebuild the Antigravity plugin using the plugin builder. | Tier: 1
+  Status: DONE 2026-06-10 — ux_reviewer.md (src/gemini + .gemini mirror) Target line now records verdicts via add_stamp (D-040), never direct REVIEWS.md append; regenerated plugin via plugin-builder.mjs (ux_rev …[full in LOG.md]
+- [x] E-173: Add a writable check for telemetry.sqlite in src/shared/telemetry.mjs preflight that logs warning messages on failure but fails open. | Tier: 2
+  Status: DONE 2026-06-10 — Added _checkWritable() W_OK preflight probe in telemetry.mjs _openDb (+ fail-open _ensureDir); logs telemetry-db-not-writable and never throws. ~/.ai-os mirror synced. telemetry_test …[full in LOG.md]
+- [x] E-174: Remove deprecated references to prd_writer from .ai/DIGEST.md to keep documentation accurate. | Tier: 1
+  Status: DONE 2026-06-10 — Removed deprecated prd_writer reference from .ai/DIGEST.md Known Risks line 26. Suite 2879/0.
+- [ ] E-175: Implement deep environment and permission validation in src/bin/ai doctor --env, checking Node version, global binaries, and directory read/write bits. | Tier: 2
+- [ ] E-176: Implement the MCP Connection Tester (src/shared/mcp-tester.mjs) to spawn each registered MCP server, test tools/list connectivity, and integrate it into ai doctor. | Tier: 2
+- [ ] E-177: Refactor the context cache assembler in cache-manager-mcp to automatically compact/prune done task records older than 7 days when the total character count exceeds 20,000 characters. | Tier: 2
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
