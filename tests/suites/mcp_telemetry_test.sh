@@ -16,7 +16,7 @@ echo "── Suite: mcp_telemetry_test (E-153 / E-154) ────────�
 # Run all behavioural scenarios in one node process with an INJECTED recorder (no real
 # telemetry DB is touched). Emits one `key=value` token per line for assert_contains.
 OUT="$(HELPER_URL="file://${REPO_ROOT}/src/shared/mcp-telemetry.mjs" node --input-type=module <<'NODE'
-const { withTelemetry, toolNameFor, statusForResult } = await import(process.env.HELPER_URL);
+const { withTelemetry, toolNameFor, statusForResult, rejection, markRejection } = await import(process.env.HELPER_URL);
 
 const reqFor = (name) => ({ params: { name } });
 let captured = null;
@@ -75,6 +75,25 @@ console.log("instrument_calltool_count=" + calls.length);
 console.log("instrument_names=" + calls.map((c) => c.tool_name).join(","));
 console.log("instrument_statuses=" + calls.map((c) => c.status).join(","));
 console.log("instrument_listtools_untouched=" + (listRes.tools[0] === "passthrough" ? "true" : "false"));
+
+// 7. E-179: expected-rejection marker. rejection()/markRejection() flag an isError result as
+//    an EXPECTED rejection so the interceptor books SUCCESS (tool healthy) while the model
+//    still receives isError:true. Unmarked isError results stay ERROR.
+const rej = rejection("✗ [INVALID_X] bad input");
+console.log("rej_iserror=" + (rej.isError === true ? "true" : "false"));
+console.log("rej_marked=" + (rej._meta && rej._meta.expected_rejection === true ? "true" : "false"));
+console.log("rej_status=" + statusForResult(rej));                                   // SUCCESS
+console.log("markrej_status=" + statusForResult(markRejection({ content: [], isError: true }))); // SUCCESS
+console.log("unmarked_iserror_status=" + statusForResult({ isError: true, _meta: {} }));          // ERROR
+// end-to-end: a wrapped handler returning a rejection() records SUCCESS but still returns isError.
+captured = null;
+const rejHandler = withTelemetry("task-synchronizer-mcp", async () => rejection("✗ [SEED_NOT_FOUND] TS-9"), { record: rec });
+const rejRes = await rejHandler(reqFor("get_topic_cluster"));
+console.log("rej_e2e_status=" + captured.status);                                    // SUCCESS
+console.log("rej_e2e_iserror=" + (rejRes && rejRes.isError === true ? "true" : "false")); // model still sees isError
+// E-179 (critic_tests P2): the non-object guard branches.
+console.log("status_null=" + statusForResult(null));                                 // ERROR (malformed)
+console.log("markrej_null_safe=" + (markRejection(null) === null ? "true" : "false")); // safe no-op, no throw
 NODE
 )"
 
@@ -96,5 +115,15 @@ assert_contains "153.08: instrument() wraps both CallTool calls"  "instrument_ca
 assert_contains "153.08b: instrument() names both tools"          "instrument_names=mcp__demo-mcp__ok,mcp__demo-mcp__boom" "$OUT"
 assert_contains "153.08c: instrument() classifies SUCCESS+ERROR"  "instrument_statuses=SUCCESS,ERROR" "$OUT"
 assert_contains "153.08d: instrument() leaves ListTools untouched" "instrument_listtools_untouched=true" "$OUT"
+# ── E-179: expected-rejection marker classification ──────────────────────────
+assert_contains "179.01: rejection() sets isError:true (model still reacts)"   "rej_iserror=true"           "$OUT"
+assert_contains "179.02: rejection() stamps _meta.expected_rejection"          "rej_marked=true"            "$OUT"
+assert_contains "179.03: marked isError result classifies SUCCESS"             "rej_status=SUCCESS"         "$OUT"
+assert_contains "179.04: markRejection() also yields SUCCESS"                   "markrej_status=SUCCESS"     "$OUT"
+assert_contains "179.05: UNMARKED isError still classifies ERROR"              "unmarked_iserror_status=ERROR" "$OUT"
+assert_contains "179.06: wrapped rejection() records SUCCESS telemetry"        "rej_e2e_status=SUCCESS"     "$OUT"
+assert_contains "179.07: wrapped rejection() still returns isError to model"   "rej_e2e_iserror=true"       "$OUT"
+assert_contains "179.08: statusForResult(null) MALFORMED → ERROR"             "status_null=ERROR"          "$OUT"
+assert_contains "179.09: markRejection(null) is a safe no-op (no throw)"       "markrej_null_safe=true"     "$OUT"
 
 assert_summary

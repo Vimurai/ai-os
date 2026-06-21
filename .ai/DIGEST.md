@@ -1,4 +1,4 @@
-# DIGEST — AI-OS v2 (Updated: 2026-06-11)
+# DIGEST — AI-OS v2 (Updated: 2026-06-21)
 
 ## Product
 - Autonomous OS for AI coding agents — Architect (Gemini) + Engineer (Claude Opus 4.8) + Tester (TestSprite), coordinated via ACID SQLite state, 25 MCP servers, JIT context cache, RBAC-gated skills, NDJSON observability, drop-in installer, Managed Agents cloud reconciliation, Multimodal RAG, cross-project meta-cognition telemetry, SEO Topic Cluster Engine, Sovereignty Hardening, and the tmux Interactive Bridge (ping-pong loop). Runtime version v3.0.0.
@@ -7,12 +7,12 @@
 - Node.js 22+ (MCP servers, node:sqlite, ESM, fetch), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
 
 ## Triad Health
-- Architect (Gemini): planned the June 2026 Architectural Audit (E-166..E-170) + post-audit/doctor-cache followups (E-171..E-177). NEXT: ratify the E-177 reinterpretation + plan next sprint.
-- Engineer (Claude): Queue EXHAUSTED — E-166..E-177 all DONE and merged to master (PRs #17, #20 [replaced auto-closed #18], #19). Control handed to Architect (signal #48).
-- Tester (TestSprite): PASS — full suite 2924 pass; only the 3 pre-existing code_execution Docker flakes (python:3.12-slim not pullable locally; green in CI).
+- Architect (Gemini): ratified E-177 (D-047). NEXT: ratify the E-179 telemetry-classification refinement + plan next sprint.
+- Engineer (Claude): Queue EXHAUSTED — E-178 + E-179 (Insights automation & telemetry audit) DONE; full suite 2976/0. Control handed to Architect.
+- Tester (TestSprite): PASS — full suite 2976 pass; only the 3 pre-existing code_execution Docker flakes (python:3.12-slim not pullable locally; green in CI).
 
 ## Current Focus
-- NONE OPEN — E-166..E-177 shipped. Awaiting Architect to ratify E-177 + plan the next sprint.
+- NONE OPEN — E-178/E-179 shipped. Awaiting Architect to ratify the E-179 telemetry-rejection refinement + plan the next sprint.
 
 ## Key Decisions
 - D-046: Synchronous OAuth pre-refresh + dynamic mcp__ tool harvesting for agy subagents.
@@ -21,7 +21,8 @@
 - D-040: Distributed Stamping for Tier-3 critics (add_stamp, never direct REVIEWS.md).
 
 ## Known Risks
-- **E-177 reinterpretation (UNRATIFIED):** blueprint said "prune done task records" but the cache holds blueprints+schema, no task records — shipped as stale-blueprint eviction (>20k chars, >7d). Blueprint also self-contradicts on threshold (5k vs 20k; used 20k). Architect must ratify.
+- **E-179 telemetry refinement (UNRATIFIED):** `isError` results explicitly marked `_meta.expected_rejection` now book SUCCESS (not ERROR) so the meta-cognition deprecation aggregate measures genuine malfunctions, not expected validation/not-found/schema-fail rejections. No status-taxonomy migration done; a distinct REJECTED dimension (to retain usage-friction signal) is flagged for the Architect (meta-cognition.md).
+- **E-177 reinterpretation:** RATIFIED by Architect as D-047 (2026-06-20) — stale-blueprint eviction (>20k chars, >7d), 20k threshold.
 - **HMAC token single-user ceiling:** role tokens use a 0600 machine key an as-user agent can read — accepted architectural limit.
 - **Flaky tests:** 3 code_execution Docker e2e tests flake on cold/unpullable python:3.12-slim image (environmental, not code).
 
@@ -33,6 +34,8 @@
 - New tooling: `ai doctor --env` live connectivity probe via src/shared/mcp-tester.mjs (E-176).
 
 ## Recent Changes (last 12)
+- 2026-06-21: E-179 telemetry failure-rate audit — `_meta.expected_rejection` marker + rejection()/markRejection() in mcp-telemetry.mjs so expected rejections book SUCCESS; applied across task-synchronizer/code-execution/ast-parser/propose-patch; docs/audits/E-179-mcp-tool-failure-audit.md. Verdict: the 7 "deprecation candidates" were misclassified rejections, not broken tools.
+- 2026-06-21: E-178 CLI automation wrapper skills (ai-analyze, ai-sync-verify, ai-dispatch, ai-topic, ai-cluster) for the top-5 high-frequency MCP tools from INSIGHTS.md (src/shared/skills + mirrors).
 - 2026-06-11: E-177 cache-manager hot-cache compaction — evict stale >7d blueprints when blob >20k chars (src/mcp/cache-manager-mcp).
 - 2026-06-11: E-176 src/shared/mcp-tester.mjs MCP connection tester (stdio tools/list, curated env).
 - 2026-06-11: E-175 `ai doctor --env` deep environment + connectivity diagnostics (src/bin/ai).

@@ -29,7 +29,7 @@ import { languageForFile, extractFromSource } from "./extractor.mjs";
 import { rankSymbols } from "./repo-mapper.mjs";
 import { serializeRepoMap } from "./serializer.mjs";
 // E-153 (telemetry-hardening.md): global telemetry interceptor (SDK-free — schema injected).
-import { instrument } from "../../shared/mcp-telemetry.mjs";
+import { instrument, rejection } from "../../shared/mcp-telemetry.mjs";
 
 const MAX_FILE_BYTES = 1_000_000; // skip files > 1 MB (DoS / minified bundles)
 const DEFAULT_MAX_FILES = 2000;
@@ -193,7 +193,11 @@ const TOOLS = [
 async function dispatchTool(name, args) {
   if (name === "parse_workspace") {
     const result = await parseWorkspace(args?.dir_path, args?.max_files);
-    if (result.error) return { content: [{ type: "text", text: result.error }], isError: true };
+    // E-179: parseWorkspace errors are EXPECTED target rejections ([PATH_DENIED] /
+    // [NOT_FOUND] — the caller pointed at a forbidden/missing path), not a parser malfunction.
+    // Booked SUCCESS for telemetry so parse_workspace's "unstable parse target" rate stops
+    // reading as a defect. Genuine thrown exceptions still hit the catch below → ERROR.
+    if (result.error) return rejection(result.error);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   }
   if (name === "generate_map") {
@@ -201,7 +205,7 @@ async function dispatchTool(name, args) {
     if (r.disabled) {
       return { content: [{ type: "text", text: "[REPO_MAP_DISABLED] AI_OS_DISABLE_REPO_MAP=1 — generate_map is a no-op." }] };
     }
-    if (r.error) return { content: [{ type: "text", text: r.error }], isError: true };
+    if (r.error) return rejection(r.error);  // E-179: expected bad-target rejection, not a defect
     return { content: [{ type: "text", text: JSON.stringify(r.summary, null, 2) }] };
   }
   return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
