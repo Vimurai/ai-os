@@ -794,6 +794,45 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-178",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement CLI automation wrapper skills (ai-analyze, ai-cluster, ai-sync-verify, ai-topic, ai-dispatch) for the top 5 high-frequency un-wrapped MCP tools identified by the telemetry insights report. Acceptance: The 5 new skills exist in src/shared/skills/ and are integrated into the core workflow.",
+      "created_at": "2026-06-20T20:44:52.320Z",
+      "completed_at": "2026-06-20T23:57:37.415Z",
+      "summary": "5 CLI automation wrapper skills for the top-5 high-frequency MCP tools from INSIGHTS.md: ai-analyze→safe-exec analyze_command, ai-sync-verify→verify_markdown_sync, ai-dispatch→orches …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-179",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Audit the high-failure-rate MCP tools (execute_code, add_topic_seed, report_performance, validate_payload, get_topic_cluster, parse_workspace, confirm_patch) highlighted in the telemetry insights report, and implement fixes or deprecation paths for them. Acceptance: Root causes are investigated and addressed with code fixes or documented deprecation.",
+      "created_at": "2026-06-20T20:44:57.112Z",
+      "completed_at": "2026-06-20T23:57:43.499Z",
+      "summary": "Audited 7 INSIGHTS \"deprecation candidate\" tools — root cause (E-168-class): statusForResult booked every isError as ERROR, but ~all flagged failures are EXPECTED rejections (validat …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-180",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 3,
+      "description": "Execute a database data migration for telemetry.sqlite to introduce the REJECTED status dimension for tool executions. Refactor mcp-telemetry.mjs to book _meta.expected_rejection markers as REJECTED instead of SUCCESS to restore usage-friction visibility for the meta_analyst. Update the meta_analyst SQL queries to handle the new status without flagging them as broken tools. Acceptance: Migration is executed safely (use ai-migration/db_architect), _meta.expected_rejection is booked as REJECTED, and meta_analyst SQL queries are updated. per .ai/blueprints/meta-cognition.md.",
+      "created_at": "2026-06-20T23:59:50.059Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2000,6 +2039,41 @@
       "task_id": null,
       "timestamp": "2026-06-10T11:58:44.866Z",
       "summary": "June 2026 Architectural Audit completed: 5 critical alignment/drift flaws identified; created E-166..E-170."
+    },
+    {
+      "type": "INSIGHTS_GENERATED",
+      "agent": "meta_analyst",
+      "task_id": null,
+      "timestamp": "2026-06-20T20:34:34.020Z",
+      "summary": "INSIGHTS.md regenerated — 25247 rows analysed, 12 recommendations"
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-179",
+      "timestamp": "2026-06-21T07:55:28.018Z",
+      "summary": "E-178/E-179: No sovereignty violations (.ai/blueprints, architect.md, BRIEF.md all absent from diff). Telemetry change faithful to meta-cognition intent — ERROR dimension preserved for genuine malfunctions; status taxonomy SUCCESS/ERROR/TIMEOUT unchanged, no schema migration (REJECTED dimension correctly deferred to E-180 Tier-3 pending Architect ratification per §35). 5 wrapper skills follow established taxonomy (context:default, procedural, scoped allowed-tools), correctly placed in src/shared/skills and byte-identical across .claude + .agents mirrors. No orphaned code; all changes trace to E-178/E-179 in TASKS.md. UNRATIFIED telemetry semantics flagged in DECISIONS.md for Architect."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-179",
+      "timestamp": "2026-06-21T07:56:40.517Z",
+      "summary": "No P0/P1 vulns. E-179 rejection()/markRejection() are telemetry-classification-only: all three security guards verified UNCHANGED — ast-parser [PATH_DENIED] containment (returns before file collection), code-execution Docker fail-closed (early-return before executeInDocker), task-synchronizer shell-metacharacter regex (fires before INSERT). isError stays true to the model; _meta carries only a static boolean (no env/secret leak). E-178 skills name only mcp__ + Bash builtins, no scope over-reach; no .mcp.json/.env/CAPABILITIES touched. No hardcoded secrets."
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-179",
+      "timestamp": "2026-06-21T08:01:30.280Z",
+      "summary": "All tests passing (2976/0). E-178: cli_wrapper_skills_test (45/0) covers all 5 skills' existence+byte-identical mirrors+frontmatter. E-179: mcp_telemetry_test §179.01-07 (23/0) covers rejection()/markRijection()/statusForResult marker branch + e2e; structured_outputs_test (51/0) updated for helper form. Verified genuine confirm_patch failures (apply-after-dry-run + write-catch) stay UNMARKED→ERROR. P2 advisory only: markRejection() non-object guard and statusForResult() non-object/MALFORMED branch lack direct assertions (covered indirectly). Non-blocking."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude (review synthesis)",
+      "task_id": "E-179",
+      "timestamp": "2026-06-21T08:02:38.169Z",
+      "summary": "E-178/E-179 parallel critics ALL PASS — ARCH_PASS (no blueprint writes; SUCCESS/ERROR/TIMEOUT taxonomy intact; REJECTED dim deferred to E-180), SEC_PASS (PATH_DENIED/Docker-fail-closed/shell-metachar guards behaviorally unchanged; no _meta leakage), TESTS_PASS (2976/0; genuine confirm_patch errors stay ERROR; P2 non-object-guard assertions added 179.08/09). No P0/P1."
     }
   ],
   "deltas": [

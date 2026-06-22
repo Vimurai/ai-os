@@ -318,7 +318,11 @@ const src = readFileSync('$SERVER', 'utf8');
 const idx = src.indexOf('case "validate_payload":');
 if (idx === -1) process.exit(1);
 const block = src.slice(idx, idx + 1200);
-if (!block.includes('isError: true')) process.exit(1);
+// E-179: SCHEMA_FAIL still signals isError to the model, but now via the shared
+// rejection() helper ({ ..., isError: true, _meta.expected_rejection }) so telemetry
+// books it SUCCESS (validate_payload reporting an invalid payload is the tool working,
+// not failing). Accept either the inline literal or the helper form.
+if (!block.includes('isError: true') && !block.includes('rejection(')) process.exit(1);
 JS
 
 # ── T-SO-S05: TASKS.md/REVIEWS.md protection ─────────────────────────────────

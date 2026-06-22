@@ -31,7 +31,7 @@ import { isMainModule } from "../shared/is-main.mjs";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { instrument } from "../../shared/mcp-telemetry.mjs";
+import { instrument, rejection } from "../../shared/mcp-telemetry.mjs";
 import { readFileSync, writeFileSync, existsSync, unlinkSync, copyFileSync } from "fs";
 import { resolve, relative } from "path";
 import { spawnSync } from "child_process";
@@ -278,21 +278,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     // ── confirm_patch ─────────────────────────────────────────────────────────
     case "confirm_patch": {
       const db = _patchDb();
+      // E-179: the guards below are EXPECTED rejections — missing DB (setup not run), a stale
+      // patch id (already applied/rejected), or a non-pending patch (double-confirm). The tool
+      // is behaving correctly, not failing; booked SUCCESS so confirm_patch's 33% rate (mostly
+      // stale ids + clean dry-run refusals) stops masquerading as a defect. Genuine apply/write
+      // failures below stay UNMARKED → still ERROR.
       if (!db) {
-        return { content: [{ type: "text", text: "✗ state.sqlite not found — run: ai init" }], isError: true };
+        return rejection("✗ state.sqlite not found — run: ai init");
       }
       const patch = db.prepare("SELECT * FROM patches WHERE id = ?").get(args.patch_id);
       if (!patch) {
-        return {
-          content: [{ type: "text", text: `✗ Patch not found: '${args.patch_id}'. It may have already been applied or rejected.` }],
-          isError: true,
-        };
+        return rejection(`✗ Patch not found: '${args.patch_id}'. It may have already been applied or rejected.`);
       }
       if (patch.status !== "pending") {
-        return {
-          content: [{ type: "text", text: `✗ Patch '${args.patch_id}' is already ${patch.status}.` }],
-          isError: true,
-        };
+        return rejection(`✗ Patch '${args.patch_id}' is already ${patch.status}.`);
       }
 
       // Defense-in-depth: re-check role at apply time
@@ -312,13 +311,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           // 1. Dry-run first — never mutate the file unless every hunk applies.
           const dry = spawnSync("patch", ["--dry-run", "-f", patch.path, "-"], popts);
           if (dry.status !== 0) {
-            return {
-              content: [{
-                type: "text",
-                text: `✗ patch would not apply cleanly (dry-run exit ${dry.status}) — no changes written:\n${dry.stderr || dry.stdout || "(no output)"}`,
-              }],
-              isError: true,
-            };
+            // E-179: a clean dry-run refusal is the tool's core SAFETY guard working as designed
+            // (the patch does not apply to the current file state) — an expected rejection that
+            // protected the file, not a malfunction. Booked SUCCESS for telemetry.
+            return rejection(
+              `✗ patch would not apply cleanly (dry-run exit ${dry.status}) — no changes written:\n${dry.stderr || dry.stdout || "(no output)"}`
+            );
           }
           // 2. Apply with a backup so a failure past the dry-run can be rolled back.
           const backup = `${patch.path}.orig`;

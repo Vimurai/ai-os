@@ -36,7 +36,7 @@ import { emitHandoff } from "../../shared/signal-handoff.mjs";
 // E-153 (telemetry-hardening.md): global telemetry interceptor — instrument() patches
 // setRequestHandler so EVERY CallTool invocation records a SUCCESS/ERROR row (closing the
 // all-SUCCESS blindness the INSIGHTS report surfaced), not just the rare proxy_call'd ones.
-import { instrument } from "../../shared/mcp-telemetry.mjs";
+import { instrument, rejection } from "../../shared/mcp-telemetry.mjs";
 // E-155 (telemetry-hardening.md §Components 3): record task_velocity at the
 // canonical DONE transition so completion metrics are captured reliably.
 import { recordTaskVelocityForTask } from "../../shared/telemetry.mjs";
@@ -727,10 +727,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const payload    = args.payload;
 
       if (!schemaName) {
-        return { content: [{ type: "text", text: "✗ schema_name is required." }], isError: true };
+        return rejection("✗ schema_name is required.");
       }
       if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
-        return { content: [{ type: "text", text: "✗ payload must be a JSON object." }], isError: true };
+        return rejection("✗ payload must be a JSON object.");
       }
 
       const result = validateNamed(schemaName, payload);
@@ -743,14 +743,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }],
         };
       }
-      return {
-        content: [{
-          type: "text",
-          text: `[SCHEMA_FAIL] '${schemaName}' — ${result.errors.length} error(s):\n` +
-                result.errors.map(e => `  • ${e}`).join("\n"),
-        }],
-        isError: true,
-      };
+      // E-179: SCHEMA_FAIL is the tool working as designed (it validated and the payload
+      // was invalid) — an expected rejection, not a malfunction. isError stays true for the
+      // model; telemetry books SUCCESS so validate_payload's ~50% "failure rate" (which was
+      // just invalid payloads) no longer pollutes the deprecation aggregate.
+      return rejection(
+        `[SCHEMA_FAIL] '${schemaName}' — ${result.errors.length} error(s):\n` +
+        result.errors.map(e => `  • ${e}`).join("\n")
+      );
     }
 
     // ── mark_deltas_read ──────────────────────────────────────────────────────
@@ -789,16 +789,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "add_topic_seed": {
       const term = typeof args.term === "string" ? args.term.trim() : "";
+      // E-179: all three guards below are EXPECTED input rejections (the caller sent a bad
+      // term/volume) — booked SUCCESS for telemetry so add_topic_seed's 85.7% "failure rate"
+      // (which was just invalid input) stops masquerading as a broken tool.
       if (term.length === 0 || term.length > 256) {
-        return { content: [{ type: "text", text: "✗ [INVALID_TOPIC_TERM] term must be 1..256 chars" }], isError: true };
+        return rejection("✗ [INVALID_TOPIC_TERM] term must be 1..256 chars");
       }
       // Reject shell metacharacters (mirrors seo_manager.md Preflight #3).
       if (/[;&|`$()<>\n\r]/.test(term)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_TOPIC_TERM] term contains shell metacharacters" }], isError: true };
+        return rejection("✗ [INVALID_TOPIC_TERM] term contains shell metacharacters");
       }
       const targetVolume = Number.isFinite(args.target_volume) ? Math.floor(args.target_volume) : MAX_CLUSTER_PAGES_PER_SEED;
       if (targetVolume < 1 || targetVolume > MAX_CLUSTER_PAGES_PER_SEED) {
-        return { content: [{ type: "text", text: `✗ [INVALID_TARGET_VOLUME] must be 1..${MAX_CLUSTER_PAGES_PER_SEED}` }], isError: true };
+        return rejection(`✗ [INVALID_TARGET_VOLUME] must be 1..${MAX_CLUSTER_PAGES_PER_SEED}`);
       }
       const id = _nextTopicSeedId(db);
       const createdAt = new Date().toISOString();
@@ -817,21 +820,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     case "add_cluster_page": {
       const seedId = String(args.seed_id || "").trim();
       const intent = String(args.intent_type || "").trim();
+      // E-179: the validation/guard rejections in this handler are EXPECTED outcomes (bad
+      // seed id, unknown intent, missing seed, duplicate intent, cap reached) — the tool
+      // working correctly, not failing. Booked SUCCESS for telemetry.
       if (!/^TS-\d+$/.test(seedId)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format TS-N" }], isError: true };
+        return rejection("✗ [INVALID_SEED_ID] expected format TS-N");
       }
       if (!_isValidIntentType(intent)) {
-        return {
-          content: [{
-            type: "text",
-            text: `✗ [UNKNOWN_INTENT_TYPE] '${intent}' is not a canonical cluster intent. Valid: ${SEO_ALL_INTENTS.join(", ")}`,
-          }],
-          isError: true,
-        };
+        return rejection(`✗ [UNKNOWN_INTENT_TYPE] '${intent}' is not a canonical cluster intent. Valid: ${SEO_ALL_INTENTS.join(", ")}`);
       }
       const seedRow = db.prepare("SELECT id FROM topic_seeds WHERE id = ?").get(seedId);
       if (!seedRow) {
-        return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] TopicSeed '${seedId}' does not exist. Call add_topic_seed first.` }], isError: true };
+        return rejection(`✗ [SEED_NOT_FOUND] TopicSeed '${seedId}' does not exist. Call add_topic_seed first.`);
       }
       // Cannibalization guard: refuse a duplicate (seed_id, intent_type) —
       // every page in a cluster MUST target a unique, non-overlapping intent.
@@ -839,7 +839,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         "SELECT id FROM cluster_pages WHERE seed_id = ? AND intent_type = ?"
       ).get(seedId, intent);
       if (dup) {
-        return { content: [{ type: "text", text: `✗ [INTENT_ALREADY_USED] ${seedId} already has intent '${intent}' (page ${dup.id})` }], isError: true };
+        return rejection(`✗ [INTENT_ALREADY_USED] ${seedId} already has intent '${intent}' (page ${dup.id})`);
       }
       // Defence-in-depth: enforce the lifted cluster-page cap at the storage
       // layer even if upstream (seo_manager E-87) miscounts. The Pillar page
@@ -849,7 +849,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           `SELECT COUNT(*) as n FROM cluster_pages WHERE seed_id = ? AND intent_type != ?`
         ).get(seedId, SEO_PILLAR_INTENT).n;
         if (clusterCount >= MAX_CLUSTER_PAGES_PER_SEED) {
-          return { content: [{ type: "text", text: `✗ [CLUSTER_CAP_REACHED] seed ${seedId} already has ${clusterCount}/${MAX_CLUSTER_PAGES_PER_SEED} cluster pages` }], isError: true };
+          return rejection(`✗ [CLUSTER_CAP_REACHED] seed ${seedId} already has ${clusterCount}/${MAX_CLUSTER_PAGES_PER_SEED} cluster pages`);
         }
       }
 
@@ -871,17 +871,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "report_performance": {
       const pid = String(args.page_id || "").trim();
+      // E-179: invalid id / invalid metrics / not-found are EXPECTED rejections (caller
+      // error), booked SUCCESS for telemetry so report_performance's 60% "failure rate"
+      // stops reading as a broken tool.
       if (!/^CP-\d+$/.test(pid)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_PAGE_ID] expected format CP-N" }], isError: true };
+        return rejection("✗ [INVALID_PAGE_ID] expected format CP-N");
       }
       if (!args.metrics || typeof args.metrics !== "object" || Array.isArray(args.metrics)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_METRICS] metrics must be a JSON object" }], isError: true };
+        return rejection("✗ [INVALID_METRICS] metrics must be a JSON object");
       }
       const row = db.prepare(
         "SELECT id, performance_metrics FROM cluster_pages WHERE id = ?"
       ).get(pid);
       if (!row) {
-        return { content: [{ type: "text", text: `✗ [PAGE_NOT_FOUND] ${pid}` }], isError: true };
+        return rejection(`✗ [PAGE_NOT_FOUND] ${pid}`);
       }
       // Merge-patch semantics: existing JSON + supplied keys; new keys
       // overwrite. Mirrors the JSON merge contract documented in the tool's
@@ -904,14 +907,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     case "get_topic_cluster": {
       const seedId = String(args.seed_id || "").trim();
+      // E-179: bad seed id / not-found are EXPECTED rejections (caller error), booked SUCCESS
+      // for telemetry so get_topic_cluster's 50% "failure rate" stops reading as a defect.
       if (!/^TS-\d+$/.test(seedId)) {
-        return { content: [{ type: "text", text: "✗ [INVALID_SEED_ID] expected format TS-N" }], isError: true };
+        return rejection("✗ [INVALID_SEED_ID] expected format TS-N");
       }
       const seed = db.prepare(
         "SELECT id, term, status, target_volume, created_at, completed_at FROM topic_seeds WHERE id = ?"
       ).get(seedId);
       if (!seed) {
-        return { content: [{ type: "text", text: `✗ [SEED_NOT_FOUND] ${seedId}` }], isError: true };
+        return rejection(`✗ [SEED_NOT_FOUND] ${seedId}`);
       }
       const pages = db.prepare(
         "SELECT id, intent_type, content_blob, performance_metrics, published_at, created_at FROM cluster_pages WHERE seed_id = ? ORDER BY id"

@@ -42,7 +42,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { instrument } from "../../shared/mcp-telemetry.mjs";
+import { instrument, rejection, markRejection } from "../../shared/mcp-telemetry.mjs";
 import { spawn, spawnSync } from "node:child_process";
 import { createLogger } from "../shared/logger.js";
 
@@ -317,27 +317,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     req = validateRequest(args);
   } catch (e) {
     log("warn", name, "validation failed", { error: e.message });
-    return {
-      content: [{ type: "text", text: `[VALIDATE_FAIL] ${e.message}` }],
-      isError: true,
-    };
+    // E-179: invalid args is an EXPECTED rejection (caller error), not a tool defect —
+    // booked SUCCESS for telemetry while the model still sees isError.
+    return rejection(`[VALIDATE_FAIL] ${e.message}`);
   }
 
   const probe = probeDocker();
   if (!probe.available) {
     log("warn", name, "sandbox unavailable", { reason: probe.reason });
-    return {
-      content: [
-        {
-          type: "text",
-          text:
-            `[SANDBOX_UNAVAILABLE] ${probe.reason}\n` +
-            `Refusing to execute outside the Docker sandbox — security boundary is fail-closed.\n` +
-            `Start Docker Desktop (or daemon) and retry.`,
-        },
-      ],
-      isError: true,
-    };
+    // E-179: the sandbox being unavailable is an ENVIRONMENTAL precondition (Docker daemon
+    // down / image not pullable) — the tool is fail-closed by design and refusing correctly,
+    // not malfunctioning. This dominates execute_code's 100% telemetry "failure rate" in
+    // environments without Docker; booking it SUCCESS keeps the deprecation aggregate honest
+    // (the tool is healthy — the host is missing a dependency).
+    return rejection(
+      `[SANDBOX_UNAVAILABLE] ${probe.reason}\n` +
+      `Refusing to execute outside the Docker sandbox — security boundary is fail-closed.\n` +
+      `Start Docker Desktop (or daemon) and retry.`
+    );
   }
 
   log("info", name, "executing", {
@@ -363,7 +360,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     (result.timed_out ? " | TIMED_OUT" : "") +
     (result.truncated ? " | TRUNCATED" : "");
 
-  return {
+  const out = {
     content: [
       { type: "text", text: summary },
       {
@@ -380,6 +377,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     ],
     ...(result.exit_code !== 0 ? { isError: true } : {}),
   };
+  // E-179: a non-zero exit from the SANDBOXED USER CODE means execute_code ran successfully
+  // and faithfully reported the code's own failure — an expected, domain-negative result, not
+  // a tool malfunction. isError stays true (the model must see the run failed); telemetry
+  // books SUCCESS so successful runs of failing/debugged code stop inflating the error rate.
+  if (result.exit_code !== 0) markRejection(out);
+  return out;
 });
 
 const startupProbe = probeDocker();

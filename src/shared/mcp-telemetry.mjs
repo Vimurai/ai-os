@@ -28,14 +28,51 @@ export function toolNameFor(serverName, request) {
   return `mcp__${serverName}__${typeof tool === "string" && tool ? tool : "unknown"}`;
 }
 
-// Classify an MCP CallTool result. A handler that returns `{ isError: true }` is a tool-level
-// failure (E-154); a non-object/undefined return is MALFORMED — the SDK validates the result
-// against CallToolResultSchema after we run and rejects it with an McpError, so we book it
-// ERROR too rather than a false SUCCESS (Tier-3 review). A thrown exception is classified
-// ERROR by the catch in withTelemetry.
+// E-179: marker key a handler sets on `result._meta` to flag an `isError` result as an
+// EXPECTED rejection (input validation, not-found, schema-fail, a domain-negative result
+// like sandboxed code exiting non-zero) — the tool worked correctly, the caller/precondition
+// was the problem. The meta-cognition INSIGHTS deprecation aggregate (E-85) counts ERROR rows
+// to find BROKEN tools; conflating expected rejections with malfunctions polluted it (the 7
+// "high-failure" tools audited in E-179 were ~all expected rejections, not defects). `_meta`
+// is a spec-sanctioned passthrough field, so the result the model receives is unchanged.
+export const EXPECTED_REJECTION_META = "expected_rejection";
+
+// Classify an MCP CallTool result. A handler that returns `{ isError: true }` is normally a
+// tool-level failure (E-154); a non-object/undefined return is MALFORMED — the SDK validates
+// the result against CallToolResultSchema after we run and rejects it with an McpError, so we
+// book it ERROR too rather than a false SUCCESS (Tier-3 review). A thrown exception is
+// classified ERROR by the catch in withTelemetry. E-179 exception: an `isError` result
+// explicitly marked `_meta.expected_rejection === true` is the tool working as designed and
+// books SUCCESS — genuine handled errors stay UNMARKED and therefore still book ERROR.
 export function statusForResult(result) {
   if (!result || typeof result !== "object") return TELEMETRY_STATUS.ERROR;
-  return result.isError ? TELEMETRY_STATUS.ERROR : TELEMETRY_STATUS.SUCCESS;
+  if (!result.isError) return TELEMETRY_STATUS.SUCCESS;
+  if (result._meta && result._meta[EXPECTED_REJECTION_META] === true) {
+    return TELEMETRY_STATUS.SUCCESS;
+  }
+  return TELEMETRY_STATUS.ERROR;
+}
+
+// E-179 helper — build an `isError` result already flagged as an EXPECTED rejection. Use for
+// single-text validation/not-found/schema-fail returns. The model still sees `isError: true`
+// (so it reacts to the bad input); telemetry books it SUCCESS (the tool is healthy). Do NOT
+// use this for genuine internal failures — leave those as a plain `{ isError: true }` so they
+// remain ERROR in the deprecation aggregate.
+export function rejection(text) {
+  return {
+    content: [{ type: "text", text }],
+    isError: true,
+    _meta: { [EXPECTED_REJECTION_META]: true },
+  };
+}
+
+// E-179 helper — stamp the expected-rejection marker onto an already-built result (e.g. a
+// multi-content payload) without rebuilding it. Returns the same object for inline use.
+export function markRejection(result) {
+  if (result && typeof result === "object") {
+    result._meta = { ...(result._meta || {}), [EXPECTED_REJECTION_META]: true };
+  }
+  return result;
 }
 
 /**

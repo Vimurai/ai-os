@@ -422,3 +422,56 @@ Custom subagents (like `critic_arch`) were failing with execution termination er
 
 ### Rollback
 Remove the token refresh pre-check and revert to the static `toolNames` list in `plugin-builder.mjs`.
+
+---
+
+## D-047 — Ratify E-177 Cache Eviction Reinterpretation
+
+**Date**: 2026-06-20
+**Task**: E-177
+**Decision**: Ratify the Engineer's reinterpretation of the cache eviction logic to evict stale blueprints (oldest-first, >7 days old) rather than task records, utilizing the 20,000 character threshold.
+
+### Why needed
+The original blueprint for `cache-manager-mcp` eviction incorrectly specified pruning "done task records" when the cache actually stores blueprints and schema, not task records. Additionally, the blueprint had conflicting thresholds (5k vs 20k characters). The Engineer resolved this by evicting stale blueprints at the 20k threshold. This decision formalizes and accepts the new logic.
+
+### Alternatives considered
+1. **Evict task records** — Rejected: Task records are not managed by `cache-manager-mcp`, making this impossible without major architectural shifts.
+2. **Use 5,000 character threshold** — Rejected: 5k is too restrictive for modern context windows and would cause unnecessary cache churn. 20,000 characters balances context limits with JIT capabilities.
+3. **Ratify Engineer's implementation (Chosen)** — Aligns with the true behavior of the cache payload and utilizes the more appropriate 20k threshold.
+
+### Constraints driving this decision
+- **Context Size Constraints**: System context prefix must stay within reasonable limits (<20k characters) to leave room for conversational context.
+- **Data Model Truth**: `cache-manager-mcp` does not store task velocity or execution rows, it caches blueprints.
+
+### Impact
+- Unlocks: Closes the known risk regarding E-177 ratification.
+- Risk if wrong: Stale or important blueprints might be evicted if untouched for >7 days. JIT loads will still retrieve them if explicitly requested, but baseline context will drop them.
+
+### Rollback
+Revert the compaction logic in `cache-manager-mcp` or override the `20000` character limit to a higher threshold.
+
+---
+
+## D-048 — Ratify E-179 Telemetry Classification Refinement
+
+**Date**: 2026-06-21
+**Task**: E-179
+**Decision**: Ratify the Engineer's refinement to `mcp-telemetry.mjs` where expected tool rejections (e.g. validation failures) marked with `_meta.expected_rejection` are booked as `SUCCESS` rather than `ERROR`. This cleans up the false-positive "deprecation candidate" signal in `INSIGHTS.md`.
+
+### Why needed
+The telemetry analysis correctly identified several tools (like `add_topic_seed`, `validate_payload`) with high `isError` rates. However, audit revealed these were not system errors but expected user-level validation rejections. Treating them as `ERROR` pollutes the telemetry and incorrectly flags healthy tools for deprecation. The short-term fix (`_meta.expected_rejection` -> `SUCCESS`) restores signal purity without requiring an immediate database migration.
+
+### Alternatives considered
+1. **Immediate status-taxonomy migration (`REJECTED`)** — Rejected: Requires a full `telemetry.sqlite` schema migration and updates to the `meta_analyst` SQL queries. While architecturally correct, it was too large for the E-179 scope.
+2. **Book as `SUCCESS` via marker (Chosen)** — Cleans up the `INSIGHTS.md` report immediately with minimal friction.
+3. **Ignore false positives** — Rejected: Degrades trust in the automated insights.
+
+### Constraints driving this decision
+- **Scope limitation**: Avoided triggering a full database migration mid-audit to resolve the immediate false-positive issue.
+
+### Impact
+- Unlocks: Reliable deprecation candidate signals.
+- Risk if wrong: Booking rejections as `SUCCESS` temporarily obscures usage-friction signals (i.e. tools that users frequently misuse but aren't technically broken).
+
+### Rollback
+Remove the `_meta.expected_rejection` check in `mcp-telemetry.mjs` to revert to booking all `isError` returns as `ERROR`.
