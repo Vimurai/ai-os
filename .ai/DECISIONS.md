@@ -500,3 +500,29 @@ The E-179 refinement booked expected rejections as `SUCCESS` to stop false-posit
 
 ### Rollback
 Run the `DOWN` migration script via `ai-migration` to revert the database schema to the original enum and restore `mcp-telemetry.mjs` logic.
+
+---
+
+## D-050 — Decouple Triad Persona from CLI Tools (ARCHITECT/ENGINEER)
+
+**Date**: 2026-06-25
+**Task**: P-44
+**Decision**: Rename `GEMINI.md` to `ARCHITECT.md` and `CLAUDE.md` to `ENGINEER.md`. Update all CLI defaults to route `agy` to Architect and `claude` to Engineer by default, generalizing the Triad terminology.
+
+### Why needed
+Historically, the Architect role was strictly coupled to the Gemini CLI and the Engineer role to Claude Code. The provider abstraction (E-138) allowed other CLIs (like Antigravity `agy`) to act as either the Architect or Engineer, but the rule files and blueprints still hardcoded "Gemini" and "Claude". Since the Gemini CLI is being deprecated, maintaining rulefiles named `GEMINI.md` creates confusion. Generalizing to `ARCHITECT.md` and `ENGINEER.md` formalizes the Role Abstraction pattern cleanly.
+
+### Alternatives considered
+1. **Keep GEMINI.md/CLAUDE.md** — Rejected: Will become legacy tech debt once Gemini CLI is fully deprecated. Breaks abstraction.
+2. **Rename to AGY.md/CLAUDE.md** — Rejected: Same issue, tightly couples the conceptual role (Architect) to the specific tool (`agy`).
+3. **Decouple via ARCHITECT.md and ENGINEER.md (Chosen)** — Pure role-based architecture. Any provider (`agy`, `claude`) can assume any role seamlessly.
+
+### Constraints driving this decision
+- **Forward-compatibility**: Must support any provider assuming any role via `.ai/roles.json`.
+
+### Impact
+- Unlocks: E-183 (Rulefile Renaming and Codebase Update), E-184 (README update).
+- Risk if wrong: Breaking changes to any external scripts hardcoding `GEMINI.md` or `CLAUDE.md`.
+
+### Rollback
+Revert file names and reverse the `src/bin/ai` and `install-ai-os.sh` default path lookups.
