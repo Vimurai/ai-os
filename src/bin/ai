@@ -16,8 +16,8 @@ Commands:
   ai install     Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot;
                  enable agent teams; install hooks
   ai init        Create/upgrade .ai/ in current repo (safe, no overwrite)
-  ai sync        Re-sync agents, skills, bootloaders (CLAUDE.md, GEMINI.md, .mcp.json)
-                 and hooks from ~/.ai-os into the current project
+  ai sync        Re-sync agents, skills, bootloaders (ENGINEER.md, ARCHITECT.md +
+                 CLAUDE.md/GEMINI.md shims, .mcp.json) and hooks into the project
   ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28)
   ai provider install-plugin agy
                  Install AI-OS personas as a native Antigravity plugin (E-144).
@@ -32,6 +32,9 @@ Commands:
                  Hand control to the other agent via the bridge (role =
                  architect|engineer). Shell-native — works from any CLI runtime
                  (incl. agy), no MCP needed; drives auto-handoff (E-158).
+  ai watch       Run the Interactive Bridge tmux watcher — routes queued
+                 handoff signals to the Architect/Engineer pane to drive the
+                 autonomous ping-pong loop (E-115). Run in a dedicated pane.
   ai version     Print version
 
 Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
@@ -41,9 +44,11 @@ Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
   archive          → skill: ai-archive
   review           → skill: ai-review
   test [--vibe]    → skill: ai-test
-  migrate-state    → mcp__task-synchronizer-mcp__verify_markdown_sync
-  mcp-setup        → cd ~/.ai-os && bash install-ai-os.sh
   where            → echo \$AIOS  (now stored as ~/.ai-os)
+
+Recovery (used internally by install/init; surfaced by 'ai doctor' hints):
+  migrate-state    Re-seed .ai/state.sqlite from TASKS.md (P-44 state mandate)
+  mcp-setup        Install MCP-server npm deps under ~/.ai-os/mcp
 USAGE
 }
 
@@ -363,8 +368,8 @@ strip_gemini_agent_fields() {
 # ── E-135 (role-abstraction.md): Role Configuration Store ─────────────────────
 # Decouples functional roles (architect/engineer) from specific CLIs. `ai install`
 # accepts `--architect <provider:pane>` / `--engineer <provider:pane>` overrides and
-# persists them to .ai/roles.json. Defaults preserve the legacy mapping
-# (architect=gemini:1, engineer=claude:0) so existing projects keep working.
+# persists them to .ai/roles.json. Defaults (D-050/E-183) map architect=agy:1,
+# engineer=claude:0 — any provider may still assume either role via the flags.
 ROLE_ARCHITECT=""
 ROLE_ENGINEER=""
 
@@ -395,7 +400,7 @@ _parse_role_flags() {
 # _parse_role_flags, so direct interpolation is injection-safe.
 _write_roles_json() {
   [[ -d ".ai" ]] || return 0
-  local arch="${ROLE_ARCHITECT:-gemini:1}" eng="${ROLE_ENGINEER:-claude:0}"
+  local arch="${ROLE_ARCHITECT:-agy:1}" eng="${ROLE_ENGINEER:-claude:0}"
   local apr="${arch%%:*}" apn="${arch##*:}" epr="${eng%%:*}" epn="${eng##*:}"
   cat > ".ai/roles.json" <<EOF
 {
@@ -483,13 +488,14 @@ ensure_ai_templates() {
   generate_mcp_json "."
   echo "Updated .mcp.json (MCP servers: filesystem + memory + AI-OS custom servers)"
 
-  # CLAUDE.md — always update bootloader so skill invocation stays current
-  cp -f "$T/CLAUDE.md" "CLAUDE.md"
-  echo "Updated CLAUDE.md (project bootloader)"
-
-  # GEMINI.md — always update bootloader
-  cp -f "$T/GEMINI.md" "GEMINI.md"
-  echo "Updated GEMINI.md (project bootloader)"
+  # Bootloaders (D-050/E-183): ENGINEER.md/ARCHITECT.md are the canonical rulefiles;
+  # CLAUDE.md/GEMINI.md are thin @import shims so vendor auto-load (Claude Code, Gemini)
+  # still bootstraps the right persona. Copy all four so skill invocation stays current.
+  cp -f "$T/ENGINEER.md"  "ENGINEER.md"
+  cp -f "$T/ARCHITECT.md" "ARCHITECT.md"
+  cp -f "$T/CLAUDE.md"    "CLAUDE.md"
+  cp -f "$T/GEMINI.md"    "GEMINI.md"
+  echo "Updated ENGINEER.md/ARCHITECT.md (canonical bootloaders) + CLAUDE.md/GEMINI.md (shims)"
 
   # .claude/, .gemini/, .agents/ — project-scoped agent dirs (v3.0 W3-T3: shared helper).
   _sync_workspace_dirs init
@@ -1449,10 +1455,13 @@ do_sync() {
   if [[ -d ".ai" ]]; then
     echo "Syncing project-scoped .claude/ and .gemini/ from ${AIOS} ..."
 
-    # Always update bootloaders so skill invocation stays current
+    # Always update bootloaders so skill invocation stays current (D-050/E-183:
+    # canonical ENGINEER.md/ARCHITECT.md + CLAUDE.md/GEMINI.md @import shims).
     local T="${AIOS}/templates"
-    cp -f "$T/CLAUDE.md" "CLAUDE.md" && echo "  CLAUDE.md updated (bootloader)"
-    cp -f "$T/GEMINI.md" "GEMINI.md" && echo "  GEMINI.md updated (bootloader)"
+    cp -f "$T/ENGINEER.md"  "ENGINEER.md"  && echo "  ENGINEER.md updated (canonical bootloader)"
+    cp -f "$T/ARCHITECT.md" "ARCHITECT.md" && echo "  ARCHITECT.md updated (canonical bootloader)"
+    cp -f "$T/CLAUDE.md"    "CLAUDE.md"    && echo "  CLAUDE.md updated (shim → ENGINEER.md)"
+    cp -f "$T/GEMINI.md"    "GEMINI.md"    && echo "  GEMINI.md updated (shim → ARCHITECT.md)"
 
     # Always regenerate .mcp.json to pick up new servers (preserves user env values)
     generate_mcp_json "." && echo "  .mcp.json updated (MCP server registry)"
@@ -2115,11 +2124,13 @@ for base in search_paths:
                     "issue": f"Ghost Tool: '{tool}' declared but not in registry or builtin list"
                 })
 
-# E-121: ANTI-DRIFT PROTOCOL check — CLAUDE.md and GEMINI.md must contain the header
+# E-121: ANTI-DRIFT PROTOCOL check — the canonical project rulefiles must contain the
+# header. E-183/D-050: these are now ENGINEER.md/ARCHITECT.md (CLAUDE.md/GEMINI.md are
+# @import shims and carry no header). The global install rulefiles keep their vendor names.
 ANTI_DRIFT_HEADER = "ANTI-DRIFT PROTOCOL"
 anti_drift_targets = []
 if Path(".ai").exists():
-    anti_drift_targets += [Path("CLAUDE.md"), Path("GEMINI.md")]
+    anti_drift_targets += [Path("ENGINEER.md"), Path("ARCHITECT.md")]
 anti_drift_targets += [Path(aios) / "claude" / "CLAUDE.md",
                        Path(aios) / "gemini" / "GEMINI.md"]
 seen_targets = set()
@@ -2502,8 +2513,8 @@ case "$cmd" in
   test)          _show_deprecated "test" "skill: ai-test  (use --vibe arg inside the skill for chaos audit)" ;;
   where)         _show_deprecated "where" "echo \"\$HOME/.ai-os\"  (install root is fixed)" ;;
 
-  # Internal helpers — not in usage(), not user-facing, but reachable for the
-  # init/install paths that call them and for the test suites that exercise them.
+  # Recovery helpers — documented under "Recovery" in usage(); also called by the
+  # init/install paths directly and exercised by the test suites.
   migrate-state) do_migrate_state "${@:2}" ;;
   mcp-setup)     do_mcp_setup ;;
 

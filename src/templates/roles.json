@@ -1,7 +1,7 @@
 {
   "roles": {
     "architect": {
-      "provider": "gemini",
+      "provider": "agy",
       "pane_identifier": "1"
     },
     "engineer": {

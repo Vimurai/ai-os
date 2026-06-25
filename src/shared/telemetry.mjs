@@ -23,7 +23,7 @@
 //     no payload bodies.
 //   - session_id is sanitised by the same /^[A-Za-z0-9-]{1,64}$/ regex used
 //     in approval-mcp (E-49 contract).
-//   - Status is constrained to {"SUCCESS","ERROR"}.
+//   - Status is constrained to {"SUCCESS","ERROR","TIMEOUT","REJECTED"} (E-154/E-180).
 //
 // Failure mode:
 //   - All write paths swallow exceptions (telemetry must NEVER break the
@@ -53,7 +53,12 @@ const SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 // E-154 (telemetry-hardening.md §Data Model): the status enum explicitly captures
 // SUCCESS, ERROR, and TIMEOUT so the global interceptor (E-153) can record an accurate
 // failure dimension (the INSIGHTS report found it was previously 100% SUCCESS).
-const STATUS_VALUES = new Set(["SUCCESS", "ERROR", "TIMEOUT"]);
+// E-180 (D-049, meta-cognition.md §Data Model): + REJECTED — an EXPECTED rejection
+// (bad input / not-found / schema-fail) that E-179 had folded into SUCCESS. Booking it as
+// a distinct status restores usage-friction visibility for the meta_analyst WITHOUT
+// re-polluting the ERROR (broken-tool) dimension. Keep this set, the CREATE TABLE CHECK,
+// and the migration's CHECK/orphan-coercion below in lockstep when the enum grows.
+const STATUS_VALUES = new Set(["SUCCESS", "ERROR", "TIMEOUT", "REJECTED"]);
 
 let _cachedDb = null;
 let _cachedPath = null;
@@ -148,7 +153,7 @@ function _openDb(pathOverride) {
       session_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
       execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0),
-      status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT')),
+      status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED')),
       timestamp TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS task_velocity (
@@ -163,8 +168,13 @@ function _openDb(pathOverride) {
     CREATE INDEX IF NOT EXISTS idx_task_velocity_timestamp
       ON task_velocity(timestamp);
   `);
-  // E-154 migration → TIMEOUT-capable schema. Existing DBs carry the old 2-value CHECK, which
-  // `CREATE TABLE IF NOT EXISTS` cannot update — a TIMEOUT insert would fail it.
+  // E-154/E-180 migration → newest-enum-capable schema. Existing DBs carry an older CHECK
+  // (2-value SUCCESS/ERROR pre-E-154, or 3-value +TIMEOUT pre-E-180), which `CREATE TABLE IF
+  // NOT EXISTS` cannot update — a REJECTED (or TIMEOUT) insert would fail the stale CHECK.
+  // The detector keys on the NEWEST status token ('REJECTED'): any DDL lacking it predates the
+  // current enum and is rebuilt, so this one block covers both the +TIMEOUT and the +REJECTED
+  // hops (a 2-value DB jumps straight to the 4-value schema). Keep the sentinel token in sync
+  // with the last value appended to STATUS_VALUES above.
   // ATOMICITY (Tier-3 review P1): db.exec() autocommits PER statement, so a crash AFTER the
   // RENAME would strand rows in _tool_executions_old while the leading CREATE IF NOT EXISTS
   // resurrects an empty table the guard then reads as already-migrated → silent data loss.
@@ -179,28 +189,40 @@ function _openDb(pathOverride) {
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='tool_executions'"
     ).get();
     const ddl = meta && typeof meta.sql === "string" ? meta.sql : "";
-    const needsMigration = ddl && !ddl.includes("TIMEOUT");
+    const needsMigration = ddl && !ddl.includes("REJECTED");
     if (orphan || needsMigration) {
       db.exec("BEGIN IMMEDIATE");
       try {
         if (orphan) {
-          // Prior crash left rows behind; the live table was just (re)created empty by the
-          // leading CREATE IF NOT EXISTS. Merge stranded rows back (coerce any unknown status
-          // to ERROR so the new CHECK accepts them; dedupe by PK), then drop the orphan.
+          // Prior crash left rows behind in _tool_executions_old. Merge them back into the live
+          // table (coerce any unknown status to ERROR so the CHECK accepts them; dedupe by PK),
+          // then drop the orphan. The live table may be the empty one the leading CREATE IF NOT
+          // EXISTS just made, OR a pre-existing table that still carries a STALE CHECK — the
+          // rebuild below handles the latter, so this merge never assumes a fresh 4-value table.
           db.exec(
             "INSERT OR IGNORE INTO tool_executions " +
             "SELECT id, project_hash, session_id, tool_name, execution_time_ms, " +
-            "CASE WHEN status IN ('SUCCESS','ERROR','TIMEOUT') THEN status ELSE 'ERROR' END, timestamp " +
+            "CASE WHEN status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED') THEN status ELSE 'ERROR' END, timestamp " +
             "FROM _tool_executions_old; " +
             "DROP TABLE _tool_executions_old;"
           );
-        } else {
+        }
+        // E-180 (db_architect P1): orphan-recovery and CHECK-migration are NOT mutually exclusive.
+        // A crashed DB can carry BOTH a stranded orphan AND a live table whose CHECK predates the
+        // current enum; the old `if/else` ran only the merge, leaving the stale CHECK in place so
+        // the triggering REJECTED insert failed it and was dropped until the next open self-healed.
+        // Run the rebuild whenever the live DDL lacks the newest token — after any orphan merge,
+        // inside this same transaction. `needsMigration` was read from the live table's DDL, which
+        // the orphan merge only inserts rows into (never alters its schema), so it still reflects
+        // CHECK-staleness here. The full-table rebuild holds the write lock for the row copy, so its
+        // cost scales with telemetry.sqlite size — acceptable as a one-time, fail-open migration.
+        if (needsMigration) {
           db.exec(
             "ALTER TABLE tool_executions RENAME TO _tool_executions_old; " +
             "CREATE TABLE tool_executions (" +
             "id TEXT PRIMARY KEY, project_hash TEXT NOT NULL, session_id TEXT NOT NULL, " +
             "tool_name TEXT NOT NULL, execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0), " +
-            "status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT')), timestamp TEXT NOT NULL); " +
+            "status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED')), timestamp TEXT NOT NULL); " +
             "INSERT INTO tool_executions " +
             "SELECT id, project_hash, session_id, tool_name, execution_time_ms, status, timestamp " +
             "FROM _tool_executions_old; " +
@@ -215,7 +237,7 @@ function _openDb(pathOverride) {
       }
     }
   } catch (e) {
-    _logErr("timeout-status-migration-failed", e.message);
+    _logErr("status-enum-migration-failed", e.message);
   }
   _cachedDb = db;
   _cachedPath = targetPath;

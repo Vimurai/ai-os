@@ -17,9 +17,11 @@
 
 import { recordToolExecution } from "./telemetry.mjs";
 
-// Status the wrapper can emit. SUCCESS / ERROR today; TIMEOUT is reserved for E-154 once the
-// schema CHECK accepts it (callers may pass a pre-classified TIMEOUT via the handler result).
-export const TELEMETRY_STATUS = { SUCCESS: "SUCCESS", ERROR: "ERROR", TIMEOUT: "TIMEOUT" };
+// Status the wrapper can emit: SUCCESS / ERROR / TIMEOUT, plus REJECTED (E-180) for an EXPECTED
+// rejection flagged via _meta.expected_rejection. The telemetry.sqlite CHECK accepts all four
+// (E-154 added TIMEOUT, E-180 added REJECTED); callers may also pass a pre-classified TIMEOUT
+// via the handler result.
+export const TELEMETRY_STATUS = { SUCCESS: "SUCCESS", ERROR: "ERROR", TIMEOUT: "TIMEOUT", REJECTED: "REJECTED" };
 
 // Build the canonical `mcp__<server>__<tool>` name — identical to the harness/MCP convention so
 // server-side rows line up with how the agent and post-tool-use.sh name the same tool.
@@ -28,36 +30,40 @@ export function toolNameFor(serverName, request) {
   return `mcp__${serverName}__${typeof tool === "string" && tool ? tool : "unknown"}`;
 }
 
-// E-179: marker key a handler sets on `result._meta` to flag an `isError` result as an
+// E-179/E-180: marker key a handler sets on `result._meta` to flag an `isError` result as an
 // EXPECTED rejection (input validation, not-found, schema-fail, a domain-negative result
 // like sandboxed code exiting non-zero) — the tool worked correctly, the caller/precondition
 // was the problem. The meta-cognition INSIGHTS deprecation aggregate (E-85) counts ERROR rows
 // to find BROKEN tools; conflating expected rejections with malfunctions polluted it (the 7
-// "high-failure" tools audited in E-179 were ~all expected rejections, not defects). `_meta`
-// is a spec-sanctioned passthrough field, so the result the model receives is unchanged.
+// "high-failure" tools audited in E-179 were ~all expected rejections, not defects). E-179 first
+// folded these into SUCCESS to de-pollute ERROR; E-180 (D-049) instead books them as a distinct
+// REJECTED status so the friction signal stays VISIBLE to the meta_analyst without inflating
+// ERROR. `_meta` is a spec-sanctioned passthrough field, so the result the model receives is unchanged.
 export const EXPECTED_REJECTION_META = "expected_rejection";
 
 // Classify an MCP CallTool result. A handler that returns `{ isError: true }` is normally a
 // tool-level failure (E-154); a non-object/undefined return is MALFORMED — the SDK validates
 // the result against CallToolResultSchema after we run and rejects it with an McpError, so we
 // book it ERROR too rather than a false SUCCESS (Tier-3 review). A thrown exception is
-// classified ERROR by the catch in withTelemetry. E-179 exception: an `isError` result
+// classified ERROR by the catch in withTelemetry. E-180 (D-049): an `isError` result
 // explicitly marked `_meta.expected_rejection === true` is the tool working as designed and
-// books SUCCESS — genuine handled errors stay UNMARKED and therefore still book ERROR.
+// books REJECTED — a distinct usage-friction status (NOT SUCCESS, which E-179 used; NOT ERROR,
+// which would re-pollute the broken-tool aggregate). Genuine handled errors stay UNMARKED and
+// therefore still book ERROR.
 export function statusForResult(result) {
   if (!result || typeof result !== "object") return TELEMETRY_STATUS.ERROR;
   if (!result.isError) return TELEMETRY_STATUS.SUCCESS;
   if (result._meta && result._meta[EXPECTED_REJECTION_META] === true) {
-    return TELEMETRY_STATUS.SUCCESS;
+    return TELEMETRY_STATUS.REJECTED;
   }
   return TELEMETRY_STATUS.ERROR;
 }
 
 // E-179 helper — build an `isError` result already flagged as an EXPECTED rejection. Use for
 // single-text validation/not-found/schema-fail returns. The model still sees `isError: true`
-// (so it reacts to the bad input); telemetry books it SUCCESS (the tool is healthy). Do NOT
-// use this for genuine internal failures — leave those as a plain `{ isError: true }` so they
-// remain ERROR in the deprecation aggregate.
+// (so it reacts to the bad input); telemetry books it REJECTED (the tool is healthy; the input
+// or precondition was the problem). Do NOT use this for genuine internal failures — leave those
+// as a plain `{ isError: true }` so they remain ERROR in the deprecation aggregate.
 export function rejection(text) {
   return {
     content: [{ type: "text", text }],

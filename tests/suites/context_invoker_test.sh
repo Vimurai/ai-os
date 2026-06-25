@@ -118,11 +118,13 @@ _assert_file_contains "T-11: compliance audit includes .agents/skills" \
 _assert_file_contains "T-12: ANTI-DRIFT PROTOCOL check in compliance audit" \
   "$AI_BIN" 'ANTI_DRIFT_HEADER'
 
-_assert_file_contains "T-13: ANTI-DRIFT check targets CLAUDE.md" \
-  "$AI_BIN" '"CLAUDE.md"'
+# E-183/D-050: the project anti-drift targets are the canonical role rulefiles
+# (CLAUDE.md/GEMINI.md became @import shims that carry no header).
+_assert_file_contains "T-13: ANTI-DRIFT check targets ENGINEER.md" \
+  "$AI_BIN" '"ENGINEER.md"'
 
-_assert_file_contains "T-14: ANTI-DRIFT check targets GEMINI.md" \
-  "$AI_BIN" '"GEMINI.md"'
+_assert_file_contains "T-14: ANTI-DRIFT check targets ARCHITECT.md" \
+  "$AI_BIN" '"ARCHITECT.md"'
 
 # ── Test 15: ANTI-DRIFT PROTOCOL section exists in src files (E-120) ──────────
 check_anti_drift_present() {
@@ -140,11 +142,11 @@ check_anti_drift_present "T-15: src/claude/CLAUDE.md has ANTI-DRIFT PROTOCOL" \
 check_anti_drift_present "T-16: src/gemini/GEMINI.md has ANTI-DRIFT PROTOCOL" \
   "${REPO_ROOT}/src/gemini/GEMINI.md"
 
-check_anti_drift_present "T-17: src/templates/CLAUDE.md has ANTI-DRIFT PROTOCOL" \
-  "${REPO_ROOT}/src/templates/CLAUDE.md"
+check_anti_drift_present "T-17: src/templates/ENGINEER.md has ANTI-DRIFT PROTOCOL" \
+  "${REPO_ROOT}/src/templates/ENGINEER.md"
 
-check_anti_drift_present "T-18: src/templates/GEMINI.md has ANTI-DRIFT PROTOCOL" \
-  "${REPO_ROOT}/src/templates/GEMINI.md"
+check_anti_drift_present "T-18: src/templates/ARCHITECT.md has ANTI-DRIFT PROTOCOL" \
+  "${REPO_ROOT}/src/templates/ARCHITECT.md"
 
 # ── Test 19: pre-commit.sh has co-modification check (E-122) ─────────────────
 PRECOMMIT="${REPO_ROOT}/hooks/pre-commit.sh"

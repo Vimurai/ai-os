@@ -3,7 +3,7 @@
   "project": {
     "current_tier": 2,
     "release_verdict": null,
-    "focus": "Resolving sovereignty breach and telemetry blindness gaps."
+    "focus": "E-181/E-182: README rewrite + CLI deprecation cleanup (src/bin/ai)"
   },
   "tasks": [
     {
@@ -824,12 +824,64 @@
     {
       "id": "E-180",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 3,
       "description": "Execute a database data migration for telemetry.sqlite to introduce the REJECTED status dimension for tool executions. Refactor mcp-telemetry.mjs to book _meta.expected_rejection markers as REJECTED instead of SUCCESS to restore usage-friction visibility for the meta_analyst. Update the meta_analyst SQL queries to handle the new status without flagging them as broken tools. Acceptance: Migration is executed safely (use ai-migration/db_architect), _meta.expected_rejection is booked as REJECTED, and meta_analyst SQL queries are updated. per .ai/blueprints/meta-cognition.md.",
       "created_at": "2026-06-20T23:59:50.059Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-06-25T12:35:54.658Z",
+      "summary": "Telemetry REJECTED status (D-049). telemetry.mjs: +REJECTED in enum/CHECK + extended atomic in-code migration (detection keys on REJECTED so 2-/3-value DBs migrate forward); db_archi …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-181",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update README.md totally to reflect the current AI-OS v2 architectural state, Native Subagents taxonomy, Interactive Bridge, and Triad configuration per the user request and recent .ai/DIGEST.md updates. Acceptance: README.md accurately describes the v2.0.0+ state, MCP registry, and workflow.",
+      "created_at": "2026-06-25T10:19:55.496Z",
+      "completed_at": "2026-06-25T10:42:06.747Z",
+      "summary": "README rewritten to current v3.0.0 state: fixed version/test badges, 22 custom + 3 third-party MCP (added code-execution-mcp, mcp-router), new Native Subagents (20-agent) taxonomy se …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-182",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Remove all deprecated ai-os CLI commands and update outdated text descriptions across the CLI source (e.g. `src/bin/ai`) to align with the current AI-OS v2 framework state. Acceptance: Unused legacy commands are removed, and help texts/descriptions reflect the current capability set.",
+      "created_at": "2026-06-25T10:20:01.378Z",
+      "completed_at": "2026-06-25T10:42:08.520Z",
+      "summary": "src/bin/ai usage() now documents 'ai watch' (Interactive Bridge, E-115) and reframes migrate-state/mcp-setup as live Recovery commands instead of falsely listing them as Removed; dis …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-183",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Rename GEMINI.md to ARCHITECT.md and CLAUDE.md to ENGINEER.md in the project root and templates. Update all internal codebase references (src/bin/ai, install-ai-os.sh, plugin-builder.mjs, and shell scripts) to point to the new rulefile names. Ensure the default provider mapping assigns `claude` to Engineer and `agy` to Architect.",
+      "created_at": "2026-06-25T12:27:18.086Z",
+      "completed_at": "2026-06-25T14:34:38.047Z",
+      "summary": "Decoupled Triad persona (D-050). Renamed CLAUDE.md→ENGINEER.md, GEMINI.md→ARCHITECT.md (root + templates) as canonical rulefiles; CLAUDE.md/GEMINI.md kept as thin @import bootstrap s …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-184",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update README.md to reflect the new decoupled rulefile naming (ARCHITECT.md / ENGINEER.md) and the default CLI provider assignments (`claude` = Engineer, `agy` = Architect) per D-050. Remove references to the deprecated Gemini CLI.",
+      "created_at": "2026-06-25T12:27:25.050Z",
+      "completed_at": "2026-06-25T14:34:40.902Z",
+      "summary": "README updated for the decoupled naming (ARCHITECT.md/ENGINEER.md canonical + CLAUDE.md/GEMINI.md @import shims) and default providers per D-050 (agy=Architect, claude=Engineer): Tri …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -2074,6 +2126,41 @@
       "task_id": "E-179",
       "timestamp": "2026-06-21T08:02:38.169Z",
       "summary": "E-178/E-179 parallel critics ALL PASS — ARCH_PASS (no blueprint writes; SUCCESS/ERROR/TIMEOUT taxonomy intact; REJECTED dim deferred to E-180), SEC_PASS (PATH_DENIED/Docker-fail-closed/shell-metachar guards behaviorally unchanged; no _meta leakage), TESTS_PASS (2976/0; genuine confirm_patch errors stay ERROR; P2 non-object-guard assertions added 179.08/09). No P0/P1."
+    },
+    {
+      "type": "INSIGHTS_GENERATED",
+      "agent": "meta_analyst",
+      "task_id": null,
+      "timestamp": "2026-06-23T16:58:00.171Z",
+      "summary": "INSIGHTS.md refreshed — 37041 rows analysed, 8 recommendations"
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-180",
+      "timestamp": "2026-06-25T12:28:34.648Z",
+      "summary": "No sovereignty violations; REJECTED enum coherent across all 6 sites (STATUS_VALUES, CREATE/migration CHECK, orphan-coercion CASE, TELEMETRY_STATUS, meta_analyst Aggregate A NULLIF + new Aggregate F); matches meta-cognition.md §Data Model + D-049 (REJECTED visible, not re-polluting ERROR); 3 meta_analyst surfaces byte-identical; db_architect P1 merge+rebuild fix sound with regression test; no orphaned/dead code."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-180",
+      "timestamp": "2026-06-25T12:28:40.298Z",
+      "summary": "No P0 vulns. REJECTED status: migration SQL is static string-concat (no external input), status parameterized + STATUS_VALUES-validated before bind, agg A/F SQL static. Fail-open preserved (BEGIN IMMEDIATE/ROLLBACK/_logErr). No PII/secret/path capture; _meta marker is boolean-only. No capability/scope expansion."
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-180",
+      "timestamp": "2026-06-25T12:34:15.625Z",
+      "summary": "All tests passing (2997/0); E-180 REJECTED status fully covered across 3 surfaces — telemetry.mjs migration (2→4, 3→4, orphan, orphan+stale-CHECK P1: 180.M11-M22) + CHECK lock, mcp-telemetry.statusForResult REJECTED/distinct/e2e (180.03-180.06), meta_analyst Aggregate F + Usage-friction class + REJECTED ref; stale rejection→SUCCESS assertions correctly replaced not deleted; T-META-S10 byte-mirror enforced."
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-180",
+      "timestamp": "2026-06-25T12:34:45.619Z",
+      "summary": "E-180 REJECTED status fully covered across all 3 src surfaces (204/0 in affected suites): migration 2→4 & 3→4 + orphan+stale-CHECK P1 regression (180.M11-M22, discriminating row-count assertions), statusForResult→REJECTED + distinctness + e2e (180.03/04/04b/06), Aggregate A error_pct excludes REJECTED + new Aggregate F + REJECTED-referenced SQL (meta_analyst), telemetry_test CHECK lock updated to 4-value; old E-179 rejection→SUCCESS assertions correctly UPDATED to REJECTED (none stale); T-META-S10 byte-identical mirror intact (src≡.gemini≡~/.ai-os, Aggregate F propagated)."
     }
   ],
   "deltas": [

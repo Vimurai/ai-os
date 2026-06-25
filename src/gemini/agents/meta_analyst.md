@@ -59,18 +59,25 @@ Locator chain (mirrors E-58 / E-65 / E-75):
 The script MUST open the DB read-only — pass `{ readOnly: true }` to
 `new DatabaseSync(path)` or simply construct queries without writes.
 
-## Step 2 — Run the Five Canonical Aggregates
+## Step 2 — Run the Six Canonical Aggregates
 
 Execute these queries verbatim. Each one is bounded so the result set
 never exceeds 50 rows per query — within the token-budget contract.
 
 ```sql
--- A. Tool-error hotspots (highest ERROR rate by tool)
+-- A. Tool-error hotspots (genuine ERROR rate by tool — REJECTED excluded as expected, not broken)
+-- E-180: REJECTED rows are EXPECTED rejections (bad input / not-found / schema-fail), not
+-- malfunctions. They are kept OUT of both `errors` and the error_pct denominator (genuine
+-- attempts = SUCCESS+ERROR+TIMEOUT) so a heavily-rejected-but-healthy tool is never mis-flagged
+-- for deprecation; their volume is surfaced separately in Aggregate F. NULLIF guards a tool whose
+-- traffic is entirely rejections (error_pct = NULL → sorts last, never flagged).
 SELECT
   tool_name,
   COUNT(*) AS calls,
   SUM(CASE WHEN status = 'ERROR' THEN 1 ELSE 0 END) AS errors,
-  ROUND(100.0 * SUM(CASE WHEN status='ERROR' THEN 1 ELSE 0 END) / COUNT(*), 1) AS error_pct
+  SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
+  ROUND(100.0 * SUM(CASE WHEN status = 'ERROR' THEN 1 ELSE 0 END)
+        / NULLIF(SUM(CASE WHEN status IN ('SUCCESS','ERROR','TIMEOUT') THEN 1 ELSE 0 END), 0), 1) AS error_pct
 FROM tool_executions
 WHERE timestamp >= datetime('now', '-30 days')
 GROUP BY tool_name
@@ -122,11 +129,29 @@ WHERE timestamp >= datetime('now', '-30 days')
 GROUP BY task_id
 ORDER BY total_tokens DESC
 LIMIT 20;
+
+-- F. Usage-friction hotspots (highest REJECTED rate by tool — E-180)
+-- Expected rejections: the tool is HEALTHY but is frequently called with invalid input, a
+-- missing/not-found target, or a schema-failing payload. High friction is a UX/docs/input
+-- signal (clearer validation messages, a wrapper skill) — explicitly NOT a deprecation signal,
+-- which is what Aggregate A measures. Restores the usage-friction visibility E-179 lost when it
+-- folded these rows into SUCCESS (E-180 books them as the distinct REJECTED status).
+SELECT
+  tool_name,
+  COUNT(*) AS calls,
+  SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
+  ROUND(100.0 * SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) / COUNT(*), 1) AS rejected_pct
+FROM tool_executions
+WHERE timestamp >= datetime('now', '-30 days')
+GROUP BY tool_name
+HAVING calls >= 5 AND rejected >= 1
+ORDER BY rejected_pct DESC, calls DESC
+LIMIT 20;
 ```
 
 ## Step 3 — Interpret + Recommend
 
-For each aggregate, convert the row set into one of three recommendation
+For each aggregate, convert the row set into one of four recommendation
 classes. Each class has a fixed prose template so the resulting
 `INSIGHTS.md` stays scannable.
 
@@ -135,6 +160,12 @@ classes. Each class has a fixed prose template so the resulting
   `ai-*` skill or hook.
 - **Tool deprecation candidate** — Aggregate A, error_pct ≥ 30 AND
   calls ≥ 10. Suggest deprecation, alternative tool, or audit work.
+  `error_pct` is the GENUINE-malfunction rate (REJECTED excluded, E-180),
+  so this never fires on a merely high-friction-but-healthy tool.
+- **Usage-friction candidate** — Aggregate F, rejected_pct ≥ 30 AND
+  calls ≥ 10. The tool is healthy but frequently mis-invoked (bad input,
+  not-found, schema-fail). Suggest clearer validation messages, schema
+  docs, or a wrapper skill — explicitly NOT deprecation.
 - **Latency hardening candidate** — Aggregate B, avg_ms ≥ 2000.
   Suggest investigation (probable hot path, missing cache, or external
   dependency).
@@ -170,6 +201,11 @@ Source:    ~/.ai-os/telemetry.sqlite (E-84)
 | Tool | Calls | Errors | Error % | Notes |
 | ---  | ---:  | ---:   | ---:    | ---   |
 | …    | …     | …      | …       | …     |
+
+## Usage-Friction Candidates
+| Tool | Calls | Rejected | Rejected % | Notes |
+| ---  | ---:  | ---:     | ---:       | ---   |
+| …    | …     | …        | …          | …     |
 
 ## Latency Hardening Candidates
 | Tool | Calls | Avg ms | Max ms | Notes |

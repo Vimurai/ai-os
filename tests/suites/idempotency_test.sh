@@ -47,8 +47,11 @@ run_init() {
 # Copy minimal templates needed for ensure_ai_templates to succeed
 mkdir -p "$PROJECT_DIR/.ai"
 
-# Check: CLAUDE.md template exists in src
+# Check: bootloader templates exist in src. E-183/D-050: ENGINEER.md/ARCHITECT.md are the
+# canonical rulefiles; CLAUDE.md/GEMINI.md are @import shims. All four are synced by `ai sync`.
 assert_exists "${AIOS}/templates/CLAUDE.md"
+assert_exists "${AIOS}/templates/ENGINEER.md"
+assert_exists "${AIOS}/templates/ARCHITECT.md"
 
 # ── Test 2: CLAUDE.md always matches template (idempotency) ──────────────────
 TEMPLATE_CLAUDE="${AIOS}/templates/CLAUDE.md"
@@ -185,7 +188,12 @@ else
 fi
 
 # ── Test 8: ANTI-DRIFT PROTOCOL header survives template overwrite ────────────
-assert_contains "CLAUDE.md template has ANTI-DRIFT PROTOCOL" "ANTI-DRIFT PROTOCOL" "$EXPECTED_CLAUDE"
+# E-183/D-050: the header lives in the canonical ENGINEER.md/ARCHITECT.md; CLAUDE.md/GEMINI.md
+# are @import shims that re-export it and carry no header of their own.
+assert_contains "ENGINEER.md template has ANTI-DRIFT PROTOCOL" "ANTI-DRIFT PROTOCOL" "$(cat "${AIOS}/templates/ENGINEER.md")"
+assert_contains "ARCHITECT.md template has ANTI-DRIFT PROTOCOL" "ANTI-DRIFT PROTOCOL" "$(cat "${AIOS}/templates/ARCHITECT.md")"
+assert_contains "CLAUDE.md shim imports ENGINEER.md" "@ENGINEER.md" "$EXPECTED_CLAUDE"
+assert_contains "GEMINI.md shim imports ARCHITECT.md" "@ARCHITECT.md" "$EXPECTED_GEMINI"
 
 # ── Test 9: .mcp.json is valid JSON after second run ─────────────────────────
 if command -v python3 &>/dev/null && [[ -f "${PROJECT_DIR}/.mcp.json" ]]; then
