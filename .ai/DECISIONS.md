@@ -475,3 +475,28 @@ The telemetry analysis correctly identified several tools (like `add_topic_seed`
 
 ### Rollback
 Remove the `_meta.expected_rejection` check in `mcp-telemetry.mjs` to revert to booking all `isError` returns as `ERROR`.
+
+---
+
+## D-049 — Ratify E-180 Telemetry Schema Migration (REJECTED/TIMEOUT)
+
+**Date**: 2026-06-25
+**Task**: E-180
+**Decision**: Ratify the formal database migration of `telemetry.sqlite` to introduce `REJECTED` and `TIMEOUT` as explicit statuses in the telemetry schema.
+
+### Why needed
+The E-179 refinement booked expected rejections as `SUCCESS` to stop false-positive alerts, but this obscured valid usage-friction signals. Migrating to an explicit `REJECTED` and `TIMEOUT` status allows the `meta_analyst` to cleanly separate actual code crashes (`ERROR`) from expected tool validation blocks (`REJECTED`) and hangs (`TIMEOUT`).
+
+### Alternatives considered
+1. **Keep booking as SUCCESS** — Rejected: Loses friction analytics and degrades meta-cognition accuracy.
+2. **Execute DB migration to REJECTED/TIMEOUT (Chosen)** — Cleans up the taxonomy properly and restores visibility into friction without triggering false "deprecation" warnings.
+
+### Constraints driving this decision
+- **Visibility vs Noise**: We need to see user friction (when validation blocks them) without the `meta_analyst` flagging the tool as broken.
+
+### Impact
+- Unlocks: E-180 implementation.
+- Risk if wrong: Migration scripts could lock the database temporarily; `db_architect` and `ai-migration` must handle it transactionally.
+
+### Rollback
+Run the `DOWN` migration script via `ai-migration` to revert the database schema to the original enum and restore `mcp-telemetry.mjs` logic.
