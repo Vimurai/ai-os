@@ -76,6 +76,7 @@ assert_status 0 "Aggregate B — latency outliers"     grep -qE -e '-- B\. Laten
 assert_status 0 "Aggregate C — frequency cohort"     grep -qE -e '-- C\. Tool-frequency'      "$AGENT_SRC"
 assert_status 0 "Aggregate D — cross-project breadth" grep -qE -e '-- D\. Cross-project'       "$AGENT_SRC"
 assert_status 0 "Aggregate E — task velocity"        grep -qE -e '-- E\. Task velocity'       "$AGENT_SRC"
+assert_status 0 "Aggregate F — usage-friction (E-180)" grep -qE -e '-- F\. Usage-friction'    "$AGENT_SRC"
 
 # Each query has a hard LIMIT — bounded result set per blueprint §Token Limits.
 LIMIT_COUNT="$(grep -cE '^LIMIT [0-9]+;' "$AGENT_SRC")"
@@ -89,7 +90,10 @@ assert_status 0 "30-day window in queries" \
 # Three recommendation classes per Step 3.
 assert_status 0 "CLI automation candidate class"     grep -qE 'CLI automation candidate'    "$AGENT_SRC"
 assert_status 0 "Tool deprecation candidate class"   grep -qE 'Tool deprecation candidate'  "$AGENT_SRC"
+assert_status 0 "Usage-friction candidate class (E-180)" grep -qE 'Usage-friction candidate' "$AGENT_SRC"
 assert_status 0 "Latency hardening candidate class"  grep -qE 'Latency hardening candidate' "$AGENT_SRC"
+# E-180: REJECTED is a distinct, recognised status in the analysis SQL (not folded into ERROR/SUCCESS).
+assert_status 0 "REJECTED status referenced in aggregates" grep -qE "status = 'REJECTED'" "$AGENT_SRC"
 
 # Empty / steady fast-path sentinel.
 assert_status 0 "[INSIGHTS_EMPTY] sentinel"          grep -qE '\[INSIGHTS_EMPTY\]'   "$AGENT_SRC"

@@ -36,11 +36,11 @@ JS
 assert_status 0 "rollback note documents env override" \
   bash -c "grep -q 'GEMINI_MODEL' '${REPO_ROOT}/src/config/registry.json'"
 
-# ── T-GMP-S02: GEMINI.md mandate ──────────────────────────────────────────────
+# ── T-GMP-S02: ARCHITECT.md mandate (E-183/D-050: GEMINI.md → ARCHITECT.md canonical) ─────────
 echo ""
-echo "  [T-GMP-S02] GEMINI.md mandate"
+echo "  [T-GMP-S02] ARCHITECT.md mandate (Gemini-provider model pin)"
 
-for f in "${REPO_ROOT}/src/templates/GEMINI.md" "${REPO_ROOT}/GEMINI.md"; do
+for f in "${REPO_ROOT}/src/templates/ARCHITECT.md" "${REPO_ROOT}/ARCHITECT.md"; do
   assert_status 0 "${f#${REPO_ROOT}/} exists" test -f "$f"
   assert_status 0 "${f#${REPO_ROOT}/} mandates gemini-3.1-pro" \
     grep -q 'gemini-3.1-pro' "$f"

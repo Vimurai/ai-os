@@ -57,8 +57,10 @@ assert_status 0 "fire-and-forget via setImmediate" \
 
 # Status-value lock to blueprint §Data Model. E-154: TIMEOUT joined SUCCESS/ERROR so the
 # global interceptor can record the failure dimension that was previously always empty.
-assert_status 0 "CHECK constraint on status column (SUCCESS/ERROR/TIMEOUT)" \
-  grep -qE "status IN \('SUCCESS','ERROR','TIMEOUT'\)" "$TELEMETRY"
+# E-180 (D-049): REJECTED joined the enum so expected rejections book a distinct usage-friction
+# status instead of polluting ERROR (or hiding in SUCCESS, as E-179 did).
+assert_status 0 "CHECK constraint on status column (SUCCESS/ERROR/TIMEOUT/REJECTED)" \
+  grep -qE "status IN \('SUCCESS','ERROR','TIMEOUT','REJECTED'\)" "$TELEMETRY"
 
 # Two-table schema per blueprint §Data Model.
 assert_status 0 "tool_executions table" \

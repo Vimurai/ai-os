@@ -19,7 +19,7 @@ The "Second Brain" operates on a telemetry-to-insight pipeline: local project ro
 - `session_id` (String)
 - `tool_name` (String)
 - `execution_time_ms` (Integer)
-- `status` (String: SUCCESS/ERROR)
+- `status` (String: SUCCESS/ERROR/TIMEOUT/REJECTED)
 - `timestamp` (DateTime)
 
 **Table: `task_velocity`**

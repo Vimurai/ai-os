@@ -12,7 +12,7 @@ agent: default
 
 ## Why This Skill Exists
 
-Claude's mid-execution trigger table (CLAUDE.md) is declarative — it lists conditions but
+The Engineer's mid-execution trigger table (ENGINEER.md) is declarative — it lists conditions but
 does not force compliance. This skill is the **enforcement layer**: it actively scans the
 current diff and task context, identifies which mandatory agents/skills have been triggered,
 and blocks progression until outstanding dispatches are resolved.

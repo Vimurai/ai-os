@@ -11,7 +11,9 @@ REPO_ROOT="${SCRIPT_DIR}/../.."
 ORCH_MCP="${REPO_ROOT}/src/mcp/orchestrator-mcp/index.js"
 SHARED_STATE="${REPO_ROOT}/src/mcp/shared/state-writer.js"
 PREFLIGHT_SKILL="${REPO_ROOT}/src/shared/skills/ai-preflight/SKILL.md"
-CLAUDE_MD_TEMPLATE="${REPO_ROOT}/src/templates/CLAUDE.md"
+# E-183/D-050: Emergency Recovery (Layer 3) lives in the canonical ENGINEER.md bootloader;
+# CLAUDE.md is now a thin @import shim that re-exports it.
+CLAUDE_MD_TEMPLATE="${REPO_ROOT}/src/templates/ENGINEER.md"
 
 echo "── Suite: resilience_test ─────────────────────────────────────────"
 

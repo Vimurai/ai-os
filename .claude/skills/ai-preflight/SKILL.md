@@ -258,7 +258,7 @@ echo "---" >> .ai/SESSION.md
 ```
 
 ### Escalation
-If Layer 2 also fails (python3/bash unavailable), escalate to **Layer 3**: read the "Emergency Recovery" section in `CLAUDE.md`.
+If Layer 2 also fails (python3/bash unavailable), escalate to **Layer 3**: read the "Emergency Recovery" section in `ENGINEER.md` (the canonical Engineer rulefile; `CLAUDE.md` is a shim that imports it).
 
 ## Token Economics Hard Rules
 - Do NOT read files outside your domain unless the task explicitly requires it.
