@@ -526,3 +526,29 @@ Historically, the Architect role was strictly coupled to the Gemini CLI and the 
 
 ### Rollback
 Revert file names and reverse the `src/bin/ai` and `install-ai-os.sh` default path lookups.
+
+---
+
+## D-051 — Ratify E-183 Shim Approach for Legacy CLI Loaders
+
+**Date**: 2026-06-26
+**Task**: P-45
+**Decision**: Ratify the E-183 implementation of keeping `CLAUDE.md` and `GEMINI.md` as thin `@import` shims that load `ENGINEER.md` and `ARCHITECT.md`.
+
+### Why needed
+D-050 explicitly rejected keeping `CLAUDE.md` and `GEMINI.md` to avoid legacy tech debt. However, during the implementation of E-183, it was discovered that certain CLIs (like Claude Code) hardcode auto-loading of `CLAUDE.md`. Without a shim, the role bootstrap fails. Keeping them as thin `@import` shims bridges the gap until vendor CLIs allow configurable rulefile names.
+
+### Alternatives considered
+1. **Strict removal (D-050 original intent)** — Rejected: Breaks automatic role bootstrap for Claude Code and legacy Gemini CLI instances.
+2. **Duplicating content** — Rejected: Creates documentation drift and violates DRY principles.
+3. **Thin @import shims (Chosen)** — Retains the decoupling of the actual role content in `ENGINEER.md`/`ARCHITECT.md` while satisfying the hardcoded vendor auto-load requirements.
+
+### Constraints driving this decision
+- **CLI Vendor Hardcoding**: Vendor CLIs (Claude Code) currently hardcode `CLAUDE.md` and do not allow custom configuration for project-wide bootloader files.
+
+### Impact
+- Unlocks: Closes the unratified shim gap reported in `DIGEST.md`.
+- Risk if wrong: Slightly more files in the root directory, but minimal maintenance burden since they only contain `@import` directives.
+
+### Rollback
+Remove the shim files when all used CLI providers support configurable role file names (e.g., via `.ai/roles.json` or CLI flags).
