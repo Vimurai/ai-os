@@ -950,6 +950,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-190",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Resolve merge conflicts in the PR stack (#25 and #26) and execute a clean bottom-up merge to master. Run a full post-merge suite execution to guarantee master is 100% green before the next major arc.",
+      "created_at": "2026-06-26T15:24:06.027Z",
+      "completed_at": "2026-06-26T15:35:48.382Z",
+      "summary": "Integrated the PR stack onto master. #23/#24 already merged; #25 was closed (stale GitHub base, not a real conflict). Built a clean integration branch off master and merged f799f16 ( …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [

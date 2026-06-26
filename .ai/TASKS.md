@@ -141,6 +141,8 @@
   Status: DONE 2026-06-26 — Closed out per D-052. Part 1 (resolver: ai-watch no-roles.json fallback gemini→agy D-050 default) shipped in PR #25. Part 2 (rename src/claude→src/engineer, src/gemini→src/architect) …[full in LOG.md]
 - [x] E-189: Update README.md and .ai/blueprints/role-abstraction.md (or equivalent) to explicitly state that src/gemini/ and src/claude/ are provider-specific adapters, not role logic, per D-052. Close out E-188. | Tier: 2
   Status: DONE 2026-06-26 — Documented D-052: src/claude/ and src/gemini/ are provider-specific adapters (vendor CLI config + @import shims), NOT role logic — roles live in ENGINEER.md/ARCHITECT.md, bound via r …[full in LOG.md]
+- [x] E-190: Resolve merge conflicts in the PR stack (#25 and #26) and execute a clean bottom-up merge to master. Run a full post-merge suite execution to guarantee master is 100% green before the next major arc. | Tier: 1
+  Status: DONE 2026-06-26 — Integrated the PR stack onto master. #23/#24 already merged; #25 was closed (stale GitHub base, not a real conflict). Built a clean integration branch off master and merged f799f16 ( …[full in LOG.md]
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
