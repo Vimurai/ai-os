@@ -924,6 +924,45 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-188",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor resolver legacy fallback (remove hardcoded 'gemini' fallback if no-roles.json is missing) and rename global rulefiles src/claude/ and src/gemini/ to src/engineer/ and src/architect/ to complete the D-050 Triad persona decoupling.",
+      "created_at": "2026-06-26T14:21:27.893Z",
+      "completed_at": "2026-06-26T15:20:19.872Z",
+      "summary": "Closed out per D-052. Part 1 (resolver: ai-watch no-roles.json fallback gemini→agy D-050 default) shipped in PR #25. Part 2 (rename src/claude→src/engineer, src/gemini→src/architect) …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-189",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update README.md and .ai/blueprints/role-abstraction.md (or equivalent) to explicitly state that src/gemini/ and src/claude/ are provider-specific adapters, not role logic, per D-052. Close out E-188.",
+      "created_at": "2026-06-26T15:06:31.132Z",
+      "completed_at": "2026-06-26T15:20:18.198Z",
+      "summary": "Documented D-052: src/claude/ and src/gemini/ are provider-specific adapters (vendor CLI config + @import shims), NOT role logic — roles live in ENGINEER.md/ARCHITECT.md, bound via r …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-190",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Resolve merge conflicts in the PR stack (#25 and #26) and execute a clean bottom-up merge to master. Run a full post-merge suite execution to guarantee master is 100% green before the next major arc.",
+      "created_at": "2026-06-26T15:24:06.027Z",
+      "completed_at": "2026-06-26T15:35:48.382Z",
+      "summary": "Integrated the PR stack onto master. #23/#24 already merged; #25 was closed (stale GitHub base, not a real conflict). Built a clean integration branch off master and merged f799f16 ( …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [

@@ -73,3 +73,7 @@ Currently, the OS is hardcoded to Gemini = Architect, Claude = Engineer. To supp
 - **E-136**: Refactor `task-synchronizer-mcp` to use semantic targets in `handoff_control` and `TASKS.md` generation.
 - **E-137**: Update `src/bin/ai-watch` to dynamically map semantic roles to specific `tmux` pane identifiers via `.ai/roles.json`.
 - **E-138**: Implement the **Provider Adapter System** (`.ai/providers.json`) in the bootloader (`src/bin/ai`), allowing seamless registration and configuration of new CLI agents.
+
+## Provider Directories (D-052 Taxonomy)
+While the roles (Architect, Engineer) are abstract, the physical configuration files for the execution environments remain scoped to the *provider*. 
+Directories such as `src/gemini/` and `src/claude/` are strictly **Provider Adapters**. They contain vendor-specific configuration (e.g., `settings.json`, `.claude.json`) and legacy fallback shims. They do *not* define the logic of the "Architect" or "Engineer" roles. Renaming these directories to semantic roles (`src/architect/`) is forbidden as it breaks this decoupling (per D-052).

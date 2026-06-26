@@ -24,6 +24,8 @@ It is a thin layer on top of the CLIs — no proxy, no cloud — so it works whe
 
 `ARCHITECT.md`/`ENGINEER.md` are the canonical rulefiles; `GEMINI.md`/`CLAUDE.md` remain as thin `@import` shims so a vendor that auto-loads them still bootstraps the right persona. The default provider for each role is set in `.ai/roles.json` and overridable via `ai install --architect/--engineer`.
 
+> **Provider directories are adapters, not roles (D-052).** The `src/claude/` and `src/gemini/` directories hold **provider-specific** artifacts — each vendor CLI's configuration, command formats (e.g. Gemini's `.toml` commands), agent/skill templates, and the `@import` rulefile shims — **not** role logic. The roles themselves live in `ENGINEER.md`/`ARCHITECT.md` and bind to a provider through `.ai/roles.json`. These directories stay **vendor-named on purpose**: their contents are tailored to a specific CLI, so renaming them to role names (`src/engineer/`, `src/architect/`) would misrepresent provider config as a role definition — and a role that defaults to `agy` has no business owning a directory full of Gemini config. Think of them as the Triad's *provider adapter* layer.
+
 State lives in `.ai/state.sqlite` (WAL mode), so two agents in two terminals never corrupt the task list.
 
 ---

@@ -82,7 +82,7 @@ rm -rf "$BADP"
 
 # ── E-137.08: _role_to_provider_pane fallback for unmapped roles ──────────────
 assert_contains "E-137.08a: fallback engineer → claude:0" "claude:0" "$(_role_pp '' engineer)"
-assert_contains "E-137.08b: fallback architect → gemini:1" "gemini:1" "$(_role_pp '' architect)"
+assert_contains "E-137.08b: fallback architect → agy:1 (D-050 default, E-188)" "agy:1" "$(_role_pp '' architect)"
 assert_status 1 "E-137.08c: non-role returns 1" bash -c "source '$WATCH' 2>/dev/null; _role_to_provider_pane bob"
 
 # ── E-137.09: WATCH_TARGETS drains semantic roles + legacy names ─────────────
