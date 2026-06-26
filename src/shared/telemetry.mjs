@@ -50,15 +50,28 @@ export const TELEMETRY_DB_PATH = resolve(homedir(), ".ai-os", "telemetry.sqlite"
 export const USAGE_DB_PATH = resolve(homedir(), ".ai-os", "usage.sqlite");
 
 const SESSION_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-// E-154 (telemetry-hardening.md §Data Model): the status enum explicitly captures
-// SUCCESS, ERROR, and TIMEOUT so the global interceptor (E-153) can record an accurate
-// failure dimension (the INSIGHTS report found it was previously 100% SUCCESS).
-// E-180 (D-049, meta-cognition.md §Data Model): + REJECTED — an EXPECTED rejection
-// (bad input / not-found / schema-fail) that E-179 had folded into SUCCESS. Booking it as
-// a distinct status restores usage-friction visibility for the meta_analyst WITHOUT
-// re-polluting the ERROR (broken-tool) dimension. Keep this set, the CREATE TABLE CHECK,
-// and the migration's CHECK/orphan-coercion below in lockstep when the enum grows.
-const STATUS_VALUES = new Set(["SUCCESS", "ERROR", "TIMEOUT", "REJECTED"]);
+// ── Telemetry status enum — SINGLE DRY SOURCE OF TRUTH (E-185) ───────────────────────────────
+// E-154 (telemetry-hardening.md §Data Model): the status enum explicitly captures SUCCESS,
+// ERROR, and TIMEOUT so the global interceptor (E-153) can record an accurate failure dimension
+// (the INSIGHTS report found it was previously 100% SUCCESS).
+// E-180 (D-049, meta-cognition.md §Data Model): + REJECTED — an EXPECTED rejection (bad input /
+// not-found / schema-fail) that E-179 had folded into SUCCESS. Booking it as a distinct status
+// restores usage-friction visibility for the meta_analyst WITHOUT re-polluting the ERROR
+// (broken-tool) dimension.
+// E-185 (flaw-remediation): STATUS_ORDER is the ONLY place the enum is written. The membership
+// Set, the SQL CHECK clause (shared verbatim by the CREATE TABLE, the migration rebuild, and the
+// orphan-merge coercion), and the migration sentinel are all DERIVED below — so growing the enum
+// is a one-line edit here and the previously-coupled sites can never desync. ORDER MATTERS:
+// append new statuses to the END so STATUS_MIGRATION_SENTINEL tracks the newest token.
+export const STATUS_ORDER = ["SUCCESS", "ERROR", "TIMEOUT", "REJECTED"];
+// Membership test for the writer's input validation.
+export const STATUS_VALUES = new Set(STATUS_ORDER);
+// SQL predicate `status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED')` — embedded verbatim in the
+// CREATE TABLE CHECK, the migration-rebuild CHECK, and the orphan-merge CASE WHEN coercion.
+export const STATUS_SQL_IN = `status IN (${STATUS_ORDER.map((s) => `'${s}'`).join(",")})`;
+// Migration sentinel: the NEWEST token. A stored DDL lacking it predates the current enum and is
+// rebuilt — so this one check covers every hop (a 2-value DB jumps straight to the full schema).
+export const STATUS_MIGRATION_SENTINEL = STATUS_ORDER[STATUS_ORDER.length - 1];
 
 let _cachedDb = null;
 let _cachedPath = null;
@@ -153,7 +166,7 @@ function _openDb(pathOverride) {
       session_id TEXT NOT NULL,
       tool_name TEXT NOT NULL,
       execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0),
-      status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED')),
+      status TEXT NOT NULL CHECK(${STATUS_SQL_IN}),
       timestamp TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS task_velocity (
@@ -173,8 +186,8 @@ function _openDb(pathOverride) {
   // NOT EXISTS` cannot update — a REJECTED (or TIMEOUT) insert would fail the stale CHECK.
   // The detector keys on the NEWEST status token ('REJECTED'): any DDL lacking it predates the
   // current enum and is rebuilt, so this one block covers both the +TIMEOUT and the +REJECTED
-  // hops (a 2-value DB jumps straight to the 4-value schema). Keep the sentinel token in sync
-  // with the last value appended to STATUS_VALUES above.
+  // hops (a 2-value DB jumps straight to the 4-value schema). The sentinel is DERIVED from
+  // STATUS_ORDER (E-185), so appending a new enum value updates the detector automatically.
   // ATOMICITY (Tier-3 review P1): db.exec() autocommits PER statement, so a crash AFTER the
   // RENAME would strand rows in _tool_executions_old while the leading CREATE IF NOT EXISTS
   // resurrects an empty table the guard then reads as already-migrated → silent data loss.
@@ -189,7 +202,7 @@ function _openDb(pathOverride) {
       "SELECT sql FROM sqlite_master WHERE type='table' AND name='tool_executions'"
     ).get();
     const ddl = meta && typeof meta.sql === "string" ? meta.sql : "";
-    const needsMigration = ddl && !ddl.includes("REJECTED");
+    const needsMigration = ddl && !ddl.includes(STATUS_MIGRATION_SENTINEL);
     if (orphan || needsMigration) {
       db.exec("BEGIN IMMEDIATE");
       try {
@@ -202,7 +215,7 @@ function _openDb(pathOverride) {
           db.exec(
             "INSERT OR IGNORE INTO tool_executions " +
             "SELECT id, project_hash, session_id, tool_name, execution_time_ms, " +
-            "CASE WHEN status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED') THEN status ELSE 'ERROR' END, timestamp " +
+            `CASE WHEN ${STATUS_SQL_IN} THEN status ELSE 'ERROR' END, timestamp ` +
             "FROM _tool_executions_old; " +
             "DROP TABLE _tool_executions_old;"
           );
@@ -222,7 +235,7 @@ function _openDb(pathOverride) {
             "CREATE TABLE tool_executions (" +
             "id TEXT PRIMARY KEY, project_hash TEXT NOT NULL, session_id TEXT NOT NULL, " +
             "tool_name TEXT NOT NULL, execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0), " +
-            "status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR','TIMEOUT','REJECTED')), timestamp TEXT NOT NULL); " +
+            `status TEXT NOT NULL CHECK(${STATUS_SQL_IN}), timestamp TEXT NOT NULL); ` +
             "INSERT INTO tool_executions " +
             "SELECT id, project_hash, session_id, tool_name, execution_time_ms, status, timestamp " +
             "FROM _tool_executions_old; " +

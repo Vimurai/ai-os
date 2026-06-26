@@ -126,4 +126,26 @@ assert_contains "180.M20: orphan rows recovered through merge+rebuild"        "p
 assert_contains "180.M21: no _tool_executions_old residue (P1 path)"          "p1_no_orphan=true"         "$OUT"
 assert_contains "180.M22: row count (live + orphan + new = 3)"               "p1_total=3"                "$OUT"
 
+# ── E-185 (flaw-remediation): DRY enum source of truth ───────────────────────────────────────
+# The status enum is declared ONCE (STATUS_ORDER); the membership Set, the SQL CHECK clause, and
+# the migration sentinel are all DERIVED. Assert that derivation so a future enum edit can never
+# desync the previously-coupled sites (the db_architect nit this task closes).
+DRY="$(TELE_URL="file://${REPO_ROOT}/src/shared/telemetry.mjs" node --input-type=module <<'NODE'
+const m = await import(process.env.TELE_URL);
+const order = m.STATUS_ORDER, set = m.STATUS_VALUES, sqlIn = m.STATUS_SQL_IN, sentinel = m.STATUS_MIGRATION_SENTINEL;
+const expectedSql = "status IN (" + order.map((s) => `'${s}'`).join(",") + ")";
+console.log("dry_order_is_array=" + Array.isArray(order));
+console.log("dry_set_matches_order=" + (order.length === set.size && order.every((s) => set.has(s))));
+console.log("dry_sql_derived=" + (sqlIn === expectedSql));
+console.log("dry_sentinel_is_newest=" + (sentinel === order[order.length - 1]));
+console.log("dry_has_all_four=" + ["SUCCESS", "ERROR", "TIMEOUT", "REJECTED"].every((s) => set.has(s)));
+NODE
+)"
+echo "$DRY"
+assert_contains "185.D01: STATUS_ORDER is the ordered source array"          "dry_order_is_array=true"     "$DRY"
+assert_contains "185.D02: STATUS_VALUES Set is derived from STATUS_ORDER"    "dry_set_matches_order=true"  "$DRY"
+assert_contains "185.D03: SQL CHECK clause is derived from STATUS_ORDER"     "dry_sql_derived=true"        "$DRY"
+assert_contains "185.D04: migration sentinel is the newest enum value"       "dry_sentinel_is_newest=true" "$DRY"
+assert_contains "185.D05: enum still covers SUCCESS/ERROR/TIMEOUT/REJECTED"  "dry_has_all_four=true"       "$DRY"
+
 assert_summary

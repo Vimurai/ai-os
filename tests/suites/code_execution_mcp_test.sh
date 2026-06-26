@@ -243,12 +243,35 @@ echo ""
 echo "  [T-CODEX-S07] End-to-end (only when Docker daemon is reachable)"
 
 if docker info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
-  E2E_RESULT="$(mcp_call_tool "$SERVER" "execute_code" '{"language":"python","code":"print(2+3)","timeout_ms":5000}')"
-  assert_contains "python prints 5"             "5"        "$E2E_RESULT"
-  assert_contains "exit_code=0 on success"      "EXECUTED" "$E2E_RESULT"
+  # E-187 (flaw-remediation): the e2e calls below run python:3.12-slim in a container. On a cold
+  # box the image is not cached, so the FIRST `docker run` triggers an implicit `docker pull` that
+  # can be slow or fail (no/slow network, rate limit) — surfacing as a FLAKY test failure rather
+  # than a real regression. Pre-pull with bounded retries so a transient hiccup self-heals; if the
+  # image still can't be made available, SKIP the block deterministically (like the daemon-down
+  # path) instead of asserting against an execution that could never have run. Must match the
+  # image the server uses (src/mcp/code-execution-mcp/index.js → python.image).
+  CODEX_IMAGE="python:3.12-slim"
+  image_ready=0
+  if docker image inspect "$CODEX_IMAGE" >/dev/null 2>&1; then
+    image_ready=1
+  else
+    for attempt in 1 2 3; do
+      if docker pull "$CODEX_IMAGE" >/dev/null 2>&1; then image_ready=1; break; fi
+      echo "  …  pull of ${CODEX_IMAGE} failed (attempt ${attempt}/3) — retrying"
+      sleep 3
+    done
+  fi
 
-  TIMEOUT_RESULT="$(mcp_call_tool "$SERVER" "execute_code" '{"language":"python","code":"import time; time.sleep(10)","timeout_ms":500}')"
-  assert_contains "long-running call timed out" "TIMED_OUT" "$TIMEOUT_RESULT"
+  if [[ $image_ready -eq 1 ]]; then
+    E2E_RESULT="$(mcp_call_tool "$SERVER" "execute_code" '{"language":"python","code":"print(2+3)","timeout_ms":5000}')"
+    assert_contains "python prints 5"             "5"        "$E2E_RESULT"
+    assert_contains "exit_code=0 on success"      "EXECUTED" "$E2E_RESULT"
+
+    TIMEOUT_RESULT="$(mcp_call_tool "$SERVER" "execute_code" '{"language":"python","code":"import time; time.sleep(10)","timeout_ms":500}')"
+    assert_contains "long-running call timed out" "TIMED_OUT" "$TIMEOUT_RESULT"
+  else
+    echo "  ⚠  ${CODEX_IMAGE} not cached and pull failed after 3 retries — skipping end-to-end execution tests"
+  fi
 else
   echo "  ⚠  Docker daemon unreachable — skipping end-to-end execution tests"
 fi
