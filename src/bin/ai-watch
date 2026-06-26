@@ -79,8 +79,8 @@ AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude gemini agy}"
 WATCH_TARGETS="engineer architect claude gemini"
 
 # E-137 (role-abstraction.md): semantic role → "<provider>:<pane>" map, populated by
-# main() from .ai/roles.json via _load_roles_mapping. Empty ⇒ legacy fallback
-# (architect=gemini:1, engineer=claude:0). Pre-declared for `set -u` safety so the
+# main() from .ai/roles.json via _load_roles_mapping. Empty ⇒ D-050 default fallback
+# (architect=agy:1, engineer=claude:0). Pre-declared for `set -u` safety so the
 # sourced helpers (resolve_pane) can reference it before main() runs.
 ROLES_MAPPING="${ROLES_MAPPING:-}"
 
@@ -171,7 +171,7 @@ PY
 }
 
 # _role_to_provider_pane <role> → "<provider>:<pane>" from ROLES_MAPPING, else the
-# legacy fallback (architect=gemini:1, engineer=claude:0). Returns 1 for non-roles.
+# D-050 default fallback (architect=agy:1, engineer=claude:0). Returns 1 for non-roles.
 _role_to_provider_pane() {
   local role="$1" entry
   if [[ -n "${ROLES_MAPPING:-}" ]]; then
@@ -181,8 +181,12 @@ _role_to_provider_pane() {
       esac
     done
   fi
+  # E-188 (D-050 completion): the no-roles.json fallback now uses the D-050 DEFAULT
+  # providers (architect=agy — not the pre-decouple 'gemini'), kept in sync with
+  # src/templates/roles.json. Only the pane ordinal is consumed by resolve_pane; the
+  # provider string is documentary, so this is a routing-neutral decoupling alignment.
   case "$role" in
-    architect) printf 'gemini:1' ;;
+    architect) printf 'agy:1' ;;
     engineer)  printf 'claude:0' ;;
     *)         return 1 ;;
   esac
@@ -202,8 +206,8 @@ _role_to_provider_pane() {
 resolve_pane() {
   local target="$1" want_idx="" lc_target ordinal has_cmd pid pidx ptitle pwin ppath pcmd
   # E-137 (role-abstraction.md): a semantic role (architect/engineer) resolves its
-  # pane ordinal via .ai/roles.json (ROLES_MAPPING), falling back to the legacy map
-  # (architect=gemini:1, engineer=claude:0). Provider-name targets keep their fixed
+  # pane ordinal via .ai/roles.json (ROLES_MAPPING), falling back to the D-050 default
+  # map (architect=agy:1, engineer=claude:0). Provider-name targets keep their fixed
   # ordinals. The title/window passes still match on the target string, so panes
   # titled by role ("engineer"/"architect") OR provider ("claude"/"gemini") both
   # resolve; otherwise the pane_identifier ordinal (Pass 4) routes — disambiguating
@@ -661,13 +665,13 @@ main() {
   echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
 
   # E-137 (role-abstraction.md): load the semantic role→provider:pane map once at
-  # startup. Empty ⇒ legacy fallback (architect=gemini, engineer=claude). A roles.json
+  # startup. Empty ⇒ D-050 default fallback (architect=agy, engineer=claude). A roles.json
   # edited mid-run is picked up on the next watcher restart (documented limitation).
   ROLES_MAPPING="$(_load_roles_mapping)"
   if [[ -n "$ROLES_MAPPING" ]]; then
     echo "ai-watch: role routing — dynamic from .ai/roles.json (${ROLES_MAPPING})"
   else
-    echo "ai-watch: role routing — legacy fallback (architect=gemini:1, engineer=claude:0)"
+    echo "ai-watch: role routing — default fallback (architect=agy:1, engineer=claude:0)"
   fi
 
   if [[ "$CURSOR_MODE" == "legacy" ]]; then

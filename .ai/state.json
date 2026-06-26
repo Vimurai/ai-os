@@ -924,6 +924,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-188",
+      "owner": "Engineer (Claude)",
+      "status": "BLOCKED",
+      "tier": 2,
+      "description": "Refactor resolver legacy fallback (remove hardcoded 'gemini' fallback if no-roles.json is missing) and rename global rulefiles src/claude/ and src/gemini/ to src/engineer/ and src/architect/ to complete the D-050 Triad persona decoupling.",
+      "created_at": "2026-06-26T14:21:27.893Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
