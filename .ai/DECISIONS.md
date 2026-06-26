@@ -552,3 +552,28 @@ D-050 explicitly rejected keeping `CLAUDE.md` and `GEMINI.md` to avoid legacy te
 
 ### Rollback
 Remove the shim files when all used CLI providers support configurable role file names (e.g., via `.ai/roles.json` or CLI flags).
+
+---
+
+## D-052 — Retain Vendor-Named Provider Directories
+
+**Date**: 2026-06-26
+**Task**: P-47
+**Decision**: Re-scope E-188 (Part 2) to cancel the rename of `src/gemini` and `src/claude` to `src/architect` and `src/engineer`. These directories will remain vendor-named (`gemini`, `claude`) as they contain provider-specific configurations and shims.
+
+### Why needed
+D-050 decoupled the *roles* (Architect/Engineer) from the *providers* (agy/Claude). However, the directories `src/gemini` and `src/claude` hold provider-specific CLI configurations (e.g., Gemini TOML settings) and the fallback shims ratified in D-051. Renaming these directories to role names (`src/architect`, `src/engineer`) introduces incoherence, as a role should not contain provider-specific configuration. By retaining vendor names for the directories, we clarify that they are *provider adapters*, not *role definitions*.
+
+### Alternatives considered
+1. **Rename to role names (E-188 Part 2 original plan)** — Rejected: Incoherent architecture. The Architect role now defaults to `agy`, so placing Gemini-specific config inside `src/architect` is incorrect.
+2. **Move all configs into a generic `src/providers`** — Rejected: Excessive refactoring and test-breakage (~25 mirror-identity tests) for purely cosmetic gains.
+
+### Constraints driving this decision
+- **Provider-Role Decoupling**: Roles are conceptual; providers are the actual CLIs executing them. Configuration tailored to a specific CLI must remain grouped by that CLI's name.
+
+### Impact
+- Unlocks: Closes the blocked E-188 task. 
+- Risk if wrong: Minor naming confusion if users mistake the provider directories for role logic, but this is mitigated by documentation.
+
+### Rollback
+If the vendor CLIs are fully deprecated, delete their respective `src/<provider>` directories entirely.
