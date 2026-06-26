@@ -29,6 +29,15 @@ Note: `critic_arch`, `critic_security`, and `critic_tests` are materialized agen
 `src/claude/agents/`. Each agent has deterministic checklists and strict stamp format rules.
 Do NOT use ad-hoc prompts — the Agent tool will load agent instructions automatically.
 
+> **`src/claude/` and `src/gemini/` are provider adapters, not role logic (D-052).** They are
+> named for the **provider CLI** whose artifacts they hold (Claude Code / Gemini): vendor
+> configuration, command formats, agent + skill templates, and the `@import` rulefile shims.
+> The **roles** (Architect / Engineer) are defined in `ARCHITECT.md` / `ENGINEER.md` and bind to a
+> provider via `.ai/roles.json` — they are decoupled from the directory names (D-050). The
+> directories deliberately keep vendor names: their contents are CLI-specific, so role-naming them
+> would conflate provider config with role definition. (E-188 Part 2 to rename them was cancelled
+> for exactly this reason.)
+
 ```
 # Post-task handover team — all 3 run simultaneously
 activate_skill("ai-task")  # record completed E-## task (replaces the retired claude_tasks agent — E-148)
