@@ -111,4 +111,32 @@ assert_contains "T-5b: idempotent — still exactly 2 personas after rebuild" "2
 real=$(node --input-type=module -e "${IMPORT} const n=listAgents([resolve('${REPO_ROOT}/src/claude/agents'),resolve('${REPO_ROOT}/src/gemini/agents')]); process.stdout.write(String(n.length))" 2>/dev/null)
 assert_match "T-6: real src/{claude,gemini}/agents → >=10 personas (got ${real})" "^(1[0-9]|[2-9][0-9])$" "$real"
 
+# ── T-7: committed plugin agent.json is byte-identical to a fresh rebuild (E-186) ────────────
+# The generated src/agents/plugin/agents/<name>/agent.json files are committed, but they are
+# DERIVED from the persona .md sources. Without this guard an edit to a source .md (or to the
+# builder's emit logic) silently drifts the committed artifact until someone notices in agy.
+# Rebuild from the REAL framework source into a temp dir and assert byte-identity — for the
+# meta_analyst persona this task names explicitly, then for EVERY committed agent.json (so the
+# guard covers the whole plugin, not just one persona). cmp -s is an exact byte comparison.
+GEN_OUT="$TMP/realbuild"
+( node --input-type=module -e "${IMPORT} buildPlugin(resolve('${REPO_ROOT}'), resolve('$GEN_OUT'))" ) >/dev/null 2>&1
+COMMITTED_DIR="${REPO_ROOT}/src/agents/plugin/agents"
+assert_status 0 "T-7a: rebuilt meta_analyst/agent.json exists" \
+  test -f "$GEN_OUT/agents/meta_analyst/agent.json"
+assert_status 0 "T-7b: committed meta_analyst/agent.json is byte-identical to rebuild (E-186)" \
+  cmp -s "${COMMITTED_DIR}/meta_analyst/agent.json" "$GEN_OUT/agents/meta_analyst/agent.json"
+
+# T-7c: no committed agent.json drifts from its rebuild. Walks the committed tree so a stale
+# artifact for ANY persona fails here, not just meta_analyst. Reports the first drifter by name.
+drifted=""
+if [[ -d "$COMMITTED_DIR" ]]; then
+  while IFS= read -r rel; do
+    if ! cmp -s "${COMMITTED_DIR}/${rel}" "${GEN_OUT}/agents/${rel}" 2>/dev/null; then
+      drifted="${rel}"; break
+    fi
+  done < <(cd "$COMMITTED_DIR" && find . -name agent.json -type f | sed 's#^\./##' | sort)
+fi
+assert_status 0 "T-7c: every committed agent.json matches rebuild (drift: '${drifted:-none}')" \
+  test -z "$drifted"
+
 assert_summary

@@ -885,6 +885,45 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-185",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Refactor telemetry.mjs to extract the hardcoded status enum values (SUCCESS, ERROR, TIMEOUT, REJECTED) into a single DRY source of truth, and derive the CHECK migration sentinel from these values per .ai/DIGEST.md Known Risks.",
+      "created_at": "2026-06-26T13:24:22.469Z",
+      "completed_at": "2026-06-26T14:17:07.211Z",
+      "summary": "Refactored telemetry.mjs status enum to a single DRY source (STATUS_ORDER); the membership Set, the SQL CHECK clause (STATUS_SQL_IN), and the migration sentinel (STATUS_MIGRATION_SEN …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-186",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement a byte-identity test for generated src/agents/plugin/agents/meta_analyst/agent.json vs the source .md to close the testing gap per .ai/DIGEST.md Known Risks.",
+      "created_at": "2026-06-26T13:24:22.498Z",
+      "completed_at": "2026-06-26T14:17:09.110Z",
+      "summary": "Added byte-identity test (plugin_builder_test T-7a/b/c): asserts the committed src/agents/plugin/agents/*/agent.json — meta_analyst specifically, plus every persona — is byte-identic …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-187",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Fix the flaky code_execution Docker e2e tests by updating the base image or implementing a pull retry mechanism, ensuring they pass consistently on cold environments per .ai/DIGEST.md Known Risks.",
+      "created_at": "2026-06-26T13:24:22.626Z",
+      "completed_at": "2026-06-26T14:17:10.412Z",
+      "summary": "De-flaked code_execution Docker e2e (T-CODEX-S07): pre-pull python:3.12-slim with 3 bounded retries before the e2e block; if the image still can't be made available, skip determinist …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [

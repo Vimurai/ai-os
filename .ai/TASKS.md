@@ -131,6 +131,12 @@
   Status: DONE 2026-06-25 — Decoupled Triad persona (D-050). Renamed CLAUDE.md→ENGINEER.md, GEMINI.md→ARCHITECT.md (root + templates) as canonical rulefiles; CLAUDE.md/GEMINI.md kept as thin @import bootstrap s …[full in LOG.md]
 - [x] E-184: Update README.md to reflect the new decoupled rulefile naming (ARCHITECT.md / ENGINEER.md) and the default CLI provider assignments (`claude` = Engineer, `agy` = Architect) per D-050. Remove references to the deprecated Gemini CLI. | Tier: 1
   Status: DONE 2026-06-25 — README updated for the decoupled naming (ARCHITECT.md/ENGINEER.md canonical + CLAUDE.md/GEMINI.md @import shims) and default providers per D-050 (agy=Architect, claude=Engineer): Tri …[full in LOG.md]
+- [x] E-185: Refactor telemetry.mjs to extract the hardcoded status enum values (SUCCESS, ERROR, TIMEOUT, REJECTED) into a single DRY source of truth, and derive the CHECK migration sentinel from these values per .ai/DIGEST.md Known Risks. | Tier: 2
+  Status: DONE 2026-06-26 — Refactored telemetry.mjs status enum to a single DRY source (STATUS_ORDER); the membership Set, the SQL CHECK clause (STATUS_SQL_IN), and the migration sentinel (STATUS_MIGRATION_SEN …[full in LOG.md]
+- [x] E-186: Implement a byte-identity test for generated src/agents/plugin/agents/meta_analyst/agent.json vs the source .md to close the testing gap per .ai/DIGEST.md Known Risks. | Tier: 2
+  Status: DONE 2026-06-26 — Added byte-identity test (plugin_builder_test T-7a/b/c): asserts the committed src/agents/plugin/agents/*/agent.json — meta_analyst specifically, plus every persona — is byte-identic …[full in LOG.md]
+- [x] E-187: Fix the flaky code_execution Docker e2e tests by updating the base image or implementing a pull retry mechanism, ensuring they pass consistently on cold environments per .ai/DIGEST.md Known Risks. | Tier: 2
+  Status: DONE 2026-06-26 — De-flaked code_execution Docker e2e (T-CODEX-S07): pre-pull python:3.12-slim with 3 bounded retries before the e2e block; if the image still can't be made available, skip determinist …[full in LOG.md]
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
