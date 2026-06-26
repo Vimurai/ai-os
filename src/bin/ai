@@ -419,6 +419,36 @@ EOF
   echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}, engineer=${epr}:${epn})"
 }
 
+# E-182/E-184 follow-up: cosmetic Triad-banner labels for do_init. Prints
+# "<architect_provider>|<engineer_provider>" read from .ai/roles.json, mirroring
+# ai-watch's _load_roles_mapping so the banner never restales when a role is
+# re-bound. Falls back to the D-050 defaults (architect=agy, engineer=claude)
+# when the file is missing/malformed or python3 is unavailable. Cosmetic only —
+# this NEVER affects handoff routing (ai-watch owns that). Safe under set -euo
+# pipefail: the python heredoc is guarded by `|| printf ''`.
+_roles_banner_labels() {
+  local roles_file=".ai/roles.json" arch="agy" eng="claude" parsed=""
+  if [[ -f "$roles_file" ]] && command -v python3 &>/dev/null; then
+    parsed="$(python3 - "$roles_file" 2>/dev/null <<'PY' || printf ''
+import json, sys
+try:
+    roles = (json.load(open(sys.argv[1])) or {}).get("roles", {})
+    def prov(role, default):
+        r = roles.get(role)
+        p = r.get("provider") if isinstance(r, dict) else None
+        return p if p else default
+    sys.stdout.write("%s|%s" % (prov("architect", "agy"), prov("engineer", "claude")))
+except Exception:
+    sys.stdout.write("")
+PY
+)"
+    if [[ "$parsed" == *"|"* ]]; then
+      arch="${parsed%%|*}"; eng="${parsed##*|}"
+    fi
+  fi
+  printf '%s|%s' "$arch" "$eng"
+}
+
 # v3.0 (W3-T3): single source for scaffolding/refreshing the project-scoped agent
 # dirs (.claude/, .gemini/, .agents/) from the installed mirror. Collapses the
 # duplicated blocks in ensure_ai_templates (init) and do_sync (sync). $1 selects
@@ -1093,10 +1123,13 @@ do_init() {
   echo "4) Fill in .github/copilot-instructions.md (project-specific context)"
   echo "5) Open Claude Code or Gemini CLI in this repo — the bootloader auto-runs ai-preflight"
   echo ""
+  local _triad_labels _arch_label _eng_label
+  _triad_labels="$(_roles_banner_labels)"
+  _arch_label="${_triad_labels%%|*}"; _eng_label="${_triad_labels##*|}"
   echo "Triad Workflow (commands now run as agent prompts/skills):"
-  echo "  Architect (Gemini) → Writes to architect.md / blueprints"
-  echo "  Engineer  (Claude) → Implements code based on blueprints"
-  echo "  Tester (TestSprite) → Quality gate via skill: ai-test"
+  printf '  Architect %-12s → Writes to architect.md / blueprints\n' "(${_arch_label})"
+  printf '  Engineer  %-12s → Implements code based on blueprints\n' "(${_eng_label})"
+  printf '  Tester    %-12s → Quality gate via skill: ai-test\n' "(TestSprite)"
   echo ""
   echo "MCP servers enabled in .mcp.json (filesystem + memory)."
 }
