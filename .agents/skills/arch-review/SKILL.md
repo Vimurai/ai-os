@@ -8,7 +8,7 @@ context: fork
 agent: default
 ---
 
-# AI-OS Review — Architectural Audit (Gemini)
+# AI-OS Review — Architectural Audit (Agy)
 
 ## Dynamic Context Injection
 Recent changes: !git log --oneline -10 2>/dev/null || echo "(no git history)"

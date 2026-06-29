@@ -40,3 +40,4 @@
 - 2026-06-25: E-184 README → decoupled rulefile naming (ENGINEER/ARCHITECT.md) + default providers (agy/claude); removed deprecated Gemini CLI refs.
 - 2026-06-25: E-183 Decouple Triad persona (D-050) — CLAUDE/GEMINI.md → canonical ENGINEER/ARCHITECT.md + @import shims; bin/ai sync/anti-drift/usage; roles default agy:1; 6 test suites + 2 skills updated.
 - 2026-06-25: E-180 telemetry REJECTED status (D-049) — +REJECTED enum/CHECK + atomic migration (db_architect P1 fix: orphan-merge & CHECK-rebuild sequential); expected_rejection→REJECTED; meta_analyst Aggregate A excl REJECTED + new Aggregate F. Tier-3 ALL PASS.
+- 2026-06-29: auto-stamped by Stop hook

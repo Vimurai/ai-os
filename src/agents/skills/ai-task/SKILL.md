@@ -1,13 +1,13 @@
 ---
 name: ai-task
-description: Gemini task lifecycle — mark P-## tasks DONE, log completion, and trigger ai-handoff to Claude. Use after completing any planning or blueprint session. Never leave P-## tasks open without closure.
+description: Agy task lifecycle — mark P-## tasks DONE, log completion, and trigger ai-handoff to Claude. Use after completing any planning or blueprint session. Never leave P-## tasks open without closure.
 disable-model-invocation: false
 user-invocable: true
 context: default
 agent: default
 ---
 
-# AI-Task (Gemini) — Architect Task Lifecycle
+# AI-Task (Agy) — Architect Task Lifecycle
 
 ## Dynamic Context Injection
 Open P-## tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | grep "P-" || echo "(none)"
@@ -45,7 +45,7 @@ mcp__task-synchronizer-mcp__update_task_status({
 
 Append to `.ai/LOG.md`:
 ```
-YYYY-MM-DD | Gemini | P-## | <summary of what was blueprinted>
+YYYY-MM-DD | Agy | P-## | <summary of what was blueprinted>
 ```
 
 ## Step 4 — Trigger Handoff to Claude (MANDATORY — E-119)
@@ -65,7 +65,7 @@ E-## without re-reading the full conversation.
 ## Step 5 — Surface Next Actions
 
 Report:
-- Any remaining open P-## tasks for Gemini
+- Any remaining open P-## tasks for Agy
 - The E-## tasks now unblocked for Claude
 - If no P-## remain: "All Architect tasks complete. Claude can now implement the open E-## tasks."
 

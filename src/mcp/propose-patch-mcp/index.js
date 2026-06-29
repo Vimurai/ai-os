@@ -65,7 +65,7 @@ function safePath(filePath, cwd) {
 
 /**
  * Role-Aware RBAC guard (E-143, §35 ANTI-DRIFT).
- * Architect (Gemini) may only write to .ai/ or plans/ — never src/.
+ * Architect (Agy) may only write to .ai/ or plans/ — never src/.
  * Returns an error result object if blocked, null if allowed.
  */
 function roleGuard(callerRole, absPath, cwd) {
@@ -82,7 +82,7 @@ function roleGuard(callerRole, absPath, cwd) {
           `  path:    ${absPath}\n` +
           `  role:    ${callerRole}\n` +
           `  allowed: .ai/, plans/\n\n` +
-          `The Architect (Gemini) may only modify .ai/ and plans/.\n` +
+          `The Architect (Agy) may only modify .ai/ and plans/.\n` +
           `To modify src/, switch to the Engineer (Claude).`,
       }],
       isError: true,

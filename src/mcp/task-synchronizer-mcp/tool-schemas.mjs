@@ -16,7 +16,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
         properties: {
           summary: { type: "boolean",  description: "Return counts + project info only (no task list). Use this by default." },
           status:  { type: "string",   enum: ["OPEN", "BLOCKED", "DONE"], description: "Filter tasks by status" },
-          owner:   { type: "string",   description: "Filter tasks by owner substring (e.g. 'claude', 'gemini')" },
+          owner:   { type: "string",   description: "Filter tasks by owner substring (e.g. 'claude', 'agy')" },
           tier:    { type: "number",   enum: [1, 2, 3], description: "Filter tasks by tier" },
         },
       },
@@ -27,7 +27,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       inputSchema: {
         type: "object",
         properties: {
-          owner:             { type: "string",  description: "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+          owner:             { type: "string",  description: "Task owner: 'Architect (Agy)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
           description:       { type: "string",  description: "Task description" },
           tier:              { type: "number",  description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
           prefix:            { type: "string",  description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },

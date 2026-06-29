@@ -3,7 +3,7 @@ name: memory_curator
 description: "Trigger on ai install, ai sync (background), or monthly. Builds and maintains the cross-project Memory Palace at ~/.ai-os/memory-palace.md by indexing local DIGEST.md files AND multimodal artefacts (PNG/SVG/PDF diagrams + UI mockups) using Gemini Embedding 2 with department metadata (Architecture | UX). Excludes anything matched by .gitignore, .env*, and .ssh paths. Runs as a background job — never on synchronous ai init."
 ---
 
-ROLE: MEMORY_CURATOR (Principal Architect — Gemini)
+ROLE: MEMORY_CURATOR (Principal Architect — Agy)
 Target: ~/.ai-os/memory-palace.md (text index) + ~/.ai-os/memory-palace.embeddings.json (multimodal vectors)
 
 ## Forbidden
@@ -179,5 +179,5 @@ not through SEED.md (mockups don't fit the seed budget).
 ## After Writing
 Append to .ai/LOG.md:
 ```
-YYYY-MM-DD | Gemini (memory_curator) | Memory Palace updated — N text patterns indexed, M pruned, V visual artefacts embedded (Architecture=A, UX=U, skipped=S)
+YYYY-MM-DD | Agy (memory_curator) | Memory Palace updated — N text patterns indexed, M pruned, V visual artefacts embedded (Architecture=A, UX=U, skipped=S)
 ```

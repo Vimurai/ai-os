@@ -64,7 +64,7 @@ Search TASKS.md for a task covering the same scope. If one exists:
 ## Step 3 — Assign IDs
 
 Read current TASKS.md and increment:
-- P-## for Gemini/Architect tasks
+- P-## for Agy/Architect tasks
 - E-## for Claude/Engineer tasks
 
 Never reuse a completed task ID.
@@ -103,7 +103,7 @@ Format:
 - [ ] P-##: <Imperative description> | Tier: N
 ```
 
-Append under the correct section (`## Engineer (Claude)` or `## Architect (Gemini)`).
+Append under the correct section (`## Engineer (Claude)` or `## Architect (Agy)`).
 
 Also call `add_task` with the routing flag set per Step 4:
 ```

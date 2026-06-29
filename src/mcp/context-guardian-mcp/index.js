@@ -33,7 +33,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       description:
         "Pre-flight RBAC check (E-143, §35 ANTI-DRIFT). " +
         "Validates whether a given role is allowed to write to the specified path. " +
-        "Architect (Gemini) may only write to .ai/ and plans/. " +
+        "Architect (Agy) may only write to .ai/ and plans/. " +
         "Returns ALLOWED or [ANTI_DRIFT_VIOLATION] without performing any write.",
       inputSchema: {
         type: "object",
@@ -96,7 +96,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               `  path:    ${abs}\n` +
               `  role:    ${args.caller_role}\n` +
               `  allowed: .ai/, plans/\n\n` +
-              `The Architect (Gemini) may only modify .ai/ and plans/.\n` +
+              `The Architect (Agy) may only modify .ai/ and plans/.\n` +
               `To modify src/, switch to the Engineer (Claude).`,
           }],
           isError: true,

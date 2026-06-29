@@ -117,7 +117,7 @@ After triage completes:
    Use `handoff_control` to escalate for Architect review:
    ```
    mcp__context-invoker-mcp__handoff_control({
-     target: "gemini",
+     target: "architect",
      message: "False-positive task rejection from ai-triage: <task_id> — <reason>. POSTMORTEM: <postmortem_section>. Please review root cause and confirm incident threshold should be adjusted."
    })
    ```

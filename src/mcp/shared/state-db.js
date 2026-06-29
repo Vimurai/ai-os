@@ -214,7 +214,7 @@ export function readState(db) {
 /**
  * E-136 (role-abstraction.md): derive the provider-agnostic semantic role from an
  * owner string for TASKS.md section headers. "Engineer (Claude)" -> "Engineer",
- * "Architect (Gemini)" -> "Architect", bare "Engineer" -> "Engineer". state.json
+ * "Architect (Agy)" -> "Architect", bare "Engineer" -> "Engineer". state.json
  * retains the full owner string; only the generated TASKS.md header is normalized,
  * so a CLI swap (e.g. Gemini -> Antigravity) never churns the section headers.
  */

@@ -38,7 +38,7 @@ Commands:
   ai version     Print version
 
 Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
-  update / onboard → Open Gemini, type the planning request directly
+  update / onboard → Open Agy, type the planning request directly
   preflight        → skill: ai-preflight  (auto-runs at session start)
   digest           → skill: ai-digest
   archive          → skill: ai-archive
@@ -1204,7 +1204,7 @@ TASK_RE    = re.compile(r'^- \[([ x])\] (E|P|T)-(\d+):?\s+(.+?)(?:\s*\|\s*Tier:\
 STATUS_RE  = re.compile(r'^\s{2}Status:\s+DONE\s+(\d{4}-\d{2}-\d{2})\s+[—–-]\s+(.+)$')
 
 OWNER_PATTERNS = [
-    (re.compile(r'\bArchitect\b|\(Gemini\)',     re.IGNORECASE), 'Architect (Gemini)'),
+    (re.compile(r'\bArchitect\b|\(Gemini\)',     re.IGNORECASE), 'Architect (Agy)'),
     (re.compile(r'\bEngineer\b|\(Claude\)',      re.IGNORECASE), 'Engineer (Claude)'),
     (re.compile(r'\bTester\b|\(TestSprite\)',    re.IGNORECASE), 'Tester (TestSprite)'),
 ]
@@ -1459,11 +1459,11 @@ for issue in issues:
         (issue.get("body") or "(no description)")[:800],
     ]))
     parts.append(block)
-footer = "\n## Action Required\nGemini (Architect): Review the issues above and create P-## blueprint tasks via:\n  mcp__task-synchronizer-mcp__add_task({ prefix: 'P', owner: 'Architect (Gemini)', description: '...', tier: N })\nThis writes to state.sqlite and regenerates TASKS.md automatically.\n"
+footer = "\n## Action Required\nAgy (Architect): Review the issues above and create P-## blueprint tasks via:\n  mcp__task-synchronizer-mcp__add_task({ prefix: 'P', owner: 'Architect (Agy)', description: '...', tier: N })\nThis writes to state.sqlite and regenerates TASKS.md automatically.\n"
 print(header + "\n\n---\n\n".join(parts) + "\n" + footer)
 PY
 
-  echo "✓ Issues fetched. Paste the output above into your chat with Gemini to blueprint them."
+  echo "✓ Issues fetched. Paste the output above into your chat with Agy to blueprint them."
 }
 
 do_sync() {
@@ -2538,7 +2538,7 @@ case "$cmd" in
   ""|help|-h|--help) usage ;;
 
   # Deprecated user surface — removed, see .ai/blueprints/cli-collapse.md
-  update|onboard) _show_deprecated "$cmd" "Open Gemini CLI and type the planning request as a prompt." ;;
+  update|onboard) _show_deprecated "$cmd" "Open Agy CLI and type the planning request as a prompt." ;;
   preflight)     _show_deprecated "preflight" "skill: ai-preflight  (auto-runs at every session start)" ;;
   digest)        _show_deprecated "digest" "skill: ai-digest" ;;
   archive)       _show_deprecated "archive" "skill: ai-archive" ;;

@@ -35,7 +35,7 @@ Extract for each incident:
 - `incident_type` — `MCP_CRASH`, `DRIFT_DETECTED`, `HOOK_REGRESSION`, `MISROUTED_TASK`, `ENV_ERROR`, `FLAKY_TEST`, `UNEXPECTED_BEHAVIOR`
 - `message` — the incident description
 - `stack_signature` — the stable grouping key (used by aggregator to count duplicates)
-- `source_agent` — which agent logged it (`Claude`, `Gemini`, `TestSprite`)
+- `source_agent` — which agent logged it (`Claude`, `Agy`, `TestSprite`)
 - `timestamp` — ISO-8601 UTC
 
 Group incidents by `stack_signature`. Count occurrences per group.

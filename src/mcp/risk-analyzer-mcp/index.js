@@ -170,7 +170,7 @@ const TIER_ACTIONS = {
       "safe-exec-mcp for shell commands",
     ],
     skip: [],
-    handover: "Mandatory [UACS_VERIFIED] stamp + Architect (Gemini) sign-off before commit.",
+    handover: "Mandatory [UACS_VERIFIED] stamp + Architect (Agy) sign-off before commit.",
     commit_tag: "[TIER_3]",
     token_cost: "~5000–20000 tokens (full Triad)",
   },

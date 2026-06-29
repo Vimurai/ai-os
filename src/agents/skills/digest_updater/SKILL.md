@@ -91,7 +91,7 @@ Required sections (in order):
 - <one line>
 
 ## Triad Health
-- Architect (Gemini): <status> — last <action> <date>; <open P-## count> open
+- Architect (Agy): <status> — last <action> <date>; <open P-## count> open
 - Engineer (Claude): <status> — last completed <E-##> (<description>, <date>); <open E-## count> open
 - Tester (TestSprite): <status> — <last test result>
 

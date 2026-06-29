@@ -127,4 +127,4 @@ I do NOT:
 I DO:
 - Implement blueprints from `architect.md` and `TASKS.md`
 - Fix bugs, write tests, refactor code
-- Ask Gemini to clarify ambiguous blueprints before implementing
+- Ask the Architect (Agy) to clarify ambiguous blueprints before implementing

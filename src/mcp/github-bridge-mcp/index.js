@@ -3,7 +3,7 @@
  * github-bridge-mcp — AI-OS GitHub Bridge (E-142, §28)
  *
  * Connects GitHub events to the AI-OS Architect cycle.
- * Fetches assigned issues via `gh` CLI and formats them as P-## task proposals for Gemini.
+ * Fetches assigned issues via `gh` CLI and formats them as P-## task proposals for Agy.
  *
  * Requires: GitHub CLI (`gh`) installed and authenticated (`gh auth status`).
  *
@@ -122,8 +122,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "create_intent_from_issues",
       description:
-        "Formats selected GitHub issues as structured P-## task proposals for the Architect (Gemini) cycle. " +
-        "Returns formatted issue content with an 'Action Required' prompt — Gemini then creates tasks via add_task. " +
+        "Formats selected GitHub issues as structured P-## task proposals for the Architect (Agy) cycle. " +
+        "Returns formatted issue content with an 'Action Required' prompt — Agy then creates tasks via add_task. " +
         "Does not write to any file — intent is returned inline for immediate use in conversation.",
       inputSchema: {
         type: "object",
@@ -317,7 +317,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const date = new Date().toISOString().split("T")[0];
       const header = `\n## GitHub Issues — imported ${date}\n\n`;
       const body   = fetchedIssues.map(formatIssueForUpdate).join("\n---\n\n");
-      const footer = `\n## Action Required\nGemini (Architect): Review the issues above and create P-## blueprint tasks in state.json using add_task.\n`;
+      const footer = `\n## Action Required\nAgy (Architect): Review the issues above and create P-## blueprint tasks in state.json using add_task.\n`;
 
       const lines = [
         `✓ Fetched ${fetchedIssues.length} issue(s):`,
