@@ -56,7 +56,14 @@ if [[ -f "$DIGEST_FILE" ]]; then
       LAST_FILE=$(grep -o '| [A-Z_]*\.md$' "$LOG_FILE" 2>/dev/null | tail -1 | tr -d '| ' || true)
       [[ -n "$LAST_FILE" ]] && DIGEST_NOTE="updated ${LAST_FILE}"
     fi
-    printf -- "- %s: %s\n" "$TODAY" "$DIGEST_NOTE" >> "$DIGEST_FILE"
+    # Never pollute DIGEST's curated "Recent Changes" with the generic placeholder
+    # (no real session summary AND no LOG-derived note). The curated section is
+    # maintained by digest_updater / ai-digest; the stale-warning below prompts a
+    # proper regen. Writing "auto-stamped by Stop hook" here was a recurring junk
+    # line that had to be hand-reverted before every commit.
+    if [[ "$DIGEST_NOTE" != "auto-stamped by Stop hook" ]]; then
+      printf -- "- %s: %s\n" "$TODAY" "$DIGEST_NOTE" >> "$DIGEST_FILE"
+    fi
   fi
 fi
 

@@ -1028,6 +1028,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-196",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Fix recurring .ai/ working-tree corruptions surfaced via the incident sweep: (1) hooks/stop-hook.sh wrote the generic \"auto-stamped by Stop hook\" placeholder into DIGEST's curated Recent Changes — guard skips it; (2) bin/ai do_migrate_state rebuilt state.json from the LOSSY TASKS.md view (date-only timestamps→midnight, depends_on stripped) and overwrote rich state on every `ai init`/install in the shared Engineer+Architect working tree — made non-destructive (append-only merge) + do_init drops --force. Regression tests: stop_hook_test.sh + migrate_state_test.sh T-04.10. Full suite 3028/0.",
+      "created_at": "2026-06-30T17:46:20.673Z",
+      "completed_at": "2026-06-30T17:47:04.243Z",
+      "summary": "Root-caused + fixed two recurring .ai/ working-tree corruptions from the incident sweep. (1) hooks/stop-hook.sh: guard skips the generic \"auto-stamped by Stop hook\" DIGEST placeholde …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2353,6 +2366,20 @@
       "task_id": "E-195",
       "timestamp": "2026-06-30T12:46:01.047Z",
       "summary": "[TIER_2] E-195 cleared: blueprint-aligner [ALIGN_PASS] (WARN-only, advisory). Scaffold .agents/AGENTS.md→@ARCHITECT.md mirrors the GEMINI.md shim; wired in _sync_workspace_dirs (init+sync); 11/0 dedicated tests incl. sourced E2E; full suite 3019/0. No P0/P1."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner",
+      "task_id": "E-196",
+      "timestamp": "2026-06-30T17:46:58.292Z",
+      "summary": "[TIER_2] E-196 incident fixes: aligner WARN only (no FAIL). ORPHANED_WORK advisory (hooks/stop-hook.sh + 2 tests) — covered by E-196 + incident log, not a blueprint feature. Non-destructive migrate + stop-hook DIGEST guard; full suite 3028/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "review_synthesizer",
+      "task_id": "E-196",
+      "timestamp": "2026-06-30T17:47:00.632Z",
+      "summary": "[TIER_2] E-196 cleared: [ALIGN_PASS] (WARN-only). Two root-caused incident fixes — Stop-hook DIGEST placeholder guard + do_migrate_state non-destructive append-only merge (+ init drops --force), ending the recurring state.json/DIGEST corruption. Regression tests stop_hook (8/0) + migrate_state T-04.10; full suite 3028/0; state.json survives a full run intact. No P0/P1."
     }
   ],
   "deltas": [
