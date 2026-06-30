@@ -4,7 +4,7 @@
 > This document specifies the transition from Markdown-based payload parsing to 100% deterministic Structured Outputs (JSON Schema) for Triad communication.
 
 ## 1. The "Brittle Markdown" Problem
-Historically, the Architect (Gemini) and Engineer (Claude) communicated via markdown files (`TASKS.md`, `REVIEWS.md`). Parsing these files via regex to update the SQLite state is brittle, prone to formatting errors, and lacks type safety.
+Historically, the Architect (Agy) and Engineer (Claude) communicated via markdown files (`TASKS.md`, `REVIEWS.md`). Parsing these files via regex to update the SQLite state is brittle, prone to formatting errors, and lacks type safety.
 
 ## 2. Native Structured Outputs
 AI-OS v2 leverages the 2026 API features for native Structured Outputs. When an agent needs to transition the system state (e.g., adding P-## tasks, marking E-## tasks done, or emitting an Audit Stamp), it MUST do so by invoking MCP tools with strictly typed JSON payloads, bypassing raw markdown generation.

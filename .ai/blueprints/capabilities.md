@@ -6,10 +6,10 @@
 ## 1. Adaptive Thinking (`think: "max"`)
 The "Adaptive Thinking" parameter (or "Deep Think" equivalent) must be strategically injected into the API payload based on the active role in the Triad.
 
-### Architect (Gemini)
+### Architect (Agy)
 - **Role Requirement**: The Architect must map out complex system edge cases, write exhaustive domain blueprints, and prevent "plan drift" before execution begins.
 - **Setting**: `think: "max"` (or `thinking_effort: "high"` depending on the SDK).
-- **Injection Point**: This is configured in `.gemini/settings.json` and passed via the Context Invoker during the `enter_plan_mode` or initial session boot.
+- **Injection Point**: This is configured provider-relative (agy reads `.agents/mcp_config.json`) and passed via the Context Invoker during the `enter_plan_mode` or initial session boot.
 
 ### Engineer (Claude)
 - **Role Requirement**: The Engineer relies on rapid, iterative execution (Fuzzy Patching, writing code, running tests). Deep thinking is too slow and expensive for iterative file editing.

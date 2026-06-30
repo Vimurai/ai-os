@@ -1,7 +1,7 @@
 # Agent Invocation Robustness Blueprint
 
 ## Goal & Architecture
-**Goal:** Enable both the Architect (Gemini) and the Engineer (Claude) to dynamically detect the execution environment (standard MCP vs. native Antigravity `agy`) and automatically decide when to invoke a skill or subagent, preventing execution termination errors due to missing or unauthenticated tools.
+**Goal:** Enable both the Architect (Agy) and the Engineer (Claude) to dynamically detect the execution environment (standard MCP vs. native Antigravity `agy`) and automatically decide when to invoke a skill or subagent, preventing execution termination errors due to missing or unauthenticated tools.
 **Architecture:** Update the main system bootloader instructions (`CLAUDE.md` and `GEMINI.md`, along with their templates) to explicitly guide the models on:
 1. When it is proper to run a skill (procedural task) vs. invoke a subagent (specialist persona).
 2. How to dynamically detect the presence of native Antigravity subagent tools (`invoke_subagent`, `define_subagent`) vs. standard MCP tools (`activate_agent`, `activate_skill`) and choose the correct API.

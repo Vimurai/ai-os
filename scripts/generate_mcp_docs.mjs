@@ -125,7 +125,7 @@ function buildMarkdown(registry) {
   lines.push("> This document maps every AI-OS Model Context Protocol (MCP) server, grouped by routing domain. It is generated from `src/config/registry.json` — edit the registry, then re-run the generator. Never edit this file directly.");
   lines.push("");
   lines.push(
-    `Total registered servers: **${Object.keys(servers).length}**. The Architect (Gemini) curates DOMAINS; the Engineer (Claude) wires them into the registry.`
+    `Total registered servers: **${Object.keys(servers).length}**. The Architect (Agy) curates DOMAINS; the Engineer (Claude) wires them into the registry.`
   );
   lines.push("");
 

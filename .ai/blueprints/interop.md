@@ -4,7 +4,7 @@
 > This document specifies the Agent-to-Agent (A2A) Bridge and Human-in-the-Loop (HITL) Security Gates required to bring AI-OS v2 into the 2026 multi-agent orchestration paradigm.
 
 ## 1. The Advisor/Executor Pattern (A2A Bridge)
-To eliminate the bottleneck of "stuck agents" waiting for human mediation, AI-OS implements an Agent-to-Agent (A2A) Bridge, allowing the Engineer (Claude) to dynamically query the Architect (Gemini).
+To eliminate the bottleneck of "stuck agents" waiting for human mediation, AI-OS implements an Agent-to-Agent (A2A) Bridge, allowing the Engineer (Claude) to dynamically query the Architect (Agy).
 
 ### Architecture (`advisor-mcp`)
 - **MCP Server**: `advisor-mcp`.

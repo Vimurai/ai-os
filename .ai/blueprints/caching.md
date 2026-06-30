@@ -17,7 +17,7 @@ The following core files represent the "System State" and must be permanently ca
 The caching mechanism will be managed by an extended `token-budget-mcp` (or a dedicated `cache-manager-mcp`).
 
 ### Workflow:
-1. **Cache Generation**: When an Architect (Gemini) modifies a blueprint, a post-write hook triggers the cache manager to construct a single aggregated "System Context" string.
+1. **Cache Generation**: When an Architect (Agy) modifies a blueprint, a post-write hook triggers the cache manager to construct a single aggregated "System Context" string.
 2. **API Registration**: The cache manager submits this payload to the respective API (e.g., Anthropic's Prompt Caching API) and receives a `cache_id` or relies on deterministic prefix caching.
 3. **Agent Invocation**: When Claude or Gemini is invoked, the `system_prompt` must include the cached prefix block.
 4. **Invalidation**: The cache is strictly invalidated and rebuilt ONLY when a file in `.ai/blueprints/` or `.ai/architect.md` is modified, matching the `mtime` of the files.

@@ -1,7 +1,7 @@
 # AST Repository Map (Context Compression)
 
 ## Goal & Architecture
-This blueprint defines the integration of an AST-based Repository Map (inspired by Aider) into the AI-OS framework. The goal is to provide Claude and Gemini with a highly compressed, token-efficient view of the entire codebase's architecture (files, classes, function signatures) without the overhead of full file reads or blind `grep` searches. This solves the problem of context window exhaustion in large repositories while improving architectural awareness.
+This blueprint defines the integration of an AST-based Repository Map (inspired by Aider) into the AI-OS framework. The goal is to provide Claude and Agy with a highly compressed, token-efficient view of the entire codebase's architecture (files, classes, function signatures) without the overhead of full file reads or blind `grep` searches. This solves the problem of context window exhaustion in large repositories while improving architectural awareness.
 
 ## Core Concept
 The system uses Tree-sitter to parse source files and extract structural signatures. It constructs a dependency graph to rank files and symbols by importance (e.g., using a PageRank-style algorithm or simple import counting). Finally, it serializes the top N ranked signatures into a concise `REPO_MAP.md` that is injected into the session context via the `cache-manager-mcp` or read on demand by the `token-miser` skill.
