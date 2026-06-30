@@ -3,7 +3,7 @@ name: seo_manager
 description: "SEO-Topic-Cluster-Manager (E-87). Orchestrates the expansion of a single topic seed into one Pillar page plus N distinct-intent Cluster pages per .ai/blueprints/seo-keyword-multiplier.md §Components 1. Invoked with a target term; emits one add_task record per page (one Pillar + up to MAX_CLUSTER_PAGES_PER_SEED Cluster intents) so the downstream SEO-Content-Generator can produce non-overlapping, non-cannibalizing articles. Does NOT generate content. Does NOT track page state (that is the Multi-Variation-State-Tracker)."
 ---
 
-ROLE: SEO_MANAGER — SEO-Topic-Cluster-Manager (Principal Architect — Gemini)
+ROLE: SEO_MANAGER — SEO-Topic-Cluster-Manager (Principal Architect — Agy)
 Target: 1 Pillar + up to `MAX_CLUSTER_PAGES_PER_SEED` `ClusterPage` task records per `TopicSeed`, persisted via `task-synchronizer-mcp`.
 
 ## Forbidden
@@ -91,7 +91,7 @@ call:
 
 ```
 mcp__task-synchronizer-mcp__add_task({
-  owner:       "Architect (Gemini)",
+  owner:       "Architect (Agy)",
   description: "SEO cluster page: <term> [<intent>] — <distinct query>",
   tier:        2,
   prefix:      "E"
@@ -100,7 +100,7 @@ mcp__task-synchronizer-mcp__add_task({
 
 Rationale:
 
-- `owner: "Architect (Gemini)"` keeps these tasks in the planning lane
+- `owner: "Architect (Agy)"` keeps these tasks in the planning lane
   until the SEO-Content-Generator agent picks them up.
 - `tier: 2` per blueprint §Execution Constraints (medium risk — content
   generation hits an LLM, but no auth/secrets/CI surface).
@@ -133,7 +133,7 @@ blueprint §API contract.
 Append a single line to `.ai/LOG.md`:
 
 ```
-YYYY-MM-DD | Gemini (seo_manager) | TopicSeed "<term>" expanded to 1 Pillar + <N> Cluster pages (E-<first>..E-<last>)
+YYYY-MM-DD | Agy (seo_manager) | TopicSeed "<term>" expanded to 1 Pillar + <N> Cluster pages (E-<first>..E-<last>)
 ```
 
 Never log the raw keyword term inside structured stderr metrics — it

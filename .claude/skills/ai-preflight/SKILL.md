@@ -30,7 +30,7 @@ Contains: product summary, stack, Triad health, current focus, known risks, rece
 Only use `filesystem.read` on `.ai/architect.md` *after* preflight, and ONLY IF your specific assigned task explicitly requires architectural details.
 
 ### 3. Read `.ai/TASKS.md` ← YOUR ASSIGNMENTS
-Assigned tasks (E-## for Claude, P-## for Gemini). Always read.
+Assigned tasks (E-## for Claude, P-## for Agy). Always read.
 
 ### 4. Verify markdown ↔ state sync ← FAILSAFE (E-60, blueprint state-sync-validation)
 
@@ -86,7 +86,7 @@ node "${AGGREGATOR}" 2>/dev/null || echo '{"status":"AGGREGATOR_UNAVAILABLE"}'
 - `OK` / `NO_INCIDENTS` / `DISABLED` / `AGGREGATOR_UNAVAILABLE` — silent.
   No-op; continue to the next step.
 - `THRESHOLD_REACHED` — emit an inline context block to the agent. Use
-  the format below verbatim so the Architect (Gemini) can recognise the
+  the format below verbatim so the Architect (Agy) can recognise the
   signal in the next handoff:
 
   ```
@@ -100,7 +100,7 @@ node "${AGGREGATOR}" 2>/dev/null || echo '{"status":"AGGREGATOR_UNAVAILABLE"}'
       sample: "<sanitised one-line message>"
     - …
 
-  Suggested next step: switch to Gemini and ask for a blueprint that
+  Suggested next step: switch to Agy and ask for a blueprint that
   resolves the highest-count signature first.
   ```
 

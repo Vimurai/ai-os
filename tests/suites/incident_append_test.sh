@@ -118,6 +118,12 @@ run_helper '{"incident_type":"X","message":"y","stack_signature":"z:1","source_a
 assert_status 0 "BogusBot normalised to unknown" \
   bash -c "tail -n1 '$SBOX/.ai-os/incidents.ndjson' | grep -q '\"source_agent\":\"unknown\"'"
 
+# E-192 (Gemini→Agy): 'Agy' is an allowed source_agent (additive, alongside legacy 'Gemini').
+run_helper '{"incident_type":"X","message":"y","stack_signature":"z:1","source_agent":"Agy"}' \
+  >/dev/null 2>"$SBOX/err" || true
+assert_status 0 "Agy preserved (not normalised to unknown)" \
+  bash -c "tail -n1 '$SBOX/.ai-os/incidents.ndjson' | grep -q '\"source_agent\":\"Agy\"'"
+
 # ── T-IN-S08: rotation threshold ─────────────────────────────────────────────
 echo ""
 echo "  [T-IN-S08] rotation moves the active log to a monthly archive"

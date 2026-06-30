@@ -963,6 +963,71 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-191",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Replace 'Architect (Gemini)' and hardcoded 'Gemini' references in all Skill & Agent markdown prompts (`.agents/skills/*`, `src/shared/skills/*`, `src/agents/plugin/agents/*`) with 'Architect (Agy)' per .ai/blueprints/role-abstraction.md. Acceptance: All prompts refer to Agy as the Architect.",
+      "created_at": "2026-06-29T19:07:45.994Z",
+      "completed_at": "2026-06-29T20:53:43.057Z",
+      "summary": "Gemini→Agy persona migration in skill & agent prompts. 'Architect (Gemini)'→'Architect (Agy)', persona shorthand (handoff/sync-state/log/incident/dispatch skills), and Architect-side …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-192",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Refactor core framework scripts and MCP servers (`src/bin/ai`, `src/mcp/*`, `src/shared/*`) to replace hardcoded 'gemini' fallback logic and references with 'agy' per .ai/blueprints/role-abstraction.md. Acceptance: Core logic uses 'agy' as the default Architect.",
+      "created_at": "2026-06-29T19:07:46.749Z",
+      "completed_at": "2026-06-29T20:53:52.423Z",
+      "summary": "Gemini→Agy in core scripts/MCP — owner label 'Architect (Gemini)'→'(Agy)' (src/bin/ai OWNER_PATTERNS output label + footer; tool-schemas; task-synchronizer/github-bridge/safe-exec/pr …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-193",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Update architectural blueprints and system contracts (`.ai/blueprints/*`, `src/contracts/*`, `src/templates/*`) to reflect 'Agy' as the default Architect provider per .ai/blueprints/role-abstraction.md. Acceptance: Blueprints accurately describe Agy as the Architect.",
+      "created_at": "2026-06-29T19:07:46.770Z",
+      "completed_at": "2026-06-30T12:19:33.921Z",
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-194",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update test suites (`tests/suites/*`) to assert against 'agy' outputs instead of 'gemini' where the framework CLI or behavior has been migrated per .ai/blueprints/role-abstraction.md. Acceptance: Test suite remains 100% green after migration.",
+      "created_at": "2026-06-29T19:07:46.990Z",
+      "completed_at": "2026-06-29T20:53:54.848Z",
+      "summary": "Test suite stays 100% green (3007/0) after migration. No assertion edits needed (E-188 already migrated default-resolution asserts; owner-label fixtures are provider-agnostic via rol …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-195",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Update `ensure_ai_templates` in `src/bin/ai` and create `src/templates/AGENTS.md` to automatically scaffold `.agents/AGENTS.md` containing `@ARCHITECT.md`. Acceptance: `ai init` correctly sets up the Antigravity workspace rules to prevent agy from violating the Architect persona.",
+      "created_at": "2026-06-29T19:12:53.735Z",
+      "completed_at": "2026-06-30T12:45:45.712Z",
+      "summary": "Scaffold .agents/AGENTS.md → @ARCHITECT.md so Antigravity (agy) auto-loads the Architect persona and stays in role (§35). New src/templates/AGENTS.md shim (mirrors GEMINI.md→ARCHITEC …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2239,6 +2304,55 @@
       "task_id": "E-180",
       "timestamp": "2026-06-25T12:34:45.619Z",
       "summary": "E-180 REJECTED status fully covered across all 3 src surfaces (204/0 in affected suites): migration 2→4 & 3→4 + orphan+stale-CHECK P1 regression (180.M11-M22, discriminating row-count assertions), statusForResult→REJECTED + distinctness + e2e (180.03/04/04b/06), Aggregate A error_pct excludes REJECTED + new Aggregate F + REJECTED-referenced SQL (meta_analyst), telemetry_test CHECK lock updated to 4-value; old E-179 rejection→SUCCESS assertions correctly UPDATED to REJECTED (none stale); T-META-S10 byte-identical mirror intact (src≡.gemini≡~/.ai-os, Aggregate F propagated)."
+    },
+    {
+      "type": "SRE_PASS",
+      "agent": "sre_responder",
+      "task_id": "NONE",
+      "timestamp": "2026-06-29T19:02:17.915Z",
+      "summary": "No recurring incidents detected (threshold: ≥3 occurrences). Incident log clean."
+    },
+    {
+      "type": "SEC_PASS",
+      "agent": "critic_security",
+      "task_id": "E-192",
+      "timestamp": "2026-06-29T20:45:24.478Z",
+      "summary": "No P0 vulns. Gemini→Agy migration is string-only: safe-exec/context-guardian/propose-patch/patch/risk-analyzer edited DENIAL/DESCRIPTION strings only; caller_role guards, path/scope checks, HMAC logic UNCHANGED. incident-append.mjs additive whitelist (Agy) is closed-Set + JSON.stringify-safe, no injection. No secrets/env leakage; no capability-boundary expansion."
+    },
+    {
+      "type": "ARCH_PASS",
+      "agent": "critic_arch",
+      "task_id": "E-191",
+      "timestamp": "2026-06-29T20:46:55.045Z",
+      "summary": "Gemini→Agy terminology migration (E-191/192/193): ZERO .ai/blueprints/, architect.md, BRIEF.md edits — sovereignty boundary intact (blueprint scope correctly deferred to Architect per §35/E-169). All src/ changes are pure strings/comments/descriptions tracing to role-abstraction.md/D-050/D-052; no logic/control-flow changes. All D-052 KEEPs preserved (advisor-mcp, ai-watch, signal-handoff, providers/roles config, GEMINI.md shim, gemini-architect/gemini-docs-architect identifiers, GEMINI_AUTHORED stamp, Gemini Embedding model). incident-append allow-list is additive (keeps Gemini). No orphaned work, no pattern deviations."
+    },
+    {
+      "type": "TESTS_PASS",
+      "agent": "critic_tests",
+      "task_id": "E-194",
+      "timestamp": "2026-06-29T20:50:48.516Z",
+      "summary": "All tests passing (3007/3007, 0 failed; independently re-run). E-191-194 Gemini->Agy migration is string/label-only: 47 files, code changes confined to denial-message/help/description/JSDoc strings + owner labels — no new branches or behavior. roleFromOwner/OWNER_PATTERNS match-sides unchanged (still accept '(Gemini)'), so role-normalization fixtures stay green. Sole functional change: incident-append.mjs adds 'Agy' to source_agent allowlist Set — covered by incident_append_test.sh (positive allowed-agent path T-IN-S05, negative unknown->unknown T-IN-S07). No new test warranted; deterministic P1 COVERAGE_GAP refuted (no untested logic). Advisory P2: explicit 'Agy preserved' assertion would be nice-to-have, non-blocking."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "review_synthesizer",
+      "task_id": "E-192",
+      "timestamp": "2026-06-29T21:07:39.507Z",
+      "summary": "Gemini→Agy migration (E-191/192/194) cleared: [ARCH_PASS] sovereignty clean (0 .ai/blueprints changes, strings align with architect.md), [SEC_PASS]+[UACS_VERIFIED] enforcement logic byte-unchanged/no boundary moved, [TESTS_PASS] suite 3007/0 independently re-run + P1 coverage-gap refuted. Pure terminology; D-052 KEEPs intact. No P0/P1."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner",
+      "task_id": "E-195",
+      "timestamp": "2026-06-30T12:45:42.840Z",
+      "summary": "[TIER_2] E-195 AGENTS.md scaffold: aligner WARN only (no FAIL). NO_LOG_UPDATE cleared by handover; ORPHANED_WORK advisory — work is E-195 task-covered (mirrors GEMINI.md→ARCHITECT.md shim), blueprint doc of the .agents/AGENTS.md mechanism deferred to Architect (native-subagents.md). Suite 3019/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "review_synthesizer",
+      "task_id": "E-195",
+      "timestamp": "2026-06-30T12:46:01.047Z",
+      "summary": "[TIER_2] E-195 cleared: blueprint-aligner [ALIGN_PASS] (WARN-only, advisory). Scaffold .agents/AGENTS.md→@ARCHITECT.md mirrors the GEMINI.md shim; wired in _sync_workspace_dirs (init+sync); 11/0 dedicated tests incl. sourced E2E; full suite 3019/0. No P0/P1."
     }
   ],
   "deltas": [

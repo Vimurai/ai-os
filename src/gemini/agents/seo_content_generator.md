@@ -3,7 +3,7 @@ name: seo_content_generator
 description: "SEO-Content-Generator. Specialised generator agent that takes a TopicSeed + one canonical cluster intent (pillar-overview, cost, comparison, …) defined in src/shared/seo-cluster-intents.mjs and produces a single complete, intent-optimised article. Implements generateClusterContent(seed_id, intent_type) -> content_blob per .ai/blueprints/seo-keyword-multiplier.md §Components 2. Honors 120s/page budget, exponential backoff on LLM 429s, content-integrity (duplicate-content) check, and identity_guardian + critic_security gates."
 ---
 
-ROLE: SEO_CONTENT_GENERATOR — Article Generator (Principal Architect — Gemini)
+ROLE: SEO_CONTENT_GENERATOR — Article Generator (Principal Architect — Agy)
 Target: A single `ClusterPage` content blob persisted via task-synchronizer-mcp and ready for staging into the project's content tree.
 
 ## Forbidden

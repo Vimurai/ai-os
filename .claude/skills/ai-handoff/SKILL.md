@@ -1,6 +1,6 @@
 ---
 name: ai-handoff
-description: Produce a structured handoff packet for Gemini↔Claude transitions. Reads unread deltas from state, formats blueprint divergence and decisions into .ai/COMM.md. Use before switching agents.
+description: Produce a structured handoff packet for Agy↔Claude transitions. Reads unread deltas from state, formats blueprint divergence and decisions into .ai/COMM.md. Use before switching agents.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Edit, mcp__task-synchronizer-mcp__get_state, mcp__task-synchronizer-mcp__mark_deltas_read, mcp__task-synchronizer-mcp__verify_markdown_sync, mcp__task-synchronizer-mcp__handoff_control
@@ -8,7 +8,7 @@ context: default
 agent: default
 ---
 
-# AI-Handoff — Gemini↔Claude Context Bridge
+# AI-Handoff — Agy↔Claude Context Bridge
 
 ## Dynamic Context Injection
 Unread deltas: !python3 -c "import json; s=json.load(open('.ai/state.json')); [print(d['task_id'],':',d['summary']) for d in s.get('deltas',[]) if not d.get('read')]" 2>/dev/null || echo "(none)"
@@ -16,12 +16,12 @@ Last COMM.md entry: !tail -5 .ai/COMM.md 2>/dev/null || echo "(no COMM.md)"
 
 ## Role
 
-You are the **Handoff Coordinator**. Your job is to produce a clear, structured transition message so the receiving agent (Gemini or Claude) can orient immediately without re-reading the entire conversation.
+You are the **Handoff Coordinator**. Your job is to produce a clear, structured transition message so the receiving agent (Agy or Claude) can orient immediately without re-reading the entire conversation.
 
 ## When to Invoke
 
-- Claude → Gemini: after completing E-## work, before asking Gemini to review or plan next
-- Gemini → Claude: after writing new blueprints or P-## tasks, before Claude starts implementing
+- Claude → Agy: after completing E-## work, before asking Agy to review or plan next
+- Agy → Claude: after writing new blueprints or P-## tasks, before Claude starts implementing
 - Any time context may be stale between agents
 
 ## Step 0 — Verify state is consistent before packaging the handoff
@@ -59,7 +59,7 @@ Append to `.ai/COMM.md` (create if missing):
 ```markdown
 ---
 ## Handoff — YYYY-MM-DD HH:MM UTC
-**From**: Claude (Engineer) → Gemini (Architect)   [or reverse]
+**From**: Claude (Engineer) → Agy (Architect)   [or reverse]
 **Trigger**: E-## complete / P-## written / [reason]
 
 ### What was built
@@ -80,9 +80,9 @@ Append to `.ai/COMM.md` (create if missing):
 ---
 ```
 
-## Step 3 — Mark Deltas Read (Claude→Gemini only)
+## Step 3 — Mark Deltas Read (Claude→Agy only)
 
-After writing COMM.md, if handing off to Gemini, mark deltas read so they don't repeat:
+After writing COMM.md, if handing off to Agy, mark deltas read so they don't repeat:
 ```
 mcp__task-synchronizer-mcp__mark_deltas_read()
 ```
@@ -96,7 +96,7 @@ wake keystroke into the receiving agent's pane:
 
 ```
 mcp__task-synchronizer-mcp__handoff_control({
-  target: "gemini",   // the RECEIVING agent: "gemini" (Claude→Architect) or "claude" (Gemini→Engineer)
+  target: "architect",   // the RECEIVING agent: "architect" (Claude→Architect) or "claude" (Agy→Engineer)
   message: "Engineer queue exhausted — review COMM.md and plan the next sprint."
 })
 ```
@@ -108,13 +108,13 @@ starts), so always emit it — never assume a human will press the key for you.
 ## Step 5 — Confirm
 
 Report:
-> "Handoff written to .ai/COMM.md and signalled via handoff_control. Switch to [Gemini/Claude] and run `skill: 'ai-sync-state'` to pick up context."
+> "Handoff written to .ai/COMM.md and signalled via handoff_control. Switch to [Agy/Claude] and run `skill: 'ai-sync-state'` to pick up context."
 
 ## What NOT to Do
 
 - Do NOT overwrite COMM.md — always append
 - Do NOT skip divergence section — even "NONE" must be stated explicitly
-- Do NOT call mark_deltas_read when handing off TO Claude (Gemini should review them first)
+- Do NOT call mark_deltas_read when handing off TO Claude (Agy should review them first)
 - Do NOT skip the `handoff_control` bridge signal (Step 4) — COMM.md records
   context but only `handoff_control` wakes the other agent (E-119). Emitting it is
   mandatory whenever your task/plan queue is exhausted.

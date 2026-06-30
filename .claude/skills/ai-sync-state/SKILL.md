@@ -1,6 +1,6 @@
 ---
 name: ai-sync-state
-description: Use activate_skill with this name when handing off work between Gemini and Claude, or when your context may be stale after the other agent modified .ai/ files. Forces explicit re-read of TASKS.md, architect.md, and DIGEST.md from the filesystem, bypassing conversational memory cache.
+description: Use activate_skill with this name when handing off work between Agy and Claude, or when your context may be stale after the other agent modified .ai/ files. Forces explicit re-read of TASKS.md, architect.md, and DIGEST.md from the filesystem, bypassing conversational memory cache.
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read
@@ -12,7 +12,7 @@ agent: default
 
 ## Why This Skill Exists
 
-Gemini and Claude run in separate terminal processes. When one agent modifies `.ai/` files,
+Agy and Claude run in separate terminal processes. When one agent modifies `.ai/` files,
 the other agent's context window becomes stale — it may be holding an outdated picture of
 TASKS.md, architect.md, or DIGEST.md from earlier in the conversation.
 
@@ -21,8 +21,8 @@ discarding any cached or conversational copy. Invoke it at every agent handoff.
 
 ## When to Invoke
 
-- You are Claude and Gemini just updated `.ai/TASKS.md` or `.ai/architect.md`
-- You are Gemini and Claude just completed an E-## task
+- You are Claude and Agy just updated `.ai/TASKS.md` or `.ai/architect.md`
+- You are Agy and Claude just completed an E-## task
 - Either agent suspects the other modified `.ai/` files since your last read
 - Before making any planning or implementation decision that depends on current task state
 - At the start of every session handoff (use `/sync-state` or `activate_skill("ai-sync-state")`)

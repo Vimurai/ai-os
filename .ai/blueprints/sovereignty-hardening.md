@@ -1,7 +1,7 @@
 # Blueprint: Sovereignty Hardening
 
 ## Goal & Architecture
-**Goal**: Enforce Role-Based Access Control (RBAC) to prevent the Architect (Gemini) from executing destructive git operations and improperly mutating completed task states.
+**Goal**: Enforce Role-Based Access Control (RBAC) to prevent the Architect (Agy) from executing destructive git operations and improperly mutating completed task states.
 **Architecture**: Transition role boundaries from "honor-system" documentation to "fail-closed" MCP validation and state-locks.
 
 ## Core Concept

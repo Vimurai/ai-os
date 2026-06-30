@@ -4,7 +4,7 @@
 Provides a continuous background mechanism for tracking, aggregating, and responding to recurrent errors in the AI-OS environment by autonomously drafting architectural P-## tasks for Gemini based on high-frequency error logs.
 
 ## Core Concept
-A Just-In-Time (JIT) aggregation system. An `ai-incident` skill logs structured error events (NDJSON) to `~/.ai-os/incidents.ndjson`. When the developer runs `ai preflight` or `ai sync`, a hook aggregates these incidents, identifies patterns, and proactively prompts the Architect (Gemini) to create resolving P-## tasks if error thresholds are exceeded.
+A Just-In-Time (JIT) aggregation system. An `ai-incident` skill logs structured error events (NDJSON) to `~/.ai-os/incidents.ndjson`. When the developer runs `ai preflight` or `ai sync`, a hook aggregates these incidents, identifies patterns, and proactively prompts the Architect (Agy) to create resolving P-## tasks if error thresholds are exceeded.
 
 ## Components
 1. **ai-incident skill**: A specialized tool triggered by Claude or Gemini upon encountering unresolvable environment errors, test suite crashes, or MCP failures. Appends to `~/.ai-os/incidents.ndjson`.
@@ -39,4 +39,4 @@ If the aggregator causes preflight timeouts, it can be disabled by toggling an `
 ## E-## Task Breakdown
 - E-##: Create `ai-incident` skill and NDJSON append logic with PII sanitization.
 - E-##: Implement JIT Aggregator logic inside the `ai-preflight` execution chain.
-- E-##: Wire `ai-preflight` to prompt the Architect (Gemini) via context injection when an incident threshold is exceeded.
+- E-##: Wire `ai-preflight` to prompt the Architect (Agy) via context injection when an incident threshold is exceeded.

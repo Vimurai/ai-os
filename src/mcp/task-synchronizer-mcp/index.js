@@ -603,7 +603,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return `- [ ] P-${num}: Blueprint for "${line}"\n  Tier: ${tier} | Proposed: ${date}`;
       });
 
-      return { content: [{ type: "text", text: `## Proposed P-## Tasks\n\n${proposed.join("\n\n")}\n\nTo apply: use add_task directly:\n  add_task({ prefix: 'P', owner: 'Architect (Gemini)', description: '...', tier: N })` }] };
+      return { content: [{ type: "text", text: `## Proposed P-## Tasks\n\n${proposed.join("\n\n")}\n\nTo apply: use add_task directly:\n  add_task({ prefix: 'P', owner: 'Architect (Agy)', description: '...', tier: N })` }] };
     }
 
     // ── REMOVED: append_tasks ─────────────────────────────────────────────────
@@ -615,7 +615,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           type: "text",
           text: "✗ append_tasks is disabled — it bypasses state.sqlite and causes desync.\n" +
                 "Use add_task instead:\n" +
-                "  add_task({ prefix: 'P', owner: 'Architect (Gemini)', description: '...', tier: 1 })\n" +
+                "  add_task({ prefix: 'P', owner: 'Architect (Agy)', description: '...', tier: 1 })\n" +
                 "add_task writes to state.sqlite and regenerates TASKS.md, state.json, and REVIEWS.md atomically.",
         }],
         isError: true,

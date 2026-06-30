@@ -54,7 +54,7 @@ mcp__orchestrator-mcp__run_handover({
 })
 ```
 
-This stamps the delta so the Architect (Gemini) can review implementation divergence from the blueprint.
+This stamps the delta so the Architect (Agy) can review implementation divergence from the blueprint.
 
 ## Step 4 — Surface Next Task & Hand Control Back (MANDATORY)
 

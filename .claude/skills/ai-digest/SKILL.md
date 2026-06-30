@@ -45,7 +45,7 @@ Required sections:
 - <one-line tech stack>
 
 ## Triad Health
-- Architect (Gemini): <status — last P-## task>
+- Architect (Agy): <status — last P-## task>
 - Engineer (Claude): <status — last E-## task>
 - Tester (TestSprite): <status — last test run>
 

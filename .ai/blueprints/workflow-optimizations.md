@@ -5,7 +5,7 @@ To elevate AI-OS v2 to the 2026 "Spec-Driven Hybrid Workflow" standard by introd
 
 ## Core Concept
 A multi-layered optimization of the AI-OS agentic workflow:
-1. **Intelligent Blueprint Alignment:** The `blueprint-aligner-mcp` is refined to understand context (canonical Node ESM sibling imports) and authorship (Gemini vs. Claude edits to core `.ai/` files).
+1. **Intelligent Blueprint Alignment:** The `blueprint-aligner-mcp` is refined to understand context (canonical Node ESM sibling imports) and authorship (Agy vs. Claude edits to core `.ai/` files).
 2. **Task Budgets:** The `ai-debug` skill and Claude's capabilities are augmented with strict iteration caps to prevent run-away token burn, forcing an escalation via `advisor-mcp` after 3 failed attempts.
 3. **Active Sandbox Pen-Testing (`@shannon` pattern):** The `security_engineer` agent is upgraded to leverage `code-execution-mcp` to run live exploit scripts against newly implemented logic, shifting from passive diff-scanning to active vulnerability validation.
 

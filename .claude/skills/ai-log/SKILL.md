@@ -34,7 +34,7 @@ YYYY-MM-DD | <Actor> | <Task-ID or action> | <one-line summary> | session=<CLAUD
 ```
 
 Rules:
-- Actor: `Claude` (Engineer) or `Gemini` (Architect)
+- Actor: `Claude` (Engineer) or `Agy` (Architect)
 - Task-ID: when tied to a task, use the bare ID (e.g. `E-##`, `P-##`, `D-###`). For non-task actions use the bare action name (e.g. `dependency_gate`, `ci_gate`, `hotfix`).
 - Summary: what changed and why — not how. Max 120 characters.
 - **Session:** read `$CLAUDE_CODE_SESSION_ID` from the environment. If unset or empty, write `session=none`. Otherwise, write the value verbatim — but only if it matches the regex `[A-Za-z0-9-]{1,64}`. If it doesn't (untrusted input), write `session=invalid`.
@@ -44,7 +44,7 @@ Examples:
 ```
 2026-04-14 | Claude | E-1   | Added root package.json with npm workspaces; sdk hoisted to root | session=01J9X2A1Z3
 2026-04-14 | Claude | dependency_gate | Approved @modelcontextprotocol/sdk upgrade to ^1.1.0 — no CVEs | session=none
-2026-04-14 | Gemini | P-4   | Designed workspace blueprint in workspace.md | session=01J9X2A1Z3
+2026-04-14 | Agy | P-4   | Designed workspace blueprint in workspace.md | session=01J9X2A1Z3
 ```
 
 ## Step 2 — Append to LOG.md

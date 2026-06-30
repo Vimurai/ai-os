@@ -1,7 +1,7 @@
 # Blueprint: Interactive Bridge (Tmux Watcher)
 
 ## Goal & Architecture
-**Goal**: Enable a "Ping-Pong" autonomous loop where the Architect (Gemini) and Engineer (Claude) can operate side-by-side in a terminal, automatically waking each other up and passing control without a heavy, brittle API wrapper.
+**Goal**: Enable a "Ping-Pong" autonomous loop where the Architect (Agy) and Engineer (Claude) can operate side-by-side in a terminal, automatically waking each other up and passing control without a heavy, brittle API wrapper.
 **Architecture**: A lightweight, global Bash watcher (`ai watch`) that uses `tmux send-keys` to orchestrate interactive CLI binaries, triggered by an explicit MCP signaling tool. It features a queueing mechanism to handle busy agents and guarantees automatic handoff.
 
 ## Core Concept

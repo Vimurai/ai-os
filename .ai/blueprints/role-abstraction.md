@@ -5,7 +5,7 @@
 **Architecture**: Introduce a global/local Role Mapping Configuration (`.ai/roles.json`), a **Provider Adapter Registry** (`.ai/providers.json`), and dynamic TMUX pane routing. Update `handoff_control` and `ai-watch` to route semantic roles (`architect`, `engineer`) dynamically.
 
 ## Core Concept
-Currently, the OS is hardcoded to Gemini = Architect, Claude = Engineer. To support dynamic assignment (e.g., Claude playing both roles via TMUX pane isolation: `claude:1` and `claude:0`), or to drop in a brand new, unknown CLI released next year, we need a **Provider Adapter System**. 
+Historically, the OS hardcoded Gemini = Architect, Claude = Engineer. To support dynamic assignment (e.g., Claude playing both roles via TMUX pane isolation: `claude:1` and `claude:0`), or to drop in a brand new, unknown CLI released next year, we need a **Provider Adapter System**. The Architect now defaults to `agy`. 
 1. **Roles** (What is done) map to **Pane Identifiers** (Where it is done).
 2. **Providers** (Who does it) declare their unique config requirements (e.g., where they read MCP settings).
 
@@ -66,7 +66,7 @@ Currently, the OS is hardcoded to Gemini = Architect, Claude = Engineer. To supp
 - If a provider acts as both Architect and Engineer, explicit pane indices (e.g. `1` and `0`) MUST be provided so `ai-watch` routes signals safely.
 
 ## Rollback Plan
-- Delete `.ai/roles.json` and `.ai/providers.json`. Hardcode the fallback mapping: `architect` = `gemini`, `engineer` = `claude`.
+- Delete `.ai/roles.json` and `.ai/providers.json`. Hardcode the fallback mapping: `architect` = `agy`, `engineer` = `claude`.
 
 ## E-## Task Breakdown
 - **E-135**: Implement the Role Configuration Store (`.ai/roles.json`) supporting explicit pane indices (`claude:1`, `claude:0`).

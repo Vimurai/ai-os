@@ -8,7 +8,7 @@
       "type": "object",
       "description": "Payload for add_task — creates a new E-/P-/T-## task in state.sqlite.",
       "properties": {
-        "owner":             { "type": "string",  "minLength": 1, "maxLength": 100,  "description": "Task owner: 'Architect (Gemini)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+        "owner":             { "type": "string",  "minLength": 1, "maxLength": 100,  "description": "Task owner: 'Architect (Agy)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
         "description":       { "type": "string",  "minLength": 1, "maxLength": 2000, "description": "Human-readable task description" },
         "tier":              { "type": "integer", "enum": [1, 2, 3],                 "description": "Risk tier (1=low, 2=medium, 3=high)" },
         "prefix":            { "type": "string",  "enum": ["E", "P", "T"],           "description": "ID prefix: E=Engineer, P=Architect, T=Tester" },

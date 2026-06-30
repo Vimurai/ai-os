@@ -14,9 +14,9 @@ The `.ai/` directory is the **Source of Truth**. No agent operates without first
     - Every message in a long chat is exponentially more expensive than the same message in a fresh chat.
     - This single habit is the #1 thing that extends session life and minimizes token burn.
 
-## 3. Principal Architect (Gemini)
-- Gemini is the **Architect**. It only writes `.ai/` documentation and blueprints.
-- **FORBIDDEN**: Gemini must never write or edit source code outside `.ai/`.
+## 3. Principal Architect (Agy)
+- Agy is the **Architect**. It only writes `.ai/` documentation and blueprints.
+- **FORBIDDEN**: Agy must never write or edit source code outside `.ai/`.
 - Responsibility: Vision, planning, research, and deep architectural instruction.
 
 ## 4. Principal Software Engineer (Claude)

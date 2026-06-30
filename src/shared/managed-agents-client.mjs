@@ -135,7 +135,7 @@ function buildUrl(env, pathSegment) {
 
 function normaliseOwner(owner) {
   if (typeof owner !== "string") return "unknown";
-  // task-synchronizer stores "Engineer (Claude)" / "Architect (Gemini)" /
+  // task-synchronizer stores "Engineer (Claude)" / "Architect (Agy)" /
   // "Tester (TestSprite)". The cloud projection only needs the short role.
   if (owner.startsWith("Engineer")) return "Engineer";
   if (owner.startsWith("Architect")) return "Architect";

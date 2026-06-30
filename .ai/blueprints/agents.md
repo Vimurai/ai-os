@@ -15,7 +15,7 @@ The AI-OS ecosystem divides cognitive labor across specialized agents and dynami
 - **`token-miser`**: Optimizes token usage when context grows large using progressive disclosure.
 - **`trigger-audit`**: Scans diffs and descriptions for mandatory trigger keywords (auth, secrets).
 
-## 2. Principal Architect (Gemini)
+## 2. Principal Architect (Agy)
 
 > **YAML Schema Note:** Gemini agents and skills do not support or require Claude-specific frontmatter fields such as `disable-model-invocation`, `user-invocable`, and `allowed-tools`. The system's compliance audit tool conditionally ignores these fields for the Gemini domain.
 
