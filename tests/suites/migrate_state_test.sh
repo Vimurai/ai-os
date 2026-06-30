@@ -238,4 +238,37 @@ console.log('violation');
 assert_contains "T-04.09: TIER3_NO_SECURITY_REVIEW blocks when stamps[] empty despite LOG.md keywords" "violation" "$t49_result"
 rm -rf "$T49_DIR"
 
+# ── T-04.10: migrate-state --force is NON-DESTRUCTIVE over a populated state ──
+# Regression for the recurring corruption: TASKS.md is a LOSSY view (date-only
+# timestamps, no depends_on). Re-migrating MUST preserve the rich existing record
+# (full time-of-day created_at + depends_on/ready/blocked_by) and only APPEND
+# genuinely-new tasks — never zero timestamps or strip the DAG.
+ND_DIR="$(mktemp -d)"; mkdir -p "$ND_DIR/.ai"
+cat > "$ND_DIR/.ai/state.json" <<'JSON'
+{ "version": "1.0", "project": { "current_tier": "2", "focus": "x" },
+  "tasks": [ { "id": "E-1", "owner": "Engineer (Claude)", "status": "DONE", "tier": 2, "description": "rich task", "created_at": "2026-06-03T07:22:16.333Z", "completed_at": "2026-06-03T10:44:26.315Z", "summary": "full summary kept in LOG", "depends_on": ["E-0"], "ready": false, "blocked_by": ["E-0"] } ],
+  "stamps": [] }
+JSON
+cat > "$ND_DIR/.ai/TASKS.md" <<'MD'
+# TASKS (Generated from state.json)
+
+## Engineer (Claude)
+- [x] E-1: rich task | Tier: 2
+  Status: DONE 2026-06-03 — full summary …[full in LOG.md]
+- [ ] E-2: a brand-new task only in TASKS.md | Tier: 1
+MD
+(cd "$ND_DIR" && bash "$AI_BIN" migrate-state --force) >/dev/null 2>&1
+nd_check=$(python3 -c "
+import json
+d=json.load(open('${ND_DIR}/.ai/state.json')); t={x['id']:x for x in d['tasks']}
+e1=t.get('E-1',{})
+ok = (e1.get('created_at')=='2026-06-03T07:22:16.333Z'      # time-of-day preserved (not midnight)
+      and e1.get('depends_on')==['E-0'] and e1.get('ready') is False  # DAG preserved
+      and e1.get('summary')=='full summary kept in LOG'     # rich summary preserved
+      and 'E-2' in t and t['E-2'].get('depends_on')==[])    # new task appended with default deps
+print('ok' if ok else 'CORRUPTED: '+json.dumps(e1))
+")
+assert_contains "T-04.10: migrate-state --force preserves rich tasks (no corruption)" "ok" "$nd_check"
+rm -rf "$ND_DIR"
+
 assert_summary

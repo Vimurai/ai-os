@@ -1107,11 +1107,15 @@ do_init() {
     echo "MCP servers: Node.js not found — run 'ai mcp-setup' after installing Node.js"
   fi
 
-  # E-93: Structured-First init — seed state.json from TASKS.md automatically
+  # E-93: Structured-First init — seed state.json from TASKS.md automatically.
+  # NO --force: only seed when state.json is empty/missing. Forcing here would
+  # re-parse the lossy TASKS.md view over an already-populated state and strip
+  # time-of-day timestamps + depends_on (the recurring corruption). The guard in
+  # do_migrate_state declines (exit 1) on a populated state, handled by the || below.
   if [[ -f ".ai/TASKS.md" ]]; then
     echo ""
     echo "Seeding state.json from TASKS.md (Structured-First init)..."
-    do_migrate_state --force 2>/dev/null || echo "  ⚠  State migration incomplete — run: ai migrate-state --force"
+    do_migrate_state 2>/dev/null || echo "  (state.json already populated — skipped re-seed)"
   fi
 
   # E-114: Query global memory store for similar architectural patterns (§31 advisory)
@@ -1292,13 +1296,27 @@ PY
     }
 
     const now = new Date().toISOString();
+    // Non-destructive merge. TASKS.md is a LOSSY *view* of state.json — it carries
+    // date-only timestamps (→ midnight), no depends_on/ready/blocked_by, and
+    // truncated summaries. Overwriting state.tasks with the parse therefore
+    // CORRUPTS any populated state (this was the recurring 'timestamps zeroed +
+    // depends_on stripped' regression). state.json is authoritative for tasks it
+    // already has (it is the source TASKS.md is generated from), so never clobber
+    // an existing record — only APPEND genuinely-new tasks parsed from TASKS.md.
+    if (!Array.isArray(state.tasks)) state.tasks = [];
+    const existingIds = new Set(state.tasks.map(t => t.id));
+    let appended = 0;
     for (const t of parsedTasks) {
+      if (existingIds.has(t.id)) continue;          // preserve the rich existing record
       if (!t.created_at) t.created_at = t.completed_at || now;
+      if (!('depends_on' in t)) t.depends_on = [];
+      if (!('ready' in t))      t.ready = true;
+      if (!('blocked_by' in t)) t.blocked_by = [];
+      state.tasks.push(t);
+      appended++;
     }
-
-    state.tasks = parsedTasks;
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2) + '\n', 'utf8');
-    console.log('[MIGRATE-STATE] state.json updated: ' + parsedTasks.length + ' tasks written.');
+    console.log('[MIGRATE-STATE] state.json: ' + appended + ' new task(s) appended, ' + existingIds.size + ' preserved (non-destructive).');
   " "$STATE_FILE" "$PARSED_TMPFILE"
 
   rm -f "$PARSED_TMPFILE"
