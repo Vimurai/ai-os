@@ -151,7 +151,8 @@
   Status: DONE 2026-06-30 — Complete
 - [x] E-194: Update test suites (`tests/suites/*`) to assert against 'agy' outputs instead of 'gemini' where the framework CLI or behavior has been migrated per .ai/blueprints/role-abstraction.md. Acceptance: Test suite remains 100% green after migration. | Tier: 2
   Status: DONE 2026-06-29 — Test suite stays 100% green (3007/0) after migration. No assertion edits needed (E-188 already migrated default-resolution asserts; owner-label fixtures are provider-agnostic via rol …[full in LOG.md]
-- [ ] E-195: Update `ensure_ai_templates` in `src/bin/ai` and create `src/templates/AGENTS.md` to automatically scaffold `.agents/AGENTS.md` containing `@ARCHITECT.md`. Acceptance: `ai init` correctly sets up the Antigravity workspace rules to prevent agy from violating the Architect persona. | Tier: 2
+- [x] E-195: Update `ensure_ai_templates` in `src/bin/ai` and create `src/templates/AGENTS.md` to automatically scaffold `.agents/AGENTS.md` containing `@ARCHITECT.md`. Acceptance: `ai init` correctly sets up the Antigravity workspace rules to prevent agy from violating the Architect persona. | Tier: 2
+  Status: DONE 2026-06-30 — Scaffold .agents/AGENTS.md → @ARCHITECT.md so Antigravity (agy) auto-loads the Architect persona and stays in role (§35). New src/templates/AGENTS.md shim (mirrors GEMINI.md→ARCHITEC …[full in LOG.md]
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2

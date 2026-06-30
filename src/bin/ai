@@ -485,10 +485,14 @@ _sync_workspace_dirs() {
   mkdir -p ".agents/skills"
   sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
   sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
+  # E-195: scaffold the Architect bootloader shim into the agy workspace so
+  # Antigravity auto-loads ARCHITECT.md and stays in the Architect persona
+  # (no source-code drift, §35). AGENTS.md @imports the root ARCHITECT.md.
+  cp -f "${AIOS}/templates/AGENTS.md" ".agents/AGENTS.md" 2>/dev/null || true
   if [[ "$mode" == "init" ]]; then
-    echo "Created .agents/ (Antigravity workspace skills)"
+    echo "Created .agents/ (Antigravity workspace skills + AGENTS.md → ARCHITECT.md)"
   else
-    echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md)"
+    echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md + AGENTS.md)"
   fi
 }
 
