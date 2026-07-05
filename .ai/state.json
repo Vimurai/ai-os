@@ -1041,6 +1041,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-197",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Re-point the advisor-mcp A2A Architect bridge from the retired Gemini CLI to `agy --print` (D-050 follow-through; E-192 deliberately KEPT the gemini -p bridge, leaving synchronous ask_architect escalations broken with IneligibleTierError). Swap execFileSync gemini→agy (--print-timeout 90s -p), drop gemini API-key env passthrough (agy uses Antigravity OAuth under $HOME), update docstrings/tool-description/fallback text, bump VERSION 1.1.0. Propagate to ~/.ai-os mirror. Preserve read-only guarantee (no --dangerously-skip-permissions). Acceptance: advisor_mcp_test green; live `agy -p` smoke returns a ruling.",
+      "created_at": "2026-07-01T18:06:02.501Z",
+      "completed_at": "2026-07-01T18:06:26.007Z",
+      "summary": "advisor-mcp A2A bridge re-pointed gemini→`agy --print` (execFileSync agy [--print-timeout 90s -p]; dropped gemini API-key env; docstrings/tool-desc/fallback→agy; VERSION 1.1.0; ~/.ai …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [

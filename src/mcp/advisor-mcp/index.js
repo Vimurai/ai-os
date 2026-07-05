@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 /**
  * advisor-mcp — AI-OS MCP Server
- * Agent-to-Agent (A2A) RPC bridge: Claude (Executor) queries Gemini (Architect)
+ * Agent-to-Agent (A2A) RPC bridge: Claude (Executor) queries the Architect (agy)
  * mid-execution for synchronous architectural rulings.
  *
  * Blueprint: .ai/blueprints/interop.md §1
  *
+ * Provider: the Architect persona is `agy` (Antigravity) per D-050. The legacy
+ * Gemini CLI was retired (IneligibleTierError — individual tier deprecated), so
+ * this bridge now invokes `agy --print` (headless print mode) instead of
+ * `gemini -p`. The queue/handoff loop (ai handoff / handoff_control) is the
+ * ASYNC channel; this MCP is the SYNCHRONOUS one for mid-task rulings.
+ *
  * Constraints (per blueprint):
- *   - Gemini is invoked READ-ONLY — it cannot write files or mutate state.
+ *   - The Architect is invoked READ-ONLY — it cannot write files or mutate state
+ *     (print mode carries no permission grant, so any tool attempt just times out
+ *     to the graceful-degradation fallback rather than mutating the tree).
  *   - All queries and rulings are logged to .ai/LOG.md as [A2A_RULING].
- *   - Gemini is invoked via `gemini -p` CLI (headless, no interactive session).
+ *   - The Architect is invoked via `agy --print` CLI (headless, no interactive session).
  *   - architect.md is pre-loaded as context for every query.
  *
  * Tools:
@@ -37,7 +45,7 @@ import { createLogger } from "../shared/logger.js";
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SERVICE = "advisor-mcp";
-const VERSION = "1.0.0";
+const VERSION = "1.1.0"; // 1.1.0: A2A bridge re-pointed gemini CLI → agy --print (D-050)
 
 // Resolve project root relative to this file's install location.
 // Supports both src/ (dev) and ~/.ai-os/mcp/ (installed) paths.
@@ -97,9 +105,9 @@ function logRuling(query, ruling, blueprintLoaded) {
 }
 
 /**
- * Build the prompt for Gemini.
+ * Build the prompt for the Architect (agy).
  * Pre-loads architect.md and optionally a domain blueprint as context.
- * Gemini is instructed to respond as a read-only Architect — no file mutations.
+ * The Architect is instructed to respond read-only — no file mutations.
  */
 function buildPrompt(query, blueprintContent, blueprintName) {
   const architectContext = safeRead(ARCHITECT_MD);
@@ -108,7 +116,7 @@ function buildPrompt(query, blueprintContent, blueprintName) {
     : "";
 
   return [
-    "You are the Principal Architect (Gemini) in the AI-OS Triad.",
+    "You are the Principal Architect (agy) in the AI-OS Triad.",
     "The Engineer (Claude) has a mid-execution question requiring an architectural ruling.",
     "Your role is STRICTLY READ-ONLY: provide a definitive ruling but do NOT write files,",
     "mutate state, or issue implementation instructions beyond answering the query.",
@@ -128,28 +136,28 @@ function buildPrompt(query, blueprintContent, blueprintName) {
 }
 
 /**
- * Invoke Gemini CLI in headless mode.
- * Uses `gemini -p <prompt>` — read-only by construction (no --write flag).
+ * Invoke the Architect (agy) CLI in headless print mode.
+ * Uses `agy --print <prompt>` — read-only by construction: print mode carries no
+ * tool-permission grant (no --dangerously-skip-permissions), so any write attempt
+ * blocks and times out to the fallback instead of mutating the tree. Replaces the
+ * retired Gemini CLI (D-050; individual-tier deprecation → IneligibleTierError).
  */
-function invokeGemini(prompt) {
+function invokeArchitect(prompt) {
   // Explicit env allowlist — never spread process.env. Spreading would leak
-  // host secrets (AWS/GCP creds, GitHub tokens, etc.) to the spawned gemini
+  // host secrets (AWS/GCP creds, GitHub tokens, etc.) to the spawned agy
   // process. Same security pattern enforced in computer-use-mcp (D-002).
+  // agy authenticates via Antigravity OAuth stored under $HOME, so PATH + HOME
+  // are the only vars it needs — no API-key env is passed through.
   const allowedEnv = {
     PATH: process.env.PATH ?? "",
     HOME: process.env.HOME ?? "",
-    GEMINI_THINKING_EFFORT: "high",
   };
-  if (process.env.GEMINI_API_KEY) {
-    allowedEnv.GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-  }
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    allowedEnv.GOOGLE_APPLICATION_CREDENTIALS = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  }
 
-  const output = execFileSync("gemini", ["-p", prompt], {
+  // --print-timeout is agy's own bounded wait (Go duration); keep it below the
+  // execFileSync hard timeout so agy self-terminates with a clean message first.
+  const output = execFileSync("agy", ["--print-timeout", "90s", "-p", prompt], {
     encoding: "utf8",
-    timeout: 60_000,
+    timeout: 100_000,
     maxBuffer: 1024 * 1024, // 1MB
     env: allowedEnv,
   });
@@ -170,10 +178,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "ask_architect",
       description: [
-        "Sends an architectural query to the Gemini Architect (A2A bridge) and returns a definitive ruling.",
+        "Sends an architectural query to the Architect (agy, A2A bridge) and returns a definitive ruling.",
         "Pre-loads .ai/architect.md as context. Optionally loads a domain blueprint for deeper context.",
         "All queries and rulings are logged to .ai/LOG.md as [A2A_RULING] for auditability.",
-        "Gemini runs READ-ONLY — it cannot write files or mutate state.",
+        "The Architect runs READ-ONLY — it cannot write files or mutate state.",
         "",
         "Use this when you hit an ambiguity in the blueprint mid-execution that would otherwise",
         "require dropping the session to consult the Architect manually.",
@@ -184,7 +192,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           query: {
             type: "string",
             description:
-              "The architectural question to ask Gemini. Be specific — include the task ID, " +
+              "The architectural question to ask the Architect (agy). Be specific — include the task ID, " +
               "the ambiguity, and the two options you're choosing between.",
           },
           blueprint: {
@@ -238,7 +246,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     const prompt = buildPrompt(query, blueprintContent, blueprintLoaded);
-    const ruling = invokeGemini(prompt);
+    const ruling = invokeArchitect(prompt);
     const timestamp = new Date().toISOString();
     const latency_ms = Date.now() - start;
 
@@ -271,7 +279,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   } catch (err) {
     const latency_ms = Date.now() - start;
-    log("error", "ask_architect", "Gemini invocation failed", {
+    log("error", "ask_architect", "Architect (agy) invocation failed", {
       latency_ms,
       error: err.message,
     });
@@ -283,12 +291,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           type: "text",
           text: JSON.stringify(
             {
-              error: `Gemini unavailable: ${err.message}`,
+              error: `Architect (agy) unavailable: ${err.message}`,
               query,
               fallback:
-                "advisor-mcp could not reach Gemini. " +
-                "Check that `gemini` CLI is installed and authenticated. " +
-                "Proceed with your best judgement or drop the session to consult the Architect.",
+                "advisor-mcp could not reach the Architect (agy). " +
+                "Check that `agy` (Antigravity) CLI is installed and authenticated (`agy` — re-auth if the Antigravity token lapsed). " +
+                "Proceed with your best judgement or hand off to the Architect via `ai handoff architect` for an async ruling.",
             },
             null,
             2
