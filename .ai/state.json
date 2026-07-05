@@ -1054,6 +1054,32 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-198",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement shell-native `ai add-task` CLI primitive (Architect Ruling A / pending D-053, obtained via A2A bridge 2026-07-05). Symmetric to E-158 `ai handoff`: lets agy persist tasks from the Antigravity shell (bypasses the MCP-unreachable deadlock) and survive verify_markdown_sync. CONSTRAINTS (per agy): (1) wrap the EXACT same add_task state logic as task-synchronizer-mcp — no divergent write path, state.sqlite stays single source of truth, no orphaned tasks; (2) stamp caller_role (architect/engineer); (3) respect the sovereignty lock (AI_OS_SOVEREIGNTY_LOCK / single-writer). Route through a shared helper like signal-handoff.mjs. Add tests + propagate to ~/.ai-os mirror. NOTE: architect-owned follow-through (D-053 record + structured-outputs.md §32 amendment documenting ai add-task + ai handoff as authorized shell-native exceptions) is agy's to persist, NOT the Engineer's (§35 sovereignty gate).",
+      "created_at": "2026-07-05T16:19:14.941Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-199",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Fix date-rollover time-bomb in tests/suites/token_optimization_test.sh: T-E-108 hardcoded `.ai/archive/stamps-2026-06.json` (lines 78/85), but _rotateToArchive (state-db.js) names the bucket by current UTC year-month via `new Date().toISOString().slice(0,7)`. Passed only during June 2026; fails every PR since the July rollover (repo-wide CI red). Fix: derive month with `date -u +%Y-%m`. Test-only; archive code is correct. Bundled into E-197 branch to unblock its merge.",
+      "created_at": "2026-07-05T18:58:28.141Z",
+      "completed_at": "2026-07-05T18:59:36.595Z",
+      "summary": "Fixed token_optimization_test.sh date-rollover time-bomb: derive bucket month via `date -u +%Y-%m` (matches _rotateToArchive's `toISOString().slice(0,7)`) instead of hardcoded stamps …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [

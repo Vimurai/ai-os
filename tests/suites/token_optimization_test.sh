@@ -72,17 +72,24 @@ for (let i = 0; i < 60; i++) ins.run('TEST_STAMP','tester',null,new Date(Date.UT
 SEEDED=$(node --input-type=module -e "import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js'; console.log(getDb('${PROJECT}/.ai').prepare('SELECT COUNT(*) n FROM stamps').get().n);" 2>/dev/null)
 assert_status 0 "E-108.00: 60 stamps seeded" bash -c "[ \"$SEEDED\" -ge 60 ]"
 
+# E-199: _rotateToArchive names the bucket by the CURRENT UTC year-month
+# (`new Date().toISOString().slice(0,7)` in state-db.js), not the stamp's own
+# date — so derive it here instead of hardcoding a month (was `2026-06`, a
+# time-bomb that broke every PR after the July 2026 rollover). `date -u` matches
+# toISOString()'s UTC basis.
+STAMP_MONTH="$(date -u +%Y-%m)"
+STAMP_ARCHIVE="${PROJECT}/.ai/archive/stamps-${STAMP_MONTH}.json"
 r=$(call archive_done_tasks "{}")
 assert_contains "E-108.01: archive run reports archived_stamps" '"archived_stamps"' "$r"
 assert_contains "E-108.01b: 50 stamps archived (60 - 10 kept)" "50 stamps" "$r"
-assert_exists "${PROJECT}/.ai/archive/stamps-2026-06.json"
+assert_exists "${STAMP_ARCHIVE}"
 
 # Active stamp count is now the 10 most recent.
 REMAIN=$(node --input-type=module -e "import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js'; console.log(getDb('${PROJECT}/.ai').prepare('SELECT COUNT(*) n FROM stamps').get().n);" 2>/dev/null)
 assert_status 0 "E-108.02: 10 most-recent stamps kept in active state" bash -c "[ \"$REMAIN\" -eq 10 ]"
 
 # Archived JSON holds the 50 rotated stamps in standard JSON (repo-oracle discoverable).
-ARCHIVED_N=$(python3 -c "import json; print(len(json.load(open('${PROJECT}/.ai/archive/stamps-2026-06.json'))))")
+ARCHIVED_N=$(python3 -c "import json; print(len(json.load(open('${STAMP_ARCHIVE}'))))")
 assert_status 0 "E-108.03: archive file holds 50 stamps" bash -c "[ \"$ARCHIVED_N\" -eq 50 ]"
 
 # ── E-108.04: a second run below threshold is a no-op ────────────────────────
