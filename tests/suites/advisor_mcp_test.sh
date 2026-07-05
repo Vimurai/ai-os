@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # advisor_mcp_test.sh — Unit tests for advisor-mcp (E-9)
 # Tests A2A bridge logic: prompt construction, LOG.md writes, error handling,
-# graceful degradation when Gemini is unavailable, registry registration.
+# graceful degradation when the Architect (agy) is unavailable, registry registration.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,23 +35,35 @@ assert_status 0 "query parameter required (inputSchema.required)" \
 assert_status 1 "blueprint parameter optional (NOT in inputSchema.required)" \
   mcp_assert_tool_param_required "$SERVER" "ask_architect" "blueprint"
 
-# ── T-A2A-03: Read-only constraint — no write flags in Gemini invocation ─────
+# ── T-A2A-03: Read-only constraint — no write flags in Architect invocation ──
 echo ""
-echo "  [T-A2A-03] Gemini read-only constraint"
+echo "  [T-A2A-03] Architect (agy) read-only constraint"
 
-assert_status 1 "gemini not invoked with --write flag" \
+# D-050: bridge re-pointed from the retired Gemini CLI to `agy --print`.
+assert_status 0 "agy CLI invoked (not the retired gemini CLI)" \
+  grep -q 'execFileSync("agy"' "$SERVER"
+
+assert_status 1 "gemini CLI no longer spawned (execFileSync gemini)" \
+  grep -q 'execFileSync("gemini"' "$SERVER"
+
+# Match the quoted argv form so the docstring's prose mention of the flag
+# (explaining why we omit it) doesn't trip the guard — mirrors --write/--edit below.
+assert_status 1 "architect not invoked with --dangerously-skip-permissions (read-only)" \
+  grep -q '"--dangerously-skip-permissions"' "$SERVER"
+
+assert_status 1 "architect not invoked with --write flag" \
   grep -q '"--write"' "$SERVER"
 
-assert_status 1 "gemini not invoked with --edit flag" \
+assert_status 1 "architect not invoked with --edit flag" \
   grep -q '"--edit"' "$SERVER"
 
-assert_status 0 "gemini invoked with -p (prompt-only) flag" \
+assert_status 0 "architect invoked with -p (print/prompt) flag" \
   grep -q '"-p"' "$SERVER"
 
 assert_status 0 "execFileSync used (not execSync — prevents shell injection)" \
   grep -q 'execFileSync' "$SERVER"
 
-assert_status 1 "execSync not used for gemini call" \
+assert_status 1 "execSync not used for architect call" \
   grep -qE '^[^/]*execSync\b' "$SERVER"
 
 # ── T-A2A-04: [A2A_RULING] log format ────────────────────────────────────────
@@ -116,18 +128,18 @@ assert_status 0 "empty query rejected" \
 assert_status 0 "non-string query rejected" \
   grep -q "typeof query !== \"string\"" "$SERVER"
 
-# ── T-A2A-08: Graceful degradation when Gemini unavailable ──────────────────
+# ── T-A2A-08: Graceful degradation when the Architect (agy) is unavailable ──
 echo ""
 echo "  [T-A2A-08] Graceful degradation"
 
 assert_status 0 "error caught and returned as MCP error response" \
   grep -q 'isError: true' "$SERVER"
 
-assert_status 0 "fallback message provided when Gemini unavailable" \
+assert_status 0 "fallback message provided when Architect unavailable" \
   grep -q 'fallback' "$SERVER"
 
-assert_status 0 "server does not crash on Gemini failure (catch block present)" \
-  grep -q 'Gemini unavailable' "$SERVER"
+assert_status 0 "server does not crash on Architect failure (catch block present)" \
+  grep -q 'Architect (agy) unavailable' "$SERVER"
 
 # ── T-A2A-09: Project root discovery ─────────────────────────────────────────
 echo ""
