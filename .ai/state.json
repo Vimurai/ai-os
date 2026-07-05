@@ -1058,12 +1058,12 @@
     {
       "id": "E-198",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement shell-native `ai add-task` CLI primitive (Architect Ruling A / pending D-053, obtained via A2A bridge 2026-07-05). Symmetric to E-158 `ai handoff`: lets agy persist tasks from the Antigravity shell (bypasses the MCP-unreachable deadlock) and survive verify_markdown_sync. CONSTRAINTS (per agy): (1) wrap the EXACT same add_task state logic as task-synchronizer-mcp — no divergent write path, state.sqlite stays single source of truth, no orphaned tasks; (2) stamp caller_role (architect/engineer); (3) respect the sovereignty lock (AI_OS_SOVEREIGNTY_LOCK / single-writer). Route through a shared helper like signal-handoff.mjs. Add tests + propagate to ~/.ai-os mirror. NOTE: architect-owned follow-through (D-053 record + structured-outputs.md §32 amendment documenting ai add-task + ai handoff as authorized shell-native exceptions) is agy's to persist, NOT the Engineer's (§35 sovereignty gate).",
       "created_at": "2026-07-05T16:19:14.941Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-07-05T20:32:29.087Z",
+      "summary": "Shell-native `ai add-task` (Ruling A): shared state-db::addTask is the single write path for both MCP add_task + the new CLI (src/shared/cli-add-task.mjs); bin/ai do_add_task+dispatc …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -2426,6 +2426,13 @@
       "task_id": "E-197",
       "timestamp": "2026-07-05T16:06:29.689Z",
       "summary": "E-197 advisor-mcp gemini→agy re-point aligns with interop.md §1 (A2A bridge). Aligner WARN was benign [ORPHANED_WORK] on tests/suites/advisor_mcp_test.sh (test files are not enumerated in architect.md). No architecture change; provider re-point only. Deterministic checks passed (UNAPPROVED_DEP WARN = false positive on state.json task-record JSON)."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Tier 2 review)",
+      "task_id": "E-198",
+      "timestamp": "2026-07-05T20:31:56.995Z",
+      "summary": "[TIER_2] ai add-task (Ruling A). Substantive review PASS: cli_add_task 19/0 + 12 add_task-affected suites green; shared state-db::addTask is single write path (MCP + CLI); live E2E persists + survives verify_markdown_sync. Aligner/run_review findings are non-blocking false positives: CAPABILITIES_BYPASS/PATH_TRAVERSAL on static `../` = helper-locator matching 3 committed siblings + standard ESM import (advisory, Gate-2 not enforced); NO_LOG_UPDATE=LOG.md updated but gitignored; ORPHANED_WORK=new files not in architect.md (Architect-owned per §35; pending D-053)."
     }
   ],
   "deltas": [
