@@ -25,6 +25,8 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
+// E-200: read-only state access for the `--settle` completion barrier (below).
+import { getDb } from "../mcp/shared/state-db.js";
 
 // Semantic roles (architect/engineer) AND legacy provider names (claude/gemini).
 // ai-watch resolves either to a tmux pane via .ai/roles.json (E-136/E-137).
@@ -95,6 +97,54 @@ export function emitHandoff({ aiDir, target, message } = {}) {
   }
 }
 
+// E-200 (completion barrier): a state signature that changes on task CREATE *and* the
+// common UPDATE (→DONE). `count` catches inserts, `maxRowid` catches inserts even if a
+// delete offsets the count, and `done` catches status transitions. Used to detect when
+// the Architect's async/batch task registration has quiesced.
+function _taskSignature(db) {
+  try {
+    const r = db.prepare(
+      "SELECT COUNT(*) AS n, COALESCE(MAX(rowid),0) AS m, " +
+      "COALESCE(SUM(CASE WHEN status='DONE' THEN 1 ELSE 0 END),0) AS d FROM tasks"
+    ).get();
+    return `${r.n}:${r.m}:${r.d}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * E-200 — Completion barrier. Poll the task table until its signature stops changing,
+ * so a handoff emitted right after an async/batch task registration (e.g. agy's
+ * JSON-RPC insertion script) waits for that registration to quiesce before waking the
+ * Engineer. Prevents the "Engineer wakes to a half-empty queue while the Architect is
+ * still generating tasks" race. WAL lets this reader observe the writer process's
+ * commits. Fail-open: any DB error skips the wait (never blocks a handoff on a broken
+ * settle probe). Synchronous (Atomics.wait) — matches the rest of this CLI helper.
+ *
+ * @returns {{settled:boolean, skipped?:boolean, signature:string|null, waitedMs:number, polls:number, error?:string}}
+ */
+export function settleTasks(aiDir, { intervalMs = 1000, stableChecks = 2, maxWaitMs = 30000 } = {}) {
+  let db;
+  try { db = getDb(aiDir); } catch (e) {
+    return { settled: false, skipped: true, signature: null, waitedMs: 0, polls: 0, error: e.message };
+  }
+  let prev = _taskSignature(db);
+  if (prev === null) return { settled: false, skipped: true, signature: null, waitedMs: 0, polls: 0, error: "task count unavailable" };
+  let stable = 0, waited = 0, polls = 1;
+  while (waited < maxWaitMs) {
+    _sleepMs(intervalMs); waited += intervalMs; polls++;
+    const cur = _taskSignature(db);
+    if (cur === null) return { settled: false, skipped: true, signature: prev, waitedMs: waited, polls, error: "task count unavailable mid-poll" };
+    if (cur === prev) {
+      if (++stable >= stableChecks) return { settled: true, signature: cur, waitedMs: waited, polls };
+    } else {
+      stable = 0; prev = cur;
+    }
+  }
+  return { settled: false, signature: prev, waitedMs: waited, polls };
+}
+
 // Walk up from `start` to find the nearest ancestor containing a `.ai/` directory,
 // so `ai handoff` works from any subdirectory of a project (git-style discovery).
 // Falls back to <start>/.ai when no ancestor has one.
@@ -126,14 +176,39 @@ const _isMain = (() => {
 })();
 
 if (_isMain) {
-  const target = process.argv[2];
-  const rest = process.argv.slice(3).join(" ").trim();
+  const argv = process.argv.slice(2);
+  const target = argv[0];
   if (!target) {
-    console.error("usage: ai handoff <architect|engineer|claude|gemini> [message]");
+    console.error("usage: ai handoff <architect|engineer|claude|gemini> [--settle [--settle-timeout N]] [message]");
     process.exit(2);
   }
-  const message = rest || defaultMessage(target);
+  // Parse flags out of the remaining args; everything else is the message. E-200:
+  // `--settle` blocks until task registration quiesces before emitting the signal.
+  let settle = false;
+  let settleTimeoutMs = 30_000;
+  const msgParts = [];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--settle") settle = true;
+    else if (a === "--settle-timeout") { const n = parseInt(argv[++i], 10); if (!isNaN(n)) settleTimeoutMs = n * 1000; }
+    else msgParts.push(a);
+  }
+  const message = msgParts.join(" ").trim() || defaultMessage(target);
   const aiDir = process.env.AI_OS_AIDIR ? resolve(process.env.AI_OS_AIDIR) : findAiDir(process.cwd());
+
+  if (settle) {
+    const s = settleTasks(aiDir, { maxWaitMs: settleTimeoutMs });
+    // Diagnostics to stderr so stdout stays the ✓ line. Emit the handoff either way —
+    // fail-open (skipped) or timeout must never strand the loop, but they are surfaced.
+    if (s.skipped) {
+      console.error(`[settle] skipped (${s.error}) — emitting handoff without the barrier.`);
+    } else if (s.settled) {
+      console.error(`[settle] task registration quiesced (sig ${s.signature}) after ${s.waitedMs}ms / ${s.polls} polls.`);
+    } else {
+      console.error(`[settle] ⚠ still changing after ${s.waitedMs}ms (${s.polls} polls) — emitting anyway; raise --settle-timeout if the Architect is still generating tasks.`);
+    }
+  }
+
   const r = emitHandoff({ aiDir, target, message });
   if (!r.ok) {
     console.error(`✗ [${r.code}] ${r.error}`);

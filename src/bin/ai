@@ -2497,11 +2497,12 @@ agy_plugin_install() {
 do_handoff() {
   local target="${1:-}"
   if [[ -z "$target" ]]; then
-    echo "usage: ai handoff <architect|engineer|claude|gemini> [message]" >&2
+    echo "usage: ai handoff <architect|engineer|claude|gemini> [--settle [--settle-timeout N]] [message]" >&2
     return 2
   fi
   shift
-  local message="$*"
+  # Forward the remaining args verbatim (message + flags like --settle, E-200) so the
+  # helper parses them — do NOT collapse to a single string here.
   if ! command -v node >/dev/null 2>&1; then
     echo "ai handoff: node not found — cannot emit handoff signal." >&2
     return 1
@@ -2522,7 +2523,7 @@ do_handoff() {
     echo "ai handoff: signal-handoff.mjs not found (run: ai install)." >&2
     return 1
   fi
-  node "$script" "$target" "$message"
+  node "$script" "$target" "$@"
 }
 
 # E-198 (Ruling A / pending D-053): shell-native task creation. Persists the SAME

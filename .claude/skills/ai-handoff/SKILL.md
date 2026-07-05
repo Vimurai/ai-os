@@ -105,6 +105,17 @@ This is **non-optional at session completion**. If `ai watch` is not running the
 signal is a harmless no-op (it stays queued and is consumed when the watcher next
 starts), so always emit it — never assume a human will press the key for you.
 
+**Completion barrier (Architect→Engineer, E-200).** If this handoff follows *task
+creation* — you just registered new E-## tasks for the Engineer — emit it via the
+shell command with the `--settle` barrier instead of `handoff_control`:
+```
+ai handoff engineer --settle "Planned E-##..E-## — execute the OPEN queue."
+```
+`--settle` blocks until the task table stops changing, so an async/batch registration
+that is still inserting rows finishes **before** the Engineer is woken. `handoff_control`
+has no such barrier — a signal emitted mid-insertion wakes the Engineer to a half-empty
+queue. (For Engineer→Architect handoffs there is nothing to settle; either path is fine.)
+
 ## Step 5 — Confirm
 
 Report:
