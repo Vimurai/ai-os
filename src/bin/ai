@@ -2525,6 +2525,40 @@ do_handoff() {
   node "$script" "$target" "$message"
 }
 
+# E-198 (Ruling A / pending D-053): shell-native task creation. Persists the SAME
+# state.sqlite row as task-synchronizer-mcp::add_task — both route through the shared
+# state-db::addTask so state stays the single source of truth — but as a plain shell
+# command so ANY CLI runtime can register a task. This exists for the agy (Antigravity)
+# Architect, which runs shell reliably but does NOT dependably invoke custom project MCP
+# servers to the model; without it, agy's hand-edited TASKS.md rows are wiped by the next
+# verify_markdown_sync (the "orphaned blueprint" incident). Symmetric to `ai handoff`.
+# Usage: ai add-task [--prefix E|P] [--owner <name>] [--role architect|engineer] [--tier N] [--depends-on E-1,E-2] <description>
+do_add_task() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "ai add-task: node not found — cannot persist task." >&2
+    return 1
+  fi
+  # Locate the helper relative to THIS script first (BASH_SOURCE-derived, resolves in
+  # both the dev tree and the ~/.ai-os install), then the install mirror, then cwd —
+  # the same locator chain as do_handoff (signal-handoff.mjs) and the plugin/mcp-tester
+  # helpers. (run_review's deterministic PATH_TRAVERSAL heuristic flags the `../` here
+  # and in the helper's relative import; both are static, safe paths — advisory only,
+  # not enforced by the Gate-2 pre-commit hook.)
+  local self_dir; self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local script=""
+  for c in \
+      "${self_dir}/../shared/cli-add-task.mjs" \
+      "${AIOS}/shared/cli-add-task.mjs" \
+      "src/shared/cli-add-task.mjs"; do
+    [[ -f "$c" ]] && { script="$c"; break; }
+  done
+  if [[ -z "$script" ]]; then
+    echo "ai add-task: cli-add-task.mjs not found (run: ai install)." >&2
+    return 1
+  fi
+  node "$script" "$@"
+}
+
 # ── dispatch ──────────────────────────────────────────────────────────────────
 
 # E-53: only run the dispatch when bin/ai is executed as a script. Sourcing
@@ -2547,6 +2581,10 @@ case "$cmd" in
   # E-158 (cli-agnostic-handoff): emit a bridge handoff signal from ANY CLI runtime
   # (shell-native, no MCP needed). Usage: ai handoff <role> [message].
   handoff)       do_handoff "${@:2}" ;;
+  # E-198 (Ruling A): shell-native task creation — persists to state.sqlite via the
+  # shared addTask (no MCP needed), so agy can register tasks that survive
+  # verify_markdown_sync. Usage: ai add-task [flags] <description>.
+  add-task)      do_add_task "${@:2}" ;;
   # E-138 (role-abstraction.md): register a CLI provider in .ai/providers.json and
   # generate its MCP config. Usage: ai provider add <name> --config-path <p> --mcp-key <k>
   # E-144: `ai provider install-plugin agy` installs AI-OS personas as a native agy plugin.

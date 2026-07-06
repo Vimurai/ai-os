@@ -446,6 +446,71 @@ export function recordIdHighWater(db, id) {
   if (num > cur) db.prepare("INSERT OR REPLACE INTO project(key, value) VALUES (?, ?)").run(key, String(num));
 }
 
+// ── Task creation (E-198: single-source write path) ─────────────────────────
+// The one place a task row is created. Both task-synchronizer-mcp::add_task AND
+// the shell-native `ai add-task` CLI (E-198, Ruling A / pending D-053) route
+// through this, so state.sqlite stays the single writer and the two callers can
+// never drift — the same src/shared-reuse discipline that E-158 applied to
+// emitHandoff()/`ai handoff`. The sequence mirrors the historical add_task
+// handler exactly: nextId → DAG validate → derive OPEN/BLOCKED → INSERT →
+// advance id high-water (only after the row commits, E-109) → regenerate the
+// TASKS.md/state.json/REVIEWS.md views so the row survives verify_markdown_sync.
+//
+// Framework-workspace routing (is_framework_task) and cloud-projection sync stay
+// in the MCP handler — the caller resolves {aiDir, db} and passes them in.
+//
+// @param {{owner:string, description:string, tier?:number|null, prefix?:string,
+//          depends_on?:string[]}} opts
+// @returns {{ok:true, task:object} | {ok:false, code:string, error:string}}
+export function addTask(aiDir, db, { owner, description, tier = null, prefix = "E", depends_on = [] } = {}) {
+  if (typeof owner !== "string" || !owner.trim()) {
+    return { ok: false, code: "INVALID_OWNER", error: "owner is required (non-empty string)." };
+  }
+  if (typeof description !== "string" || !description.trim()) {
+    return { ok: false, code: "INVALID_DESCRIPTION", error: "description is required (non-empty string)." };
+  }
+
+  const id   = nextId(db, prefix || "E", aiDir);
+  const deps = [...new Set(Array.isArray(depends_on) ? depends_on : [])];
+
+  // E-91: validate dependency edges (existence, no self-ref, acyclic, depth ≤ 5)
+  // before insert. A new task starts BLOCKED when any dependency is not yet DONE.
+  if (deps.length) {
+    const dag = validateDag(db, id, deps);
+    if (!dag.ok) return { ok: false, code: dag.code, error: dag.error };
+  }
+  const allDepsDone = deps.every(d => {
+    const r = db.prepare("SELECT status FROM tasks WHERE id = ?").get(d);
+    return r && r.status === "DONE";
+  });
+  const initialStatus = deps.length && !allDepsDone ? "BLOCKED" : "OPEN";
+
+  const task = {
+    id,
+    owner,
+    status:       initialStatus,
+    tier:         tier || null,
+    description,
+    created_at:   new Date().toISOString(),
+    completed_at: null,
+    summary:      null,
+    depends_on:   deps,
+  };
+
+  db.prepare(`
+    INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary, depends_on)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(task.id, task.owner, task.status, task.tier, task.description,
+          task.created_at, task.completed_at, task.summary,
+          deps.length ? JSON.stringify(deps) : null);
+
+  // E-109: advance the per-prefix high-water mark only now that the row is
+  // committed, so a rejected/failed add never burns an id.
+  recordIdHighWater(db, task.id);
+  regenerateViews(aiDir, db);
+  return { ok: true, task };
+}
+
 // ── Archive rotation (E-111: single-source ownership) ───────────────────────
 // The SQLite-aware rotation for DONE tasks and audit stamps lives here so both
 // task-synchronizer-mcp (the archive_done_tasks tool) and archive-manager-mcp

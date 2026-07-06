@@ -26,7 +26,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, recordIdHighWater as _recordIdHighWater, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
+import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, addTask as _addTask, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 // E-158 (cli-agnostic-handoff): shared handoff primitive — the SAME locked signal.json
@@ -361,55 +361,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      const prefix = args.prefix || "E";
-      const id     = _nextId(targetDb, prefix, targetAiDir);
-
-      // E-91: validate the dependency edges before insert (existence, no
-      // self-reference, acyclic, depth <= 5). A new task starts BLOCKED when
-      // any dependency is not yet DONE, otherwise OPEN.
-      const deps = [...new Set(Array.isArray(args.depends_on) ? args.depends_on : [])];
-      if (deps.length) {
-        const dag = _validateDag(targetDb, id, deps);
-        if (!dag.ok) {
-          return { content: [{ type: "text", text: `✗ [${dag.code}] ${dag.error}` }], isError: true };
-        }
-      }
-      const allDepsDone = deps.every(d => {
-        const r = targetDb.prepare("SELECT status FROM tasks WHERE id = ?").get(d);
-        return r && r.status === "DONE";
+      // E-198: the create sequence (nextId → DAG validate → OPEN/BLOCKED →
+      // INSERT → id high-water → regenerate views) now lives in the shared
+      // state-db::addTask so the shell-native `ai add-task` CLI writes through
+      // the EXACT same path. Framework-workspace routing is resolved above; we
+      // pass the resolved {targetAiDir, targetDb} in.
+      const _res = _addTask(targetAiDir, targetDb, {
+        owner:       args.owner,
+        description: args.description,
+        tier:        args.tier,
+        prefix:      args.prefix || "E",
+        depends_on:  args.depends_on,
       });
-      const initialStatus = deps.length && !allDepsDone ? "BLOCKED" : "OPEN";
+      if (!_res.ok) {
+        return { content: [{ type: "text", text: `✗ [${_res.code}] ${_res.error}` }], isError: true };
+      }
+      const task = _res.task;
 
-      const task   = {
-        id,
-        owner:        args.owner,
-        status:       initialStatus,
-        tier:         args.tier || null,
-        description:  args.description,
-        created_at:   new Date().toISOString(),
-        completed_at: null,
-        summary:      null,
-        depends_on:   deps,
-      };
-
-      targetDb.prepare(`
-        INSERT INTO tasks(id, owner, status, tier, description, created_at, completed_at, summary, depends_on)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(task.id, task.owner, task.status, task.tier, task.description,
-              task.created_at, task.completed_at, task.summary,
-              deps.length ? JSON.stringify(deps) : null);
-
-      // E-109: advance the per-prefix high-water mark only now that the row is
-      // committed, so a rejected add_task never burns an id.
-      _recordIdHighWater(targetDb, task.id);
-
-      _regenerateViews(targetAiDir, targetDb);
       // E-74: schedule cloud projection sync. Framework-routed tasks sync
       // the framework workspace's state.sqlite, not the local one — the
       // projection always reflects the workspace the row landed in.
       _scheduleCloudSync(targetAiDir);
       const routeSuffix = targetAiDir === aiDir ? "" : ` (routed to framework workspace ${targetAiDir})`;
-      return { content: [{ type: "text", text: `✓ Added ${id}: ${args.description}${routeSuffix}\n${JSON.stringify(task, null, 2)}` }] };
+      return { content: [{ type: "text", text: `✓ Added ${task.id}: ${args.description}${routeSuffix}\n${JSON.stringify(task, null, 2)}` }] };
     }
 
     // ── update_task_status ────────────────────────────────────────────────────
