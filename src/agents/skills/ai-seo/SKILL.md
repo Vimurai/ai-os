@@ -80,6 +80,12 @@ Site structure: !ls -1 . 2>/dev/null | head -20
 - [ ] Canonical tags point to the correct authoritative URL
 - [ ] No duplicate content served at multiple URLs without canonical
 
+## Phase 4 — Semrush Keyword Optimization
+
+### 4.1 Golden Keyword Discovery
+- [ ] Use the Semrush MCP server to identify "golden keywords" (high search volume, low keyword difficulty) relevant to the page topic.
+- [ ] Integrate these keywords strategically into the page title, meta description, headers (H1/H2), and early in the body content to drive top Google search rankings without sweat.
+
 ## Output Format
 
 For each page audited, produce:
@@ -99,6 +105,10 @@ For each page audited, produce:
 ### Passing
 - <check>
 
+### Golden Keywords (Semrush)
+- <keyword 1> (Volume: X, KD: Y)
+- <keyword 2> (Volume: X, KD: Y)
+
 ## Top Recommendation
 <Single most impactful change to improve AI discoverability>
 ```
@@ -108,3 +118,4 @@ For each page audited, produce:
 - Prioritize AEO Score improvements for pages targeting question-based queries.
 - Flag any `noindex` or `nofollow` directives that would prevent AI indexing.
 - Recommend `llms.txt` if not present — it signals intentional AI-friendliness.
+- ALWAYS use the Semrush MCP server when performing SEO audits to find golden keywords and optimize the content for top Google searches.
