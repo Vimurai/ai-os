@@ -98,4 +98,33 @@ rm -f "$SIGNAL"
 assert_status 0 "158.09: signal written to the project root .ai/ from a subdir" test -f "$SIGNAL"
 assert_contains "158.09: subdir handoff message landed" "deep subdir" "$(qfield "$SIGNAL" -1 message)"
 
+# ── 158.10: --settle completion barrier emits + strips the flag (E-200) ──────
+# Empty tasks table → signature is immediately stable → settles (~2s) then emits.
+rm -f "$SIGNAL"
+out="$(AI_OS_AIDIR="${PROJECT}/.ai" bash "$AI" handoff engineer --settle "Planned E-20..E-22 ready." 2>&1)"
+assert_contains "158.10: --settle still emits the handoff" "[HANDOFF] → engineer" "$out"
+assert_contains "158.10: settle barrier reported (stderr)" "settle" "$out"
+assert_status 0 "158.10: signal written after settle" test -f "$SIGNAL"
+assert_contains "158.10: message persisted, flag stripped" "Planned E-20..E-22 ready." "$(qfield "$SIGNAL" -1 message)"
+assert_not_contains "158.10: --settle token not in message" "settle" "$(qfield "$SIGNAL" -1 message)"
+
+# ── 158.11: --settle WAITS for an active writer before emitting (the race fix) ─
+# Background writer inserts 3 tasks ~1s apart into the same WAL state.sqlite; settle
+# must block until the count quiesces at 3, so the Engineer never wakes mid-insertion.
+rm -f "$SIGNAL"
+node --input-type=module -e "
+import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js';
+const db = getDb('${PROJECT}/.ai');
+const sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms);
+for (let i=1;i<=3;i++){ db.prepare('INSERT OR IGNORE INTO tasks(id,owner,status,tier,description,created_at) VALUES (?,?,?,?,?,?)').run('E-9'+i,'Engineer (Claude)','OPEN',2,'race '+i,'2026-07-05T00:00:00Z'); sleep(1000);}
+" &
+WPID=$!
+start=$(date +%s)
+AI_OS_AIDIR="${PROJECT}/.ai" bash "$AI" handoff engineer --settle "all tasks ready" >/dev/null 2>&1
+elapsed=$(( $(date +%s) - start ))
+wait "$WPID" 2>/dev/null || true
+assert_status 0 "158.11: settle blocked while the writer was inserting (>=2s)" bash -c "[ $elapsed -ge 2 ]"
+final="$(node --input-type=module -e "import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js'; console.log(getDb('${PROJECT}/.ai').prepare('SELECT COUNT(*) n FROM tasks').get().n);" 2>/dev/null)"
+assert_contains "158.11: all 3 writer tasks landed before the handoff" "3" "$final"
+
 assert_summary

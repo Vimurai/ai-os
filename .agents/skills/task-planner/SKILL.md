@@ -128,7 +128,7 @@ Report:
 > "N tasks written to TASKS.md: [E-## list]. All passed quality gate.
 >  Framework-routed: [E-## list, or 'none']."
 
-## Step 7 — Hand Off to the Engineer (MANDATORY)
+## Step 7 — Hand Off to the Engineer (MANDATORY — and LAST)
 
 Creating tasks is only half the loop — the Engineer is **not** polling the queue;
 it must be *woken*. After the tasks are registered (Step 5), ALWAYS emit a handoff so
@@ -137,10 +137,21 @@ mandatory hand-back (`skill: ai-task` Step 4): the autonomous ping-pong loop onl
 advances if each side hands off when its turn ends. Registering tasks without handing
 off is the failure that strands a planned sprint (and leaves the Engineer idle).
 
-Emit it with the **shell command** — it works from ANY runtime, including agy:
+**COMPLETION BARRIER (critical).** The handoff must be your **FINAL** action — emitted
+only after **every** task has been fully written to `state.sqlite`. If you register tasks
+with an async/batch script (e.g. a JSON-RPC insertion loop), the handoff must wait for
+that script to fully exit; a signal emitted mid-insertion wakes the Engineer to a
+**half-empty queue**, and it plans against the tasks that haven't landed yet. Always hand
+off with the **`--settle`** barrier, which blocks until the task table stops changing
+(the registration has quiesced) before it emits:
 ```
-ai handoff engineer "Planned E-##..E-## (<one-line scope>). Execute the OPEN queue."
+ai handoff engineer --settle "Planned E-##..E-## (<one-line scope>). Execute the OPEN queue."
 ```
+`--settle` polls the task count and only signals once it is stable for ~2s (default max
+wait 30s; raise with `--settle-timeout <seconds>` for a very large batch). It is
+fail-open — if the state DB is unreadable it emits immediately rather than stranding the
+loop. Before emitting, also confirm `verify_markdown_sync` returns `[SYNC_PASS]` and the
+OPEN queue contains every task you drafted in Step 1.
 
 Why the shell command rather than `mcp__task-synchronizer-mcp__handoff_control`: the
 agy (Antigravity) Architect runtime does **not** dependably expose/invoke custom
@@ -165,6 +176,10 @@ Then report: "Planned N tasks and handed control to the Engineer."
   canonical AI-OS clone.
 - Do NOT end a planning turn WITHOUT handing off to the Engineer (Step 7).
   Registered-but-un-handed-off tasks strand the loop — the Engineer never wakes.
+- Do NOT hand off WHILE still creating or updating tasks. The handoff is your LAST
+  action, after registration has fully quiesced — always use `ai handoff engineer
+  --settle` (Step 7). A premature signal wakes the Engineer to a half-empty queue and
+  it plans against missing tasks (the failure this barrier exists to prevent).
 - Do NOT hand-edit `TASKS.md`. `add_task` is the source of truth and regenerates
   the file from `state.sqlite`; lines you type directly are silently wiped by
   `verify_markdown_sync` on the next sync (the "lost tasks after state-sync drift"
