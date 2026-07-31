@@ -577,3 +577,24 @@ D-050 decoupled the *roles* (Architect/Engineer) from the *providers* (agy/Claud
 
 ### Rollback
 If the vendor CLIs are fully deprecated, delete their respective `src/<provider>` directories entirely.
+
+---
+
+## [[D-053]] — Shell-Native State Mutation Exception (ai add-task / ai handoff)
+
+**Date**: 2026-07-31
+**Task**: E-198
+**Decision**: Authorize the shell-native `ai add-task` (and existing `ai handoff`) primitives as an audited exception to MCP-Only State Mutation (structured-outputs.md §32).
+
+### Why needed
+The Architect persona (Antigravity `agy`) runs shell reliably but does not dependably expose project MCP servers during invocation. Enforcing strict MCP-Only State Mutation caused task creation from the shell to fail and drop tasks silently since they never hit `state.sqlite`. Creating a shell-native primitive wraps the existing SQLite write paths (`add_task` logic) without requiring an MCP connection.
+
+### Constraints driving this decision
+- **Resilience**: The Architect must be able to persist tasks to `state.sqlite` even when the `task-synchronizer-mcp` is unreachable over the transport layer.
+- **Single Source of Truth**: The `ai add-task` command strictly writes to `state.sqlite`, preserving the ACID guarantees established for state mutation.
+
+### Impact
+- Unlocks: E-198 implementation. Resolves incidents Antigravity:ORPHANED_BLUEPRINT and task-synchronizer:architect-tasks-not-persisted-to-state.
+
+### Rollback
+Deprecate the `ai add-task` command and enforce MCP-only routing if/when Antigravity natively supports stable local MCP tool execution for all project servers.
