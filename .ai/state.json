@@ -1093,6 +1093,32 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-201",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Revert Architect's unauthorized direct modifications to ~/.gemini/config/mcp_config.json and .agents/skills/ai-seo/SKILL.md to resolve the ANTI-DRIFT incident.",
+      "created_at": "2026-07-06T09:06:36.185Z",
+      "completed_at": "2026-07-06T11:48:09.871Z",
+      "summary": "Reverted Architect's unauthorized direct edits (ANTI-DRIFT): git-restored the drifted .agents/skills/ai-seo/SKILL.md mirror to clean HEAD. Out-of-repo ~/.gemini/config/mcp_config.jso …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-202",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 1,
+      "description": "Implement the Semrush MCP server in ~/.gemini/config/mcp_config.json and update the ai-seo/SKILL.md to instruct the agent to use Semrush for finding golden keywords.",
+      "created_at": "2026-07-06T09:06:36.278Z",
+      "completed_at": "2026-07-06T11:48:11.985Z",
+      "summary": "Implemented Semrush integration properly (canonical, not mirror): added Phase 4 Semrush Keyword Optimization + Golden Keywords output block + audit rule to canonical src/agents/skill …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
