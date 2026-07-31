@@ -169,7 +169,8 @@
   Status: DONE 2026-07-06 — Implemented Semrush integration properly (canonical, not mirror): added Phase 4 Semrush Keyword Optimization + Golden Keywords output block + audit rule to canonical src/agents/skill …[full in LOG.md]
 - [x] E-203: Grant ai-seo the mcp__semrush__* tool in its toolNames list
   Status: DONE 2026-07-31 — Granted ai-seo skill the mcp__semrush__* tool via allowed-tools (canonical src/agents/skills/ai-seo/SKILL.md + .agents/ + ~/.ai-os mirrors, byte-identical). Confirmed allow-rule wild …[full in LOG.md]
-- [ ] E-204: Auto-trigger ai handoff when a new task is created for another role, eliminating manual handoffs
+- [x] E-204: Auto-trigger ai handoff when a new task is created for another role, eliminating manual handoffs
+  Status: DONE 2026-07-31 — Auto-handoff on cross-role task creation: `ai add-task` now auto-emits an `ai handoff` bridge signal when the task's execution role (prefix E→engineer / P→architect) differs from the …[full in LOG.md]
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2

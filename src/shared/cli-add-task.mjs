@@ -24,10 +24,17 @@
 //      from the bootloader-injected AI_OS_CALLER_ROLE (E-127) unless overridden.
 //   3. Respect the sovereignty lock: writes go through getDb() (node:sqlite WAL,
 //      single-writer) — the same handle discipline the MCP uses; no divergent raw write.
+//
+// E-204 (auto-handoff): after a task is created FOR the other role (prefix E→engineer,
+//   P→architect, when it differs from the creator's AI_OS_CALLER_ROLE), this primitive
+//   auto-emits an `ai handoff` bridge signal so the executing role is woken with no
+//   manual step. Best-effort + fail-open (a handoff error never fails the add); deduped
+//   against an already-pending signal; disabled by AI_OS_NO_AUTO_HANDOFF=1 (rollback).
 
 import { existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { getDb, addTask } from "../mcp/shared/state-db.js";
+import { emitHandoff, hasPendingHandoff } from "./signal-handoff.mjs";
 
 // Triad caller_role → TASKS.md owner label. Attribution only (safe-exec-mcp owns the
 // tamper-resistant HMAC role boundary, E-129); here we just record who created the row.
@@ -115,6 +122,57 @@ export function runAddTask({ aiDir, description, owner, role, tier, prefix, depe
   return { ok: true, task: res.task, owner: finalOwner };
 }
 
+// ── E-204: auto-handoff on cross-role task creation ─────────────────────────────
+// Eliminates the manual `ai handoff` step: when a role creates a task the OTHER role
+// must execute, wake that role automatically. The task prefix is the authoritative
+// signal for WHICH queue the task lands in (E-## → Engineer, P-## → Architect); the
+// creator is the bootloader-injected AI_OS_CALLER_ROLE (E-127: agy→architect,
+// claude→engineer). This mirrors the shell-native philosophy of `ai handoff` (E-158)
+// and closes the loop with the E-200 settle barrier from the opposite side.
+
+// Task-id prefix → the Triad role that owns/executes that queue.
+export const PREFIX_ROLE = { E: "engineer", P: "architect" };
+
+/**
+ * Resolve the auto-handoff target for a just-created task, or null when none applies.
+ * A task is "created for another role" when the role that will execute it (from its
+ * prefix) differs from the creator (AI_OS_CALLER_ROLE). A role queuing its OWN work
+ * (creator === target) returns null — no self-handoff. An unrecognised prefix returns
+ * null rather than guessing.
+ * @param {{prefix?:string, callerRole?:string}} opts callerRole is injectable for tests;
+ *        it defaults to AI_OS_CALLER_ROLE, then 'engineer' (matching resolveOwner()).
+ * @returns {"architect"|"engineer"|null}
+ */
+export function autoHandoffTarget({ prefix, callerRole } = {}) {
+  const target = PREFIX_ROLE[String(prefix || "E").toUpperCase()];
+  if (!target) return null;
+  const creator = String(callerRole || process.env.AI_OS_CALLER_ROLE || "engineer").toLowerCase();
+  return creator === target ? null : target;
+}
+
+/**
+ * Best-effort auto-handoff after a cross-role task creation. Side-effect-isolated:
+ * NEVER throws and never blocks — the task is already persisted, so a handoff failure
+ * must not fail `ai add-task`. Disabled entirely by AI_OS_NO_AUTO_HANDOFF=1 (rollback /
+ * test isolation). Deduped against an already-pending undelivered signal so a burst of
+ * creations coalesces into a single wake.
+ * @returns {{emitted:boolean, target?:string, reason?:string}}
+ */
+export function maybeAutoHandoff({ aiDir, task, prefix, callerRole } = {}) {
+  if (process.env.AI_OS_NO_AUTO_HANDOFF === "1") return { emitted: false, reason: "disabled" };
+  const target = autoHandoffTarget({ prefix, callerRole });
+  if (!target) return { emitted: false, reason: "same-role" };
+  try {
+    if (hasPendingHandoff(aiDir, target)) return { emitted: false, target, reason: "already-pending" };
+    const id = task && task.id ? task.id : "a task";
+    const message = `Auto-handoff: ${id} was queued for the ${target}. Review TASKS.md and execute the open queue.`;
+    const res = emitHandoff({ aiDir, target, message });
+    return res.ok ? { emitted: true, target } : { emitted: false, target, reason: res.code };
+  } catch (e) {
+    return { emitted: false, target, reason: e.message };
+  }
+}
+
 // ── CLI entrypoint ────────────────────────────────────────────────────────────
 // Invoked as: node cli-add-task.mjs <args…>  (from bin/ai `do_add_task`).
 function main() {
@@ -133,6 +191,12 @@ function main() {
   // stdout: the created id (scriptable) + a human line; full record to stderr for logs.
   process.stdout.write(`${res.task.id}\n`);
   process.stderr.write(`✓ Added ${res.task.id} (${res.task.status}) owner="${res.owner}": ${res.task.description}\n`);
+
+  // E-204: if this task is for the OTHER role, wake it automatically (no manual
+  // `ai handoff`). Creator = AI_OS_CALLER_ROLE (NOT opts.role, which is the task's
+  // owner). Best-effort — a handoff failure never fails the already-persisted add.
+  const auto = maybeAutoHandoff({ aiDir, task: res.task, prefix: opts.prefix });
+  if (auto.emitted) process.stderr.write(`↪ auto-handoff → ${auto.target} (E-204)\n`);
 }
 
 // Run only when executed directly (not when imported by tests). Mirrors the
