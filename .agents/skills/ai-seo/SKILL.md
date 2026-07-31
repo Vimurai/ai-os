@@ -3,7 +3,7 @@ name: ai-seo
 description: Use activate_skill with this name when the user mentions "AEO", "LLM optimization", "AI search", or asks "how do I show up in AI answers". Audits content for AI Engine Optimization (AEO) and LLM Mention Optimization (LLMO) to ensure pages are discoverable and cited by AI engines.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Grep, Glob
+allowed-tools: Read, Grep, Glob, mcp__semrush__*
 context: default
 agent: default
 source: agents/skills/ai-seo

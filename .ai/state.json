@@ -1119,6 +1119,32 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-203",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": null,
+      "description": "Grant ai-seo the mcp__semrush__* tool in its toolNames list",
+      "created_at": "2026-07-31T11:09:54.895Z",
+      "completed_at": "2026-07-31T11:25:07.325Z",
+      "summary": "Granted ai-seo skill the mcp__semrush__* tool via allowed-tools (canonical src/agents/skills/ai-seo/SKILL.md + .agents/ + ~/.ai-os mirrors, byte-identical). Confirmed allow-rule wild …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-204",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": null,
+      "description": "Auto-trigger ai handoff when a new task is created for another role, eliminating manual handoffs",
+      "created_at": "2026-07-31T11:18:20.108Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2479,6 +2505,13 @@
       "task_id": "E-200",
       "timestamp": "2026-07-05T21:47:19.618Z",
       "summary": "[TIER_2] Handoff completion barrier (`ai handoff --settle`). Substantive PASS: handoff_cli 31/0 incl. 158.11 live concurrent-writer race (settle waited 6s for 5 inserts before emitting); enforcement 24/0; control 41/0. Aligner WARN only — NO_LOG_UPDATE (LOG.md updated, gitignored) + ORPHANED_WORK (skill mirrors, not architect.md content). Fail-open settle never strands the loop."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "critic_synthesizer",
+      "task_id": "E-203",
+      "timestamp": "2026-07-31T11:31:21.611Z",
+      "summary": "[TIER_2] E-203 ai-seo semrush tool grant cleared. No P0 after scoping the commit to Engineer files — the Architect's structured-outputs.md §32 amendment + D-053 DECISIONS entry are held OUT of this commit for Architect/user disposition per §35/E-169. Two P1 WARNs are known false positives: UNAPPROVED_DEP matches state.json task-record JSON keys (id/owner/status); NO_LOG_UPDATE = LOG.md is gitignored. Change is a declarative allowed-tools grant: +mcp__semrush__* completes E-202 / aligns with seo-keyword-multiplier; allow-rule wildcard syntax verified (mcp__server__* is the required allow form; bare mcp__semrush is deny/ask-only); byte-identical across src/ + .agents/ + ~/.ai-os (md5 7371a59); capability grant is explicitly Architect-authorized (E-203), scoped to the named semrush server, no secrets/auth code touched. skill_context_test 21/0. No P0/P1 blockers."
     }
   ],
   "deltas": [

@@ -167,6 +167,9 @@
   Status: DONE 2026-07-06 — Reverted Architect's unauthorized direct edits (ANTI-DRIFT): git-restored the drifted .agents/skills/ai-seo/SKILL.md mirror to clean HEAD. Out-of-repo ~/.gemini/config/mcp_config.jso …[full in LOG.md]
 - [x] E-202: Implement the Semrush MCP server in ~/.gemini/config/mcp_config.json and update the ai-seo/SKILL.md to instruct the agent to use Semrush for finding golden keywords. | Tier: 1
   Status: DONE 2026-07-06 — Implemented Semrush integration properly (canonical, not mirror): added Phase 4 Semrush Keyword Optimization + Golden Keywords output block + audit rule to canonical src/agents/skill …[full in LOG.md]
+- [x] E-203: Grant ai-seo the mcp__semrush__* tool in its toolNames list
+  Status: DONE 2026-07-31 — Granted ai-seo skill the mcp__semrush__* tool via allowed-tools (canonical src/agents/skills/ai-seo/SKILL.md + .agents/ + ~/.ai-os mirrors, byte-identical). Confirmed allow-rule wild …[full in LOG.md]
+- [ ] E-204: Auto-trigger ai handoff when a new task is created for another role, eliminating manual handoffs
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
