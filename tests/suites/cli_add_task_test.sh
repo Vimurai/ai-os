@@ -18,15 +18,18 @@ echo "── Suite: cli_add_task (E-198) ─────────────
 
 # Fresh temp project with a state.json seed (getDb builds state.sqlite from it).
 PROJ="$(mktemp -d)"
-trap 'rm -rf "$PROJ"' EXIT
+P9=""; P10=""; P11=""   # E-204 auto-handoff fixtures (created in T-09)
+trap 'rm -rf "$PROJ" "$P9" "$P10" "$P11"' EXIT
 mkdir -p "${PROJ}/.ai"
 cp "$TEMPLATE" "${PROJ}/.ai/state.json"
 
 # Run the helper from inside the project (it resolves .ai via cwd walk-up).
 # Usage: run_add <ROLE> <args...>  → echoes stdout (the created id); stderr suppressed.
+# AI_OS_NO_AUTO_HANDOFF=1 isolates T-01..T-08 from the E-204 auto-handoff side effect
+# (exercised explicitly in T-09) so they never touch signal.json.
 run_add() {
   local role="$1"; shift
-  ( cd "$PROJ" && AI_OS_CALLER_ROLE="$role" node "$HELPER" "$@" 2>/dev/null )
+  ( cd "$PROJ" && AI_OS_CALLER_ROLE="$role" AI_OS_NO_AUTO_HANDOFF=1 node "$HELPER" "$@" 2>/dev/null )
 }
 task_field() { # <id> <col>
   node --input-type=module -e "
@@ -93,5 +96,52 @@ echo ""; echo "  [T-08] stdout purity"
 out="$(run_add engineer "Purity check task")"
 assert_status 0 "T-08.01: stdout is a single bare id line" \
   bash -c "printf '%s' '$out' | grep -qxE 'E-[0-9]+'"
+
+# ── T-09: E-204 auto-handoff on cross-role task creation ─────────────────────
+echo ""; echo "  [T-09] E-204 auto-handoff"
+
+# Unit: autoHandoffTarget() pure logic — target from prefix, gated on creator role.
+aht() { # <prefix> <callerRole> → target role or 'null'
+  node --input-type=module -e "
+import { autoHandoffTarget } from '${HELPER}';
+process.stdout.write(String(autoHandoffTarget({ prefix: process.argv[1], callerRole: process.argv[2] }) ?? 'null'));
+" "$1" "$2" 2>/dev/null
+}
+t="$(aht E architect)"; assert_status 0 "T-09.01: architect + E → engineer"        test "engineer"  = "$t"
+t="$(aht E engineer)";  assert_status 0 "T-09.02: engineer + E → null (own work)"   test "null"      = "$t"
+t="$(aht P engineer)";  assert_status 0 "T-09.03: engineer + P → architect"         test "architect" = "$t"
+t="$(aht P architect)"; assert_status 0 "T-09.04: architect + P → null (own work)"  test "null"      = "$t"
+t="$(aht X architect)"; assert_status 0 "T-09.05: unknown prefix → null"            test "null"      = "$t"
+
+# Count UNDELIVERED handoffs for a target in a project's signal.json (0 if absent).
+undelivered() { # <projdir> <target>
+  node --input-type=module -e "
+import { readFileSync, existsSync } from 'node:fs';
+const p = process.argv[1] + '/.ai/signal.json';
+if (!existsSync(p)) { process.stdout.write('0'); }
+else { const raw = JSON.parse(readFileSync(p,'utf8')); const q = Array.isArray(raw) ? raw : [raw];
+  process.stdout.write(String(q.filter(e => e && e.target === process.argv[2] && e.delivered !== true).length)); }
+" "$1" "$2" 2>/dev/null
+}
+seed_proj() { local d; d="$(mktemp -d)"; mkdir -p "${d}/.ai"; cp "$TEMPLATE" "${d}/.ai/state.json"; printf '%s' "$d"; }
+
+# Behavioral: architect creating an E-## auto-wakes the engineer (one undelivered signal).
+P9="$(seed_proj)"
+( cd "$P9" && AI_OS_CALLER_ROLE=architect node "$HELPER" "Cross-role task 1" >/dev/null 2>&1 )
+c="$(undelivered "$P9" engineer)"; assert_status 0 "T-09.06: architect+E emits 1 engineer handoff" test "1" = "$c"
+
+# Dedup: a second cross-role create coalesces into the still-pending signal (stays 1).
+( cd "$P9" && AI_OS_CALLER_ROLE=architect node "$HELPER" "Cross-role task 2" >/dev/null 2>&1 )
+c="$(undelivered "$P9" engineer)"; assert_status 0 "T-09.07: second create deduped (still 1)" test "1" = "$c"
+
+# Opt-out: AI_OS_NO_AUTO_HANDOFF=1 suppresses the handoff entirely.
+P10="$(seed_proj)"
+( cd "$P10" && AI_OS_CALLER_ROLE=architect AI_OS_NO_AUTO_HANDOFF=1 node "$HELPER" "Disabled task" >/dev/null 2>&1 )
+c="$(undelivered "$P10" engineer)"; assert_status 0 "T-09.08: AI_OS_NO_AUTO_HANDOFF=1 emits nothing" test "0" = "$c"
+
+# Same-role: engineer queuing its own E-## does NOT self-handoff.
+P11="$(seed_proj)"
+( cd "$P11" && AI_OS_CALLER_ROLE=engineer node "$HELPER" "Own task" >/dev/null 2>&1 )
+c="$(undelivered "$P11" engineer)"; assert_status 0 "T-09.09: engineer+E (own work) emits nothing" test "0" = "$c"
 
 assert_summary

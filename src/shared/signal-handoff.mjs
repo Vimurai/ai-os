@@ -97,6 +97,27 @@ export function emitHandoff({ aiDir, target, message } = {}) {
   }
 }
 
+/**
+ * E-204 (auto-handoff): true if <aiDir>/signal.json already holds an UNDELIVERED
+ * handoff for `target`. Lets a caller coalesce a burst of auto-emitted handoffs (e.g.
+ * a batch of cross-role task creations) into a single pending wake instead of one per
+ * task. Read-only — no lock needed (a benign race just risks one extra signal, never a
+ * lost one). Fail-open: any missing-file / parse error returns false, so a needed
+ * handoff is emitted rather than silently swallowed.
+ * @returns {boolean}
+ */
+export function hasPendingHandoff(aiDir, target) {
+  try {
+    const signalPath = resolve(aiDir, "signal.json");
+    if (!existsSync(signalPath)) return false;
+    const parsed = JSON.parse(readFileSync(signalPath, "utf8"));
+    const queue = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === "object" ? [parsed] : []);
+    return queue.some((e) => e && e.target === target && e.delivered !== true);
+  } catch {
+    return false;
+  }
+}
+
 // E-200 (completion barrier): a state signature that changes on task CREATE *and* the
 // common UPDATE (→DONE). `count` catches inserts, `maxRowid` catches inserts even if a
 // delete offsets the count, and `done` catches status transitions. Used to detect when

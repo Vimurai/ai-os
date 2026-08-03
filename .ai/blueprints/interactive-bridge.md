@@ -16,6 +16,7 @@ Because interactive REPLs block on standard input, they cannot natively listen t
    - **Single-Writer Lock**: Uses a cross-process lock to safely mutate signal statuses.
 3. **Automated Handoff Enforcement**
    - Responsibility: Agents (via prompts or framework scripts) are strictly mandated to invoke `handoff_control` automatically when their task queue is exhausted or planning is complete.
+   - **Cross-Role Auto-Handoff (E-204)**: When a role creates a task for a different role via the shell primitive `ai add-task` (e.g., Architect creates a task for the Engineer), the tool automatically triggers `ai handoff` to wake the target role. This eliminates manual signaling when delegating work. Can be bypassed via `AI_OS_NO_AUTO_HANDOFF=1`.
 
 ## Data Model
 **`.ai/signal.json` Payload (Queue Array):**
@@ -65,3 +66,4 @@ Because interactive REPLs block on standard input, they cannot natively listen t
 - **E-118**: Refactor `handoff_control` and `ai-watch` to support a signal queue (array) and busy-state detection before injection.
 - **E-119**: Enforce automatic handoff in Claude and Gemini workflows by updating prompt instructions (e.g., `ai-handoff` and `ai-task` skills) to mandate calling `handoff_control`.
 - **E-124**: Implement the smart ai-watch delivery model: stateful persistence using a `delivered` flag, startup backlog drain, single-writer lock, and per-target independent FIFOs.
+- **E-204**: Auto-trigger `ai handoff` on cross-role task creation. `ai add-task` automatically signals the target role (prefix E -> engineer, P -> architect) unless `AI_OS_NO_AUTO_HANDOFF=1` is set.
