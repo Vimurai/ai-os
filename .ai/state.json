@@ -2559,6 +2559,13 @@
       "task_id": "E-206",
       "timestamp": "2026-08-04T18:35:36.017Z",
       "summary": "[TIER_2] node:test unit layer cleared. tests/unit/state-db.test.mjs (26 assertions, real temp-SQLite, no mocks) covers parseDeps/roleFromOwner/validateDag(cycle,self-ref,unknown-dep,depth,dedupe)/nextId+high-water/addTask(OPEN/BLOCKED/validation)/withTransaction/readDependencyGraph — 83% line / 76% branch coverage on state-db.js via Node built-in coverage (no new dep). Wired into master runner via tests/suites/node_unit_test.sh (TAP tally → assert.sh counters); node_unit 26/0 standalone + integrated. Dispositions: PATH_TRAVERSAL P0 = FALSE POSITIVE (line `source \"${SCRIPT_DIR}/../lib/assert.sh\"` is the static helper locator used verbatim by 107 suites, no external input; advisory per E-198); UNAPPROVED_DEP P1 = state.json task-record keys FP; aligner WARN = benign ORPHANED_WORK (test files). Unrelated: managed_agents_sync_hook flaked 2 assertions under full-run load (5/5 in isolation) — pre-existing, not from E-206, logged for follow-up. No real P0/P1."
+    },
+    {
+      "type": "INSIGHTS_GENERATED",
+      "agent": "meta_analyst",
+      "task_id": null,
+      "timestamp": "2026-08-04T18:45:14.210Z",
+      "summary": "INSIGHTS.md refreshed — 9,829 tool_executions + 365 task_velocity rows analysed (30-day window), 13 recommendations (5 CLI-automation, 0 deprecation, 7 usage-friction, 1 latency). No deprecation candidates: prior report's 4 flags reclassified as friction per E-180."
     }
   ],
   "deltas": [
