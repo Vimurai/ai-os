@@ -1149,12 +1149,12 @@
     {
       "id": "E-205",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Harden MCP roundtrip test helper against transient flakes — add a bounded retry (MCP_CLIENT_RETRIES/TIMEOUT env-tunable, default 3× / 10s, 0.25s backoff) to tests/lib/mcp-client.sh::_mcp_send so a cold node-spawn returning an empty tools/list under CPU load is retried instead of misread as \"tool not advertised\" (exit 3). Root cause of the intermittent advisor_mcp_test \"blueprint parameter optional (got exit 3)\" false failure seen once in a full 108-suite run (3065/3066). Test infrastructure only; success path unchanged.",
       "created_at": "2026-08-04T17:34:43.464Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-08-04T17:38:27.729Z",
+      "summary": "Added a bounded retry to tests/lib/mcp-client.sh::_mcp_send (MCP_CLIENT_RETRIES=3/MCP_CLIENT_TIMEOUT=10s, 0.25s×attempt backoff); transient empty tools/list under load is retried, no …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
