@@ -1175,12 +1175,12 @@
     {
       "id": "E-207",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Fix the second load-sensitive flake: managed_agents_sync_hook_test.sh asserts an async debounced cloud-sync's \"projection fetch failed\" stderr log lands within a blind fixed sleep window (600ms), which misses under CPU load (passes 5/5 in isolation). Replace the blind time.sleep in _call_mcp_capturing_stderr with an adaptive wait that keeps stdin open and polls stderr for a caller-supplied marker, breaking early when it appears (fast common case) with a generous deadline cap under load. Positive-marker cases (S02/S03/S07) pass WAIT_FOR=\"projection fetch failed\"; negative cases (S04/S05, flag-off/add_stamp) keep the full-window wait to confirm the sync does NOT fire. Test-infra only.",
       "created_at": "2026-08-04T19:05:58.172Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-08-04T19:17:18.647Z",
+      "summary": "Fixed managed_agents_sync_hook flake: _call_mcp_capturing_stderr now uses an adaptive stderr poll (WAIT_FOR marker + deadline) keeping stdin open, replacing the blind 600ms sleep tha …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
