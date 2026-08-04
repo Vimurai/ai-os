@@ -19,9 +19,16 @@ _mcp_send() {
   # $1 = server path, $2 = method, $3 = args JSON ("" → no arguments)
   local server="$1" method="$2" args="${3:-}"
   python3 - "$server" "$method" "$args" <<'PY'
-import json, subprocess, sys, time
+import json, os, subprocess, sys, time
 
 server, method, args_raw = sys.argv[1], sys.argv[2], sys.argv[3]
+
+# Transport-flake guard: cold `node` spawns + the initialize→tools handshake
+# occasionally miss under CPU load (parallel suites), returning an empty result
+# that upstream asserts misread as "tool not advertised". Retry the whole
+# roundtrip a few times before declaring failure. Tunable via env for CI.
+ATTEMPTS = max(1, int(os.environ.get("MCP_CLIENT_RETRIES", "3")))
+TIMEOUT_S = float(os.environ.get("MCP_CLIENT_TIMEOUT", "10"))
 
 initialize = {
     "jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -47,30 +54,37 @@ else:
 
 frames = "\n".join(json.dumps(m) for m in (initialize, initialized, call)) + "\n"
 
-proc = subprocess.Popen(
-    ["node", server],
-    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    text=True,
-)
-try:
-    stdout, _ = proc.communicate(frames, timeout=10)
-except subprocess.TimeoutExpired:
-    proc.kill(); print("{}"); sys.exit(3)
-
-# Find the response with id == 2
-for line in stdout.splitlines():
-    line = line.strip()
-    if not line or not line.startswith("{"):
-        continue
+last_exit = 4
+for attempt in range(ATTEMPTS):
+    if attempt:
+        time.sleep(0.25 * attempt)  # brief backoff before a retry
+    proc = subprocess.Popen(
+        ["node", server],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True,
+    )
     try:
-        obj = json.loads(line)
-    except Exception:
+        stdout, _ = proc.communicate(frames, timeout=TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        proc.kill(); proc.wait()
+        last_exit = 3  # transport timeout — retry
         continue
-    if obj.get("id") == 2:
-        print(json.dumps(obj.get("result", {})))
-        sys.exit(0)
 
-print("{}"); sys.exit(4)
+    # Find the response with id == 2
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if obj.get("id") == 2:
+            print(json.dumps(obj.get("result", {})))
+            sys.exit(0)
+    last_exit = 4  # id==2 response missing — retry
+
+print("{}"); sys.exit(last_exit)
 PY
 }
 

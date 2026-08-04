@@ -1145,6 +1145,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-205",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Harden MCP roundtrip test helper against transient flakes — add a bounded retry (MCP_CLIENT_RETRIES/TIMEOUT env-tunable, default 3× / 10s, 0.25s backoff) to tests/lib/mcp-client.sh::_mcp_send so a cold node-spawn returning an empty tools/list under CPU load is retried instead of misread as \"tool not advertised\" (exit 3). Root cause of the intermittent advisor_mcp_test \"blueprint parameter optional (got exit 3)\" false failure seen once in a full 108-suite run (3065/3066). Test infrastructure only; success path unchanged.",
+      "created_at": "2026-08-04T17:34:43.464Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2519,6 +2532,13 @@
       "task_id": "E-204",
       "timestamp": "2026-07-31T12:21:33.144Z",
       "summary": "[TIER_2] E-204 auto-handoff cleared. Deterministic checks pass (only NO_LOG_UPDATE P1 = LOG.md gitignored; no P0/sovereignty — src/shared + test only). `ai add-task` now auto-emits `ai handoff` when a task's execution role (prefix E→engineer / P→architect) differs from the creator (AI_OS_CALLER_ROLE, bootloader-injected: agy→architect, claude→engineer). Reuses emitHandoff (same signal.json FIFO/lock semantics — no drift); deduped via new hasPendingHandoff so a batch coalesces to one wake; fail-open (never fails the persisted add) + opt-out AI_OS_NO_AUTO_HANDOFF=1. Scoped to the CLI path (the shell-native friction agy hits); MCP add_task path intentionally excluded (Claude handoffs via ai-task skill). Tests cli_add_task 28/0 (+9: autoHandoffTarget matrix, live emit, dedup, opt-out, same-role no-op); handoff_cli/control/enforcement 31/41/24 green. Follow-up (Architect): document auto-handoff in interactive-bridge.md. No P0/P1 blockers."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Tier 2 review)",
+      "task_id": "E-205",
+      "timestamp": "2026-08-04T17:35:53.979Z",
+      "summary": "[TIER_2] MCP roundtrip flake fix cleared. tests/lib/mcp-client.sh::_mcp_send now retries the initialize→tools/list roundtrip (MCP_CLIENT_RETRIES=3 / MCP_CLIENT_TIMEOUT=10s, 0.25s×attempt backoff) instead of treating a transient empty result as a false failure — root cause of the 1-in-108 advisor_mcp_test \"blueprint param optional (got exit 3)\" flake (schema is correct: required=[query]). Success path byte-unchanged; only the failure path retries. Proof: advisor 37/0, mcp_behavioral 44/0, 8/8 green under 10-core saturation, full suite re-ran clean 3066/0. Deterministic checks: UNAPPROVED_DEP P1 = known false positive (matches state.json task-record keys id/owner/status); aligner WARN = benign ORPHANED_WORK (test helper not enumerated in architect.md, per E-197 precedent). Test-infra only — no product code, no auth/secrets, no blueprints. No P0/P1 blockers."
     }
   ],
   "deltas": [

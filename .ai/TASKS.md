@@ -171,6 +171,7 @@
   Status: DONE 2026-07-31 — Granted ai-seo skill the mcp__semrush__* tool via allowed-tools (canonical src/agents/skills/ai-seo/SKILL.md + .agents/ + ~/.ai-os mirrors, byte-identical). Confirmed allow-rule wild …[full in LOG.md]
 - [x] E-204: Auto-trigger ai handoff when a new task is created for another role, eliminating manual handoffs
   Status: DONE 2026-07-31 — Auto-handoff on cross-role task creation: `ai add-task` now auto-emits an `ai handoff` bridge signal when the task's execution role (prefix E→engineer / P→architect) differs from the …[full in LOG.md]
+- [ ] E-205: Harden MCP roundtrip test helper against transient flakes — add a bounded retry (MCP_CLIENT_RETRIES/TIMEOUT env-tunable, default 3× / 10s, 0.25s backoff) to tests/lib/mcp-client.sh::_mcp_send so a cold node-spawn returning an empty tools/list under CPU load is retried instead of misread as "tool not advertised" (exit 3). Root cause of the intermittent advisor_mcp_test "blueprint parameter optional (got exit 3)" false failure seen once in a full 108-suite run (3065/3066). Test infrastructure only; success path unchanged. | Tier: 2
 
 ## Architect
 - [x] P-41: Perform a post-migration audit: verify `agy` sign-in, confirm semantic role routing across panes, and validate that the relocated skills are correctly resolved by the `context-invoker`. Acceptance: `agy` is authenticated, `ai-watch` routes correctly, and all tests remain green under the new provider mapping. | Tier: 2
