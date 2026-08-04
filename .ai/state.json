@@ -1158,6 +1158,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-206",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Add node:test unit suites with Node's built-in coverage (no new deps) for pure-logic modules, starting with src/mcp/shared/state-db.js (DAG validation, dep parsing, ID allocation, role mapping). Wire them into the existing bash runner via a tests/suites/*_test.sh wrapper so they contribute to the master pass/fail count. Establishes the deterministic, coverage-measured unit-test layer recommended alongside the existing black-box behavioral suites.",
+      "created_at": "2026-08-04T18:17:30.663Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2539,6 +2552,13 @@
       "task_id": "E-205",
       "timestamp": "2026-08-04T17:35:53.979Z",
       "summary": "[TIER_2] MCP roundtrip flake fix cleared. tests/lib/mcp-client.sh::_mcp_send now retries the initialize→tools/list roundtrip (MCP_CLIENT_RETRIES=3 / MCP_CLIENT_TIMEOUT=10s, 0.25s×attempt backoff) instead of treating a transient empty result as a false failure — root cause of the 1-in-108 advisor_mcp_test \"blueprint param optional (got exit 3)\" flake (schema is correct: required=[query]). Success path byte-unchanged; only the failure path retries. Proof: advisor 37/0, mcp_behavioral 44/0, 8/8 green under 10-core saturation, full suite re-ran clean 3066/0. Deterministic checks: UNAPPROVED_DEP P1 = known false positive (matches state.json task-record keys id/owner/status); aligner WARN = benign ORPHANED_WORK (test helper not enumerated in architect.md, per E-197 precedent). Test-infra only — no product code, no auth/secrets, no blueprints. No P0/P1 blockers."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Tier 2 review)",
+      "task_id": "E-206",
+      "timestamp": "2026-08-04T18:35:36.017Z",
+      "summary": "[TIER_2] node:test unit layer cleared. tests/unit/state-db.test.mjs (26 assertions, real temp-SQLite, no mocks) covers parseDeps/roleFromOwner/validateDag(cycle,self-ref,unknown-dep,depth,dedupe)/nextId+high-water/addTask(OPEN/BLOCKED/validation)/withTransaction/readDependencyGraph — 83% line / 76% branch coverage on state-db.js via Node built-in coverage (no new dep). Wired into master runner via tests/suites/node_unit_test.sh (TAP tally → assert.sh counters); node_unit 26/0 standalone + integrated. Dispositions: PATH_TRAVERSAL P0 = FALSE POSITIVE (line `source \"${SCRIPT_DIR}/../lib/assert.sh\"` is the static helper locator used verbatim by 107 suites, no external input; advisory per E-198); UNAPPROVED_DEP P1 = state.json task-record keys FP; aligner WARN = benign ORPHANED_WORK (test files). Unrelated: managed_agents_sync_hook flaked 2 assertions under full-run load (5/5 in isolation) — pre-existing, not from E-206, logged for follow-up. No real P0/P1."
     }
   ],
   "deltas": [
