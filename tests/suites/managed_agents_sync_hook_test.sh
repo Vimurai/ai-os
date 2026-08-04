@@ -31,24 +31,31 @@ SYNC_MCP="${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
 echo "===== managed_agents_sync_hook_test.sh ====="
 
 # ── Harness: spawn MCP, send one tools/call, capture stdout + stderr ─────────
-# Arguments: $1=tool name, $2=args JSON, $3=wait_ms (debounce + network slack),
-# $4=cwd (where MCP resolves .ai/), $5=env JSON (overrides for the child).
+# Arguments: $1=tool name, $2=args JSON, $3=wait_ms (max debounce + network slack),
+# $4=cwd (where MCP resolves .ai/), $5=env JSON (overrides for the child),
+# $6=wait_for marker (OPTIONAL). When set, wait_ms is a DEADLINE: the harness
+# keeps stdin open (so the unref'd debounce timer + DNS lookup can run) and
+# polls stderr, returning as soon as the marker appears — fast in the common
+# case, tolerant of CPU-load stalls up to the deadline. When empty, the harness
+# waits the FULL window (used by negative cases that assert the marker is absent).
 _call_mcp_capturing_stderr() {
-  local tool="$1" args="$2" wait_ms="$3" cwd="$4" env_json="$5"
+  local tool="$1" args="$2" wait_ms="$3" cwd="$4" env_json="$5" wait_for="${6:-}"
   TOOL="$tool" ARGS="$args" WAIT_MS="$wait_ms" MCP_CWD="$cwd" ENV_JSON="$env_json" \
+  WAIT_FOR="$wait_for" \
   SYNC_MCP="$SYNC_MCP" python3 - <<'PY'
-import json, os, subprocess, sys, time
+import json, os, select, subprocess, sys, time
 
 server   = os.environ["SYNC_MCP"]
 tool     = os.environ["TOOL"]
 args_raw = os.environ["ARGS"]
 wait_ms  = int(os.environ["WAIT_MS"])
+wait_for = os.environ.get("WAIT_FOR", "")
 cwd      = os.environ["MCP_CWD"]
 extra    = json.loads(os.environ["ENV_JSON"] or "{}")
 
 env = {**os.environ, **extra}
 # Don't propagate the harness's own settings.
-for k in ("TOOL", "ARGS", "WAIT_MS", "MCP_CWD", "ENV_JSON", "SYNC_MCP"):
+for k in ("TOOL", "ARGS", "WAIT_MS", "WAIT_FOR", "MCP_CWD", "ENV_JSON", "SYNC_MCP"):
     env.pop(k, None)
 # Strip parent-shell env vars that would let the MCP write outside the
 # sandbox cwd. The test's `extra` dict is re-applied after the strip so a
@@ -78,10 +85,36 @@ proc = subprocess.Popen(
 proc.stdin.write(frames)
 proc.stdin.flush()
 
-# Sleep BEFORE closing stdin so the debounce timer + ENOTFOUND lookup land
-# while the process is still alive. (The timer is unref()'d so it cannot
-# keep the loop open by itself.)
-time.sleep(wait_ms / 1000.0)
+# Keep stdin OPEN during the wait so the debounce timer + ENOTFOUND lookup land
+# while the process is still alive (the timer is unref()'d so it cannot keep the
+# loop open by itself). Instead of a blind fixed sleep — which raced the async
+# "projection fetch failed" log under CPU load (E-207 flake) — drain stderr
+# incrementally and, when a marker is supplied, stop as soon as it appears.
+# wait_ms is a DEADLINE, not a mandatory sleep. Negative cases pass no marker and
+# so wait the full window to confirm the sync did NOT fire.
+err_fd     = proc.stderr.fileno()
+stderr_buf = []
+deadline   = time.monotonic() + wait_ms / 1000.0
+try:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        r, _, _ = select.select([err_fd], [], [], min(remaining, 0.05))
+        if r:
+            chunk = os.read(err_fd, 65536)
+            if chunk:
+                stderr_buf.append(chunk.decode("utf-8", "replace"))
+            elif proc.poll() is not None:
+                break  # EOF + process gone → nothing more will arrive
+        if wait_for and wait_for in "".join(stderr_buf):
+            break
+        if not r and proc.poll() is not None:
+            break  # process exited with no pending stderr
+except Exception:
+    # Belt-and-suspenders: if select/read misbehaves on this platform, fall back
+    # to the original blind sleep so the test still runs.
+    time.sleep(max(0.0, deadline - time.monotonic()))
 
 # Close stdin (EOF ends the server's read loop) then drain the pipes via
 # wait()+read() rather than communicate(). communicate() re-touches the now-
@@ -95,8 +128,18 @@ try:
 except subprocess.TimeoutExpired:
     proc.kill()
     proc.wait()
+# Drain any stderr left after we stopped polling (read the raw fd we've been
+# using, so we don't fight the text wrapper's buffering), then combine.
+try:
+    while True:
+        chunk = os.read(err_fd, 65536)
+        if not chunk:
+            break
+        stderr_buf.append(chunk.decode("utf-8", "replace"))
+except Exception:
+    pass
 stdout = proc.stdout.read()
-stderr = proc.stderr.read()
+stderr = "".join(stderr_buf)
 
 response = None
 for line in stdout.splitlines():
@@ -179,7 +222,7 @@ env_on='{"AI_MANAGED_AGENTS_ENABLE":"1","AI_MANAGED_AGENT_KEY":"abcdef0123456789
 result="$(_call_mcp_capturing_stderr \
   "add_task" \
   '{"owner":"Engineer (Claude)","description":"e74 add_task test","tier":1}' \
-  600 "$LOCAL_DIR" "$env_on")"
+  3000 "$LOCAL_DIR" "$env_on" "projection fetch failed")"
 
 ON_OUT="${SBOX}/on.out"
 ON_ERR="${SBOX}/on.err"
@@ -202,7 +245,7 @@ else
   result="$(_call_mcp_capturing_stderr \
     "update_task_status" \
     "{\"id\":\"${existing_id}\",\"status\":\"DONE\",\"summary\":\"e74 update test\"}" \
-    600 "$LOCAL_DIR" "$env_on")"
+    3000 "$LOCAL_DIR" "$env_on" "projection fetch failed")"
   UPD_OUT="${SBOX}/upd.out"
   UPD_ERR="${SBOX}/upd.err"
   _split_result "$result" "$UPD_OUT" "$UPD_ERR"
@@ -289,7 +332,7 @@ print(json.dumps({
 result="$(_call_mcp_capturing_stderr \
   "add_task" \
   '{"owner":"Engineer (Claude)","description":"e74 framework-routed test","tier":1,"is_framework_task":true}' \
-  600 "$LOCAL_FW_DIR" "$env_fw")"
+  3000 "$LOCAL_FW_DIR" "$env_fw" "projection fetch failed")"
 
 FW_OUT="${SBOX}/fw.out"
 FW_ERR="${SBOX}/fw.err"
