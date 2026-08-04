@@ -1162,12 +1162,12 @@
     {
       "id": "E-206",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Add node:test unit suites with Node's built-in coverage (no new deps) for pure-logic modules, starting with src/mcp/shared/state-db.js (DAG validation, dep parsing, ID allocation, role mapping). Wire them into the existing bash runner via a tests/suites/*_test.sh wrapper so they contribute to the master pass/fail count. Establishes the deterministic, coverage-measured unit-test layer recommended alongside the existing black-box behavioral suites.",
       "created_at": "2026-08-04T18:17:30.663Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-08-04T18:36:00.203Z",
+      "summary": "Added tests/unit/state-db.test.mjs (26 node:test assertions, real temp-SQLite) + tests/suites/node_unit_test.sh wrapper wiring node:test into tests/run.sh. 83% line / 76% branch cove …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
