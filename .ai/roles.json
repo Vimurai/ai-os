@@ -1,7 +1,7 @@
 {
   "roles": {
     "architect": {
-      "provider": "agy",
+      "provider": "claude",
       "pane_identifier": "1"
     },
     "engineer": {

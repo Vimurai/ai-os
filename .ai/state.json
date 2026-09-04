@@ -1184,6 +1184,62 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-208",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 3,
+      "description": "Implement per-pane role binding per .ai/blueprints/role-abstraction.md §Same-Provider Triad (D-054): add the 'ai pane <role>' launcher to src/bin/ai (reads roles.json + providers.json 'launch' adapter, sets AI_OS_PANE_ROLE/AI_OS_CALLER_ROLE in the launch env, forwards optional roles.json 'model', pins the tmux pane title to the role before exec); generate .claude/settings.<role>.json overlays from src/claude/ (env only, NO second SessionStart hook); make hooks/session-start.sh mint the E-129 token for ${AI_OS_PANE_ROLE:-$1} and emit '[AI_OS_ROLE] <role>' as the first additionalContext line; add the Role Resolution clause to ENGINEER.md and ARCHITECT.md; extend hooks/pre-tool-use.sh to match Write|Edit and BLOCK paths outside .ai/ and plans/ when the token-minted role is architect. Acceptance: role_config/role_routing/handoff suites green; new tests for the launcher and the gate; LIVE negative test — Write to src/** from an 'ai pane architect' session is BLOCKED; plain 'claude' launch still mints engineer. Sync ~/.ai-os mirrors.",
+      "created_at": "2026-09-04T21:25:59.177Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-209",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Re-order resolve_pane in src/bin/ai-watch for semantic targets per .ai/blueprints/interactive-bridge.md §Pane Resolution Precedence (D-054): exact pane-title match → roles.json ordinal (E-122 agent-pane rules unchanged) → fuzzy title → window name. Provider targets keep the E-117 order. Acceptance: add regression assertions reproducing the COMM.md 2026-09-04 G3 case (Engineer pane titled '✳ Engineer and architect separation with Claude', Architect pane '✳ Claude Code', mapping architect:claude:1|engineer:claude:0 → target=architect resolves to the ordinal-1 pane); role_routing_test + handoff suites green; mirror synced.",
+      "created_at": "2026-09-04T21:25:59.236Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-210",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Make advisor-mcp ask_architect provider-aware per .ai/blueprints/role-abstraction.md §Same-Provider Triad (D-054): resolve architect.provider from .ai/roles.json and build argv from the providers.json 'print_mode' template ({rulefile}={ARCHITECT.md}, {prompt}); strip 'child_env_unset' vars (CLAUDECODE) from the child env; keep the read-only invariant (print mode, no permission bypass); fallback to agy when roles.json is absent. Extend src/templates providers.json with launch/print_mode/child_env_unset for claude/agy/gemini. Acceptance: advisor_mcp_test covers claude + agy argv shapes and the nested-session env strip; live smoke 'ask_architect' under architect.provider=claude returns a ruling; mirror synced.",
+      "created_at": "2026-09-04T21:25:59.289Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-211",
+      "owner": "Engineer (Claude)",
+      "status": "BLOCKED",
+      "tier": 1,
+      "description": "Deprecate legacy provider targets in src/bin/ai-watch resolve_pane per .ai/blueprints/role-abstraction.md §Same-Provider Triad (D-054): emit a stderr deprecation warning for target 'claude'/'gemini' (removal v4.0) and fail closed (return 1 with hint 'use architect/engineer') when .ai/roles.json maps both roles to that provider. Acceptance: role_routing_test asserts the warning and the same-provider ambiguity path; handoff_control_test green; mirror synced.",
+      "created_at": "2026-09-04T21:25:59.343Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [
+        "E-209"
+      ],
+      "ready": false,
+      "blocked_by": [
+        "E-209"
+      ]
     }
   ],
   "stamps": [
@@ -2586,6 +2642,13 @@
       "task_id": "E-207",
       "timestamp": "2026-08-04T19:16:55.292Z",
       "summary": "[TIER_2] managed_agents_sync_hook flake fix cleared. Root cause: _call_mcp_capturing_stderr used a blind fixed time.sleep (600ms) to catch an async debounced cloud-sync's \"projection fetch failed\" stderr log, but the unresolvable-host DNS failure takes ~1-2s to log — so under CPU load the marker missed the window (2 false fails: S02 lines 189/190; passed 5/5 in isolation). Fix: adaptive wait — keep stdin open (so the unref'd debounce timer + DNS lookup run) and poll stderr via select/os.read, breaking as soon as a caller-supplied WAIT_FOR marker appears; wait_ms becomes a DEADLINE (positive cases S02/S03/S07 pass marker + 3000ms cap; negative cases S04/S05 keep the full-window wait to assert the sync does NOT fire). Fail-open to a plain sleep if select misbehaves. Proof: 23/0 isolation + 5/5 under 10-core saturation; full suite 3092/0 (was 3090/2). UNAPPROVED_DEP P1 = state.json task-record keys FP; aligner WARN = benign ORPHANED_WORK (test file). Test-infra only. No real P0/P1."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-208",
+      "timestamp": "2026-09-04T21:28:07.384Z",
+      "summary": "Proxy-commit of Architect D-054 ratification (.ai/ only: DECISIONS, TASKS, architect.md, role-abstraction.md, interactive-bridge.md, roles.json, state.json). Docs/state only, zero src/ change; §35 proxy-commit per explicit Architect order in the E-208 handoff."
     }
   ],
   "deltas": [
