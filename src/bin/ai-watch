@@ -254,6 +254,36 @@ _pass_ordinal() {
   return 1
 }
 
+# _role_provider <role> → the provider string mapped to that role (via ROLES_MAPPING,
+# else the D-050 default). Empty when the role is unknown.
+_role_provider() {
+  local pp; pp="$(_role_to_provider_pane "$1")" || return 1
+  printf '%s' "${pp%%:*}"
+}
+
+# _warn_legacy_target <target> — E-211 (D-054, role-abstraction.md §Same-Provider Triad).
+# Legacy PROVIDER targets ("claude"/"gemini") predate semantic roles and carry fixed
+# ordinals, so they cannot express which pane is meant once BOTH roles run on the same
+# provider — exactly the all-Claude Triad D-054 ratified. Behaviour:
+#   - always warn on stderr (scheduled for removal in v4.0);
+#   - FAIL CLOSED (return 1) when both roles map to this provider, rather than silently
+#     routing to the fixed ordinal and delivering an Architect handoff to the Engineer.
+# Fail-closed is the point: a lost handoff is recoverable and visible; a MISROUTED one
+# silently corrupts the ping-pong loop (that is gap G3, and it cost two handoffs).
+_warn_legacy_target() {
+  local target="$1" arch eng
+  printf 'ai-watch: WARNING — target "%s" is a legacy provider name and is DEPRECATED (removal: v4.0). Use the semantic roles "architect" / "engineer" instead.\n' \
+    "$target" >&2
+  arch="$(_role_provider architect 2>/dev/null || true)"
+  eng="$(_role_provider engineer  2>/dev/null || true)"
+  if [[ -n "$arch" && "$arch" == "$target" && "$eng" == "$target" ]]; then
+    printf 'ai-watch: ERROR — target "%s" is AMBIGUOUS: .ai/roles.json maps BOTH architect and engineer to provider "%s". Refusing to guess. Hint: use "architect" or "engineer".\n' \
+      "$target" "$target" >&2
+    return 1
+  fi
+  return 0
+}
+
 # resolve_pane <target> → prints the pane id, or nothing.
 #
 # E-209 / D-054 (interactive-bridge.md §Pane Resolution Precedence) — the pass ORDER
@@ -284,8 +314,8 @@ resolve_pane() {
       local mapped; mapped="$(_role_to_provider_pane "$target")" || return 1
       want_idx="${mapped##*:}"
       ;;
-    claude) want_idx=0 ;;
-    gemini) want_idx=1 ;;
+    claude) _warn_legacy_target "$target" || return 1; want_idx=0 ;;
+    gemini) _warn_legacy_target "$target" || return 1; want_idx=1 ;;
     *) return 1 ;;
   esac
   # Defensive: want_idx feeds `[[ -eq ]]`, which aborts bash 3.2 under `set -u` on a

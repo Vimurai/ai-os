@@ -139,13 +139,56 @@ assert_status 1 "E-209.06: no agent pane at the ordinal and no title/window hit 
 
 # PROVIDER targets keep the historical E-117 order (fuzzy BEFORE ordinal).
 PANES_LEGACY='%x\t1\tMac.lan\tWindow\t/p\t2.1.261\n%y\t2\tclaude-code\tWindow\t/p\t2.1.261\n'
+# Non-colliding map (only engineer is claude) — E-211 fails closed on a colliding one.
 assert_contains "E-209.07: legacy 'claude' target keeps E-117 order — fuzzy title wins over ordinal 0" "%y" \
-  "$(_resolve_with "$MAP_G3" "$PANES_LEGACY" claude)"
+  "$(_resolve_with 'architect:agy:1|engineer:claude:0' "$PANES_LEGACY" claude 2>/dev/null)"
 
 # TIER-B degrade (no command column) still works through the re-ordered path.
 PANES_TIERB='%p0\t1\tMac.lan\tWindow\t/p\t\n%p1\t2\tMac.lan\tWindow\t/p\t\n'
 assert_contains "E-209.08: TIER-B degrade intact — architect → ordinal 1 with no command column" "%p1" \
   "$(_resolve_with "$MAP_G3" "$PANES_TIERB" architect)"
+
+
+# ── E-211 (D-054): legacy provider targets deprecated + ambiguity fail-closed ──
+# A legacy provider target carries a FIXED ordinal, so once both roles run on the same
+# provider it cannot express which pane is meant. Warn always; refuse to guess when
+# ambiguous (a misrouted handoff is worse than a refused one — that was gap G3).
+_stderr_of() {  # <roles_mapping> <panes> <target> → stderr only
+  local rm="$1" panes="$2" tgt="$3"
+  ( source "$WATCH" 2>/dev/null
+    ROLES_MAPPING="$rm"
+    _project_panes() { printf '%b' "$panes"; }
+    resolve_pane "$tgt" ) 2>&1 >/dev/null
+}
+MAP_DUAL_CLAUDE='architect:claude:1|engineer:claude:0'
+MAP_MIXED='architect:agy:1|engineer:claude:0'
+
+assert_contains "E-211.01: 'claude' target warns DEPRECATED on stderr" "DEPRECATED" \
+  "$(_stderr_of "$MAP_MIXED" "$PANES_LEGACY" claude)"
+assert_contains "E-211.01b: deprecation warning names the removal version" "v4.0" \
+  "$(_stderr_of "$MAP_MIXED" "$PANES_LEGACY" claude)"
+assert_contains "E-211.02: 'gemini' target warns DEPRECATED on stderr" "DEPRECATED" \
+  "$(_stderr_of "$MAP_MIXED" "$PANES_AB" gemini)"
+
+# Same-provider ambiguity → fail closed with an actionable hint.
+assert_contains "E-211.03a: dual-claude makes 'claude' AMBIGUOUS" "AMBIGUOUS" \
+  "$(_stderr_of "$MAP_DUAL_CLAUDE" "$PANES_LEGACY" claude)"
+assert_contains "E-211.03b: ambiguity error hints at the semantic roles" 'use "architect" or "engineer"' \
+  "$(_stderr_of "$MAP_DUAL_CLAUDE" "$PANES_LEGACY" claude)"
+assert_status 1 "E-211.03c: ambiguous legacy target returns 1 (fails closed)" \
+  bash -c "source '$WATCH' 2>/dev/null; ROLES_MAPPING='$MAP_DUAL_CLAUDE'; _project_panes() { printf '%b' \"$PANES_LEGACY\"; }; resolve_pane claude 2>/dev/null"
+
+# Fail-closed must print NOTHING on stdout — a caller must never get a pane id.
+assert_not_contains "E-211.03d: ambiguous legacy target emits no pane id on stdout" "%" \
+  "$(_resolve_with "$MAP_DUAL_CLAUDE" "$PANES_LEGACY" claude 2>/dev/null)"
+
+# Mixed-provider map is NOT ambiguous — legacy target still resolves (warn only).
+assert_status 0 "E-211.04: non-colliding map keeps the legacy target working" \
+  bash -c "source '$WATCH' 2>/dev/null; ROLES_MAPPING='$MAP_MIXED'; _project_panes() { printf '%b' \"$PANES_LEGACY\"; }; resolve_pane claude 2>/dev/null"
+
+# Semantic targets are never warned about and never fail closed under dual-claude.
+assert_not_contains "E-211.05: semantic 'architect' target emits no deprecation warning" "DEPRECATED" \
+  "$(_stderr_of "$MAP_DUAL_CLAUDE" "$PANES_G3" architect)"
 
 
 assert_summary
