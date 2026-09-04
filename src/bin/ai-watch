@@ -192,26 +192,93 @@ _role_to_provider_pane() {
   esac
 }
 
-# resolve_pane <target> → prints the pane id, or nothing. Resolution order runs
-# most-specific → most-conventional, per interactive-bridge.md §API (E-117/E-122):
-#   1. exact pane-title match     (case-sensitive fast path)
-#   2. fuzzy pane-title match     (case-insensitive substring, e.g. "claude-code")
-#   3. window-name match          (case-insensitive substring — exact + fuzzy)
-#   4. conventional ordinal among AGENT panes only (E-122): claude→1st, gemini→2nd,
-#      ordered by pane-index (pane-id tiebreak) so it is deterministic and base-
-#      index agnostic. Shells are excluded via _is_agent_cmd, so "gemini" can never
-#      resolve to a bash/zsh pane. TIER B: if no agent pane is identifiable (e.g.
-#      the command column is unavailable), degrade to the all-panes ordinal so
-#      resolution still works.
+# ── Resolution passes (E-209) ─────────────────────────────────────────────────
+# Each pass prints a pane id and returns 0 on a hit, or returns 1. They are kept
+# as separate helpers so resolve_pane can ORDER them differently per target class
+# without duplicating the matching logic (interactive-bridge.md §Pane Resolution
+# Precedence, D-054).
+
+# _pass_exact_title <target> — case-sensitive exact pane-title match.
+_pass_exact_title() {
+  local target="$1" pid pidx ptitle pwin ppath pcmd
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+    [[ "$ptitle" == "$target" ]] && { printf '%s' "$pid"; return 0; }
+  done < <(_project_panes)
+  return 1
+}
+
+# _pass_fuzzy_title <lc_target> — case-insensitive pane-title substring.
+_pass_fuzzy_title() {
+  local lc_target="$1" pid pidx ptitle pwin ppath pcmd
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+    case "$(_lc "$ptitle")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
+  done < <(_project_panes)
+  return 1
+}
+
+# _pass_window <lc_target> — case-insensitive window-name substring.
+_pass_window() {
+  local lc_target="$1" pid pidx ptitle pwin ppath pcmd
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+    case "$(_lc "$pwin")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
+  done < <(_project_panes)
+  return 1
+}
+
+# _pass_ordinal <want_idx> (E-122, unchanged semantics) — conventional ordinal among
+# AGENT panes only, ordered by pane-index with a pane-id tiebreak so it is
+# deterministic and base-index agnostic. Shells are excluded via _is_agent_cmd, so a
+# handoff can never land in bash/zsh. has_cmd records whether ANY pane reported a
+# foreground command, so the TIER B degrade fires only when the command column is
+# unavailable (older tmux / test mocks) — never when commands are present but none
+# qualify as an agent.
+_pass_ordinal() {
+  local want_idx="$1" ordinal has_cmd pid pidx ptitle pwin ppath pcmd
+  has_cmd=0
+  ordinal=0
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+    [[ -n "$pcmd" ]] && has_cmd=1
+    _is_agent_cmd "$pcmd" || continue
+    if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
+    ordinal=$((ordinal + 1))
+  done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
+
+  # TIER B degrade: ONLY when no pane reported a command.
+  if [[ "$has_cmd" -eq 0 ]]; then
+    ordinal=0
+    while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+      if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
+      ordinal=$((ordinal + 1))
+    done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
+  fi
+  return 1
+}
+
+# resolve_pane <target> → prints the pane id, or nothing.
+#
+# E-209 / D-054 (interactive-bridge.md §Pane Resolution Precedence) — the pass ORDER
+# now depends on the target class, because explicit configuration must beat heuristics:
+#
+#   SEMANTIC targets (architect|engineer), mapped via .ai/roles.json:
+#     1. exact pane-title match   (`ai pane <role>` pins this — deterministic opt-in)
+#     2. roles.json ordinal       (E-122 agent-pane rules unchanged — the safety net)
+#     3. fuzzy pane-title substring   } last resort only, reached solely when no agent
+#     4. window-name substring        } pane exists at the ordinal (pane not running yet)
+#
+#   PROVIDER targets (claude|gemini) keep the historical E-117 order:
+#     1. exact title → 2. fuzzy title → 3. window name → 4. conventional ordinal
+#   (deprecated in E-211; see _warn_legacy_target).
+#
+# WHY (COMM.md 2026-09-04, gap G3): under the E-117 order a Claude-authored pane title
+# — Claude Code renames the pane to the live conversation summary — containing the word
+# "architect" made the fuzzy pass swallow an Architect handoff into the ENGINEER pane.
+# Reproduced live twice. A same-provider Triad makes this the default failure mode, since
+# BOTH panes carry drifting summary titles and the ordinal is the only real disambiguator.
 resolve_pane() {
-  local target="$1" want_idx="" lc_target ordinal has_cmd pid pidx ptitle pwin ppath pcmd
-  # E-137 (role-abstraction.md): a semantic role (architect/engineer) resolves its
-  # pane ordinal via .ai/roles.json (ROLES_MAPPING), falling back to the D-050 default
-  # map (architect=agy:1, engineer=claude:0). Provider-name targets keep their fixed
-  # ordinals. The title/window passes still match on the target string, so panes
-  # titled by role ("engineer"/"architect") OR provider ("claude"/"gemini") both
-  # resolve; otherwise the pane_identifier ordinal (Pass 4) routes — disambiguating
-  # two panes of the SAME provider (the dual-Claude case the blueprint calls out).
+  local target="$1" want_idx="" lc_target
+  # E-137 (role-abstraction.md): a semantic role resolves its pane ordinal via
+  # .ai/roles.json (ROLES_MAPPING), falling back to the D-050 default map
+  # (architect=agy:1, engineer=claude:0). Provider-name targets keep fixed ordinals.
   case "$target" in
     architect|engineer)
       local mapped; mapped="$(_role_to_provider_pane "$target")" || return 1
@@ -227,43 +294,22 @@ resolve_pane() {
   case "$want_idx" in ''|*[!0-9]*) return 1 ;; esac
   lc_target="$(_lc "$target")"
 
-  # Pass 1: exact pane-title match.
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
-    [[ "$ptitle" == "$target" ]] && { printf '%s' "$pid"; return 0; }
-  done < <(_project_panes)
-
-  # Pass 2: fuzzy pane-title match (case-insensitive substring).
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
-    case "$(_lc "$ptitle")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
-  done < <(_project_panes)
-
-  # Pass 3: window-name match (case-insensitive substring covers exact + fuzzy).
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
-    case "$(_lc "$pwin")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
-  done < <(_project_panes)
-
-  # Pass 4 (E-122): conventional ordinal among AGENT panes only — shells excluded.
-  # has_cmd records whether ANY pane reported a foreground command, so TIER B only
-  # degrades when the command column is unavailable — never misroutes to a shell.
-  has_cmd=0
-  ordinal=0
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
-    [[ -n "$pcmd" ]] && has_cmd=1
-    _is_agent_cmd "$pcmd" || continue
-    if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
-    ordinal=$((ordinal + 1))
-  done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
-
-  # TIER B degrade: ONLY when no pane reported a command (older tmux / test mocks
-  # without a command field). When commands ARE present but none qualify as an
-  # agent, return nothing rather than route a handoff into a shell.
-  if [[ "$has_cmd" -eq 0 ]]; then
-    ordinal=0
-    while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
-      if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
-      ordinal=$((ordinal + 1))
-    done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
-  fi
+  case "$target" in
+    architect|engineer)
+      # D-054 order — configuration before heuristics.
+      _pass_exact_title "$target"  && return 0
+      _pass_ordinal     "$want_idx" && return 0
+      _pass_fuzzy_title "$lc_target" && return 0
+      _pass_window      "$lc_target" && return 0
+      ;;
+    *)
+      # E-117 order — unchanged for legacy provider targets.
+      _pass_exact_title "$target"  && return 0
+      _pass_fuzzy_title "$lc_target" && return 0
+      _pass_window      "$lc_target" && return 0
+      _pass_ordinal     "$want_idx" && return 0
+      ;;
+  esac
 
   return 1
 }
