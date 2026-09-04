@@ -1,23 +1,25 @@
 #!/usr/bin/env node
 /**
  * advisor-mcp — AI-OS MCP Server
- * Agent-to-Agent (A2A) RPC bridge: Claude (Executor) queries the Architect (agy)
- * mid-execution for synchronous architectural rulings.
+ * Agent-to-Agent (A2A) RPC bridge: the Engineer queries the Architect mid-execution
+ * for synchronous architectural rulings.
  *
  * Blueprint: .ai/blueprints/interop.md §1
  *
- * Provider: the Architect persona is `agy` (Antigravity) per D-050. The legacy
- * Gemini CLI was retired (IneligibleTierError — individual tier deprecated), so
- * this bridge now invokes `agy --print` (headless print mode) instead of
- * `gemini -p`. The queue/handoff loop (ai handoff / handoff_control) is the
- * ASYNC channel; this MCP is the SYNCHRONOUS one for mid-task rulings.
+ * Provider: RESOLVED per call, never hardcoded (E-210 / D-054). `.ai/roles.json`
+ * names the provider bound to the `architect` role and `.ai/providers.json` supplies
+ * that provider's `print_mode` argv template, so an all-Claude Triad consults a Claude
+ * Architect and an agy Triad consults agy. Default when unconfigured: agy (D-050).
+ * The legacy Gemini CLI was retired (IneligibleTierError — individual tier deprecated).
+ * The queue/handoff loop (ai handoff / handoff_control) is the ASYNC channel; this MCP
+ * is the SYNCHRONOUS one for mid-task rulings.
  *
  * Constraints (per blueprint):
  *   - The Architect is invoked READ-ONLY — it cannot write files or mutate state
  *     (print mode carries no permission grant, so any tool attempt just times out
  *     to the graceful-degradation fallback rather than mutating the tree).
  *   - All queries and rulings are logged to .ai/LOG.md as [A2A_RULING].
- *   - The Architect is invoked via `agy --print` CLI (headless, no interactive session).
+ *   - The Architect is invoked in the provider's headless print mode (no interactive session).
  *   - architect.md is pre-loaded as context for every query.
  *
  * Tools:
@@ -41,11 +43,17 @@ import { execFileSync } from "child_process";
 import { readFileSync, appendFileSync, existsSync } from "fs";
 import { resolve, join } from "path";
 import { createLogger } from "../shared/logger.js";
+import {
+  roleProvider,
+  providerAdapter,
+  buildArgv,
+  childEnv,
+} from "../../shared/provider-adapter.mjs";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SERVICE = "advisor-mcp";
-const VERSION = "1.1.0"; // 1.1.0: A2A bridge re-pointed gemini CLI → agy --print (D-050)
+const VERSION = "1.2.0"; // 1.2.0: provider-aware bridge via roles.json × providers.json (E-210/D-054)
 
 // Resolve project root relative to this file's install location.
 // Supports both src/ (dev) and ~/.ai-os/mcp/ (installed) paths.
@@ -60,7 +68,9 @@ function findProjectRoot() {
 }
 
 const PROJECT_ROOT = findProjectRoot();
+const AI_DIR = join(PROJECT_ROOT, ".ai");
 const ARCHITECT_MD = join(PROJECT_ROOT, ".ai", "architect.md");
+const ARCHITECT_RULEFILE = join(PROJECT_ROOT, "ARCHITECT.md");
 const LOG_MD = join(PROJECT_ROOT, ".ai", "LOG.md");
 const BLUEPRINTS_DIR = join(PROJECT_ROOT, ".ai", "blueprints");
 
@@ -105,7 +115,7 @@ function logRuling(query, ruling, blueprintLoaded) {
 }
 
 /**
- * Build the prompt for the Architect (agy).
+ * Build the prompt for the Architect.
  * Pre-loads architect.md and optionally a domain blueprint as context.
  * The Architect is instructed to respond read-only — no file mutations.
  */
@@ -116,7 +126,7 @@ function buildPrompt(query, blueprintContent, blueprintName) {
     : "";
 
   return [
-    "You are the Principal Architect (agy) in the AI-OS Triad.",
+    "You are the Principal Architect in the AI-OS Triad.",
     "The Engineer (Claude) has a mid-execution question requiring an architectural ruling.",
     "Your role is STRICTLY READ-ONLY: provide a definitive ruling but do NOT write files,",
     "mutate state, or issue implementation instructions beyond answering the query.",
@@ -136,30 +146,61 @@ function buildPrompt(query, blueprintContent, blueprintName) {
 }
 
 /**
- * Invoke the Architect (agy) CLI in headless print mode.
- * Uses `agy --print <prompt>` — read-only by construction: print mode carries no
- * tool-permission grant (no --dangerously-skip-permissions), so any write attempt
- * blocks and times out to the fallback instead of mutating the tree. Replaces the
- * retired Gemini CLI (D-050; individual-tier deprecation → IneligibleTierError).
+ * Invoke the Architect CLI in headless print mode.
+ *
+ * E-210 (D-054): the executable and its argv are RESOLVED, never hardcoded —
+ * `.ai/roles.json` names the provider bound to the `architect` role, and that
+ * provider's `print_mode` template in `.ai/providers.json` supplies the argv.
+ * A same-provider (all-Claude) Triad therefore consults a Claude Architect; an
+ * agy Triad still consults agy. Absent config falls back to the D-050 default (agy).
+ *
+ * READ-ONLY INVARIANT (unchanged): print mode carries no tool-permission grant and
+ * we never pass a permission-bypass flag, so a write attempt by the Architect blocks
+ * and times out into the graceful-degradation fallback rather than mutating the tree.
  */
 function invokeArchitect(prompt) {
-  // Explicit env allowlist — never spread process.env. Spreading would leak
-  // host secrets (AWS/GCP creds, GitHub tokens, etc.) to the spawned agy
-  // process. Same security pattern enforced in computer-use-mcp (D-002).
-  // agy authenticates via Antigravity OAuth stored under $HOME, so PATH + HOME
-  // are the only vars it needs — no API-key env is passed through.
-  const allowedEnv = {
+  const provider = roleProvider(AI_DIR, "architect") || "agy";
+  const adapter = providerAdapter(AI_DIR, provider);
+
+  // Explicit env ALLOWLIST — never spread process.env. Spreading would leak host
+  // secrets (AWS/GCP creds, GitHub tokens) to the spawned child; same rule as
+  // computer-use-mcp (D-002).
+  //
+  // USER is required, not optional (measured E-210): a `claude` child launched with
+  // only PATH+HOME exits "Not logged in - Please run /login", because it resolves its
+  // stored login against the account identity. Bisected against the live CLI — USER
+  // alone fixes it; SHELL/LOGNAME/TMPDIR/XPC_SERVICE_NAME do not. It carries no
+  // secret (it is the account name, already implicit in HOME), so the allowlist stays
+  // secret-free. agy is unaffected. NOTE for the Architect: role-abstraction.md
+  // §Security states "PATH + HOME"; that is measurably insufficient for a claude
+  // Architect and the blueprint line wants amending.
+  const baseEnv = {
     PATH: process.env.PATH ?? "",
     HOME: process.env.HOME ?? "",
+    USER: process.env.USER ?? "",
   };
+  // child_env_unset (defence-in-depth): Claude Code refuses to nest while it sees an
+  // inherited CLAUDECODE=1. The allowlist above already excludes it; this keeps the
+  // guarantee if the allowlist ever grows.
+  const env = childEnv(baseEnv, adapter);
 
-  // --print-timeout is agy's own bounded wait (Go duration); keep it below the
-  // execFileSync hard timeout so agy self-terminates with a clean message first.
-  const output = execFileSync("agy", ["--print-timeout", "90s", "-p", prompt], {
+  // A claude Architect needs ARCHITECT.md appended, else it boots the ENGINEER
+  // persona from CLAUDE.md (gap G1). Templates that omit {rulefile} ignore it.
+  const args = buildArgv(adapter.print_mode, {
+    prompt,
+    rulefile: existsSync(ARCHITECT_RULEFILE) ? ARCHITECT_RULEFILE : "",
+  });
+  if (args.length === 0) {
+    throw new Error(
+      `provider "${provider}" has no print_mode argv template in .ai/providers.json`
+    );
+  }
+
+  const output = execFileSync(provider, args, {
     encoding: "utf8",
     timeout: 100_000,
     maxBuffer: 1024 * 1024, // 1MB
-    env: allowedEnv,
+    env,
   });
   return output.trim();
 }
@@ -178,7 +219,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "ask_architect",
       description: [
-        "Sends an architectural query to the Architect (agy, A2A bridge) and returns a definitive ruling.",
+        "Sends an architectural query to the Architect (A2A bridge; provider resolved from .ai/roles.json) and returns a definitive ruling.",
         "Pre-loads .ai/architect.md as context. Optionally loads a domain blueprint for deeper context.",
         "All queries and rulings are logged to .ai/LOG.md as [A2A_RULING] for auditability.",
         "The Architect runs READ-ONLY — it cannot write files or mutate state.",
@@ -192,7 +233,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           query: {
             type: "string",
             description:
-              "The architectural question to ask the Architect (agy). Be specific — include the task ID, " +
+              "The architectural question to ask the Architect. Be specific — include the task ID, " +
               "the ambiguity, and the two options you're choosing between.",
           },
           blueprint: {
@@ -279,8 +320,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     };
   } catch (err) {
     const latency_ms = Date.now() - start;
-    log("error", "ask_architect", "Architect (agy) invocation failed", {
+    const failedProvider = (() => {
+      try { return roleProvider(AI_DIR, "architect") || "agy"; } catch { return "agy"; }
+    })();
+    log("error", "ask_architect", "Architect invocation failed", {
       latency_ms,
+      provider: failedProvider,
       error: err.message,
     });
 
@@ -291,11 +336,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           type: "text",
           text: JSON.stringify(
             {
-              error: `Architect (agy) unavailable: ${err.message}`,
+              error: `Architect (${failedProvider}) unavailable: ${err.message}`,
               query,
+              provider: failedProvider,
               fallback:
-                "advisor-mcp could not reach the Architect (agy). " +
-                "Check that `agy` (Antigravity) CLI is installed and authenticated (`agy` — re-auth if the Antigravity token lapsed). " +
+                `advisor-mcp could not reach the Architect via provider "${failedProvider}" ` +
+                "(resolved from .ai/roles.json). Check that the provider CLI is installed and " +
+                "signed in (agy: re-auth if the Antigravity login lapsed; claude: check ~/.claude). " +
                 "Proceed with your best judgement or hand off to the Architect via `ai handoff architect` for an async ruling.",
             },
             null,

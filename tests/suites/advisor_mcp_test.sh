@@ -40,8 +40,13 @@ echo ""
 echo "  [T-A2A-03] Architect (agy) read-only constraint"
 
 # D-050: bridge re-pointed from the retired Gemini CLI to `agy --print`.
-assert_status 0 "agy CLI invoked (not the retired gemini CLI)" \
+# E-210 (D-054): the executable is RESOLVED from .ai/roles.json, never a literal.
+assert_status 1 "no hardcoded agy literal in execFileSync (E-210)" \
   grep -q 'execFileSync("agy"' "$SERVER"
+assert_status 0 "architect provider resolved from roles.json" \
+  grep -q 'roleProvider(AI_DIR, "architect")' "$SERVER"
+assert_status 0 "argv built from the providers.json print_mode template" \
+  grep -q 'buildArgv(adapter.print_mode' "$SERVER"
 
 assert_status 1 "gemini CLI no longer spawned (execFileSync gemini)" \
   grep -q 'execFileSync("gemini"' "$SERVER"
@@ -57,8 +62,12 @@ assert_status 1 "architect not invoked with --write flag" \
 assert_status 1 "architect not invoked with --edit flag" \
   grep -q '"--edit"' "$SERVER"
 
-assert_status 0 "architect invoked with -p (print/prompt) flag" \
-  grep -q '"-p"' "$SERVER"
+assert_status 0 "print mode (-p) carried by every providers.json print_mode template" \
+  bash -c "python3 - <<'PYEOF'
+import json,sys
+d=json.load(open('src/templates/providers.json'))['providers']
+sys.exit(0 if all('-p' in v.get('print_mode',[]) for v in d.values()) else 1)
+PYEOF"
 
 assert_status 0 "execFileSync used (not execSync — prevents shell injection)" \
   grep -q 'execFileSync' "$SERVER"
@@ -139,7 +148,7 @@ assert_status 0 "fallback message provided when Architect unavailable" \
   grep -q 'fallback' "$SERVER"
 
 assert_status 0 "server does not crash on Architect failure (catch block present)" \
-  grep -q 'Architect (agy) unavailable' "$SERVER"
+  grep -q 'Architect (\${failedProvider}) unavailable' "$SERVER"
 
 # ── T-A2A-09: Project root discovery ─────────────────────────────────────────
 echo ""
@@ -192,5 +201,72 @@ import { readFileSync } from 'fs';
 const m = JSON.parse(readFileSync('${REPO_ROOT}/.mcp.json', 'utf8'));
 if (!m.mcpServers['advisor-mcp']) process.exit(1);
 JS
+
+# ── T-A2A-12 (E-210 / D-054): provider-aware argv + nested-session env strip ──
+# The bridge must build argv from .ai/providers.json rather than a vendor literal, so
+# an all-Claude Triad consults a CLAUDE Architect and an agy Triad still consults agy.
+echo "  [T-A2A-12] Provider-aware bridge (E-210)"
+
+_argv() {  # <provider> <key> [model] → JSON argv from the real shared module
+  node --input-type=module -e "
+import { providerAdapter, buildArgv } from './src/shared/provider-adapter.mjs';
+const a = providerAdapter('.ai', '$1');
+console.log(JSON.stringify(buildArgv(a['$2'], { prompt: 'Q', rulefile: 'ARCHITECT.md', role: 'architect', model: '${3:-}' })));
+" 2>/dev/null
+}
+
+assert_contains "T-A2A-12.01: claude print_mode appends ARCHITECT.md (else it boots ENGINEER — gap G1)" \
+  '"--append-system-prompt-file","ARCHITECT.md"' "$(_argv claude print_mode)"
+assert_contains "T-A2A-12.02: claude print_mode is read-only print mode" '"-p"' "$(_argv claude print_mode)"
+assert_not_contains "T-A2A-12.03: claude print_mode carries NO permission bypass" \
+  "dangerously" "$(_argv claude print_mode)"
+assert_contains "T-A2A-12.04: agy print_mode keeps its bounded --print-timeout" \
+  '"--print-timeout","90s"' "$(_argv agy print_mode)"
+assert_not_contains "T-A2A-12.05: agy print_mode does not take a rulefile flag" \
+  "append-system-prompt-file" "$(_argv agy print_mode)"
+
+# Launch argv (consumed by `ai pane`, E-208) — the {model} pair must vanish when unset.
+assert_contains "T-A2A-12.06: claude launch forwards a configured model" \
+  '"--model","claude-opus-5"' "$(_argv claude launch claude-opus-5)"
+assert_not_contains "T-A2A-12.07: unset model drops the whole --model pair (no dangling flag)" \
+  "--model" "$(_argv claude launch)"
+assert_contains "T-A2A-12.08: claude launch selects the per-role settings overlay" \
+  '".claude/settings.architect.json"' "$(_argv claude launch)"
+
+# Nested-session guard: Claude Code refuses to nest while it inherits CLAUDECODE=1.
+_child_env() {
+  node --input-type=module -e "
+import { providerAdapter, childEnv } from './src/shared/provider-adapter.mjs';
+console.log(JSON.stringify(childEnv({ PATH: '/p', HOME: '/h', CLAUDECODE: '1' }, providerAdapter('.ai', '$1'))));
+" 2>/dev/null
+}
+assert_not_contains "T-A2A-12.09: CLAUDECODE stripped from a claude child env (nested-session guard)" \
+  "CLAUDECODE" "$(_child_env claude)"
+assert_contains "T-A2A-12.10: PATH survives the strip" "PATH" "$(_child_env claude)"
+assert_contains "T-A2A-12.11: HOME survives the strip" "HOME" "$(_child_env claude)"
+
+# Env must remain an explicit allowlist — never a process.env spread (D-002).
+assert_status 1 "T-A2A-12.12: process.env is never spread into the child" \
+  grep -qE '\.\.\.process\.env' "$SERVER"
+assert_status 0 "T-A2A-12.13: child env routed through childEnv (adapter strip applied)" \
+  grep -q 'childEnv(baseEnv, adapter)' "$SERVER"
+
+# USER is load-bearing for a claude Architect: with only PATH+HOME the child exits
+# "Not logged in - Please run /login" (bisected against the live CLI, E-210). It is an
+# account name, not a secret, so the allowlist stays secret-free.
+assert_status 0 "T-A2A-12.13b: USER present in the env allowlist (claude login resolution)" \
+  grep -qE 'USER: process\.env\.USER' "$SERVER"
+assert_status 0 "T-A2A-12.13c: PATH still allowlisted" \
+  grep -qE 'PATH: process\.env\.PATH' "$SERVER"
+assert_status 0 "T-A2A-12.13d: HOME still allowlisted" \
+  grep -qE 'HOME: process\.env\.HOME' "$SERVER"
+
+# Fallback to the D-050 default when roles.json is absent.
+assert_contains "T-A2A-12.14: unconfigured architect role falls back to agy (D-050)" "agy" \
+  "$(node --input-type=module -e "
+import { roleProvider } from './src/shared/provider-adapter.mjs';
+console.log(roleProvider('/nonexistent-dir', 'architect'));
+" 2>/dev/null)"
+
 
 assert_summary
