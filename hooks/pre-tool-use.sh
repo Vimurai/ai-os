@@ -14,6 +14,18 @@
 # present but CRASHES, `--check` itself exits 2 (FAIL-CLOSED, E-128) and this hook
 # blocks — an internal error can no longer be used to bypass the gate.
 #
+# E-208 (D-054, role-abstraction.md §Components 5): the gate also covers the WRITE
+# tools (Write|Edit|MultiEdit|NotebookEdit). When the HMAC-verified session role is
+# `architect`, a write to any path outside .ai/ or plans/ is BLOCKED. The Engineer
+# path is unchanged: for role=engineer the write gate is a fast no-op.
+#
+# SCOPE — this NARROWS gap G2, it does NOT close it. Shell writes (`>`, tee, cp, mv,
+# sed -i, ln -s, git apply, python3 -c) and the MCP write tools (mcp__filesystem__*,
+# mcp__patch-mcp__*) are NOT covered: they fall outside this matcher and safe-exec's
+# analyzeSovereignty has no concept of redirection. Treat this as defence-in-depth,
+# not a boundary. Closing those channels is a policy expansion beyond §Components 5
+# and needs an Architect ruling (escalated 2026-09-05).
+#
 # Rollback / emergency bypass: AI_OS_SAFE_EXEC_GATE=0.
 set -uo pipefail
 
@@ -36,16 +48,57 @@ except Exception:
 tool = d.get("tool_name", "") or ""
 ti = d.get("tool_input") or {}
 cmd = ti.get("command", "") if isinstance(ti, dict) else ""
+# E-208: Write/Edit/MultiEdit carry file_path; NotebookEdit carries notebook_path.
+fp = ""
+if isinstance(ti, dict):
+    fp = ti.get("file_path") or ti.get("notebook_path") or ""
 print(tool)
 print(base64.b64encode((cmd or "").encode()).decode())
 print(d.get("session_id", "") or "")   # E-129: tamper-resistant role token key
+print(base64.b64encode((fp or "").encode()).decode())
 ' 2>/dev/null)"
 
 TOOL="$(printf '%s\n' "$PARSED" | sed -n '1p')"
 CMD="$(printf '%s\n' "$PARSED" | sed -n '2p' | base64 --decode 2>/dev/null)"
 SID="$(printf '%s\n' "$PARSED" | sed -n '3p')"   # E-129: session id (from harness, not env)
+FILE_PATH="$(printf '%s\n' "$PARSED" | sed -n '4p' | base64 --decode 2>/dev/null)"
 
-# Only gate shell execution. Other tools (Read/Write/Edit/MCP/…) pass through.
+# ── E-208: Architect write-scope gate (Write|Edit|MultiEdit|NotebookEdit) ──────
+# Delegates to safe-exec `--check-path`, which resolves the role from the SAME
+# HMAC-verified session token the Bash gate uses and exits 0 immediately for a
+# non-architect role. Fail-open ONLY when the analyzer is missing (no node / not
+# installed) — an analyzer that is present but crashes exits 2 and blocks (E-128).
+case "$TOOL" in
+  Write|Edit|MultiEdit|NotebookEdit)
+    [[ -z "$FILE_PATH" ]] && exit 0
+    SE_W=""
+    for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/safe-exec-mcp/index.js" \
+             "${HOME}/.ai-os/mcp/safe-exec-mcp/index.js"; do
+      [[ -f "$c" ]] && { SE_W="$c"; break; }
+    done
+    if [[ -n "$SE_W" ]] && command -v node >/dev/null 2>&1; then
+      # Argument order is fixed: <path> <role> --session <sid>. safe-exec anchors its
+      # --session scan past those positionals, so a target path literally named
+      # "--session" cannot hijack the parse (E-208 audit).
+      W_REPORT="$(node --no-warnings "$SE_W" --check-path "$FILE_PATH" "${AI_OS_CALLER_ROLE:-engineer}" --session "$SID" 2>/dev/null)"
+      W_RC=$?
+      # ANY non-zero exit blocks, not just 2. A module that fails to LOAD exits 1,
+      # and E-128's in-JS fail-closed guarantee cannot cover a file that never ran —
+      # so treating only 2 as a block left a fail-open hole (E-208 audit).
+      if [[ "$W_RC" -ne 0 ]]; then
+        {
+          echo "[SOVEREIGNTY_BLOCK] Architect write-scope gate (E-208) blocked this ${TOOL}:"
+          echo "$W_REPORT"
+          echo "Rollback (only if you are certain): re-run with AI_OS_SAFE_EXEC_GATE=0."
+        } >&2
+        exit 2
+      fi
+    fi
+    exit 0
+    ;;
+esac
+
+# Only gate shell execution below this point. Other tools pass through.
 [[ "$TOOL" != "Bash" ]] && exit 0
 [[ -z "$CMD" ]] && exit 0
 

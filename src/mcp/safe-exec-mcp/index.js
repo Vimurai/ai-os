@@ -24,9 +24,9 @@ import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { parse } from "shell-quote";
 import { createLogger } from "../shared/logger.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, realpathSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, isAbsolute, normalize, relative, dirname, basename, resolve as resolvePath } from "node:path";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("safe-exec-mcp");
@@ -229,6 +229,147 @@ const SAFE_ARCHITECT_PATH = /^(\.\/)?(\.ai|plans)(\/|$)/;
 
 function isSafeArchitectPath(tok) {
   return SAFE_ARCHITECT_PATH.test(tok);
+}
+
+// ── E-208 (D-054, role-abstraction.md §Components 5): Write/Edit sovereignty ───
+// SAFE_ARCHITECT_PATH above matches the RELATIVE operands that appear in a shell
+// command. The Write/Edit tools hand the hook an ABSOLUTE path instead, so it must
+// first be normalised against the project root before the same .ai/ | plans/ rule
+// can be applied. Kept separate from the token-based command analyser because the
+// input shape differs: one path, already parsed, no shell quoting to reason about.
+//
+// WHY THIS EXISTS: under a same-provider Triad the Architect pane is Claude, which
+// unlike agy HAS Write/Edit tools. §35 ANTI-DRIFT was prompt-level only for those.
+//
+// SCOPE — READ THIS BEFORE RELYING ON IT (E-208 security audit, 2026-09-05):
+// this gate covers the NATIVE write tools only (Write|Edit|MultiEdit|NotebookEdit).
+// It does NOT cover shell writes (`>`, tee, cp, mv, sed -i, ln -s, git apply,
+// python3 -c) — analyzeSovereignty has no concept of redirection — nor the MCP write
+// tools (mcp__filesystem__*, mcp__patch-mcp__*), which sit outside the hook matcher
+// and are pre-approved in the allow-list. Gap G2 is therefore NARROWED, not closed:
+// treat this as defence-in-depth, not a boundary. Closing the remaining channels is
+// a policy expansion beyond role-abstraction.md §Components 5 and needs an Architect
+// ruling (escalated 2026-09-05).
+//
+// PATH GATING ITSELF also has limits, so do not read the list above as "everything
+// else is airtight":
+//   - HARDLINKS are handled below by an nlink check, NOT by path resolution — no
+//     resolution algorithm can see through one (see the check in this function).
+//   - TOCTOU: the hook approves a path, then the tool opens it. A concurrent
+//     `ln -sf` between those two moments is not observable here. Inherent to
+//     hook-based gating, and it needs the same shell channel already declared open.
+function architectPathVerdict(rawPath, projectRoot) {
+  if (!rawPath || typeof rawPath !== "string") {
+    return { blocked: false }; // nothing to gate — never invent a block
+  }
+  // A parent-directory segment must be rejected BEFORE any resolution, because
+  // `normalize` and `resolve` collapse it LEXICALLY (a pure string operation) while
+  // the kernel applies it to the SYMLINK TARGET. Given a link inside .ai/ pointing at
+  // a directory under src/, a path that walks through that link and then back up one
+  // level collapses, as a string, to something still inside .ai/ — so the gate allowed
+  // it — while the kernel resolved it to a file under src/. That wrote real bytes to a
+  // real source file through the native Write tool (E-208 audit round 2).
+  // Resolving symlinks first does not fix it — the two orders disagree by design.
+  // The Write/Edit tools always hand us a clean absolute path, so such a segment has
+  // no legitimate use here, and rejecting it removes the whole class rather than one
+  // instance. Checked on the RAW input, before normalize can hide it.
+  for (const seg of String(rawPath).split(/[\\/]+/)) {
+    if (seg === "..") {
+      return { blocked: true, reason: "path contains a '..' segment, which cannot be resolved safely across symlinks" };
+    }
+  }
+
+  // Strip trailing separators BEFORE resolving. `existsSync(".ai/link/")` is false for
+  // a symlink-to-FILE (ENOTDIR), so the ancestor walk would skip the leaf, re-attach
+  // it as an unresolved tail, and hand back `.ai/link` — inside the allowed root,
+  // never resolved to its target. `.ai/link` blocked while `.ai/link/` allowed
+  // (E-208 audit round 2). basename() already discards the slash, so this only makes
+  // the existence probe see the same path the kernel would.
+  const cleanedPath = String(rawPath).replace(/[\\/]+$/, "") || rawPath;
+
+  let rel;
+  try {
+    const abs = isAbsolute(cleanedPath) ? normalize(cleanedPath) : resolvePath(projectRoot, cleanedPath);
+    // Symlinks must be resolved BEFORE the .ai|plans test, or a link planted inside
+    // .ai/ (which the Architect may legitimately write) silently forwards a write to
+    // any target: `.ai/link -> src/bin/ai` passed the normalise-only check.
+    // The write target itself may not exist yet, so resolve the nearest EXISTING
+    // ancestor and re-attach the unresolved tail.
+    rel = relative(realpathRoot(projectRoot), realpathNearest(abs));
+  } catch {
+    return { blocked: true, reason: "path could not be resolved against the project root" };
+  }
+  // Outside the project entirely (rel starts with ".." or is another absolute root).
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+    return { blocked: true, reason: "path is outside the project root" };
+  }
+  // Already normalised above, so any embedded parent-directory segments have been
+  // collapsed — an escape attempt shows up as a rel that leaves the root, caught above.
+  if (isSafeArchitectPath(rel)) {
+    // HARDLINK check — the one place path resolution genuinely cannot help. A
+    // hardlink is not a REFERENCE to a file, it IS the file under a second equally
+    // canonical name, so realpath has nothing to see through: `ln src/bin/ai .ai/h`
+    // then `Write .ai/h` writes src/bin/ai, and every path-based check agrees the
+    // target is inside .ai/. Only an inode property distinguishes it. One lstat, and
+    // it can only ever ADD restriction to a write we were about to allow.
+    // Directories legitimately carry nlink > 1 (subdirectory back-references), so
+    // this is restricted to regular files. A missing target is not yet a file and
+    // cannot be an alias for one.
+    try {
+      const st = lstatSync(join(realpathRoot(projectRoot), rel));
+      if (st.isFile() && st.nlink > 1) {
+        return {
+          blocked: true,
+          reason: `target has ${st.nlink} hard links — it is the same inode as a file elsewhere, so writing it would write outside .ai//plans/`,
+        };
+      }
+    } catch {
+      // Target does not exist yet (the common case for a new file) — nothing to alias.
+    }
+    return { blocked: false };
+  }
+  return { blocked: true, reason: "the Architect may only write under .ai/ or plans/" };
+}
+
+// realpath of the project root itself (the root may sit under a symlinked prefix,
+// e.g. /tmp -> /private/tmp on macOS; without this every path would look "outside").
+function realpathRoot(root) {
+  try { return realpathSync(root); } catch { return root; }
+}
+
+// realpath the deepest EXISTING ancestor of `abs`, then re-attach the not-yet-created
+// tail. A write target usually does not exist yet, so realpathSync(abs) would throw;
+// resolving the ancestor still defeats a symlinked directory component.
+function realpathNearest(abs) {
+  let cur = abs;
+  const tail = [];
+  for (let i = 0; i < 64; i++) {
+    if (existsSync(cur)) {
+      // FAIL CLOSED: a realpath error must NOT degrade to the unresolved path — that
+      // is a fail-open in a security decision, and it is what let a trailing slash on
+      // a symlinked leaf (ENOTDIR) slip through (E-208 audit round 2). Throwing here
+      // is caught by architectPathVerdict, which returns blocked.
+      const real = realpathSync(cur); // may throw — intentional
+      return tail.length ? join(real, ...tail.reverse()) : real;
+    }
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    tail.push(basename(cur));
+    cur = parent;
+  }
+  return abs;
+}
+
+// Project root for the path gate: nearest ancestor of cwd containing .ai/.
+function findProjectRootFrom(start) {
+  let dir = resolvePath(start || process.cwd());
+  for (let i = 0; i < 40; i++) {
+    if (existsSync(join(dir, ".ai"))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return resolvePath(start || process.cwd());
 }
 
 // Non-flag operand tokens appearing after the first occurrence of `cmd`
@@ -435,11 +576,35 @@ function tokenPath(sid) {
   return join(_RUN_DIR, `role-${_sanitizeSid(sid)}.lock`);
 }
 
+// E-208 (P0 fix): a session id may be minted repeatedly (SessionStart fires on both
+// `startup` and `resume`) but ONLY ever for the SAME role. Before E-208 the token
+// gated a handful of Bash verbs, so an unguarded re-mint was accepted risk; E-208
+// makes the same token gate WRITES, which turned re-mint into a full role swap:
+//   as architect: Write src/  -> BLOCKED
+//   node index.js --mint-<t> engineer <same sid>   (the Bash gate does not stop this)
+//   as architect: Write src/  -> ALLOWED           <- privilege escalation
+// Refusing a role CHANGE closes that without breaking legitimate resume re-mints.
+// Rollback: AI_OS_ROLE_TOKEN=0 disables the whole token layer.
 function mintToken(role, sid) {
   const cleanSid = _sanitizeSid(sid);
   if (!role || !cleanSid) return false;
   const key = getMachineKey();
   if (!key) return false;
+  const existing = verifyToken(cleanSid);
+  if (existing && existing !== role) {
+    // Wording matters here: this guard enforces "a VALID BINDING may not be CHANGED",
+    // NOT "a session's role is immutable". Deleting or corrupting the lock file makes
+    // verifyToken return null and a fresh mint then succeeds — so this raises the cost
+    // from one command to two, it is not an integrity guarantee. Closing that needs the
+    // record bound to something the deleter cannot forge (process start-time / boot-id
+    // in the HMAC, or an append-only ledger); escalated to the Architect. Do not
+    // restate this as immutability — the next reviewer will believe it.
+    process.stderr.write(
+      "[safe-exec] refusing to re-mint this session with a different role — it is already " +
+      `bound to "${existing}" (E-208). Partial guard: a deleted/corrupt lock can still be re-minted.\n`
+    );
+    return false;
+  }
   try {
     mkdirSync(_RUN_DIR, { recursive: true, mode: 0o700 });
     const rec = JSON.stringify({ v: 1, role, session_id: cleanSid, hmac: signRole(role, cleanSid, key) });
@@ -506,6 +671,52 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 const _mintIdx = process.argv.indexOf("--mint-token");
 if (_mintIdx !== -1) {
   mintToken(process.argv[_mintIdx + 1], process.argv[_mintIdx + 2]);
+  process.exit(0);
+}
+
+// ── E-208: Write/Edit sovereignty gate CLI (role-abstraction.md §Components 5) ──
+// `node index.js --check-path "<path>" [caller_role] [--session <sid>]` exits 2 when
+// the session's HMAC-verified role is `architect` and the path lies outside .ai/ or
+// plans/, 0 otherwise. hooks/pre-tool-use.sh calls this for Write|Edit|MultiEdit|
+// NotebookEdit. The ENGINEER path is a fast exit 0 — this gate adds no restriction
+// for the Engineer. For a Claude Architect it NARROWS gap G2; it does not close it
+// (shell writes and MCP write tools are still open — see the scope note on
+// architectPathVerdict above).
+const _checkPathIdx = process.argv.indexOf("--check-path");
+if (_checkPathIdx !== -1) {
+  const target = process.argv[_checkPathIdx + 1] || "";
+  // Scan for --session AFTER the two fixed positionals (<path> [role]). A bare
+  // indexOf would match a TARGET PATH literally named "--session" first and then
+  // read the role as the session id, dropping the check to the env fallback
+  // (E-208 audit, argv confusion).
+  const _spIdx = process.argv.indexOf("--session", _checkPathIdx + 3);
+  const spSid = _spIdx !== -1 ? process.argv[_spIdx + 1] : "";
+  const pathRole = verifyCheckRole(process.argv[_checkPathIdx + 2], spSid);
+  if (String(pathRole).toLowerCase() !== "architect") process.exit(0);
+  let verdict;
+  try {
+    if (process.env.AI_OS_SAFE_EXEC_SELFTEST_THROW === "1") throw new Error("self-test fault injection");
+    verdict = architectPathVerdict(target, findProjectRootFrom(process.cwd()));
+  } catch (e) {
+    // FAIL-CLOSED, same rule as --check (T-HITL-004): a crash must block, never allow.
+    process.stdout.write(
+      "## safe-exec-mcp Sovereignty Analysis\nVerdict: \u2717 BLOCK\n\n" +
+      "### BLOCKED \u2014 analyzer error (fail-closed)\n" +
+      `The path gate crashed; the write is blocked rather than allowed: ${e.message}\n`
+    );
+    process.exit(2);
+  }
+  if (verdict.blocked) {
+    process.stdout.write(
+      "## safe-exec-mcp Sovereignty Analysis\nVerdict: \u2717 BLOCK\n\n" +
+      "### BLOCKED \u2014 ARCH_WRITE_OUTSIDE_SCOPE\n" +
+      `Role: architect (HMAC-verified session token)\nPath: ${target}\n` +
+      `Reason: ${verdict.reason}.\n\n` +
+      "The Architect designs; the Engineer implements (\u00a735 ANTI-DRIFT, D-054).\n" +
+      "Write the blueprint under .ai/ and hand the change-list to the Engineer via `ai handoff engineer`.\n"
+    );
+    process.exit(2);
+  }
   process.exit(0);
 }
 

@@ -463,6 +463,7 @@ _sync_workspace_dirs() {
   sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
   sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
   _configure_project_claude_settings ".claude"
+  _write_role_settings_overlays ".claude" ".ai"   # E-208: per-role overlays
   if [[ "$mode" == "init" ]]; then
     echo "Created .claude/ (project-scoped agents + skills + settings.json)"
   else
@@ -562,6 +563,61 @@ migrate_legacy_ai_if_present() {
 # Writes .claude/settings.json in a project directory with project-scoped hooks,
 # agent teams env var, Gemini permission, and registry-driven MCP tool permissions.
 # $1: target dir (e.g. ".claude")
+
+# ── E-208 (D-054, role-abstraction.md §Components 3): per-role settings overlay ──
+# Generates .claude/settings.<role>.json for every role that .ai/roles.json maps to
+# the `claude` provider. `ai pane <role>` selects it via `claude --settings <file>`.
+#
+# The overlay carries ENV ONLY — deliberately NO SessionStart hook. Claude Code
+# MERGES hook arrays rather than replacing them, so registering a second
+# `session-start.sh <role>` here would mint TWO role tokens for one session id with
+# undefined ordering (D-054 §Alternatives, option 3). The launch-time role reaches
+# the hook through AI_OS_PANE_ROLE instead, which has a single authoritative value.
+_write_role_settings_overlays() {
+  local target_dir="${1:-.claude}"
+  local ai_dir="${2:-.ai}"
+  [[ -d "$ai_dir" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$target_dir" "$ai_dir" <<'PY'
+import json, os, sys
+
+target_dir, ai_dir = sys.argv[1], sys.argv[2]
+
+def load(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f) or default
+    except Exception:
+        return default
+
+import re
+# .ai/roles.json is ARCHITECT-WRITABLE, so its keys are untrusted input to a path
+# join. A key containing parent-directory segments would write outside .claude/
+# (E-208 audit). Constrain role names to a safe charset before os.path.join sees them.
+ROLE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+roles = load(os.path.join(ai_dir, "roles.json"), {}).get("roles", {})
+for role, cfg in roles.items():
+    if not ROLE_RE.match(str(role)):
+        print(f"  ! skipping role '{role}' — invalid role name (must match [a-z][a-z0-9_-]*)")
+        continue
+    if not isinstance(cfg, dict) or cfg.get("provider") != "claude":
+        continue
+    path = os.path.join(target_dir, f"settings.{role}.json")
+    data = load(path, {})
+    env = data.setdefault("env", {})
+    # Authoritative (not setdefault) so a stale/forged role can never linger.
+    env["AI_OS_CALLER_ROLE"] = role
+    # NEVER register hooks here — see the comment above _write_role_settings_overlays.
+    data.pop("hooks", None)
+    os.makedirs(target_dir, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    print(f"  .claude/settings.{role}.json written (role overlay, env only)")
+PY
+}
+
 _configure_project_claude_settings() {
   local TARGET_DIR="${1:-.claude}"
   local REGISTRY="${AIOS}/config/registry.json"
@@ -654,15 +710,22 @@ if not already:
 # pre-execution gate. Register the PreToolUse hook on the Bash matcher so every
 # shell command is screened by safe-exec and a BLOCK verdict is ENFORCED (the
 # hook exits 2) instead of merely advised. Rollback: AI_OS_SAFE_EXEC_GATE=0.
+# E-208 (D-054, role-abstraction.md §Components 5): the matcher also covers the
+# WRITE tools, so an Architect-bound pane cannot write outside .ai/ or plans/. The
+# Engineer path is unaffected (the gate exits 0 immediately for role=engineer).
 pre_cmd = "bash $HOME/.ai-os/hooks/pre-tool-use.sh"
+PRE_MATCHER = "Bash|Write|Edit|MultiEdit|NotebookEdit"
 pre_hooks = hooks.setdefault("PreToolUse", [])
-already_pre = any(
-    h.get("command") == pre_cmd
-    for entry in pre_hooks
-    for h in entry.get("hooks", [])
-)
+already_pre = False
+for entry in pre_hooks:
+    if any(h.get("command") == pre_cmd for h in entry.get("hooks", [])):
+        already_pre = True
+        # Heal a pre-E-208 registration that only matched Bash.
+        if entry.get("matcher") != PRE_MATCHER:
+            entry["matcher"] = PRE_MATCHER
+            print(f"Widened PreToolUse matcher → {PRE_MATCHER} (E-208 write-scope gate)")
 if not already_pre:
-    pre_hooks.append({"matcher": "Bash", "hooks": [{"type": "command", "command": pre_cmd}]})
+    pre_hooks.append({"matcher": PRE_MATCHER, "hooks": [{"type": "command", "command": pre_cmd}]})
 
 # E-126 (caching.md §3.2/§3.3): inject the compiled System Context Cache as a
 # prompt-prefix at session start/resume via a SessionStart hook (the previously-
@@ -2568,6 +2631,131 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 
+
+# ── E-208 (D-054, role-abstraction.md §Same-Provider Triad): `ai pane <role>` ──
+# The single provider-agnostic surface that BINDS a tmux pane to a role, symmetric
+# to `ai handoff <role>` (E-158) and `ai add-task` (D-053). Role identity is bound
+# per pane at LAUNCH, never per project — that is the whole point of D-054: two
+# panes of the same provider must be able to hold different roles, which a project
+# settings file (one per repo) structurally cannot express.
+#
+# It does four things, then exec()s the provider CLI:
+#   1. resolves role -> provider (+ optional model) from .ai/roles.json
+#   2. builds the provider's `launch` argv from .ai/providers.json
+#   3. exports AI_OS_PANE_ROLE + AI_OS_CALLER_ROLE into the launch environment
+#      (session-start.sh mints the E-129 token from AI_OS_PANE_ROLE)
+#   4. pins the tmux pane title to the role, so ai-watch Pass 1 resolves it
+#      deterministically (E-209) instead of guessing from a drifting summary title
+#
+# Usage: ai pane <architect|engineer> [-- <extra provider args>]
+do_pane() {
+  local role="${1:-}"
+  case "$role" in
+    architect|engineer) ;;
+    ""|-h|--help)
+      echo "Usage: ai pane <architect|engineer> [-- <extra provider args>]"
+      echo "  Binds THIS tmux pane to a role and launches that role's provider CLI."
+      return 0 ;;
+    *)
+      echo "ai pane: unknown role '${role}' (expected: architect | engineer)" >&2
+      return 2 ;;
+  esac
+  shift
+  # Drop a leading `--` separator so `ai pane architect -- --foo` forwards --foo.
+  [[ "${1:-}" == "--" ]] && shift
+
+  local ai_dir; ai_dir="$(_find_ai_dir)"
+  if [[ ! -d "$ai_dir" ]]; then
+    echo "ai pane: not inside an AI-OS project (.ai/ not found). Run 'ai init' first." >&2
+    return 2
+  fi
+
+  # `|| true`: the script runs under `set -e`, so an unguarded non-zero from the
+  # locator would abort with exit 1 before the explicit error branch below could
+  # report the real problem (and the documented exit code 2).
+  local helper; helper="$(_locate_resolve_launch || true)"
+  if [[ -z "$helper" ]]; then
+    echo "ai pane: resolve-launch.mjs not found (run: ai install)." >&2
+    return 2
+  fi
+
+  # Resolve provider + argv through the SHARED seam (src/shared/resolve-launch.mjs →
+  # provider-adapter.mjs), the same module advisor-mcp uses (E-210). One code path, so
+  # the A2A bridge, the launcher and the tests cannot drift apart about which provider
+  # owns a role. Output: line 1 = provider, remaining lines = argv.
+  local resolved rc
+  resolved="$(node --no-warnings "$helper" "$role" "$ai_dir" 2>/dev/null)"; rc=$?
+  if [[ "$rc" -ne 0 || -z "$resolved" ]]; then
+    echo "ai pane: role '${role}' is not mapped to a provider in ${ai_dir}/roles.json." >&2
+    return 2
+  fi
+
+  local provider; provider="$(printf '%s\n' "$resolved" | sed -n '1p')"
+  local -a argv=()
+  while IFS= read -r line; do [[ -n "$line" ]] && argv+=("$line"); done < <(printf '%s\n' "$resolved" | tail -n +2)
+
+  # .ai/providers.json is ARCHITECT-WRITABLE and this value becomes an exec target,
+  # so an unconstrained string here is an architect→engineer execution chain
+  # (E-208 audit). Constrain it to a plain command name — no paths, no separators.
+  if ! printf '%s' "$provider" | grep -qE '^[a-z][a-z0-9_-]{0,31}$'; then
+    echo "ai pane: refusing to exec provider '${provider}' — invalid provider name in providers.json." >&2
+    return 2
+  fi
+
+  # Distinguish the two failure modes the blueprint's §API contract separates
+  # (critic_arch P2): a role with no provider mapping vs. a provider with no launch
+  # adapter. Both exit 2, but the operator needs to know which file to edit.
+  if [[ "${#argv[@]}" -eq 0 ]]; then
+    echo "ai pane: provider '${provider}' has no 'launch' argv template in ${ai_dir}/providers.json (role ${role})." >&2
+    return 2
+  fi
+
+  if ! command -v "$provider" >/dev/null 2>&1; then
+    echo "ai pane: provider CLI '${provider}' is not on PATH (role ${role})." >&2
+    return 2
+  fi
+
+  # Pin the pane title BEFORE exec so ai-watch resolves this pane by exact title
+  # (E-209 Pass 1). Claude Code rewrites pane titles from the conversation summary,
+  # so also turn off automatic renaming for this window — without that the pin is
+  # overwritten within a few turns and routing silently degrades to the ordinal.
+  # No-op outside tmux; never fatal.
+  if [[ -n "${TMUX:-}" ]] && command -v tmux >/dev/null 2>&1; then
+    tmux select-pane -T "$role" 2>/dev/null || true
+    tmux set -w allow-rename off 2>/dev/null || true
+  fi
+
+  echo "ai pane: binding this pane to '${role}' via provider '${provider}'"
+  # AI_OS_PANE_ROLE is the launch-time role the SessionStart hook mints from;
+  # AI_OS_CALLER_ROLE keeps the advisory (E-127) env in agreement with it.
+  export AI_OS_PANE_ROLE="$role"
+  export AI_OS_CALLER_ROLE="$role"
+  exec "$provider" "${argv[@]}" "$@"
+}
+
+# Nearest ancestor .ai/ directory (git-style discovery), so `ai pane` works from a
+# subdirectory. Mirrors signal-handoff.mjs::findAiDir.
+_find_ai_dir() {
+  local dir; dir="$(pwd)"
+  for _ in $(seq 1 40); do
+    [[ -d "${dir}/.ai" ]] && { printf '%s' "${dir}/.ai"; return 0; }
+    [[ "$dir" == "/" ]] && break
+    dir="$(dirname "$dir")"
+  done
+  printf '%s' "$(pwd)/.ai"
+}
+
+# Locate the shared launch resolver: dev tree first, then the install mirror.
+# (It imports provider-adapter.mjs from the same directory, so locating one locates both.)
+_locate_resolve_launch() {
+  local c
+  for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/shared/resolve-launch.mjs" \
+           "${AIOS}/shared/resolve-launch.mjs"; do
+    [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+
 cmd="${1:-}"
 case "$cmd" in
   # Bootloader / installer surface (the only working commands)
@@ -2586,6 +2774,9 @@ case "$cmd" in
   # shared addTask (no MCP needed), so agy can register tasks that survive
   # verify_markdown_sync. Usage: ai add-task [flags] <description>.
   add-task)      do_add_task "${@:2}" ;;
+  # E-208 (role-abstraction.md §Same-Provider Triad): bind THIS tmux pane to a role
+  # and launch that role's provider CLI. Usage: ai pane <architect|engineer>.
+  pane)          do_pane "${@:2}" ;;
   # E-138 (role-abstraction.md): register a CLI provider in .ai/providers.json and
   # generate its MCP config. Usage: ai provider add <name> --config-path <p> --mcp-key <k>
   # E-144: `ai provider install-plugin agy` installs AI-OS personas as a native agy plugin.
