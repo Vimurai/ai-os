@@ -2758,6 +2758,13 @@
       "task_id": "E-208",
       "timestamp": "2026-09-04T23:07:09.063Z",
       "summary": "[TIER_3] Per-pane role binding. ARCH_PASS + TESTS_PASS + SEC_CLEARED (security_engineer, round 3, scoped to the ratified Write|Edit surface). 3 audit rounds; symlink escape, re-mint P0, lexical-.. bypass, trailing-slash fail-open and hardlink alias all fixed + exploit-regressed. pane_binding 90/0, full suite 3223/0, live negative test passing. Residual P0 from run_review is a FALSE POSITIVE on `source ${SCRIPT_DIR}/../lib/assert.sh` — the assert include used by all 110 suites and already in HEAD (E-198 precedent). Shell + MCP write channels remain open by ratified scope; escalated to the Architect."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-212",
+      "timestamp": "2026-09-07T08:20:29.993Z",
+      "summary": "[TIER_2] Role manifest + role-aware provisioning (D-054). align_diff WARN-only (ORPHANED_WORK advisory — the 7 personas are covered by architect-provider-parity.md, which the aligner does not read). Found+fixed 3 unanticipated problems: ai-task/repo-oracle skill-name collision (Engineer pane was loading the Architect's skill — verified live), a bash 3.2 empty-array abort that left .agents//.gemini/ unprovisioned, and unserved-provider stripping. role_provisioning 63/0, full suite 3290/0."
     }
   ],
   "deltas": [

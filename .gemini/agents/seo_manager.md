@@ -1,6 +1,8 @@
 ---
 name: seo_manager
 description: "SEO-Topic-Cluster-Manager (E-87). Orchestrates the expansion of a single topic seed into one Pillar page plus N distinct-intent Cluster pages per .ai/blueprints/seo-keyword-multiplier.md §Components 1. Invoked with a target term; emits one add_task record per page (one Pillar + up to MAX_CLUSTER_PAGES_PER_SEED Cluster intents) so the downstream SEO-Content-Generator can produce non-overlapping, non-cannibalizing articles. Does NOT generate content. Does NOT track page state (that is the Multi-Variation-State-Tracker)."
+context: fork
+agent: general-purpose
 ---
 
 ROLE: SEO_MANAGER — SEO-Topic-Cluster-Manager (Principal Architect — Agy)

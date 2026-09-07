@@ -455,13 +455,156 @@ PY
 # the user-facing wording only ("init" → "Created …", "sync" → indented "… synced");
 # the filesystem operations are identical. Antigravity native subagents are NOT
 # synced here — they ship as an installed plugin (`ai provider install-plugin agy`).
+
+# ── E-212 (architect-provider-parity.md §Components 1-2): role-aware provisioning ──
+# Locate the role-manifest resolver (dev tree first, then the install mirror).
+_locate_role_manifest() {
+  local c
+  for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/shared/role-manifest.mjs" \
+           "${AIOS}/shared/role-manifest.mjs"; do
+    [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+
+# _provider_source_dirs <provider> [--agents|--roles] → one source dir per line.
+# Unions the `shared` role with every role .ai/roles.json binds to <provider>, per the
+# registry.json manifest. Empty output is a NORMAL state (a provider serving no role).
+# Fail-open: if the resolver or node is unavailable, prints nothing and the caller
+# falls back to its legacy hardcoded set, so sync never breaks on a missing helper.
+_provider_source_dirs() {
+  local provider="$1" flag="${2:-}"
+  local rm; rm="$(_locate_role_manifest || true)"
+  [[ -z "$rm" ]] && return 0
+  command -v node >/dev/null 2>&1 || return 0
+  node --no-warnings "$rm" ".ai" "${AIOS}/config/registry.json" "$provider" "$flag" 2>/dev/null || true
+}
+
+# _provision_workspace <provider> <workspace_dir> <copy_agents:yes|no> [legacy_skill_dirs...]
+# Copies every source skill dir the provider serves into <workspace_dir>/skills, and
+# (when copy_agents=yes) every agent dir into <workspace_dir>/agents. Falls back to the
+# caller-supplied legacy dirs when the manifest yields nothing, so a project whose
+# registry.json predates E-212 provisions exactly as before.
+#
+# Additive by design (sync_skills_20 is cp -rf, never a prune) — matches existing
+# behaviour: rebinding a role leaves the previous provider's copies until it re-syncs.
+# NOTE ON BASH 3.2 (macOS ships 3.2.57, and this script runs under `set -u`):
+# expanding an EMPTY array as "${arr[@]}" raises "unbound variable" on 3.2 — it only
+# became safe in bash 4.4. Every array expansion below is therefore either guarded by
+# a ${#arr[@]} count or written as ${arr[@]+"${arr[@]}"}. An unserved provider yields
+# an empty list, which is a NORMAL state, so this is the common path, not an edge case.
+# _sync_skills_no_clobber <src_dir> <dst_dir> <label> — E-212 collision guard.
+#
+# WHY: two roles can ship DIFFERENT skills under the SAME name. `ai-task` is the live
+# case — src/shared/skills/ai-task manages the Engineer's E-## lifecycle, while
+# src/agents/skills/ai-task manages the Architect's P-## lifecycle and hands off to
+# Claude. (`repo-oracle` is the second.)
+#
+# THE OVERRIDE RULE DEPENDS ON HOW MANY ROLES THE WORKSPACE SERVES:
+#   - SINGLE-role workspace: a role skill legitimately OVERRIDES the shared baseline.
+#     That is the historical behaviour (an agy Architect gets the Architect's ai-task)
+#     and it is preserved exactly — changing it would regress every split Triad.
+#   - MULTI-role workspace (the D-054 same-provider case): the "override" is no longer
+#     meaningful, because the shared copy is what the OTHER role in the same directory
+#     reads. A flat skills dir cannot hold both, and do_sync cannot know which role the
+#     reading pane will hold — so the shared baseline is KEPT and the role variant is
+#     reported rather than silently swapped in. Without this, the Engineer pane loaded
+#     the Architect's task skill; verified live, it did.
+#
+# The real fix — role-scoped skill directories, or renaming the colliding Architect
+# skills — changes the skill-discovery contract and is an Architect ruling
+# (architect-provider-parity.md §Components 2 does not cover same-name collisions).
+# Escalated 2026-09-07.
+_sync_skills_no_clobber() {
+  local src_dir="$1" dst_dir="$2" label="$3"
+  local count=0 skipped=0 skill_dir name
+  for skill_dir in "${src_dir}"/*/; do
+    [[ -d "$skill_dir" && -f "${skill_dir}SKILL.md" ]] || continue
+    name="$(basename "$skill_dir")"
+    if [[ -e "${dst_dir}/${name}" ]]; then
+      # Identical content is not a collision — it is the same skill shipped twice.
+      if ! diff -rq "${skill_dir%/}" "${dst_dir}/${name}" >/dev/null 2>&1; then
+        echo "  ! COLLISION: '${name}' from ${label} differs from the copy already in ${dst_dir} — KEPT the existing one (E-212; pending Architect ruling)" >&2
+        skipped=$((skipped + 1))
+      fi
+      continue
+    fi
+    cp -rf "${skill_dir%/}" "${dst_dir}/"
+    count=$((count + 1))
+  done
+  # Legacy flat .md files: same first-wins rule.
+  local f
+  for f in "${src_dir}"/*.md; do
+    [[ -f "$f" ]] || continue
+    [[ -e "${dst_dir}/$(basename "$f")" ]] && continue
+    cp -f "$f" "${dst_dir}/"
+  done
+  echo "  $count Skills 2.0 folder(s) synced from ${src_dir}$([[ "$skipped" -gt 0 ]] && echo " (${skipped} name collision(s) skipped)")"
+  _generate_skills_index "${dst_dir}"
+}
+
+_provision_workspace() {
+  local provider="$1" ws="$2" copy_agents="$3"; shift 3
+  local -a legacy=()
+  [[ "$#" -gt 0 ]] && legacy=("$@")
+  local -a skill_dirs=() agent_dirs=()
+  local line
+
+  while IFS= read -r line; do [[ -n "$line" ]] && skill_dirs+=("$line"); done < <(_provider_source_dirs "$provider")
+  # A provider bound to NO role keeps its historical provisioning rather than being
+  # stripped back to `shared` only. Rebinding a role (e.g. architect agy -> claude)
+  # must not quietly empty the other provider's workspace: the user may switch back,
+  # and sync is additive everywhere else. The manifest always yields at least
+  # `shared/skills`, so the emptiness test is on SERVED ROLES, not on the dir list.
+  if [[ "${#legacy[@]}" -gt 0 ]]; then
+    local _served_probe; _served_probe="$(_provider_source_dirs "$provider" --roles)"
+    [[ -z "$_served_probe" ]] && skill_dirs=("${legacy[@]}")
+  fi
+
+  # How many roles this workspace serves decides the override rule (see the comment
+  # on _sync_skills_no_clobber). One role → historical overwrite semantics; two or
+  # more → keep the shared baseline and report the collision.
+  local -a served_roles=()
+  while IFS= read -r line; do [[ -n "$line" ]] && served_roles+=("$line"); done < <(_provider_source_dirs "$provider" --roles)
+  local multi_role=0
+  [[ "${#served_roles[@]}" -gt 1 ]] && multi_role=1
+
+  mkdir -p "${ws}/skills"
+  if [[ "${#skill_dirs[@]}" -gt 0 ]]; then
+    local first=1
+    for line in "${skill_dirs[@]}"; do
+      [[ -d "${AIOS}/${line}" ]] || continue
+      if [[ "$first" -eq 1 || "$multi_role" -eq 0 ]]; then
+        sync_skills_20 "${AIOS}/${line}" "${ws}/skills"
+        first=0
+      else
+        _sync_skills_no_clobber "${AIOS}/${line}" "${ws}/skills" "$line"
+      fi
+    done
+  fi
+
+  if [[ "$copy_agents" == "yes" ]]; then
+    while IFS= read -r line; do [[ -n "$line" ]] && agent_dirs+=("$line"); done < <(_provider_source_dirs "$provider" --agents)
+    mkdir -p "${ws}/agents"
+    if [[ "${#agent_dirs[@]}" -gt 0 ]]; then
+      for line in "${agent_dirs[@]}"; do
+        [[ -d "${AIOS}/${line}" ]] && cp -f "${AIOS}/${line}/"*.md "${ws}/agents/" 2>/dev/null || true
+      done
+    fi
+  fi
+
+  local served; served="$(_provider_source_dirs "$provider" --roles | tr '\n' ' ')"
+  [[ -n "$served" ]] && echo "  ${ws}/ serves role(s): ${served}"
+  return 0
+}
+
 _sync_workspace_dirs() {
   local mode="${1:-sync}"
 
   mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
-  cp -f "${AIOS}/claude/agents/"*.md ".claude/agents/" 2>/dev/null || true
-  sync_skills_20 "${AIOS}/shared/skills" ".claude/skills"
-  sync_skills_20 "${AIOS}/claude/skills" ".claude/skills"
+  # E-212: role-aware. Under an all-Claude Triad (D-054) this pulls in the Architect's
+  # skills and agents too, instead of only the Engineer-side src/claude/* dirs.
+  _provision_workspace "claude" ".claude" "yes" "shared/skills" "claude/skills"
   _configure_project_claude_settings ".claude"
   _write_role_settings_overlays ".claude" ".ai"   # E-208: per-role overlays
   if [[ "$mode" == "init" ]]; then
@@ -473,7 +616,13 @@ _sync_workspace_dirs() {
   # E-132 (antigravity-migration): workspace skills migrated to .agents/skills/;
   # Gemini agents + GEMINI.md remain in .gemini/ per blueprint §API/Interface Contracts.
   mkdir -p ".gemini/agents"
+  # E-212: gemini receives the agent dirs of whatever role it serves; when it serves
+  # none the legacy set still lands, so a gemini-Architect project is unchanged.
+  _provision_workspace "gemini" ".gemini" "yes" "shared/skills"
   cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
+  # Claude-only frontmatter keys are stripped for the Gemini CLI. This runs AFTER the
+  # copy, so the E-212 normalization (which targets the Claude contract) is undone here
+  # for gemini's own workspace only — the src/ files keep the full contract.
   strip_gemini_agent_fields ".gemini/agents"
   _configure_project_gemini_settings ".gemini"
   if [[ "$mode" == "init" ]]; then
@@ -484,8 +633,9 @@ _sync_workspace_dirs() {
 
   # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
   mkdir -p ".agents/skills"
-  sync_skills_20 "${AIOS}/shared/skills" ".agents/skills"
-  sync_skills_20 "${AIOS}/agents/skills" ".agents/skills"
+  # E-212: skills only — agy subagents ship as an installed plugin (E-144), never as
+  # loose .agents/agents/ files, so agent_dirs are deliberately NOT provisioned here.
+  _provision_workspace "agy" ".agents" "no" "shared/skills" "agents/skills"
   # E-195: scaffold the Architect bootloader shim into the agy workspace so
   # Antigravity auto-loads ARCHITECT.md and stays in the Architect persona
   # (no source-code drift, §35). AGENTS.md @imports the root ARCHITECT.md.

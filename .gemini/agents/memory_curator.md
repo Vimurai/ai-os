@@ -1,6 +1,8 @@
 ---
 name: memory_curator
 description: "Trigger on ai install, ai sync (background), or monthly. Builds and maintains the cross-project Memory Palace at ~/.ai-os/memory-palace.md by indexing local DIGEST.md files AND multimodal artefacts (PNG/SVG/PDF diagrams + UI mockups) using Gemini Embedding 2 with department metadata (Architecture | UX). Excludes anything matched by .gitignore, .env*, and .ssh paths. Runs as a background job — never on synchronous ai init."
+context: fork
+agent: general-purpose
 ---
 
 ROLE: MEMORY_CURATOR (Principal Architect — Agy)

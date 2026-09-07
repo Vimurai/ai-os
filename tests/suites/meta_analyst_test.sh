@@ -18,6 +18,18 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
 
+
+# E-212: .gemini/agents is NOT byte-identical to src/gemini/agents any more. The
+# personas now carry the Claude agent contract (so a Claude-bound Architect can load
+# them), and strip_gemini_agent_fields deliberately removes the three Claude-only keys
+# for the Gemini CLI. Compare ignoring exactly those keys — real content drift still fails.
+_diff_ignoring_claude_keys() {  # <src> <mirror>
+  diff -q \
+    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$1") \
+    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$2") \
+    >/dev/null 2>&1
+}
+
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 AGENT_SRC="${REPO_ROOT}/src/gemini/agents/meta_analyst.md"
 AGENT_GEM="${REPO_ROOT}/.gemini/agents/meta_analyst.md"
@@ -189,7 +201,8 @@ assert_contains "telemetry --stats emits status key" "\"status\":" "$STATS"
 echo ""
 echo "  [T-META-S10] mirrors byte-identical"
 
-assert_status 0 "meta_analyst → .gemini mirror"      diff -q "$AGENT_SRC" "$AGENT_GEM"
+assert_status 0 "meta_analyst → .gemini mirror (modulo stripped Claude keys, E-212)" \
+  _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
 assert_status 0 "meta_analyst → ~/.ai-os mirror"     diff -q "$AGENT_SRC" "$AGENT_MIRROR"
 assert_status 0 "ai-insights  → .claude mirror"     diff -q "$SKILL_SRC" "$SKILL_CLAUDE"
 assert_status 0 "ai-insights  → .gemini mirror"     diff -q "$SKILL_SRC" "$SKILL_GEMINI"
