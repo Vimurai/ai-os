@@ -18,6 +18,8 @@ assert_exists "$PROPOSE_MCP"
 assert_exists "$GUARDIAN_MCP"
 
 PATCH_SRC="$(cat "$PATCH_MCP")"
+# E-219 (D-056 R1): role derivation and the .ai//plans/ scope moved OUT of each server into one shared module, so the scope assertions follow it.
+CALLER_ROLE_SRC="${REPO_ROOT}/src/mcp/shared/caller-role.mjs"
 PROPOSE_SRC="$(cat "$PROPOSE_MCP")"
 GUARDIAN_SRC="$(cat "$GUARDIAN_MCP")"
 
@@ -29,8 +31,15 @@ assert_contains "patch-mcp: architect enum value in schema" '"architect"' "$PATC
 assert_contains "patch-mcp: roleGuard called with args.caller_role" "roleGuard(args.caller_role" "$PATCH_SRC"
 
 # ── patch-mcp: whitelist paths ────────────────────────────────────────────────
-assert_contains "patch-mcp: .ai/ in architect whitelist" '".ai/"' "$PATCH_SRC"
-assert_contains "patch-mcp: plans/ in architect whitelist" '"plans/"' "$PATCH_SRC"
+# E-219: there is no longer a quoted whitelist STRING to grep for — the scope is one
+# regex in architect-writes.mjs, and caller-role delegates to the predicate built on it.
+# Asserting the delegation is stronger than asserting a literal: a second hand-rolled
+# prefix test would satisfy the old grep while reintroducing the symlink hole E-216 closed.
+ARCH_WRITES_SRC="${REPO_ROOT}/src/mcp/safe-exec-mcp/architect-writes.mjs"
+assert_status 0 "patch-mcp: .ai//plans/ scope defined once, as a regex" \
+  grep -qE 'SAFE_ARCHITECT_PATH = /.*\.ai\|plans' "$ARCH_WRITES_SRC"
+assert_status 0 "patch-mcp: the shared guard DELEGATES to that predicate (no second copy)" \
+  grep -q 'architectPathVerdict(absPath, findProjectRootFrom(cwd))' "$CALLER_ROLE_SRC"
 
 # ── propose-patch-mcp: roleGuard present ─────────────────────────────────────
 assert_contains "propose-patch-mcp: roleGuard function defined" "roleGuard" "$PROPOSE_SRC"
@@ -49,43 +58,45 @@ assert_contains "context-guardian-mcp: Pre-flight RBAC description" "Pre-flight 
 
 # ── functional: roleGuard logic ───────────────────────────────────────────────
 if command -v node &>/dev/null; then
+  # E-219: this previously embedded its own COPY of roleGuard and asserted that a
+  # caller supplying NO role was allowed to write anywhere — so the suite certified the
+  # exact default-open behaviour E-219 exists to remove, and it passed because it was
+  # testing a copy rather than the shipped code. It now imports the real module.
   GUARD_SCRIPT=$(mktemp /tmp/e143_guard_XXXXXX.mjs)
-  cat > "$GUARD_SCRIPT" <<'JSEOF'
-import { relative } from "path";
+  cat > "$GUARD_SCRIPT" <<JSEOF
+import { architectScopeGuard, _resetCallerRoleCache } from "file://${REPO_ROOT}/src/mcp/shared/caller-role.mjs";
 
-function roleGuard(callerRole, absPath, cwd) {
-  if (!callerRole || callerRole.toLowerCase() !== "architect") return null;
-  const rel = relative(cwd, absPath).replace(/\\/g, "/");
-  const allowed = rel === ".ai" || rel.startsWith(".ai/") ||
-                  rel === "plans" || rel.startsWith("plans/");
-  if (!allowed) {
-    return { blocked: true, message: "[ANTI_DRIFT_VIOLATION]" };
-  }
-  return null;
-}
+const cwd = process.cwd();
+const g = (role, p) => {
+  _resetCallerRoleCache();
+  return architectScopeGuard(role, p, cwd) === null ? "allow" : "block";
+};
 
-const cwd = "/project";
-const block1  = roleGuard("architect", "/project/src/mcp/foo.js", cwd);    // blocked
-const allow1  = roleGuard("architect", "/project/.ai/TASKS.md", cwd);       // allowed
-const allow2  = roleGuard("architect", "/project/plans/foo.md", cwd);       // allowed
-const allow3  = roleGuard("engineer",  "/project/src/mcp/foo.js", cwd);     // allowed
-const allow4  = roleGuard(null,        "/project/src/mcp/foo.js", cwd);     // allowed
-const blockSrc= roleGuard("architect", "/project/src/bin/ai", cwd);         // blocked
+// With AI_OS_CALLER_ROLE=architect in the environment (set by the runner below), the
+// derived role is architect regardless of what the caller volunteers.
+const results = {
+  srcBlocked:      g(undefined, cwd + "/src/mcp/foo.js"),
+  aiAllowed:       g(undefined, cwd + "/.ai/TASKS.md"),
+  plansAllowed:    g(undefined, cwd + "/plans/foo.md"),
+  // THE REGRESSION: omitting the role no longer buys unrestricted access.
+  omittedBlocked:  g(undefined, cwd + "/src/bin/ai"),
+  // A volunteered engineer cannot lift the derived architect restriction.
+  claimedEngineer: g("engineer", cwd + "/src/bin/ai"),
+};
 
 const ok =
-  block1  !== null && block1.message === "[ANTI_DRIFT_VIOLATION]" &&
-  allow1  === null &&
-  allow2  === null &&
-  allow3  === null &&
-  allow4  === null &&
-  blockSrc !== null;
+  results.srcBlocked === "block" &&
+  results.aiAllowed === "allow" &&
+  results.plansAllowed === "allow" &&
+  results.omittedBlocked === "block" &&
+  results.claimedEngineer === "block";
 
-process.stdout.write(ok ? "PASS" : "FAIL");
+process.stdout.write(ok ? "PASS" : "FAIL " + JSON.stringify(results));
 JSEOF
-  RESULT=$(node "$GUARD_SCRIPT" 2>/dev/null || echo "error")
+  RESULT=$(AI_OS_CALLER_ROLE=architect CLAUDE_CODE_SESSION_ID= node "$GUARD_SCRIPT" 2>/dev/null || echo "error")
   rm -f "$GUARD_SCRIPT"
   if [[ "$RESULT" == "PASS" ]]; then
-    _pass "e143: roleGuard blocks src/ for architect, allows .ai/ plans/ engineer null"
+    _pass "e143: shipped guard blocks src/ for architect, allows .ai//plans/, and an OMITTED role no longer allows (E-219)"
   else
     _fail "e143: roleGuard logic incorrect (got: $RESULT)"
   fi

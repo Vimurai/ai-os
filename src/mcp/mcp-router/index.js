@@ -134,11 +134,32 @@ function isServerInActiveDomain(server) {
 
 // ── JSON-RPC stdio client (one-shot per call) ─────────────────────────────────
 
-function proxyOneShot({ command, args, env }, method, params, timeoutMs) {
+// Servers that derive a Triad role server-side (E-219) and therefore need the evidence
+// to do it. Everything else keeps the bare PATH+HOME environment.
+const ROLE_AWARE_SERVERS = new Set(["patch-mcp", "propose-patch-mcp", "safe-exec-mcp"]);
+
+function proxyOneShot({ command, args, env, serverName }, method, params, timeoutMs) {
   return new Promise((resolvePromise, reject) => {
     const childEnv = {
       PATH: process.env.PATH || "",
       HOME: process.env.HOME || "",
+      // E-219: the ROLE EVIDENCE a proxied server needs to identify its caller. Without
+      // these two the child sees neither a session id nor a launch role, derives
+      // `architect` by the fail-closed default, and refuses every src/ write — including
+      // the ENGINEER's, on a route the Code domain uses by design. Forwarding them
+      // grants nothing: the session id is only useful to look up an HMAC-verified record
+      // this process already holds, and the role env is the same spawn-frozen value the
+      // router itself was launched with.
+      //
+      // SCOPED to the role-aware servers rather than forwarded to all of them: the
+      // PATH+HOME allowlist is itself an isolation property, and several routable
+      // targets are third-party npx packages that have no business receiving a session
+      // id which is, after all, the selector for the role record. Minimization is kept
+      // for everything that does not need it.
+      ...(ROLE_AWARE_SERVERS.has(serverName) ? {
+        ...(process.env.CLAUDE_CODE_SESSION_ID ? { CLAUDE_CODE_SESSION_ID: process.env.CLAUDE_CODE_SESSION_ID } : {}),
+        ...(process.env.AI_OS_CALLER_ROLE ? { AI_OS_CALLER_ROLE: process.env.AI_OS_CALLER_ROLE } : {}),
+      } : {}),
       ...(env && typeof env === "object" ? env : {}),
       // E-153/E-154 (Tier-3 review P1): the proxied child server is itself telemetry-
       // instrumented now, so letting it record would DOUBLE-count every routed call — the
@@ -472,7 +493,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
 
         const result = await proxyOneShot(
-          cmd,
+          // serverName decides whether this target receives role evidence (E-219).
+          { ...cmd, serverName: targetServer },
           "tools/call",
           { name: targetTool, arguments: callArgs },
           timeoutMs

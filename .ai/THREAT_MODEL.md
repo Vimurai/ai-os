@@ -1,7 +1,7 @@
 # THREAT_MODEL.md — AI-OS v2
 
 > Companion to `.ai/SECURITY.md`. Contains full threat entries for all external integrations and trust boundaries.
-> Last updated: 2026-09-07 (E-218 stamp waiver requires a verified record)
+> Last updated: 2026-09-07 (E-219 server-side role derivation; T-PATCHMCP-001 fixed)
 
 ---
 
@@ -339,11 +339,43 @@ mitigation; this entry at least makes the assumption visible.
 not stop it. E-216 denies `proxy_call` itself for the architect role; that closes the
 named route, not the underlying default-open guard.
 
-**Not fixed in E-216** — it is a defect in patch-mcp, outside the ratified scope of the
-write-gate widening, and widening a Tier 3 task silently to cover it would be exactly
-the drift these gates exist to prevent. Fix shape: derive the role from the
-HMAC-verified session record (`safe-exec --verify-role`) instead of trusting an
-argument, and fail closed when no record is available.
+**FIXED in E-219 (D-056 R1).** Both servers now delegate to
+`src/mcp/shared/caller-role.mjs`, which derives the role server-side: the HMAC-verified
+session record first, then the server's spawn-frozen `AI_OS_CALLER_ROLE`, then
+`architect` — the RESTRICTED role — when there is no evidence either way. A volunteered
+`caller_role` may only ADD restriction, never lift it, so omitting it no longer means
+"unrestricted". The scope test delegates to `architectPathVerdict`, the same predicate
+the Write/Edit and shell gates use, so a symlink or hardlink planted inside `.ai/` cannot
+forward a write out of scope. `mcp__mcp-router__proxy_call` was also forwarding neither
+piece of evidence, which made a proxied server derive `architect` and refuse the
+ENGINEER's writes; the router now forwards both, scoped to the role-aware servers.
+Rollback: `AI_OS_SOVEREIGNTY_LOCK=0`.
+
+**Verification note**: the sandboxed pen-test could not run (Docker unavailable on this
+host), so this is verified by `tests/suites/caller_role_test.sh` driving the real server
+over stdio — including the symlink and hardlink cases — plus static analysis, NOT by a
+sandboxed proof-of-concept.
+
+---
+
+### T-PROPOSEPATCH-001 — `confirm_patch` applies a stored absolute path against the confirming process's cwd
+
+**Boundary**: `src/mcp/propose-patch-mcp/index.js` — `propose_patch` stores an ABSOLUTE
+path resolved against the proposing process's cwd; `confirm_patch` later writes to that
+stored path without re-running `safePath` against its OWN cwd. Confirm from a different
+project and the write lands outside that project's root.
+
+**Recorded as its own entry, not as an E-219 residual.** It long predates E-219 and is
+an independent defect in propose-patch's two-phase flow; filing it under E-219 would make
+it look like a leftover of that task rather than something that still needs funding.
+
+**Not a role escape**: `confirm_patch` re-derives the caller role in its own process
+(E-219), so an Architect confirming a patch is still confined to `.ai/`+`plans/` — of the
+CONFIRMING project. The gap is the project boundary, not the role boundary.
+
+**Fix shape**: re-run `safePath(patch.path, cwd)` at confirm time and refuse when the
+stored path lies outside the confirming root, or store the project root alongside the
+patch and refuse to confirm from a different one.
 
 ---
 

@@ -38,6 +38,7 @@ import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
 import { getDb } from "../shared/state-db.js";
 import { createLogger } from "../shared/logger.js";
+import { architectScopeGuard, effectiveRequestRole } from "../shared/caller-role.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("propose-patch-mcp");
@@ -64,31 +65,17 @@ function safePath(filePath, cwd) {
 }
 
 /**
- * Role-Aware RBAC guard (E-143, §35 ANTI-DRIFT).
- * Architect (Agy) may only write to .ai/ or plans/ — never src/.
- * Returns an error result object if blocked, null if allowed.
+ * Role-Aware RBAC guard (E-143 §35; role derivation moved SERVER-SIDE in E-219/D-056 R1).
+ *
+ * The old signature took the caller's own `caller_role` and returned "allow" whenever it
+ * was absent — a self-declared guard, and the only barrier left in a session started
+ * without the settings overlay. It now delegates to the shared resolver, which derives
+ * the role from the HMAC-verified session record, then this server's launch env, and
+ * falls back to `architect` (the RESTRICTED role) when there is no evidence.
+ * The argument survives as advisory: it may add restriction, never lift it.
  */
 function roleGuard(callerRole, absPath, cwd) {
-  if (!callerRole || callerRole.toLowerCase() !== "architect") return null;
-  const rel = relative(cwd, absPath).replace(/\\/g, "/");
-  const allowed = rel === ".ai" || rel.startsWith(".ai/") ||
-                  rel === "plans" || rel.startsWith("plans/");
-  if (!allowed) {
-    return {
-      content: [{
-        type: "text",
-        text:
-          `[ANTI_DRIFT_VIOLATION] Architect attempted to write outside allowed scope.\n` +
-          `  path:    ${absPath}\n` +
-          `  role:    ${callerRole}\n` +
-          `  allowed: .ai/, plans/\n\n` +
-          `The Architect (Agy) may only modify .ai/ and plans/.\n` +
-          `To modify src/, switch to the Engineer (Claude).`,
-      }],
-      isError: true,
-    };
-  }
-  return null;
+  return architectScopeGuard(callerRole, absPath, cwd);
 }
 
 /**
@@ -175,7 +162,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           caller_role:  {
             type: "string",
             enum: ["engineer", "architect"],
-            description: "Role of the calling agent. If 'architect', writes outside .ai/ and plans/ are blocked with [ANTI_DRIFT_VIOLATION].",
+            description:
+              "Role of the calling agent. If 'architect', writes outside .ai/ and plans/ " +
+              "are blocked with [ANTI_DRIFT_VIOLATION]. Advisory only (E-219): the role is " +
+              "derived server-side from the verified session record, then this server's launch " +
+              "environment, defaulting to 'architect' when neither is available. Supplying a " +
+              "role can only ADD restriction — pass 'architect' to sandbox yourself; passing " +
+              "'engineer' does nothing.",
           },
         },
         required: ["path", "diff_content"],
@@ -262,6 +255,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         diff_content: args.diff_content,
         description: args.description || "",
         caller_role: args.caller_role || null,
+        // E-219: RENDER-ONLY provenance. These two fields reach the tool's text output
+        // so a reviewer can see what the proposing process was derived as, and from
+        // which evidence — they are NOT persisted: the patches table has no such
+        // columns and the INSERT below does not name them.
+        //
+        // Deliberately not persisted. No guard consumes them (confirm_patch re-derives
+        // in its own process, which is the stronger check), so adding columns would mean
+        // a state.sqlite schema migration for a field nothing reads. An earlier comment
+        // here claimed the stored row was auditable, which was simply false — and a
+        // comment that overstates what the code does is worse than an absent feature,
+        // because the next reader trusts it.
+        derived_role: effectiveRequestRole(args.caller_role, cwd).role,
+        derived_role_source: effectiveRequestRole(args.caller_role, cwd).source,
         created_at: new Date().toISOString(),
         status: "pending",
       };

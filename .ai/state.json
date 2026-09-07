@@ -2870,6 +2870,13 @@
       "task_id": "E-218",
       "timestamp": "2026-09-07T15:12:30.702Z",
       "summary": "[TIER_2] Git Lane stamp waiver now requires the HMAC-verified session record; env fallbacks may restrict but never waive. Closes the hole where exporting AI_OS_CALLER_ROLE=architect allowed stamp-free commits to .ai/, which holds REVIEWS.md. Hit the command-substitution subshell trap again and pinned it with an assertion. THREAT_MODEL T-GITLANE-001 item 4 marked FIXED. git_lane 57/0, full suite 3683/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-219",
+      "timestamp": "2026-09-07T15:51:08.335Z",
+      "summary": "[TIER_3] Server-side caller-role derivation closes T-PATCHMCP-001. security_engineer NOT CLEARED then SEC_CLEARED. P0 was mine: I hand-rolled a prefix scope test instead of reusing architectPathVerdict, reintroducing the symlink hole E-216 closed — after flagging the concern and not acting on it. Also fixed a live over-block (router stripped role evidence, blocking the Engineer via proxy_call) and a suite that certified the old default-open behaviour by testing a copy. Pen-test blocked on Docker; F1 verified by suite + static analysis, not a PoC. caller_role 28/0, full suite 3711/0."
     }
   ],
   "deltas": [

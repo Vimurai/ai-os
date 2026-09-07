@@ -11,7 +11,9 @@
  *   patch_file(path, old_content, new_content, expected_md5?, caller_role?)
  *     → Replaces old_content with new_content only if file matches expected_md5.
  *       If expected_md5 is omitted, falls back to old_content exact-match check.
- *       If caller_role is "architect", writes outside .ai/ and plans/ are blocked.
+ *       The role is derived server-side (E-219): verified session record, then this
+ *       server's launch env, then `architect` when there is no evidence. A supplied
+ *       caller_role may only ADD restriction.
  *
  * Security:
  *   - Path must be within cwd (no traversal outside project root).
@@ -28,6 +30,7 @@ import { readFileSync, writeFileSync, existsSync, statSync } from "fs";
 import { resolve, relative } from "path";
 import { createHash } from "crypto";
 import { createLogger } from "../shared/logger.js";
+import { architectScopeGuard } from "../shared/caller-role.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("patch-mcp");
@@ -50,31 +53,17 @@ function safePath(filePath, cwd) {
 }
 
 /**
- * Role-Aware RBAC guard (E-143, §35 ANTI-DRIFT).
- * Architect (Agy) may only write to .ai/ or plans/ — never src/.
- * Returns an error result object if blocked, null if allowed.
+ * Role-Aware RBAC guard (E-143 §35; role derivation moved SERVER-SIDE in E-219/D-056 R1).
+ *
+ * The old signature took the caller's own `caller_role` and returned "allow" whenever it
+ * was absent — a self-declared guard, and the only barrier left in a session started
+ * without the settings overlay. It now delegates to the shared resolver, which derives
+ * the role from the HMAC-verified session record, then this server's launch env, and
+ * falls back to `architect` (the RESTRICTED role) when there is no evidence.
+ * The argument survives as advisory: it may add restriction, never lift it.
  */
 function roleGuard(callerRole, absPath, cwd) {
-  if (!callerRole || callerRole.toLowerCase() !== "architect") return null;
-  const rel = relative(cwd, absPath).replace(/\\/g, "/");
-  const allowed = rel === ".ai" || rel.startsWith(".ai/") ||
-                  rel === "plans" || rel.startsWith("plans/");
-  if (!allowed) {
-    return {
-      content: [{
-        type: "text",
-        text:
-          `[ANTI_DRIFT_VIOLATION] Architect attempted to write outside allowed scope.\n` +
-          `  path:    ${absPath}\n` +
-          `  role:    ${callerRole}\n` +
-          `  allowed: .ai/, plans/\n\n` +
-          `The Architect (Agy) may only modify .ai/ and plans/.\n` +
-          `To modify src/, switch to the Engineer (Claude).`,
-      }],
-      isError: true,
-    };
-  }
-  return null;
+  return architectScopeGuard(callerRole, absPath, cwd);
 }
 
 // ── Server ────────────────────────────────────────────────────────────────────
@@ -122,7 +111,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             enum: ["engineer", "architect"],
             description:
               "Role of the calling agent. If 'architect', writes outside .ai/ and plans/ " +
-              "are blocked with [ANTI_DRIFT_VIOLATION]. Omit or set to 'engineer' for Claude.",
+              "are blocked with [ANTI_DRIFT_VIOLATION]. Advisory only (E-219): the role is derived server-side from the verified session record, then this server's launch environment, defaulting to 'architect' when neither is available. Supplying a role can only ADD restriction — pass 'architect' to sandbox yourself; passing 'engineer' does nothing.",
           },
         },
         required: ["path", "old_content", "new_content"],
