@@ -9,7 +9,7 @@
 - Node.js 22.5+ (MCP servers, node:sqlite DatabaseSync, ESM, fetch; CI pins Node 22), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
 
 ## Triad Health
-- Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. Owes D-053 ratification + `structured-outputs.md §32` amendment (E-198), plus the E-208/E-212/E-214 follow-ups listed under Known Risks.
+- Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. D-053 + `structured-outputs.md §32` were ratified 2026-07-31 (closed). Ruled D-055 (2026-09-07) on the D-054 sprint residuals → E-216/E-217/E-218 registered for the Engineer.
 - Engineer (Claude): shipped the entire **D-054 sprint (E-208..E-215, 8 tasks)** — merged to `master` and pushed. Queue EXHAUSTED (0 open).
 - Tester: bash suite now 114 files, **3403 assertions, 0 failing**.
 

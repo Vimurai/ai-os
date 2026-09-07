@@ -38,7 +38,11 @@ the manifest instead of hardcoding `claude=engineer`, `agents/gemini=architect`.
    Directory names stay vendor-named (D-052); the manifest is the only place that says which role they serve.
 2. **Role-aware `do_sync`**: for each provider in `.ai/roles.json`, the provider's skill/agent target dir
    receives `shared` + every served role's dirs (union, byte-identical copies, `_SKILLS_INDEX.md` regenerated).
-   A provider serving both roles gets everything. Agent `.md` files from `src/gemini/agents` MUST be
+   A provider serving both roles gets everything. **Same-name collisions (D-055 R2, E-217)**: two role
+   directories MUST NOT ship different content under one skill name — the Architect's lifecycle copies are
+   named `arch-task` / `arch-oracle` (E-149 pattern; the Engineer keeps `ai-task` / `repo-oracle`). A
+   single-role workspace keeps the historical role-overrides-shared behaviour; a multi-role workspace treats
+   any remaining collision as a sync ERROR (non-zero exit), never a silent choice. Agent `.md` files from `src/gemini/agents` MUST be
    normalized to the Claude agent frontmatter contract (`name`, `description`, `allowed-tools`,
    `context: fork`, `agent: general-purpose`) — verify each of the 7 loads in `/agents`.
 3. **Architect settings overlay** (`.claude/settings.architect.json`, generated per E-208): adds the Architect
@@ -57,10 +61,17 @@ the manifest instead of hardcoding `claude=engineer`, `agents/gemini=architect`.
 
 ## Git Lane (Architect-scoped commits) — ruling
 A Claude Architect may commit **only** when every staged path is under `.ai/` or `plans/`. The pre-commit
-hook reads the E-129 session role (token first, env fallback): role `architect` + any staged path outside
-that scope → BLOCK (`[SOVEREIGNTY_BLOCK]`, hint: hand the change list to the Engineer). For an
-architect-scoped commit the `[CRITIC_STAMP]` requirement is **waived** (critics review `src/`; `.ai/` docs
-have no diff for them) — all other Gate 2 checks (secret scan, co-modification warning) still run. Engineer
+hook resolves the session role through `safe-exec --verify-role <session id>`, where the session id comes
+from the harness-provided session-id env var (E-129 records are keyed by session id and a git hook receives
+no payload, so there is no "role-stamp file" to read — amended per E-214). Fallback order: `AI_OS_PANE_ROLE`,
+then `AI_OS_CALLER_ROLE`, then `engineer`. Role `architect` + any staged path outside that scope → BLOCK
+(`[SOVEREIGNTY_BLOCK]`, hint: hand the change list to the Engineer). For an architect-scoped commit the
+`[CRITIC_STAMP]` requirement is **waived** (critics review `src/`; `.ai/` docs have no diff for them) — all
+other Gate 2 checks (credential scan, co-modification warning, REVIEWS.md hand-edit checks) still run.
+**(D-055 R4, E-218)** The waiver is granted ONLY when the role came from the verified session record; the env
+fallbacks may produce the restrictive outcome (BLOCK) but never the waiver. Accepted residuals are recorded in
+`THREAT_MODEL.md` T-GITLANE-001 (`--amend` index↔HEAD~ gap, unauthenticated record selection,
+`--no-verify`/`merge`/`cherry-pick`). Engineer
 role behaviour is unchanged. This retires the D-053 proxy-commit workaround for same-provider Triads only;
 agy Architects keep using the Engineer proxy.
 
@@ -84,3 +95,6 @@ agy Architects keep using the Engineer proxy.
 - **E-213** (Tier 2, dep E-208): Architect overlay permissions + role-correct identity labels + MCP spawn-identity acceptance (§Components 3–4).
 - **E-214** (Tier 3, dep E-208): Architect-scoped Git Lane in `pre-commit.sh` (§Git Lane).
 - **E-215** (Tier 2, dep E-212): ARCHITECT.md runtime ladder + `ai doctor` per-role provisioning report (§Components 5–6).
+- **E-216** (Tier 3, D-055 R1): widen the Architect write gate — overlay deny rules for MCP write tools + shell write-redirect policy in `analyzeSovereignty` (see `role-abstraction.md §Security`).
+- **E-217** (Tier 2, D-055 R2): rename the Architect's `ai-task`/`repo-oracle` to `arch-task`/`arch-oracle`; collision guard → sync error in multi-role workspaces; add the missing `context:` key to `seo_engineer.md`.
+- **E-218** (Tier 2, D-055 R4): Git Lane stamp waiver only from the verified session record.

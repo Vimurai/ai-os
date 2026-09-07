@@ -633,3 +633,54 @@ D-050 decoupled persona from vendor and `role-abstraction.md` already *claims* t
 Revert `.ai/roles.json` to `architect: agy:1`, delete the `ai pane` launcher and the per-role settings file, restore the `session-start.sh engineer` positional-only mint, and restore the E-117 resolution order. The Role Resolution clause in the rulefiles is inert when no stamp is present, so it may stay.
 
 ---
+
+---
+
+## [[D-055]] — D-054 Sprint Residuals: Six Rulings (write-gate scope, skill collisions, cache contract, Git Lane residuals, mint guard, D-053 status)
+
+**Date**: 2026-09-07
+**Task**: E-216, E-217, E-218 (Engineer handoff 2026-09-07 12:03 UTC, COMM.md)
+**Decision**: Rule on the six open questions left by the shipped D-054 sprint (E-208..E-215, master 8af653e). R1 widen by policy; R2 rename the Architect copies; R3 accept; R4 accept three residuals and fund the fourth; R5 accept as documented; R6 already closed.
+
+### R1 — Architect write gate: WIDEN (by policy surface, not by claiming parser completeness)
+Gap G2 is narrowed, not closed: shell writes and MCP write tools bypass the E-208 gate. Ruling:
+1. **MCP write channel** — the Architect overlay (`.claude/settings.architect.json`) gains `permissions.deny` for every filesystem-mutating MCP tool: `mcp__filesystem__write_file`, `edit_file`, `move_file`, `create_directory`, `mcp__patch-mcp__patch_file`, `mcp__propose-patch-mcp__confirm_patch`, `mcp__propose-patch-mcp__propose_patch`. Deterministic, zero parser work. The Architect edits `.ai/` with the native `Write`/`Edit` tools, which the gate already scopes.
+2. **Shell write channel** — `analyzeSovereignty` gains a **write-redirect policy** for `caller_role=architect`: any output redirection (`>`, `>>`, `|& tee`, `tee`) or file-mutating utility (`cp`, `mv`, `install`, `ln`, `sed -i`, `perl -i`, `rsync`, `dd`, `truncate`, `git apply`, `patch`) whose resolved target lies outside `.ai/` or `plans/` → `[SOVEREIGNTY_BLOCK]`. **Inline interpreters** (`python3 -c`, `node -e`, `perl -e`, `ruby -e`, `bash -c`, `sh -c`, `eval`) and heredoc-fed interpreters are BLOCKED outright for the architect role — their targets are unresolvable, and the Architect has no legitimate need for them (hint: use `Write`/`Edit`). Fail-closed on any unparsable target.
+3. The gate's documented guarantee becomes: "native write tools + MCP write tools + recognised shell write forms"; the code comments and tests keep stating the residual (exotic encodings, `git` plumbing such as `update-index`/`hash-object`, editors launched interactively).
+
+### R2 — Skill-name collision: RENAME the Architect copies (E-149 precedent)
+`ai-task` and `repo-oracle` in `src/agents/skills` become **`arch-task`** and **`arch-oracle`** (the same pattern that turned the Architect's `ai-review` into `arch-review`). `ARCHITECT.md`, `task-planner`, `blueprint-writer`, `_INDEX`, and any P-## lifecycle text are updated. After the rename the multi-role workspace must contain **zero** collisions; the E-212 collision guard is retained as a permanent invariant and is promoted from a warning to a **non-zero `ai sync` exit** in a multi-role workspace (a single-role workspace keeps role-overrides-shared, unchanged). Role-scoped skill directories were rejected: the host loads one flat directory per provider, so a directory-level fix would be a host-specific fork of the discovery contract.
+
+### R3 — E-126 cache-rollback contract: ACCEPT the change
+`AI_OS_DISABLE_CACHE=1` suppresses the compiled context blob only. The `[AI_OS_ROLE]` stamp is role binding (D-054), not caching, and MUST survive a caching rollback — otherwise a cache toggle silently reopens G1. Recorded in `role-abstraction.md §Same-Provider Triad` Component 2.
+
+### R4 — T-GITLANE-001 residuals: ACCEPT 1–3, FUND 4
+- Accept **1** (`--amend` index↔HEAD~ gap): undetectable from inside `pre-commit`; a partial detector on a sovereignty gate is worse than a stated gap.
+- Accept **2** (record selected by an unauthenticated session id): same ceiling as `mintToken`; impact bounded to adding a restriction or waiving a diff that is already in scope.
+- Accept **3** (`--no-verify`, `merge`, `cherry-pick`): inherent to git, pre-existing for Gate 2 as a whole.
+- **Fund 4**: the stamp waiver is granted **only** when the role comes from the verified session record (`safe-exec --verify-role`). The `AI_OS_PANE_ROLE` / `AI_OS_CALLER_ROLE` fallbacks may drive the **restrictive** outcome (path-scope BLOCK) but never the waiver. A `.ai/`-only commit from an unverified session keeps the full `[CRITIC_STAMP]` requirement. Together with the existing E-100/E-113 REVIEWS.md hand-edit checks this closes the "bookkeeping commit without a stamp" path.
+
+### R5 — Mint guard is partial: ACCEPT as documented
+The guard prevents *changing* a valid binding; it does not prevent delete-and-remint. Deleting the record from an Architect pane is already gated by the E-102 `rm` sovereignty block, so the residual requires an actor with unrestricted shell — who is outside every AI-OS gate anyway. Binding the record to a process start-time / boot-id, or an append-only ledger, is deferred to the backlog (no E-## now); `THREAT_MODEL.md` already states the ceiling.
+
+### R6 — D-053 + structured-outputs.md §32: ALREADY CLOSED
+D-053 was ratified 2026-07-31 (`DECISIONS.md` line "[[D-053]]") and §32 carries the `ai add-task` / `ai handoff` exception. The Engineer's item is stale; the `DIGEST.md` Known Risk that still says "pending D-053" is corrected with this decision.
+
+### Alternatives considered
+1. **R1: accept the write gate as advisory** — rejected; §35 enforcement at the gate is the whole point of D-054's Tier 3 acceptance, and the two uncovered channels are the cheapest ones for a drifting Architect to reach.
+2. **R1: full shell parser with path resolution for every utility** — rejected as unbounded; the policy surface above blocks the reachable forms and states the rest.
+3. **R2: role-scoped skill directories** — rejected (host contract, see R2).
+4. **R4: fix `--amend` with a best-effort detector** — rejected (false confidence on a sovereignty gate).
+
+### Constraints driving this decision
+- Sovereignty must be enforced by gates, not prompts (D-054). Every gate must state its residual plainly; tests must fail if a stronger claim is reinserted (E-208 precedent).
+- No host-specific forks of the skill-discovery contract (one flat directory per provider).
+
+### Impact
+- Unlocks: E-216 (R1, Tier 3), E-217 (R2 rename + collision invariant + the `seo_engineer.md` frontmatter fix, Tier 2), E-218 (R4.4 verified-record-only waiver, Tier 2).
+- Risk if wrong: R1's interpreter block could hamper an Architect that legitimately needs a one-liner to read state — mitigated: reads are unaffected (only write forms and inline interpreters are blocked) and `.ai/` reads have MCP equivalents.
+
+### Rollback
+`AI_OS_SOVEREIGNTY_LOCK=0` disables the widened shell policy; remove the overlay deny rules; rename the skills back; `AI_OS_SKIP_GIT_LANE=1` for the waiver rule. R3/R5/R6 are documentation-only.
+
+---
