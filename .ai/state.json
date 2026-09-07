@@ -1315,12 +1315,12 @@
     {
       "id": "E-217",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Resolve the skill-name collision per D-055 R2 and .ai/blueprints/architect-provider-parity.md §Components 2: rename src/agents/skills/ai-task → arch-task and src/agents/skills/repo-oracle → arch-oracle (E-149 pattern; the Engineer keeps ai-task/repo-oracle); update every reference (ARCHITECT.md, task-planner, blueprint-writer, decision-recorder, _SKILLS_INDEX, agy plugin if it lists skills); promote the E-212 collision guard in src/bin/ai do_sync from a warning to a non-zero exit in a multi-role workspace (single-role keeps role-overrides-shared); also add the missing 'context:' key to src/claude/agents/seo_engineer.md so all 20 agents pass the frontmatter contract. Acceptance: ai sync in this repo reports zero collisions; sync/skill_context/role_config/agent-frontmatter suites green; a synthetic collision makes ai sync exit non-zero only when roles.json maps both roles to one provider; mirrors synced.",
       "created_at": "2026-09-07T12:08:11.635Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-07T15:13:11.148Z",
+      "summary": "Architect skills renamed to arch-task/arch-oracle (E-149 pattern); Engineer keeps ai-task/repo-oracle. Collision guard now fatal in multi-role workspaces, inert in single-role. seo_e …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
