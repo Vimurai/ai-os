@@ -460,7 +460,14 @@ PY
 # Locate the role-manifest resolver (dev tree first, then the install mirror).
 _locate_role_manifest() {
   local c
-  for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/shared/role-manifest.mjs" \
+  # Resolve relative to THIS script (BASH_SOURCE), never to the CURRENT PROJECT.
+  # `git rev-parse --show-toplevel` finds the USER's repo, not the AI-OS install: run
+  # `ai sync` inside any project that happens to contain src/shared/role-manifest.mjs and
+  # node would execute THAT file and trust its stdout. Same shape as E-219 F3.
+  # `${_sd%/*}` takes the parent by parameter expansion rather than a ".." component,
+  # so the candidate path is already normalised — nothing to resolve, nothing to escape.
+  local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  for c in "${_sd%/*}/shared/role-manifest.mjs" \
            "${AIOS}/shared/role-manifest.mjs"; do
     [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
   done
@@ -601,6 +608,14 @@ _provision_workspace() {
         _sync_skills_no_clobber "${AIOS}/${line}" "${ws}/skills" "$line"
       fi
     done
+    # Prune with the SAME source array the copy above just consumed. Deriving the
+    # canonical list a second way would let provisioning and pruning disagree about
+    # what is canonical — which is precisely how a "cleanup" deletes something real.
+    local -a _abs=()
+    for line in "${skill_dirs[@]}"; do
+      [[ -d "${AIOS}/${line}" ]] && _abs+=("${AIOS}/${line}")
+    done
+    [[ "${#_abs[@]}" -gt 0 ]] && _prune_workspace_dir "${ws}/skills" "${_abs[@]}"
   fi
   fi
 
@@ -618,6 +633,87 @@ _provision_workspace() {
   [[ -n "$served" ]] && echo "  ${ws}/ serves role(s): ${served}"
   return 0
 }
+
+
+# ── E-220 (D-056 R2): manifest-scoped pruning ────────────────────────────────
+# `ai sync` has always been additive, which is safe but leaky: after the E-217 rename
+# the old `ai-task` / `repo-oracle` directories survived in every workspace forever.
+# The obvious fix — delete anything not in the source — is the dangerous one, because a
+# user's own skill is exactly "not in the source". So a path is removed only when sync
+# WROTE it (manifest), NOBODY HAS EDITED IT SINCE (hash), and it is GONE UPSTREAM.
+# Everything else is reported as `orphan (kept)`. A first run has no manifest and
+# therefore prunes nothing.
+#
+# Rollback: AI_OS_NO_PRUNE=1 skips pruning entirely (the manifest is still recorded, so
+# a later run can prune once the flag is removed).
+_locate_sync_manifest() {
+  local c
+  # Resolve relative to THIS script (BASH_SOURCE), never to the CURRENT PROJECT.
+  # `git rev-parse --show-toplevel` finds the USER's repo, not the AI-OS install: run
+  # `ai sync` inside any project that happens to contain src/shared/sync-manifest.mjs and
+  # node would execute THAT file and trust its stdout. Same shape as E-219 F3.
+  # `${_sd%/*}` takes the parent by parameter expansion rather than a ".." component,
+  # so the candidate path is already normalised — nothing to resolve, nothing to escape.
+  local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  for c in "${_sd%/*}/shared/sync-manifest.mjs" \
+           "${AIOS}/shared/sync-manifest.mjs"; do
+    [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+
+# _prune_workspace_dir <target_dir> <source_dir...>
+# Names provided by the current sources decide what is still upstream.
+_prune_workspace_dir() {
+  local dst="$1"; shift
+  [[ -d "$dst" ]] || return 0
+  [[ "${AI_OS_NO_PRUNE:-0}" == "1" ]] && return 0
+  command -v node >/dev/null 2>&1 || return 0
+  local sm; sm="$(_locate_sync_manifest || true)"
+  [[ -n "$sm" ]] || return 0
+
+  # Names the current sources provide, as JSON for the helper.
+  local names_json canon_json d n
+  names_json="$(mktemp)"; canon_json="$(mktemp)"
+  {
+    printf '['
+    local first=1
+    for d in "$@"; do
+      [[ -d "$d" ]] || continue
+      for n in "$d"/*/; do
+        [[ -d "$n" && -f "${n}SKILL.md" ]] || continue
+        [[ "$first" -eq 1 ]] || printf ','
+        printf '"%s"' "$(basename "$n")"
+        first=0
+      done
+      for n in "$d"/*.md; do
+        [[ -f "$n" ]] || continue
+        [[ "$first" -eq 1 ]] || printf ','
+        printf '"%s"' "$(basename "$n")"
+        first=0
+      done
+    done
+    printf ']'
+  } > "$names_json"
+  # Canonical source dirs, for the --prune-known identity check.
+  { printf '['; local f2=1; for d in "$@"; do [[ -d "$d" ]] || continue; [[ "$f2" -eq 1 ]] || printf ','; printf '"%s"' "$d"; f2=0; done; printf ']'; } > "$canon_json"
+
+  local mode="apply" extra=()
+  [[ "${AI_OS_PRUNE_KNOWN:-0}" == "1" ]] && extra+=("--prune-known")
+  local out
+  out="$(node --no-warnings "$sm" "$mode" "$dst" "$names_json" "${extra[@]:-}" --canon "$canon_json" 2>/dev/null || true)"
+  rm -f "$names_json" "$canon_json"
+  [[ -z "$out" ]] && return 0
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      PRUNE*) echo "  - pruned ${line#PRUNE }" ;;
+      KEEP*)  echo "  ! orphan (kept) ${line#KEEP }" >&2 ;;
+    esac
+  done <<< "$out"
+  return 0
+}
+
 
 _sync_workspace_dirs() {
   local mode="${1:-sync}"
@@ -3089,7 +3185,14 @@ _find_ai_dir() {
 # (It imports provider-adapter.mjs from the same directory, so locating one locates both.)
 _locate_resolve_launch() {
   local c
-  for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/shared/resolve-launch.mjs" \
+  # Script-relative, never project-relative — see the note on _locate_sync_manifest.
+  # This one carries the most weight of the three: its stdout decides which BINARY
+  # `ai pane` execs, so trusting a helper found in the user's cwd would let any repo
+  # choose the launched process.
+  # `${_sd%/*}` takes the parent by parameter expansion rather than a ".." component,
+  # so the candidate path is already normalised — nothing to resolve, nothing to escape.
+  local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  for c in "${_sd%/*}/shared/resolve-launch.mjs" \
            "${AIOS}/shared/resolve-launch.mjs"; do
     [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
   done
