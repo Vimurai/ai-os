@@ -1287,12 +1287,12 @@
     {
       "id": "E-215",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Make ARCHITECT.md runtime-aware and add the ai doctor per-role provisioning report per .ai/blueprints/architect-provider-parity.md §Components 5-6: mirror ENGINEER.md's Session Start ladder (Step 1 Skill tool ai-preflight, Step 2 run_preflight, Step 3 activate_skill) and 'use the Skill tool when present' in Skill Invocation; move the Gemini Model Mandate under a 'Provider notes' heading; leave the Forbidden Zone and §35 text unchanged; extend 'ai doctor' in src/bin/ai to print, per role → provider, whether the provider dir holds that role's skills/agents, whether the settings overlay exists, and whether the rulefile is present. Acceptance: GEMINI.md/CLAUDE.md shims unchanged; rulefile + doctor suites green; mirrors synced.",
       "created_at": "2026-09-04T21:32:54.629Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-07T10:36:52.305Z",
+      "summary": "ARCHITECT.md gains the three-step Session Start ladder and Skill-tool-when-present; gemini Model Mandate re-homed under Provider notes; Forbidden Zone/§35/shims unchanged. ai doctor …[full in LOG.md]",
       "depends_on": [
         "E-212"
       ],
