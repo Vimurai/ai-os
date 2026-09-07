@@ -35,22 +35,51 @@ import { existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { getDb, addTask } from "../mcp/shared/state-db.js";
 import { emitHandoff, hasPendingHandoff } from "./signal-handoff.mjs";
+import { roleProvider } from "./provider-adapter.mjs";
 
 // Triad caller_role → TASKS.md owner label. Attribution only (safe-exec-mcp owns the
 // tamper-resistant HMAC role boundary, E-129); here we just record who created the row.
-export const ROLE_OWNER = {
+//
+// E-213 (architect-provider-parity.md §Components 4): the PROVIDER half is resolved
+// from .ai/roles.json rather than hardcoded. "Architect (Agy)" was baked in, so an
+// all-Claude Triad (D-054) attributed every Architect-created task to Agy — a provider
+// that is not even running. state-db::roleFromOwner splits on " (" for the generated
+// TASKS.md section headers, so making the provider dynamic cannot churn those headers.
+export const DEFAULT_ROLE_OWNER = {
   architect: "Architect (Agy)",
   engineer:  "Engineer (Claude)",
 };
 
+// Kept as a named export for back-compat with existing importers/tests.
+export const ROLE_OWNER = DEFAULT_ROLE_OWNER;
+
+// "claude" → "Claude". Cosmetic only: the label is human-facing and the previous
+// hardcoded values were capitalized, so this keeps TASKS.md reading the same way.
+function _titleProvider(p) {
+  const t = String(p || "").trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+}
+
 /**
  * Resolve the owner label. Explicit --owner wins; else map the Triad role
- * (--role, then the bootloader-injected AI_OS_CALLER_ROLE, then 'engineer').
+ * (--role, then the bootloader-injected AI_OS_CALLER_ROLE, then 'engineer') and
+ * pair it with the provider that role is bound to in .ai/roles.json.
+ * Fails soft to the D-050 defaults — an attribution label must never break task
+ * creation just because roles.json is missing or unreadable.
  */
-export function resolveOwner({ owner, role } = {}) {
+export function resolveOwner({ owner, role, aiDir } = {}) {
   if (typeof owner === "string" && owner.trim()) return owner.trim();
   const r = String(role || process.env.AI_OS_CALLER_ROLE || "engineer").toLowerCase();
-  return ROLE_OWNER[r] || ROLE_OWNER.engineer;
+  const known = r === "architect" ? "architect" : "engineer";
+  const label = known === "architect" ? "Architect" : "Engineer";
+  try {
+    const dir = aiDir || findAiDir(process.cwd());
+    const provider = _titleProvider(roleProvider(dir, known));
+    if (provider) return `${label} (${provider})`;
+  } catch {
+    /* fall through to the default */
+  }
+  return DEFAULT_ROLE_OWNER[known];
 }
 
 /**

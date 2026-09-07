@@ -8,7 +8,6 @@
   },
   "permissions": {
     "allow": [
-      "Bash(gemini -p *)",
       "mcp__vibe-check-mcp__run_vibe_audit",
       "mcp__vibe-check-mcp__run_chaos_test",
       "mcp__vibe-check-mcp__get_performance_metrics",

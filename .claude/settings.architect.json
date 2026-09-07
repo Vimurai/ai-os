@@ -1,5 +1,15 @@
 {
   "env": {
     "AI_OS_CALLER_ROLE": "architect"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ai add-task *)",
+      "Bash(ai handoff *)",
+      "mcp__task-synchronizer-mcp__handoff_control",
+      "mcp__task-synchronizer-mcp__add_topic_seed",
+      "mcp__task-synchronizer-mcp__add_cluster_page",
+      "mcp__context-guardian-mcp__check_role_access"
+    ]
   }
 }

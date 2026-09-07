@@ -34,10 +34,36 @@ PY
   [[ -n "$EXTRACTED" ]] && SUMMARY="$EXTRACTED"
 fi
 
+# E-213 (§Components 4): stamp WHICH provider ran WHICH role, instead of a hardcoded
+# "Claude". Under a same-provider Triad both panes are Claude, so the provider alone no
+# longer identifies the session. Role comes from the launch-time pane role (set by
+# `ai pane`) or the advisory env; provider from .ai/roles.json. Fails soft to "Claude"
+# — a session stamp must never break the Stop hook.
+ACTOR="Claude"
+_E213_ROLE="${AI_OS_PANE_ROLE:-${AI_OS_CALLER_ROLE:-engineer}}"
+case "$_E213_ROLE" in architect|engineer) ;; *) _E213_ROLE="engineer" ;; esac
+if command -v node >/dev/null 2>&1; then
+  for _pa in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/shared/provider-adapter.mjs" \
+             "${HOME}/.ai-os/shared/provider-adapter.mjs"; do
+    if [[ -f "$_pa" ]]; then
+      _E213_PROV="$(node --no-warnings -e '
+const { pathToFileURL } = require("node:url");
+import(pathToFileURL(process.argv[1]).href).then(m =>
+  process.stdout.write(m.roleProvider(process.argv[2], process.argv[3]) || ""));
+' "$_pa" "$AI_DIR" "$_E213_ROLE" 2>/dev/null || true)"
+      break
+    fi
+  done
+fi
+[[ -z "${_E213_PROV:-}" ]] && _E213_PROV="claude"
+# "claude" -> "Claude" so the stamp reads the way it always has.
+_E213_PROV="$(printf '%s' "$_E213_PROV" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+ACTOR="${_E213_PROV} (${_E213_ROLE})"
+
 cat >> "$SESSION_FILE" <<STAMP
 ---
 - Time: ${TIMESTAMP}
-- Actor: Claude
+- Actor: ${ACTOR}
 - Notes: ${SUMMARY}
 ---
 STAMP

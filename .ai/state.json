@@ -2777,6 +2777,13 @@
       "task_id": "E-215",
       "timestamp": "2026-09-07T10:36:11.350Z",
       "summary": "[TIER_2] ARCHITECT.md runtime ladder + ai doctor per-role provisioning report (D-054). Also fixed a real E-212 bug this surfaced: role-manifest.mjs's _isMain used a filename-suffix test, so a dynamic import printed the CLI usage banner and exit 2 into the caller — it aborted the doctor report mid-run. role_runtime 40/0, role_provisioning 63/0, full suite 3376/0. Forbidden Zone, §35 and both @import shims verified byte-unchanged."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-213",
+      "timestamp": "2026-09-07T11:56:40.683Z",
+      "summary": "[TIER_2] Architect overlay allow rules + provider-aware identity labels (D-054). align_diff WARN-only (ORPHANED_WORK advisory — covered by architect-provider-parity.md §Components 3-4, which the aligner does not read). Acceptance verified live: an architect-spawned MCP server reports caller_role=architect and blocks git push with ARCH_GIT_PUSH; engineer-spawned passes with no ARCH_ rules. role_identity 27/0, full suite 3403/0."
     }
   ],
   "deltas": [
