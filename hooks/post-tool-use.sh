@@ -7,21 +7,54 @@
 #    ~/.ai-os/telemetry.sqlite (per .ai/blueprints/universal-telemetry.md).
 # Installed to ~/.ai-os/hooks/post-tool-use.sh
 
+# ── E-223 (D-057 §3): install-first helper resolution ────────────────────────
+# The locators below used to start at "$(git rev-parse --show-toplevel)/src/...", which
+# names the USER's repository, not the AI-OS install. Any project containing
+# src/mcp/safe-exec-mcp/index.js had THAT file executed by node from inside this hook,
+# with its stdout trusted to decide whether a write is allowed — cloning a repo was
+# enough to run its code and disable the gate meant to stop it.
+#
+# Bootstrapping the shared resolver must not repeat the mistake, so it is install-mirror
+# first and script-relative second — never the visited repo.
+# The env here may have been chosen by the repo we are visiting (a project's
+# .claude/settings.json `env` block is inherited by hooks), so AI_OS_HOME is NOT read:
+# pointing it at a decoy made this bootstrap SOURCE the decoy's own locate.sh, i.e.
+# arbitrary shell inside a fail-closed gate. Assigned here, in the hook's own text, so it
+# overrides anything inherited.
+# Exported so a child process — an `ai` subcommand spawned from this hook — inherits
+# the same judgement rather than defaulting back to trusting the environment.
+export AI_OS_LOCATE_UNTRUSTED_ENV=1
+_AI_OS_HOME_DIR="${HOME}/.ai-os"
+# The guard below asks `declare -f ai_os_locate`, which means "is a name defined", NOT
+# "did my source succeed". bash imports exported functions from the environment at
+# startup, so an inherited `ai_os_locate` satisfies it, the safe inline fallback is never
+# installed, and the attacker's function IS the resolver — reachable whenever
+# shared/locate.sh is absent, i.e. exactly the degraded install the fallback exists for.
+unset -f ai_os_locate ai_os_locate_enable_dev_tree ai_os_is_framework_clone 2>/dev/null || true
+for _l in "${_AI_OS_HOME_DIR}/shared/locate.sh" \
+          "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/../src/shared/locate.sh"; do
+  [[ -f "$_l" ]] && { . "$_l"; break; }
+done
+# Fail-open: these hooks must still run without the resolver (a missing helper is a
+# degraded gate, an aborted hook is a broken session). The fallback is the install
+# mirror alone — it never falls back to the visited repo.
+if ! declare -f ai_os_locate >/dev/null 2>&1; then
+  ai_os_locate() { local _c="${_AI_OS_HOME_DIR}/${1}"; [[ -f "$_c" ]] && { printf '%s' "$_c"; return 0; }; return 1; }
+fi
+
 INPUT=$(cat)
 
 # ── Universal Telemetry (E-105) ──────────────────────────────────────────────
-# Background-record every tool execution. Locator chain mirrors E-58:
-#   1. ${PROJECT_ROOT}/src/shared/telemetry.mjs (dev tree)
-#   2. ${HOME}/.ai-os/shared/telemetry.mjs     (installed mirror)
+# Background-record every tool execution. Resolution is install-first via ai_os_locate
+# (E-223): the ~/.ai-os mirror, with the dev tree consulted only inside the framework
+# clone. The order used to be the reverse — ${PROJECT_ROOT}/src/... first — which meant
+# any visited repo could supply this helper.
 # Fail-open: all errors swallowed. <50ms synchronous hook budget preserved by
 # putting BOTH the python schema-translation AND the node write inside the
 # detached subshell — only the cheap helper-locator runs on the hot path.
 {
   TELEMETRY_HELPER=""
-  for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/shared/telemetry.mjs" \
-           "${HOME}/.ai-os/shared/telemetry.mjs"; do
-    if [[ -f "$c" ]]; then TELEMETRY_HELPER="$c"; break; fi
-  done
+  TELEMETRY_HELPER="$(ai_os_locate shared/telemetry.mjs || true)"
   if [[ -n "$TELEMETRY_HELPER" ]] && command -v node >/dev/null 2>&1; then
     (
       # Translate Claude Code PostToolUse schema → blueprint flat schema
@@ -89,10 +122,7 @@ PY
 )"
   if [[ "$CACHE_TRIGGER" == "REBUILD" && "${AI_OS_DISABLE_CACHE:-}" != "1" ]]; then
     CACHE_SERVER=""
-    for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/cache-manager-mcp/index.js" \
-             "${HOME}/.ai-os/mcp/cache-manager-mcp/index.js"; do
-      if [[ -f "$c" ]]; then CACHE_SERVER="$c"; break; fi
-    done
+    CACHE_SERVER="$(ai_os_locate mcp/cache-manager-mcp/index.js || true)"
     if [[ -n "$CACHE_SERVER" ]] && command -v node >/dev/null 2>&1; then
       ( node "$CACHE_SERVER" --build >/dev/null 2>&1 ) &
       disown 2>/dev/null || true

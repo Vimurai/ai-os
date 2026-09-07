@@ -58,10 +58,20 @@ export function isSafeArchitectPath(tok) {
 //   - TOCTOU: the hook approves a path, then the tool opens it. A concurrent
 //     `ln -sf` between those two moments is not observable here. Inherent to
 //     hook-based gating, and it needs the same shell channel already declared open.
-export function architectPathVerdict(rawPath, projectRoot) {
-  if (!rawPath || typeof rawPath !== "string") {
-    return { blocked: false }; // nothing to gate — never invent a block
-  }
+/**
+ * boundedRel — resolve `rawPath` against `projectRoot` and report the path RELATIVE to
+ * it, or a block reason. This is the shared half of every path gate in the system.
+ *
+ * E-221 note: it was shared for a reason. `propose-patch-mcp` carried its own four-line
+ * `safePath` — resolve, relative, reject a leading ".." — and a symlinked DIRECTORY
+ * component inside the project (`src/esc -> ../outside`) walked straight through it: the
+ * lexical relative path contains no "..", so the check passed, and the write followed the
+ * link out of the project. That is the same class E-216 spent seven rounds on and E-219 F1
+ * reintroduced. Two predicates for one rule will always drift; there is now one.
+ */
+export function boundedRel(rawPath, projectRoot) {
+  if (!rawPath || typeof rawPath !== "string") return { blocked: false, rel: null };
+
   // A parent-directory segment must be rejected BEFORE any resolution, because
   // `normalize` and `resolve` collapse it LEXICALLY (a pure string operation) while
   // the kernel applies it to the SYMLINK TARGET. Given a link inside .ai/ pointing at
@@ -70,9 +80,6 @@ export function architectPathVerdict(rawPath, projectRoot) {
   // it — while the kernel resolved it to a file under src/. That wrote real bytes to a
   // real source file through the native Write tool (E-208 audit round 2).
   // Resolving symlinks first does not fix it — the two orders disagree by design.
-  // The Write/Edit tools always hand us a clean absolute path, so such a segment has
-  // no legitimate use here, and rejecting it removes the whole class rather than one
-  // instance. Checked on the RAW input, before normalize can hide it.
   for (const seg of String(rawPath).split(/[\\/]+/)) {
     if (seg === "..") {
       return { blocked: true, reason: "path contains a '..' segment, which cannot be resolved safely across symlinks" };
@@ -83,50 +90,68 @@ export function architectPathVerdict(rawPath, projectRoot) {
   // a symlink-to-FILE (ENOTDIR), so the ancestor walk would skip the leaf, re-attach
   // it as an unresolved tail, and hand back `.ai/link` — inside the allowed root,
   // never resolved to its target. `.ai/link` blocked while `.ai/link/` allowed
-  // (E-208 audit round 2). basename() already discards the slash, so this only makes
-  // the existence probe see the same path the kernel would.
+  // (E-208 audit round 2).
   const cleanedPath = String(rawPath).replace(/[\\/]+$/, "") || rawPath;
 
   let rel;
   try {
     const abs = isAbsolute(cleanedPath) ? normalize(cleanedPath) : resolvePath(projectRoot, cleanedPath);
-    // Symlinks must be resolved BEFORE the .ai|plans test, or a link planted inside
-    // .ai/ (which the Architect may legitimately write) silently forwards a write to
-    // any target: `.ai/link -> src/bin/ai` passed the normalise-only check.
-    // The write target itself may not exist yet, so resolve the nearest EXISTING
-    // ancestor and re-attach the unresolved tail.
+    // Symlinks are resolved BEFORE the boundary test, or a link planted inside the root
+    // silently forwards a write to any target. The write target itself may not exist
+    // yet, so resolve the nearest EXISTING ancestor and re-attach the unresolved tail.
     rel = relative(realpathRoot(projectRoot), realpathNearest(abs));
   } catch {
     return { blocked: true, reason: "path could not be resolved against the project root" };
   }
-  // Outside the project entirely (rel starts with ".." or is another absolute root).
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
     return { blocked: true, reason: "path is outside the project root" };
   }
+  return { blocked: false, rel };
+}
+
+/**
+ * HARDLINK check — the one place path resolution genuinely cannot help. A hardlink is
+ * not a REFERENCE to a file, it IS the file under a second equally canonical name, so
+ * realpath has nothing to see through: `ln src/bin/ai .ai/h` then `Write .ai/h` writes
+ * src/bin/ai, and every path-based check agrees the target is inside .ai/. Only an inode
+ * property distinguishes it. One lstat, and it can only ever ADD restriction to a write
+ * we were about to allow. Directories legitimately carry nlink > 1 (subdirectory
+ * back-references), so this is restricted to regular files. A missing target is not yet
+ * a file and cannot be an alias for one.
+ */
+export function hardlinkAlias(projectRoot, rel, escapesWhat = "outside the project root") {
+  try {
+    const st = lstatSync(join(realpathRoot(projectRoot), rel));
+    if (st.isFile() && st.nlink > 1) {
+      return {
+        blocked: true,
+        reason: `target has ${st.nlink} hard links — it is the same inode as a file elsewhere, so writing it would write ${escapesWhat}`,
+      };
+    }
+  } catch {
+    // Target does not exist yet (the common case for a new file) — nothing to alias.
+  }
+  return null;
+}
+
+/**
+ * The PROJECT boundary, for every role. Used by propose-patch-mcp (E-221) so a confirmed
+ * patch cannot write outside the project it was proposed in, by any mechanism.
+ */
+export function projectPathVerdict(rawPath, projectRoot) {
+  const b = boundedRel(rawPath, projectRoot);
+  if (b.blocked || b.rel === null) return b;
+  return hardlinkAlias(projectRoot, b.rel) || { blocked: false, rel: b.rel };
+}
+
+export function architectPathVerdict(rawPath, projectRoot) {
+  const b = boundedRel(rawPath, projectRoot);
+  if (b.blocked) return b;
+  if (b.rel === null) return { blocked: false }; // nothing to gate — never invent a block
   // Already normalised above, so any embedded parent-directory segments have been
   // collapsed — an escape attempt shows up as a rel that leaves the root, caught above.
-  if (isSafeArchitectPath(rel)) {
-    // HARDLINK check — the one place path resolution genuinely cannot help. A
-    // hardlink is not a REFERENCE to a file, it IS the file under a second equally
-    // canonical name, so realpath has nothing to see through: `ln src/bin/ai .ai/h`
-    // then `Write .ai/h` writes src/bin/ai, and every path-based check agrees the
-    // target is inside .ai/. Only an inode property distinguishes it. One lstat, and
-    // it can only ever ADD restriction to a write we were about to allow.
-    // Directories legitimately carry nlink > 1 (subdirectory back-references), so
-    // this is restricted to regular files. A missing target is not yet a file and
-    // cannot be an alias for one.
-    try {
-      const st = lstatSync(join(realpathRoot(projectRoot), rel));
-      if (st.isFile() && st.nlink > 1) {
-        return {
-          blocked: true,
-          reason: `target has ${st.nlink} hard links — it is the same inode as a file elsewhere, so writing it would write outside .ai//plans/`,
-        };
-      }
-    } catch {
-      // Target does not exist yet (the common case for a new file) — nothing to alias.
-    }
-    return { blocked: false };
+  if (isSafeArchitectPath(b.rel)) {
+    return hardlinkAlias(projectRoot, b.rel, "outside .ai//plans/") || { blocked: false };
   }
   return { blocked: true, reason: "the Architect may only write under .ai/ or plans/" };
 }

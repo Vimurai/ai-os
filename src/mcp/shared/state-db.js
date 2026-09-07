@@ -75,7 +75,11 @@ export function getDb(aiDir) {
       description  TEXT,
       caller_role  TEXT,
       created_at   TEXT NOT NULL,
-      status       TEXT NOT NULL DEFAULT 'pending'
+      status       TEXT NOT NULL DEFAULT 'pending',
+      -- E-221: the root that 'path' was resolved against, plus the path RELATIVE
+      -- to it. confirm_patch re-derives its own root and refuses unless they agree.
+      project_root TEXT,
+      rel_path     TEXT
     );
     -- E-88: Multi-Variation-State-Tracker tables for the SEO Topic Cluster
     -- Engine (.ai/blueprints/seo-keyword-multiplier.md §Data Model).
@@ -118,6 +122,8 @@ export function getDb(aiDir) {
   // CREATE TABLE IF NOT EXISTS never alters an existing table, so DBs created
   // before E-91 need this idempotent ALTER. Safe + no-op on fresh DBs.
   _migrateTaskDag(db);
+  // E-221: pending patches must carry the root they were resolved against.
+  _migratePatchProjectRoot(db);
 
   _dbCache.set(dbPath, db);
   return db;
@@ -132,6 +138,37 @@ function _migrateTaskDag(db) {
   const cols = db.prepare("PRAGMA table_info(tasks)").all();
   if (!cols.some((c) => c.name === "depends_on")) {
     db.exec("ALTER TABLE tasks ADD COLUMN depends_on TEXT;");
+  }
+}
+
+/**
+ * E-221 (D-057 §1): add `project_root` + `rel_path` to a legacy patches table.
+ *
+ * A pending patch used to store only an ABSOLUTE path, resolved against whatever cwd
+ * the PROPOSING process had. `confirm_patch` then wrote to that path without re-checking
+ * it against its own root, so confirming from elsewhere landed the write outside the
+ * confirming project. Recording the root the path was resolved against is what makes
+ * the confirm-side check possible at all.
+ *
+ * Idempotent — mirrors _migrateTaskDag. Rows written before this migration keep both
+ * columns NULL, which is exactly how confirm_patch recognises a legacy record and
+ * refuses it rather than guessing which project it belonged to.
+ */
+function _migratePatchProjectRoot(db) {
+  const cols = db.prepare("PRAGMA table_info(patches)").all();
+  // Each ALTER is guarded individually. table_info is read ONCE, but 25 MCP servers can
+  // call getDb() concurrently on a pre-migration DB: the loser of the race throws
+  // "duplicate column name", which propagates out of getDb, and propose-patch's bare
+  // catch turns that into "state.sqlite not found — run: ai init". Fail-closed, but
+  // diagnosed as a missing database when the real cause is a concurrent migration.
+  for (const col of ["project_root", "rel_path"]) {
+    if (cols.some((c) => c.name === col)) continue;
+    try {
+      db.exec(`ALTER TABLE patches ADD COLUMN ${col} TEXT;`);
+    } catch (e) {
+      // Another process won the race and added it — the desired end state either way.
+      if (!/duplicate column name/i.test(e.message)) throw e;
+    }
   }
 }
 

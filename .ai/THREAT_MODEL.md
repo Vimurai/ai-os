@@ -1,7 +1,7 @@
 # THREAT_MODEL.md — AI-OS v2
 
 > Companion to `.ai/SECURITY.md`. Contains full threat entries for all external integrations and trust boundaries.
-> Last updated: 2026-09-07 (E-219 server-side role derivation; T-PATCHMCP-001 fixed)
+> Last updated: 2026-09-07 (E-221 patch boundary + diff-target validation; E-223 install-first locators)
 
 ---
 
@@ -373,9 +373,188 @@ it look like a leftover of that task rather than something that still needs fund
 (E-219), so an Architect confirming a patch is still confined to `.ai/`+`plans/` — of the
 CONFIRMING project. The gap is the project boundary, not the role boundary.
 
-**Fix shape**: re-run `safePath(patch.path, cwd)` at confirm time and refuse when the
-stored path lies outside the confirming root, or store the project root alongside the
-patch and refuse to confirm from a different one.
+**FIXED in E-221 (D-057 §1).** Pending records now carry `project_root` (the base the
+path was resolved against) plus a project-RELATIVE path. `confirm_patch` re-derives its
+own root, requires equality (`[PROJECT_MISMATCH]`), re-resolves the relative path against
+that root, and re-derives the caller role. Legacy rows carrying only an absolute path are
+refused with a re-propose hint; `AI_OS_PATCH_LEGACY=1` accepts them, and even then the
+stored path is bounds-checked against the confirming root.
+
+**The audit found the fix insufficient on its own, and that half mattered more.** Storing
+the root closed the cross-project route, but the underlying property — *a confirmed patch
+writes inside the confirming project* — was still false. `propose-patch-mcp` carried its
+own four-line `safePath` (resolve, relative, reject a leading `..`), which is a LEXICAL
+test: a symlinked DIRECTORY component inside the project (`src/esc -> ../outside`) yields
+a relative path containing no `..`, so the check passed and the write followed the link
+out of the project. One project, no cross-project confirm, no DB tampering. Reproduced
+independently against the post-fix server before acting.
+
+`safePath` now delegates to `projectPathVerdict`, extracted from the predicate the
+Write/Edit and shell gates already used — raw `..` rejection before resolution, trailing
+separator handling, `realpathNearest`, a hardlink inode check, fail-closed on a realpath
+error. That predicate cost seven audit rounds in E-216; hand-rolling a second one is what
+E-219 F1 did, and the same lesson applies: two gates for one rule drift, and the weaker
+one is the one that decides.
+
+**And the path check alone was NOT sufficient.** A second audit round found that
+`diff_content` names its own write targets: `patch(1)` applies the validated operand to the
+FIRST diff section only, and later sections take their targets from their own `---`/`+++`
+headers. A blob proposed for `src/target.txt` carrying a second section headed
+`../outside/victim.txt` wrote outside the project with exit 0, a clean dry-run, a
+"✓ Patch applied" report, and a preview naming only the benign file. Every path check
+E-221 added was correct and none of it applied, because the set of files `patch` writes is
+not the operand — the predicate was right, it was applied to the wrong thing.
+
+My first fix for this ("at most one file section") was also insufficient: an ed-style
+prelude (`1c` … `.` … `w`) carries no header at all, so it is invisible to a section count
+while still writing — and a blob combining one with a single unified section wrote BOTH
+the operand and a second file. `src/mcp/propose-patch-mcp/diff-targets.mjs` now requires a
+blob fed to `patch` to be unified diff and NOTHING ELSE, parsed structurally (hunk bodies
+consumed by their declared line counts, so a removed line rendering as `--- x` is read as
+DATA, not as a section header — the E-216 invariant in a new parser). Validated at propose
+AND at confirm, since the stored row is data.
+
+**Rollback shape also corrected**: `patch(1)` is no longer asked to write its own `.orig`
+(it backs up per SECTION, so a later failure could "restore" partially-applied content,
+and `${target}.orig` clobbered any real file of that name). The rollback now uses an
+in-memory pre-image and VERIFIES the restore before reporting one.
+
+**Verification limit — patch(1) implementation.** All testing ran against
+`patch 2.0-12u11-Apple`; the Docker daemon is down on this host, so GNU patch 2.7.x (what
+CI runs) was NOT exercised. This matters less than it would have, because the redirect
+payloads are refused by `validateDiffContent` BEFORE `patch` is spawned at all — the gate
+sits upstream of the binary, so containment does not depend on which implementation is
+installed. The residual is narrower and should be stated: an input shape that this
+validator ACCEPTS and GNU patch interprets as naming a second target would still escape.
+The grammar is deliberately strict (unified diff and nothing else, hunks satisfied
+exactly) to keep that surface small, but it is argued, not measured, on GNU patch.
+
+**Verification note**: the sandboxed pen-test could not run (Docker unavailable), so this
+rests on `tests/suites/patch_project_boundary_test.sh` (51 cases) driving the real server
+over stdio, plus non-vacuity checks — the cross-project and symlink-escape cases were both
+run against the PRE-FIX server and both wrote outside the confirming project, as were
+the multi-section and ed-prelude cases.
+
+**Not a role escape**: `confirm_patch` re-derives the caller role in its own process
+(E-219), so an Architect confirming a patch is still confined to `.ai/`+`plans/` — of the
+CONFIRMING project. The gap was the project boundary, not the role boundary.
+
+---
+
+### T-PROPOSEPATCH-002 — pending-patch rendering reads an unbounded stored path
+
+**Boundary**: `src/mcp/propose-patch-mcp/index.js` — `preview_patch` calls
+`formatDiff(patch.diff_content, patch.path)`, which stats and READS the stored absolute
+path to build a diff baseline. That path is not re-bounded against the previewing
+project, so contents of a file outside the root can be echoed into tool output. Proven
+during the E-221 audit: a secret-bearing file outside the project root was rendered by
+both `propose_patch` and `preview_patch`.
+
+**Filed separately, not folded into E-221.** D-057 §1 explicitly scopes the read-only
+tools as unchanged, and widening a Tier 3 task past its ruling is the drift these gates
+exist to prevent. Post-E-221 the stored path is project-bounded at propose time, so the
+practical exposure is narrowed to legacy rows and to whatever the proposing project could
+already read — but the check is genuinely absent, not merely redundant.
+
+**Related, same entry, both LOW**: `list_pending_patches` and `reject_patch` operate on
+rows from any project reachable in the same store, giving path disclosure and
+cross-project queue deletion respectively.
+
+**Fix shape**: re-bound `patch.path` (or prefer `project_root` + `rel_path`) before
+rendering, and scope the pending-patch queries to the current project root.
+
+---
+
+### T-PROPOSEPATCH-003 — TOCTOU between the path check and the write
+
+**Boundary**: `src/mcp/propose-patch-mcp/index.js` — between `safePath` and
+`writeFileSync`/`patch(1)`, and between the dry-run and the apply, the target can be
+replaced (e.g. `ln -sf`). Inherent to path-based gating rather than specific to this
+server; the same class is documented at `architect-writes.mjs` for the Write/Edit gate.
+
+**ACCEPTED, recorded not fixed.** Closing it needs handle-based writes (open once, verify
+by fd, write through the same fd), which is a larger change than either D-057 §1 or the
+value of the residual justifies. Recorded so the next reader does not mistake its absence
+for an oversight.
+
+---
+
+### T-LOCATOR-001 — framework helpers were located via the VISITED repository
+
+**Boundary**: `hooks/*.sh` and `src/bin/ai` — helpers were resolved as
+`"$(git rev-parse --show-toplevel)/src/<helper>"` before the install mirror.
+`--show-toplevel` names the USER's repository. Any project containing
+`src/mcp/safe-exec-mcp/index.js` therefore had THAT file executed by node from inside the
+PreToolUse hook, with its stdout trusted to decide whether a write is allowed — cloning a
+repo was enough to run its code AND disable the gate meant to stop it. Measured on the
+pre-fix hooks: a decoy repo's `safe-exec-mcp/index.js` ran THREE times plus
+`cache-manager-mcp/index.js` once, from a single session in that directory.
+
+**FIXED in E-223 (D-057 §3)** by one shared resolver (`src/shared/locate.sh` + its node
+twin): the install mirror is authoritative, and the dev tree is a candidate only inside
+the framework clone.
+
+**Two ways the first cut was still escapable, both found in audit and both closed.**
+A project's own `.claude/settings.json` carries an `env` block that hooks INHERIT, and
+`ai init` writes that key — so env is attacker-supplied at the same capability level as
+the repo itself, not a trusted channel. `AI_OS_LOCATE_DEV=1`, `AIOS_WORKSPACE=<decoy>` and
+`AI_OS_HOME=<decoy>` each restored the vulnerability; the last was strictly NEW exposure
+introduced by E-223 itself (pre-E-223 hooks hardcoded `${HOME}/.ai-os`) and was the worst,
+because it made the bootstrap SOURCE the decoy's own `locate.sh` — arbitrary shell inside
+a fail-closed gate. Hooks now set `AI_OS_LOCATE_UNTRUSTED_ENV=1` in their own text, which
+makes the resolver ignore all three and read the workspace only from the installer-written
+file. Separately, the shell and node implementations disagreed: a substring `grep` for
+`"name": "ai-os-v2"` matched a NESTED occurrence in an unrelated repo's package.json while
+the node twin's `JSON.parse` did not, and the shell side is the one every hook uses. Both
+now parse.
+
+**STILL OPEN — the same class, in the skills (needs funding).** Four SKILL.md files carry
+the pre-E-223 chain in a WORSE form: plain cwd-relative, so not even a git repo is needed.
+
+    src/shared/skills/ai-preflight/SKILL.md:18   incident-aggregate.mjs   (auto-executed `!` line)
+    src/shared/skills/ai-preflight/SKILL.md:129  insights-staleness.mjs
+    src/shared/skills/ai-insights/SKILL.md:54    telemetry.mjs
+    src/shared/skills/ai-review-proposed-skills/SKILL.md:24  skill-promoter.mjs
+
+(plus their `.claude/` and `.agents/` mirrors). The first is the worst: `ai-preflight` is
+the skill `ENGINEER.md` mandates at the start of EVERY session, and line 18 is a
+`!`-prefixed auto-executed command. Not fixed under E-223 because D-057 §3 scopes that
+task to `hooks/*.sh` and `src/bin/ai`, and widening a Tier 3 task past its ruling is the
+drift these gates exist to prevent — but the class is NOT closed while these stand, and
+this entry would otherwise read as though it were. Fix shape: the same `ai_os_locate`,
+which the skills can reach via the installed mirror.
+
+**SCOPE — what this does NOT close.** Only FRAMEWORK-HELPER resolution. Hooks still run a
+visited project's own code where that is their purpose, and these are DELIBERATE, listed
+so a later sweep classifies them rather than re-finding them as bugs:
+
+    hooks/post-tool-use.sh   the project's own tests/run.sh, on a src/ edit
+    hooks/pre-commit.sh:228  the project's own registry_sync_test.sh
+    hooks/pre-commit.sh:265  the project's own mcp_purity_check.sh
+    hooks/pre-commit.sh:320  `${repo_root}/scripts/standards.mjs` BEFORE the install copy —
+                             the last dev-tree-first shape left in a hook. Judged correct
+                             to leave: committing already implies working on that repo, and
+                             it is the same family as running its test suite. Recorded
+                             because it is the one that will look like an oversight.
+    hooks/post-commit.sh     the project's own .ai/state.json (data, not code)
+
+That is the ordinary git-hook trust model — but "cloning a repo cannot run its code" is NOT
+true in general and must not be read into this entry.
+
+**The fix for this had to be fixed twice, both times by audit.** Round 1: three env vars a
+project supplies through its own `.claude/settings.json` restored it in full, one of them
+(`AI_OS_HOME`) strictly new exposure that E-223 introduced. Round 3: my "argv-only"
+dev-tree override was implemented as ANOTHER env var that each caller promised to reset —
+`bin/ai` did, the five hooks never mentioned it, so the same settings.json channel made a
+hook resolve the visited repo's own safe-exec analyzer and the gate then allowed
+everything. The override is now a FUNCTION (`ai_os_locate_enable_dev_tree`), with the state
+reset unconditionally at source time, so the guarantee no longer depends on six callers
+remembering. The lesson worth keeping: a fix for an environment-trust bug must not
+introduce a new environment variable.
+
+**Residual**: `HOME` itself is still honoured (pre-existing — the old hooks used
+`${HOME}/.ai-os` too, and redirecting `HOME` breaks far more than this). The framework
+test's package.json fallback is reachable only when the install recorded no workspace.
 
 ---
 

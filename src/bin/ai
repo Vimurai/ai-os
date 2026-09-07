@@ -4,6 +4,75 @@ set -euo pipefail
 AIOS="${HOME}/.ai-os"
 VERSION="3.0.0"
 
+# ── E-223 (D-057 §3): the environment here is UNTRUSTED ──────────────────────
+# `ai` is routinely invoked through Bash from inside the project being worked on, and
+# that Bash inherits the session env the CLI applied — which a project's own
+# `.claude/settings.json` `env` block supplies, a file `ai init` itself writes. So the env
+# reaching `ai` sits at exactly the same trust level as the one reaching the hooks, and
+# hardening only the hooks left AI_OS_HOME and AI_OS_LOCATE_DEV honoured here: proven, a
+# decoy repo redirected `_locate_resolve_launch`, whose stdout decides which BINARY
+# `ai pane` execs.
+#
+# DEVIATION FROM D-057 §3, flagged for the Architect: the ruling names AI_OS_LOCATE_DEV=1
+# as the dev-tree rollback. An env var cannot be the rollback channel here, because the
+# env is the attack channel. The same capability is `--dev-tree`, which a settings.json
+# cannot supply — and it is turned on by CALLING ai_os_locate_enable_dev_tree below, not by
+# setting a variable, so the guarantee does not depend on every caller remembering to reset
+# one (my first attempt did exactly that, and the hooks that forgot re-opened the hole).
+#
+# The flag is recognised only as the FIRST argument and never past a `--` terminator, so a
+# literal "--dev-tree" arriving as user DATA (a task title, a handoff message,
+# `ai add-task -- --dev-tree`) cannot steer resolution policy or be eaten from the
+# arguments the user meant to pass.
+_AI_OS_WANT_DEV_TREE=0
+if [[ "${1:-}" == "--dev-tree" ]]; then
+  _AI_OS_WANT_DEV_TREE=1
+  shift
+fi
+AI_OS_LOCATE_UNTRUSTED_ENV=1
+
+# ── E-223 (D-057 §3): the shared helper resolver ─────────────────────────────
+# One policy, one place — see src/shared/locate.sh. Install mirror first; the dev tree
+# only when this repo IS the framework clone. Bootstrapped install-first, then
+# script-relative, so locating the resolver cannot itself consult the visited repo.
+# ── F13: the guard must mean "my source SUCCEEDED", not "a name is defined" ──
+# bash imports exported functions from the environment at startup, so an inherited
+# `ai_os_locate` satisfies `declare -f`, the safe inline fallback is never installed, and
+# the attacker's function IS the resolver — reachable on a partial or mid-upgrade install
+# missing shared/locate.sh, which is exactly the degraded state the fallback exists for.
+unset -f ai_os_locate ai_os_locate_enable_dev_tree ai_os_is_framework_clone 2>/dev/null || true
+for _l in "${AIOS}/shared/locate.sh" \
+          "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/../shared/locate.sh"; do
+  [[ -f "$_l" ]] && { . "$_l"; break; }
+done
+if ! declare -f ai_os_locate >/dev/null 2>&1; then
+  ai_os_locate() { local _c="${AIOS}/${1}"; [[ -f "$_c" ]] && { printf '%s' "$_c"; return 0; }; return 1; }
+fi
+# _ai_os_helper <logical-path> — every helper lookup in this file goes through here.
+# D-057 §3 names src/bin/ai, and the first pass converted only the three _locate_* wrappers
+# while EIGHT other chains kept their own order — four of them cwd-relative FIRST, which is
+# the defect in a more direct form than the original: no git repo is needed at all, so a
+# `src/shared/memory-batch-scanner.mjs` in any directory `ai sync` runs from was executed.
+_ai_os_helper() {
+  local logical="$1" p
+  p="$(ai_os_locate "$logical" 2>/dev/null || true)"
+  [[ -n "$p" ]] && { printf '%s' "$p"; return 0; }
+  # Script-relative sibling last: the install mirror still wins, and this only prevents
+  # version skew between this script and the helper it drives (see _locate_* above).
+  local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  # `${logical#src/}` is a no-op for every current logical path (all begin shared/,
+  # scripts/ or agents/); it exists so a future `src/`-prefixed logical path maps onto the
+  # repo layout rather than doubling the prefix.
+  local _sib="${_sd%/*}/${logical#src/}"
+  [[ -f "$_sib" ]] && { printf '%s' "$_sib"; return 0; }
+  return 1
+}
+
+# Only now, after argv has been read and the resolver sourced.
+if [[ "$_AI_OS_WANT_DEV_TREE" == "1" ]] && declare -f ai_os_locate_enable_dev_tree >/dev/null 2>&1; then
+  ai_os_locate_enable_dev_tree
+fi
+
 usage() {
   cat <<USAGE
 ai — AI-OS v${VERSION}
@@ -88,14 +157,7 @@ _regenerate_mcp_docs() {
     return 0
   fi
   local SCRIPT=""
-  for candidate in \
-      "scripts/generate_mcp_docs.mjs" \
-      "${AIOS}/scripts/generate_mcp_docs.mjs"; do
-    if [[ -f "$candidate" ]]; then
-      SCRIPT="$candidate"
-      break
-    fi
-  done
+  SCRIPT="$(_ai_os_helper scripts/generate_mcp_docs.mjs || true)"
   if [[ -z "$SCRIPT" ]]; then
     echo "  ⚠ generate_mcp_docs.mjs not found — skipping mcp.md regeneration" >&2
     return 0
@@ -115,14 +177,7 @@ _regenerate_blueprints_index() {
     return 0
   fi
   local SCRIPT=""
-  for candidate in \
-      "scripts/generate_blueprints_index.mjs" \
-      "${AIOS}/scripts/generate_blueprints_index.mjs"; do
-    if [[ -f "$candidate" ]]; then
-      SCRIPT="$candidate"
-      break
-    fi
-  done
+  SCRIPT="$(_ai_os_helper scripts/generate_blueprints_index.mjs || true)"
   if [[ -z "$SCRIPT" ]]; then
     echo "  ⚠ generate_blueprints_index.mjs not found — skipping _INDEX.md regeneration" >&2
     return 0
@@ -149,21 +204,11 @@ _wal_checkpoint_state_db() {
     echo "  ⚠ node not found — skipping WAL checkpoint" >&2
     return 0
   fi
-  # Locator chain: cwd-relative dev tree → bin/ai-relative dev tree (works
-  # when cwd is not the repo root, e.g. during sourced tests) → installed
-  # mirror under ${AIOS}/shared/.
-  local SELF_DIR
-  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  # E-223: install mirror first, dev tree only inside the framework clone. The old chain
+  # started cwd-relative, so running `ai sync` in any directory containing
+  # src/shared/wal-flusher.mjs handed THAT file to node.
   local SCRIPT=""
-  for candidate in \
-      "src/shared/wal-flusher.mjs" \
-      "${SELF_DIR}/../shared/wal-flusher.mjs" \
-      "${AIOS}/shared/wal-flusher.mjs"; do
-    if [[ -f "$candidate" ]]; then
-      SCRIPT="$candidate"
-      break
-    fi
-  done
+  SCRIPT="$(_ai_os_helper shared/wal-flusher.mjs || true)"
   if [[ -z "$SCRIPT" ]]; then
     echo "  ⚠ wal-flusher.mjs not found — skipping WAL checkpoint" >&2
     return 0
@@ -208,9 +253,7 @@ _generate_memory_palace() {
   [[ "${AI_OS_DISABLE_MEMORY_PALACE:-}" == "1" ]] && { echo "  ⚠ Memory Palace index skipped (AI_OS_DISABLE_MEMORY_PALACE=1)"; return 0; }
   command -v node >/dev/null 2>&1 || { echo "  ⚠ node not found — skipping Memory Palace index" >&2; return 0; }
   local scanner=""
-  for c in "src/shared/memory-batch-scanner.mjs" "${AIOS}/shared/memory-batch-scanner.mjs"; do
-    [[ -f "$c" ]] && { scanner="$c"; break; }
-  done
+  scanner="$(_ai_os_helper shared/memory-batch-scanner.mjs || true)"
   [[ -z "$scanner" ]] && { echo "  ⚠ memory-batch-scanner.mjs not found — skipping Memory Palace index" >&2; return 0; }
   # Every command below is guarded so a filesystem error can NEVER abort do_sync
   # under `set -euo pipefail` (fail-open is the load-bearing invariant — E-145 W5-T1).
@@ -460,17 +503,15 @@ PY
 # Locate the role-manifest resolver (dev tree first, then the install mirror).
 _locate_role_manifest() {
   local c
-  # Resolve relative to THIS script (BASH_SOURCE), never to the CURRENT PROJECT.
-  # `git rev-parse --show-toplevel` finds the USER's repo, not the AI-OS install: run
-  # `ai sync` inside any project that happens to contain src/shared/role-manifest.mjs and
-  # node would execute THAT file and trust its stdout. Same shape as E-219 F3.
-  # `${_sd%/*}` takes the parent by parameter expansion rather than a ".." component,
-  # so the candidate path is already normalised — nothing to resolve, nothing to escape.
+  ai_os_locate "shared/role-manifest.mjs" && return 0
+  # F3: keep the script-relative sibling as a LAST candidate. The shared resolver drops
+  # the dev tree outside the recorded workspace, so a git worktree or a second framework
+  # clone would exec a helper from a DIFFERENT version than the `ai` script that was
+  # invoked. The install mirror still wins, so this costs nothing in trust — it only
+  # stops silent version skew between this script and the helper it drives.
   local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-  for c in "${_sd%/*}/shared/role-manifest.mjs" \
-           "${AIOS}/shared/role-manifest.mjs"; do
-    [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
-  done
+  local _sib="${_sd%/*}/shared/role-manifest.mjs"
+  [[ -f "$_sib" ]] && { printf '%s' "$_sib"; return 0; }
   return 1
 }
 
@@ -648,17 +689,15 @@ _provision_workspace() {
 # a later run can prune once the flag is removed).
 _locate_sync_manifest() {
   local c
-  # Resolve relative to THIS script (BASH_SOURCE), never to the CURRENT PROJECT.
-  # `git rev-parse --show-toplevel` finds the USER's repo, not the AI-OS install: run
-  # `ai sync` inside any project that happens to contain src/shared/sync-manifest.mjs and
-  # node would execute THAT file and trust its stdout. Same shape as E-219 F3.
-  # `${_sd%/*}` takes the parent by parameter expansion rather than a ".." component,
-  # so the candidate path is already normalised — nothing to resolve, nothing to escape.
+  ai_os_locate "shared/sync-manifest.mjs" && return 0
+  # F3: keep the script-relative sibling as a LAST candidate. The shared resolver drops
+  # the dev tree outside the recorded workspace, so a git worktree or a second framework
+  # clone would exec a helper from a DIFFERENT version than the `ai` script that was
+  # invoked. The install mirror still wins, so this costs nothing in trust — it only
+  # stops silent version skew between this script and the helper it drives.
   local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-  for c in "${_sd%/*}/shared/sync-manifest.mjs" \
-           "${AIOS}/shared/sync-manifest.mjs"; do
-    [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
-  done
+  local _sib="${_sd%/*}/shared/sync-manifest.mjs"
+  [[ -f "$_sib" ]] && { printf '%s' "$_sib"; return 0; }
   return 1
 }
 
@@ -2550,9 +2589,7 @@ _run_env_diagnostics() {
   echo "MCP connectivity (tools/list handshake):"
   local tester="" self_dir
   self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  for c in "${self_dir}/../shared/mcp-tester.mjs" "${AIOS}/shared/mcp-tester.mjs" "src/shared/mcp-tester.mjs"; do
-    [[ -f "$c" ]] && { tester="$c"; break; }
-  done
+  tester="$(_ai_os_helper shared/mcp-tester.mjs || true)"
   if [[ -n "$tester" ]] && [[ -f ".mcp.json" ]] && command -v node >/dev/null 2>&1; then
     node "$tester" --config .mcp.json --timeout 2000 || fail=1
   else
@@ -2956,7 +2993,11 @@ except Exception:
 # command (not auto-run by ai init/sync). Re-running overwrites the installed plugin.
 agy_plugin_install() {
   local plugin_dir=""
-  for c in "src/agents/plugin" "${AIOS}/agents/plugin"; do
+  # NOT routed through _ai_os_helper: `agents/plugin` is a DIRECTORY and the resolver
+  # tests `[[ -f ]]`, so the call could never resolve — it would look routed while always
+  # falling through. The explicit install path is the honest form until the resolver grows
+  # a directory mode.
+  for c in "${AIOS}/agents/plugin"; do
     [[ -f "$c/plugin.json" && -d "$c/agents" ]] && { plugin_dir="$c"; break; }
   done
   if [[ -z "$plugin_dir" ]]; then
@@ -2978,9 +3019,7 @@ agy_plugin_install() {
   # and the duplicate makes subagent selection fail. Collapse to a single registration.
   local self_dir; self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local pb=""
-  for c in "${self_dir}/../shared/plugin-builder.mjs" "${AIOS}/shared/plugin-builder.mjs" "src/shared/plugin-builder.mjs"; do
-    [[ -f "$c" ]] && { pb="$c"; break; }
-  done
+  pb="$(_ai_os_helper shared/plugin-builder.mjs || true)"
   if [[ -n "$pb" ]] && command -v node >/dev/null 2>&1; then
     node "$pb" --dedupe-imports || echo "[WARN] import_manifest dedup skipped (non-fatal)." >&2
   fi
@@ -3012,12 +3051,7 @@ do_handoff() {
   # back to the install mirror and a cwd-relative path. Mirrors the wal-flusher chain.
   local self_dir; self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local script=""
-  for c in \
-      "${self_dir}/../shared/signal-handoff.mjs" \
-      "${AIOS}/shared/signal-handoff.mjs" \
-      "src/shared/signal-handoff.mjs"; do
-    [[ -f "$c" ]] && { script="$c"; break; }
-  done
+  script="$(_ai_os_helper shared/signal-handoff.mjs || true)"
   if [[ -z "$script" ]]; then
     echo "ai handoff: signal-handoff.mjs not found (run: ai install)." >&2
     return 1
@@ -3046,12 +3080,7 @@ do_add_task() {
   # not enforced by the Gate-2 pre-commit hook.)
   local self_dir; self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local script=""
-  for c in \
-      "${self_dir}/../shared/cli-add-task.mjs" \
-      "${AIOS}/shared/cli-add-task.mjs" \
-      "src/shared/cli-add-task.mjs"; do
-    [[ -f "$c" ]] && { script="$c"; break; }
-  done
+  script="$(_ai_os_helper shared/cli-add-task.mjs || true)"
   if [[ -z "$script" ]]; then
     echo "ai add-task: cli-add-task.mjs not found (run: ai install)." >&2
     return 1
@@ -3185,17 +3214,16 @@ _find_ai_dir() {
 # (It imports provider-adapter.mjs from the same directory, so locating one locates both.)
 _locate_resolve_launch() {
   local c
-  # Script-relative, never project-relative — see the note on _locate_sync_manifest.
-  # This one carries the most weight of the three: its stdout decides which BINARY
-  # `ai pane` execs, so trusting a helper found in the user's cwd would let any repo
-  # choose the launched process.
-  # `${_sd%/*}` takes the parent by parameter expansion rather than a ".." component,
-  # so the candidate path is already normalised — nothing to resolve, nothing to escape.
+  # The heaviest of the three: its stdout decides which BINARY `ai pane` execs.
+  ai_os_locate "shared/resolve-launch.mjs" && return 0
+  # F3: keep the script-relative sibling as a LAST candidate. The shared resolver drops
+  # the dev tree outside the recorded workspace, so a git worktree or a second framework
+  # clone would exec a helper from a DIFFERENT version than the `ai` script that was
+  # invoked. The install mirror still wins, so this costs nothing in trust — it only
+  # stops silent version skew between this script and the helper it drives.
   local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-  for c in "${_sd%/*}/shared/resolve-launch.mjs" \
-           "${AIOS}/shared/resolve-launch.mjs"; do
-    [[ -f "$c" ]] && { printf '%s' "$c"; return 0; }
-  done
+  local _sib="${_sd%/*}/shared/resolve-launch.mjs"
+  [[ -f "$_sib" ]] && { printf '%s' "$_sib"; return 0; }
   return 1
 }
 

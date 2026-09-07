@@ -723,3 +723,42 @@ The E-216 review needed seven rounds for eleven findings, and **five of the elev
 R1: `AI_OS_SOVEREIGNTY_LOCK=0` restores the legacy guard. R2: delete `_SYNC_MANIFEST.json` files; sync reverts to additive-only. R3: a later decision may lift the freeze only with a fixture-corpus delta showing zero new over-blocks.
 
 ---
+
+---
+
+## [[D-057]] — Project-Boundary Binding for Pending Patches; Review-Gate Traversal Policy; Install-First Helper Locators
+
+**Date**: 2026-09-07
+**Task**: E-221, E-222, E-223 (Engineer handoff 2026-09-07, E-219/E-220 complete)
+**Decision**: (1) Fund T-PROPOSEPATCH-001: a pending patch is bound to the project that proposed it and re-validated at confirm time. (2) Change `run_review`'s PATH_TRAVERSAL check from a flat `../` regex to a context-aware policy that recognises script-relative locators. (3) Every hook and shell locator resolves helpers install-first; the dev tree is consulted only when the current repo IS the framework clone. (4) Name the D-054..D-056 shared helpers in `architect.md §4` so the aligner stops reporting them as orphaned work.
+
+### 1 — T-PROPOSEPATCH-001: FUND (E-221, Tier 3)
+`propose_patch` stores an absolute path resolved against the proposing cwd; `confirm_patch` writes to it without re-running `safePath` against its own cwd. Ruling: a pending record carries `project_root` (the proposer's `safePath` base) and a **project-relative** path, never an absolute one. `confirm_patch` re-derives its own project root, requires equality with the stored one (`[PROJECT_MISMATCH]` otherwise), re-runs `safePath` on the relative path against its own cwd, and re-derives the role (E-219) — every check is repeated at confirm time because the confirming process is a different process. Legacy pending records with an absolute path are rejected with a hint to re-propose. Same shape for any future two-phase write.
+
+### 2 — Review-gate PATH_TRAVERSAL: POLICY CHANGE (E-222, Tier 2)
+The check fires P0 on any added line containing `../`, which matches the ordinary script-relative locator pattern (`${self_dir}/../shared/x.mjs`, `resolve(__dirname, "../shared")`, `dirname "$0"`) present at several sites in `src/bin/ai`; the Engineer removed a legitimate `..` to pass. A review gate that blocks the codebase's own idiom trains people to route around it (the D-056 over-block lesson, applied to reviews). Ruling: keep P0 for `/etc/`, `/root/`, and for `../` that appears in **runtime path handling** (string concatenation with a request/argument value, `path.join`/`resolve` whose first argument is not a script anchor). Downgrade to **P1 advisory** when the `../` is anchored to a script-relative base (`__dirname`, `import.meta.url`, `self_dir`, `$0`, `BASH_SOURCE`, `AIOS`/`HOME`-rooted mirrors). The anchor list lives in one place with fixture cases in both directions (positive: the four `src/bin/ai` locators; negative: `join(req.path, "../")`). The HARDCODED_SECRET check keeps its shape (no reported over-blocks).
+
+### 3 — Helper locators: INSTALL-FIRST (E-223, Tier 3)
+E-220 found three `git rev-parse --show-toplevel` locators in `src/bin/ai` that resolved the USER's repo, so any project containing `src/shared/<helper>.mjs` would have that file executed with trusted stdout. The same pattern exists in all six `hooks/*.sh` (safe-exec, cache-manager locators). Ruling: locator order is **`~/.ai-os` install mirror first**; the dev tree (`<toplevel>/src/...`) is consulted **only when the current repo is the framework clone** — determined by `AIOS_WORKSPACE` equalling the toplevel, or the toplevel's `package.json` name being the framework package. A downstream project can never supply a helper. One shared resolver (`ai-os-locate`, shell function + `.mjs` twin) replaces the per-site chains; the dogfooding path for this repo is preserved by the clone check.
+
+### 4 — Orphaned work: NAME THE HELPERS
+`architect.md §4` gains one bullet, "Sovereignty & provisioning helpers", listing `architect-writes.mjs`, `caller-role.mjs`, `provider-adapter.mjs`, `role-manifest.mjs`, `sync-manifest.mjs` and pointing to `role-abstraction.md` / `architect-provider-parity.md`. The parity blueprint gets a matching "Shared helpers" section. This is the aligner's contract; adding a shared helper without naming it there is the divergence, not the helper.
+
+### Alternatives considered
+1. **(1) Re-run `safePath` only, without binding the project** — rejected; a path that is in-scope for the confirmer but outside the proposer's project silently lands in the wrong project.
+2. **(2) Delete the traversal check** — rejected; the `/etc/` / `/root/` and runtime-concatenation cases are real. **(2) Keep P0 and allowlist file names** — rejected; the idiom is not file-specific.
+3. **(3) Keep dev-tree-first and add a checksum** — rejected; the install mirror is already the trusted copy, and a checksum adds a second trust root.
+
+### Constraints driving this decision
+- Two-phase operations re-validate everything in phase two (D-055 R4 / E-219 pattern).
+- Gates must not block the codebase's own idioms (D-056 R3).
+- Executable helpers are trusted only from the install root; a project tree is data (E-201 lesson generalised).
+
+### Impact
+- Unlocks: E-221 (T3, `security_engineer`), E-222 (T2), E-223 (T3, `security_engineer`).
+- Risk if wrong: (3) breaks dogfooding if the clone check misfires — mitigated by the `AIOS_WORKSPACE` equality path and a `AI_OS_LOCATE_DEV=1` escape hatch for framework development only.
+
+### Rollback
+(1) Accept legacy absolute records with `AI_OS_PATCH_LEGACY=1`. (2) `AI_OS_REVIEW_STRICT_TRAVERSAL=1` restores the flat regex. (3) `AI_OS_LOCATE_DEV=1` restores dev-tree-first. (4) documentation only.
+
+---

@@ -47,9 +47,13 @@ assert_status 0 "wal-flusher.mjs calls PRAGMA wal_checkpoint(TRUNCATE)" \
 assert_status 0 "helper guards on node availability (fail-open)" \
   grep -qE 'command -v node' "$BIN_AI"
 
-# Locator chain: prefer in-repo script, fall back to ~/.ai-os/shared/.
-assert_status 0 "helper falls back to ~/.ai-os/shared/wal-flusher.mjs" \
-  grep -qE '\$\{AIOS\}/shared/wal-flusher\.mjs' "$BIN_AI"
+# E-223 REVERSED this order: the chain used to start cwd-relative, so running `ai sync`
+# in any directory containing src/shared/wal-flusher.mjs handed THAT file to node.
+# Resolution now goes through the shared install-first helper.
+assert_status 0 "helper resolves wal-flusher via the shared install-first locator" \
+  grep -q '_ai_os_helper shared/wal-flusher.mjs' "$BIN_AI"
+assert_status 1 "helper no longer prefers a cwd-relative wal-flusher" \
+  bash -c "sed 's/[[:space:]]*#.*\$//' '$BIN_AI' | grep -qE '\"src/shared/wal-flusher'"
 
 # ── T-WAL-S02: do_sync() and doctor() both call the helper ───────────────────
 echo ""

@@ -32,13 +32,15 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { instrument, rejection } from "../../shared/mcp-telemetry.mjs";
-import { readFileSync, writeFileSync, existsSync, unlinkSync, copyFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, unlinkSync, realpathSync } from "fs";
 import { resolve, relative } from "path";
 import { spawnSync } from "child_process";
 import { randomBytes } from "crypto";
 import { getDb } from "../shared/state-db.js";
 import { createLogger } from "../shared/logger.js";
 import { architectScopeGuard, effectiveRequestRole } from "../shared/caller-role.mjs";
+import { findProjectRootFrom, projectPathVerdict } from "../safe-exec-mcp/architect-writes.mjs";
+import { validateDiffContent } from "./diff-targets.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("propose-patch-mcp");
@@ -57,11 +59,61 @@ function newPatchId() {
   return "patch-" + randomBytes(4).toString("hex");
 }
 
+/**
+ * Bounds a path to a project root. Delegates to `projectPathVerdict` — the SAME predicate
+ * the Write/Edit and shell gates use — and returns the absolute path, or null.
+ *
+ * This used to be four lines of its own: resolve, relative, reject a leading "..". That is
+ * a LEXICAL test, and a symlinked DIRECTORY component inside the project walked straight
+ * through it — `src/esc -> ../outside` collapses to a relative path with no "..", so the
+ * check passed and the write followed the link out of the project. Proven end-to-end
+ * against this server during the E-221 audit: a single project, no cross-project confirm,
+ * no DB tampering, and the bytes landed outside the root.
+ *
+ * The repository already contained the hardened predicate — symlink resolution through
+ * realpathNearest, raw ".." rejection, trailing-separator handling, a hardlink inode check,
+ * fail-closed on a realpath error — built over seven audit rounds in E-216. Hand-rolling a
+ * second one is exactly what E-219 F1 did and what the E-216 header warns against: two
+ * gates for one rule drift, and the weaker one is the one that decides.
+ */
 function safePath(filePath, cwd) {
-  const abs = resolve(cwd, filePath);
-  const rel = relative(cwd, abs);
-  if (rel.startsWith("..")) return null;
-  return abs;
+  const v = projectPathVerdict(filePath, cwd);
+  if (v.blocked || !v.rel) return null;
+  return resolve(cwd, v.rel);
+}
+
+/**
+ * E-221 (D-057 §1): the project boundary for a two-phase patch.
+ *
+ * `propose_patch` resolves a path against the PROPOSING process's root; `confirm_patch`
+ * used to write to the stored ABSOLUTE path without re-checking it against its OWN root,
+ * so confirming a pending patch from a different project landed the write outside that
+ * project. That is not a role escape — the role is re-derived per process since E-219 —
+ * the gap is the project boundary.
+ *
+ * The fix has two halves, and BOTH are needed:
+ *   1. store the root the path was resolved against, plus a path RELATIVE to it;
+ *   2. at confirm time re-derive the root, require equality, and re-run safePath on the
+ *      relative path against that root.
+ * Storing the root alone would only detect the mismatch; re-resolving the relative path
+ * is what stops a stored absolute path from being trusted as a destination at all.
+ */
+function projectRootFor(cwd) {
+  return canonicalRoot(findProjectRootFrom(cwd));
+}
+
+/**
+ * Compare roots by their REALPATH. `/tmp` is a symlink to `/private/tmp` on macOS, so
+ * two processes in the same directory can hold strings that differ while naming one
+ * place — a string compare would reject legitimate confirms there. realpathSync throws
+ * on a missing path; fall back to the resolved string rather than crashing the guard.
+ */
+function canonicalRoot(dir) {
+  try {
+    return realpathSync(resolve(dir));
+  } catch {
+    return resolve(dir);
+  }
 }
 
 /**
@@ -232,10 +284,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   switch (name) {
     // ── propose_patch ─────────────────────────────────────────────────────────
     case "propose_patch": {
-      const abs = safePath(args.path, cwd);
+      // Resolve against the PROJECT ROOT so confirm_patch can re-derive the same base
+      // independently. In practice this equals cwd: `_patchDb()` looks for `.ai` in cwd
+      // EXACTLY and returns null otherwise, so a call that gets this far already has cwd
+      // at the root and the walk-up never fires. An earlier comment here claimed this
+      // handled the documented MCP rooting trap — it does not, because the DB lookup
+      // fails first. Kept because it makes the two sides derive the root the same way,
+      // which is what the equality check below compares.
+      const projectRoot = projectRootFor(cwd);
+      const abs = safePath(args.path, projectRoot);
       if (!abs) {
         return {
           content: [{ type: "text", text: `✗ Path traversal blocked: '${args.path}'` }],
+          isError: true,
+        };
+      }
+      const relPath = relative(projectRoot, abs);
+
+      // The path is validated three ways above — and none of that bounds what `patch`
+      // WRITES. It consumes the operand for the FIRST diff section only; later sections
+      // pick their own targets from their own headers, so a blob proposed for one file
+      // could carry a second section headed `../outside/victim.txt` and land there with
+      // exit 0 and a "✓ Patch applied" report. The predicate was right; it was applied to
+      // the wrong thing. Verified on this host: single-section blobs ARE operand-governed,
+      // multi-section ones escape.
+      const diffCheck = validateDiffContent(args.diff_content);
+      if (!diffCheck.ok) {
+        return {
+          content: [{ type: "text", text: `✗ [DIFF_REDIRECT] ${diffCheck.reason}` }],
           isError: true,
         };
       }
@@ -272,8 +348,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         status: "pending",
       };
       db.prepare(
-        "INSERT INTO patches(id, path, diff_content, description, caller_role, created_at, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')"
-      ).run(id, abs, args.diff_content, args.description || null, args.caller_role || null, patchData.created_at);
+        "INSERT INTO patches(id, path, diff_content, description, caller_role, created_at, status, project_root, rel_path) " +
+        "VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)"
+      ).run(
+        id, abs, args.diff_content, args.description || null, args.caller_role || null,
+        patchData.created_at, projectRoot, relPath,
+      );
 
       const formatted = formatDiff(args.diff_content, abs);
       const rendered  = renderPatch(patchData, formatted);
@@ -300,8 +380,78 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return rejection(`✗ Patch '${args.patch_id}' is already ${patch.status}.`);
       }
 
-      // Defense-in-depth: re-check role at apply time
-      const roleBlock = roleGuard(patch.caller_role, patch.path, cwd);
+      // ── E-221 (D-057 §1): re-establish the PROJECT boundary at confirm time ──
+      // The stored absolute path is never trusted as a destination. We re-derive this
+      // process's own root, require it to be the root the patch was proposed against,
+      // and re-resolve the RELATIVE path against it. A patch is a promise about a place
+      // inside one project; confirming it somewhere else is not the same promise.
+      const ownRoot = projectRootFor(cwd);
+      let targetPath;
+
+      // A record is legacy when the COLUMNS are absent — not when a value is falsy.
+      // `propose_patch(path: ".")` stores rel_path = "", and `!""` sent a row written
+      // seconds earlier down the legacy branch, reporting that it "predates the
+      // project-boundary check". It failed closed, but on the wrong branch: legacy is
+      // precisely the branch that SKIPS the PROJECT_MISMATCH equality check, and it was
+      // being selected by a value the record controls. An empty rel_path is rejected
+      // below on its own terms — it names the root directory, never a writable file.
+      if (patch.project_root == null || patch.rel_path == null) {
+        // A record from before this migration carries only an absolute path, and nothing
+        // in it says which project it belonged to. Guessing is exactly the behaviour
+        // being removed, so refuse and let the caller re-propose — the diff is not lost,
+        // it is still readable via preview_patch.
+        if (process.env.AI_OS_PATCH_LEGACY !== "1") {
+          return rejection(
+            `✗ [LEGACY_PATCH] Patch '${args.patch_id}' predates the project-boundary check ` +
+            `(E-221) and records no project root, so it cannot be verified against this ` +
+            `project. Re-propose it here, or set AI_OS_PATCH_LEGACY=1 to accept the ` +
+            `pre-E-221 behaviour for this run.`
+          );
+        }
+        // Rollback path: still strictly better than pre-E-221 — the stored absolute path
+        // is bounds-checked against THIS root before anything is written.
+        targetPath = safePath(patch.path, ownRoot);
+        if (!targetPath) {
+          return rejection(
+            `✗ [PROJECT_ESCAPE] Legacy patch '${args.patch_id}' targets '${patch.path}', ` +
+            `which lies outside this project root (${ownRoot}) — refusing to write.`
+          );
+        }
+      } else if (patch.rel_path === "") {
+        return rejection(
+          `✗ [PROJECT_ESCAPE] Patch '${args.patch_id}' names the project root itself, ` +
+          `not a file within it — refusing to write.`
+        );
+      } else {
+        if (canonicalRoot(patch.project_root) !== ownRoot) {
+          return rejection(
+            `✗ [PROJECT_MISMATCH] Patch '${args.patch_id}' was proposed against ` +
+            `'${patch.project_root}' but is being confirmed from '${ownRoot}'. ` +
+            `Confirm it from the project it was proposed in, or re-propose it here.`
+          );
+        }
+        // Re-run the bounds check on the RELATIVE path against our own root. The stored
+        // rel_path is data, not a verified destination: a row edited in the DB, or one
+        // written before some later change, must still be unable to escape.
+        targetPath = safePath(patch.rel_path, ownRoot);
+        if (!targetPath) {
+          return rejection(
+            `✗ [PROJECT_ESCAPE] Patch '${args.patch_id}' resolves outside the project ` +
+            `root (${ownRoot}) — refusing to write.`
+          );
+        }
+      }
+
+      // Re-validate the blob too: the stored row is DATA, and confirm already re-derives
+      // the root, the path and the role rather than trusting what was written down.
+      const storedDiffCheck = validateDiffContent(patch.diff_content);
+      if (!storedDiffCheck.ok) {
+        return rejection(`✗ [DIFF_REDIRECT] ${storedDiffCheck.reason}`);
+      }
+
+      // Defense-in-depth: re-check role at apply time, against the path we just
+      // re-derived — not the stored one.
+      const roleBlock = roleGuard(patch.caller_role, targetPath, cwd);
       if (roleBlock) return roleBlock;
 
       // Apply the patch — determine if diff_content is a unified diff or a full
@@ -315,7 +465,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (isDiff) {
           const popts = { input: patch.diff_content, encoding: "utf8", timeout: 10000, maxBuffer: 10 * 1024 * 1024 };
           // 1. Dry-run first — never mutate the file unless every hunk applies.
-          const dry = spawnSync("patch", ["--dry-run", "-f", patch.path, "-"], popts);
+          const dry = spawnSync("patch", ["--dry-run", "-f", targetPath, "-"], popts);
           if (dry.status !== 0) {
             // E-179: a clean dry-run refusal is the tool's core SAFETY guard working as designed
             // (the patch does not apply to the current file state) — an expected rejection that
@@ -324,26 +474,79 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               `✗ patch would not apply cleanly (dry-run exit ${dry.status}) — no changes written:\n${dry.stderr || dry.stdout || "(no output)"}`
             );
           }
-          // 2. Apply with a backup so a failure past the dry-run can be rolled back.
-          const backup = `${patch.path}.orig`;
-          const result = spawnSync("patch", ["-b", "-f", patch.path, "-"], popts);
+          // 2. Capture the pre-image OURSELVES, in memory, before anything runs.
+          //
+          // This used to pass `-b` and roll back from the `.orig` that patch(1) writes.
+          // Two problems with that, both raised in the E-221 audit:
+          //   - patch(1) writes `.orig` per SECTION, not per run, so by the time a later
+          //     section fails the backup can already hold partially-applied content —
+          //     "restoring" it would then commit exactly what we meant to reject;
+          //   - `${targetPath}.orig` is a real path in the user's tree. A pre-existing
+          //     file of that name was overwritten and then unlinked on success: data
+          //     loss caused by a rollback mechanism.
+          // A pre-image we read ourselves has neither property, and it is the only copy
+          // we can be sure corresponds to the state the dry-run approved.
+          //
+          // NOTE on the audit's H2: the reported dry-run BYPASS (an ed-style section
+          // plus a trailing unified header) did not reproduce here — patch 2.0-12u11-Apple
+          // returns 1 from the dry-run and the file is untouched, and the tool's message
+          // is accurate. The rollback SHAPE was still wrong for the reasons above, so it
+          // is fixed on its own merits rather than on the strength of that payload.
+          let preImage = null;
+          try { preImage = readFileSync(targetPath); } catch { preImage = null; }
+
+          // patch(1) writes `${target}.orig` on its OWN initiative on this platform
+          // (patch 2.0-12u11-Apple backs up by default; `-b` only made it explicit), so
+          // dropping `-b` does not stop it. Record what was at that path first: it may be
+          // a real file of the user's, and a housekeeping unlink that destroys one is the
+          // same class of harm as the over-prune in E-220. Restore it if it existed,
+          // remove it only if patch created it.
+          const backup = `${targetPath}.orig`;
+          let priorBackup = null;
+          try { priorBackup = existsSync(backup) ? readFileSync(backup) : null; } catch { priorBackup = null; }
+          const restoreBackupPath = () => {
+            try {
+              if (priorBackup !== null) writeFileSync(backup, priorBackup);
+              else if (existsSync(backup)) unlinkSync(backup);
+            } catch { /* best effort — never fail the call over backup housekeeping */ }
+          };
+
+          const result = spawnSync("patch", ["-f", targetPath, "-"], popts);
           if (result.status !== 0) {
-            // Restore from the backup and remove any reject fragments.
-            try { if (existsSync(backup)) copyFileSync(backup, patch.path); } catch {}
-            try { if (existsSync(backup)) unlinkSync(backup); } catch {}
-            try { const rej = `${patch.path}.rej`; if (existsSync(rej)) unlinkSync(rej); } catch {}
+            // Restore from OUR pre-image, then verify the restore actually happened
+            // before claiming it did. The old message said "file restored from backup"
+            // unconditionally — including when there was no backup to restore from.
+            let restored = false;
+            try {
+              if (preImage !== null) {
+                writeFileSync(targetPath, preImage);
+                restored = readFileSync(targetPath).equals(preImage);
+              } else if (existsSync(targetPath)) {
+                // The file did not exist before; a partial apply may have created it.
+                unlinkSync(targetPath);
+                restored = !existsSync(targetPath);
+              } else {
+                restored = true;
+              }
+            } catch { restored = false; }
+            restoreBackupPath();
+            try { const rej = `${targetPath}.rej`; if (existsSync(rej)) unlinkSync(rej); } catch {}
             return {
               content: [{
                 type: "text",
-                text: `✗ patch failed after dry-run passed (exit ${result.status}); file restored from backup:\n${result.stderr || result.stdout || "(no output)"}`,
+                text: `✗ patch failed after dry-run passed (exit ${result.status}); ` +
+                      (restored
+                        ? "file restored to its pre-patch content"
+                        : "⚠ THE FILE MAY BE PARTIALLY MODIFIED — the rollback could not be verified, inspect it before continuing") +
+                      `:\n${result.stderr || result.stdout || "(no output)"}`,
               }],
               isError: true,
             };
           }
-          // 3. Success — drop the backup to keep the working tree clean.
-          try { if (existsSync(backup)) unlinkSync(backup); } catch {}
+          // Success — leave the tree as we found it.
+          restoreBackupPath();
         } else {
-          writeFileSync(patch.path, patch.diff_content, "utf8");
+          writeFileSync(targetPath, patch.diff_content, "utf8");
         }
 
         db.prepare("DELETE FROM patches WHERE id = ?").run(args.patch_id);
@@ -351,7 +554,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: `✓ Patch applied: ${patch.path}\n  ID: ${args.patch_id}\n  Desc: ${patch.description || "(none)"}`,
+            text: `✓ Patch applied: ${targetPath}\n  ID: ${args.patch_id}\n  Desc: ${patch.description || "(none)"}`,
           }],
         };
       } catch (e) {

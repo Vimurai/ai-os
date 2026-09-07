@@ -85,9 +85,9 @@ sys.exit(0 if m and '_regenerate_mcp_docs' in m.group(1) else 1)
 assert_status 0 "_regenerate_mcp_docs guards on node availability" \
   grep -qE 'command -v node' "$BIN_AI"
 
-# Helper locates the generator from both repo and installed roots.
-assert_status 0 "helper falls back to ~/.ai-os/scripts/" \
-  grep -qE '\$\{AIOS\}/scripts/generate_mcp_docs\.mjs' "$BIN_AI"
+# E-223: install-first via the shared helper (was cwd-relative first).
+assert_status 0 "helper resolves the generator via the shared install-first locator" \
+  grep -q '_ai_os_helper scripts/generate_mcp_docs.mjs' "$BIN_AI"
 
 # ── T-MCPDOC-S04: install-ai-os.sh ships scripts/ ────────────────────────────
 echo ""

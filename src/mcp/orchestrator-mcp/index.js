@@ -14,6 +14,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { instrument } from "../../shared/mcp-telemetry.mjs";
+import { classifyTraversal } from "../../shared/traversal-policy.mjs";
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
@@ -356,11 +357,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         checks.push({ id: "HARDCODED_SECRET", severity: "P0", status: "FAIL", detail: secretMatches[0] });
       }
 
-      // Check 2: Path traversal
-      const traversalPattern = /^\+[^+].*(\.\.\/|\/etc\/|\/root\/)/gm;
-      const traversalMatches = [...diff.matchAll(traversalPattern)].map(m => m[0].trim().slice(0, 80));
-      if (traversalMatches.length > 0) {
-        checks.push({ id: "PATH_TRAVERSAL", severity: "P0", status: "FAIL", detail: traversalMatches[0] });
+      // Check 2: Path traversal — context-aware since E-222 (D-057 §2).
+      //
+      // This was one flat regex: any added line containing `../` was a P0 that BLOCKED
+      // the commit. That is right for a path assembled from runtime input and wrong for
+      // resolving a file relative to the script that needs it — it blocked E-220's fix
+      // for a real vulnerability, on an idiom already present at four other sites in the
+      // same file. A gate that fires on correct code teaches people to route around it.
+      //
+      // `/etc/` and `/root/` stay P0. A `../` anchored to a script-relative base is P1
+      // ADVISORY — still reported, so no traversal disappears from the review; only the
+      // blocking changes. The policy and its anchor list live in one place
+      // (src/shared/traversal-policy.mjs) so the checker and the fixtures cannot drift.
+      const traversal = classifyTraversal(diff, {
+        strict: process.env.AI_OS_REVIEW_STRICT_TRAVERSAL === "1",
+      });
+      if (traversal) {
+        checks.push({
+          id: "PATH_TRAVERSAL",
+          severity: traversal.severity,
+          status: traversal.severity === "P0" ? "FAIL" : "WARN",
+          detail: traversal.anchor
+            ? `${traversal.detail}  (anchored to ${traversal.anchor} — advisory)`
+            : traversal.detail,
+        });
       }
 
       // Check 3: Blueprint alignment — architect-owned files & the blueprint tree (E-169).

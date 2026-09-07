@@ -24,6 +24,7 @@
 - **Framework & Stack**: Node.js 20+ for MCP servers, Python 3.10+ for legacy fallbacks, and SQLite3 for ACID state management.
 - **State Management (SQLite-First Singularity)**: All task synchronization, execution states, and system metadata are stored in `.ai/state.sqlite` to prevent race conditions and ensure transactional integrity.
 - **Context & Memory Strategy (JIT)**: Avoids monolithic token consumption. Domain blueprints and skills are loaded Just-In-Time (JIT) as metadata first, expanding to full content only when needed.
+- **Sovereignty & provisioning helpers (D-054..D-057)**: `src/mcp/shared/caller-role.mjs` (server-side role derivation, E-219), `src/mcp/safe-exec-mcp/architect-writes.mjs` (shell write gate, E-216), `src/shared/provider-adapter.mjs` (A2A argv/env adapters, E-210), `src/shared/role-manifest.mjs` (role → directory manifest, E-212), `src/shared/sync-manifest.mjs` (manifest-scoped pruning, E-220), and the install-first helper resolver (E-223). Design: `.ai/blueprints/role-abstraction.md` and `.ai/blueprints/architect-provider-parity.md`. A new shared helper is named here in the same change that introduces it.
 
 ## 5. Data Models & API Contracts (MCP Nervous System)
 > [!IMPORTANT]

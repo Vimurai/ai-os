@@ -75,6 +75,19 @@ fallbacks may produce the restrictive outcome (BLOCK) but never the waiver. Acce
 role behaviour is unchanged. This retires the D-053 proxy-commit workaround for same-provider Triads only;
 agy Architects keep using the Engineer proxy.
 
+## Shared Helpers (aligner contract — D-057 §4)
+| Helper | Owner task | Purpose |
+|---|---|---|
+| `src/mcp/shared/caller-role.mjs` | E-219 | Server-side role derivation: verified session record → spawn-frozen env → restrictive default (`architect`). |
+| `src/mcp/safe-exec-mcp/architect-writes.mjs` | E-216 | Shell write-redirect policy; contract = `tests/fixtures/arch-write-cases.json`. |
+| `src/shared/provider-adapter.mjs` | E-210 | Provider `launch` / `print_mode` argv templates and child-env allowlist (`PATH`, `HOME`, `USER`, `child_env_keep`). |
+| `src/shared/role-manifest.mjs` | E-212 | Role → source-directory manifest from `registry.json`. |
+| `src/shared/sync-manifest.mjs` | E-220 | `_SYNC_MANIFEST.json` writer/reader; prune only in-manifest + unmodified + gone-from-source. |
+| install-first resolver (`ai-os-locate` shell + `.mjs` twin) | E-223 | Helpers resolve from `~/.ai-os` first; dev tree only inside the framework clone. |
+
+Two-phase writes (`propose_patch` → `confirm_patch`, E-221) bind the pending record to `project_root` + a
+project-relative path and re-run every check (`safePath`, role, project equality) at confirm time.
+
 ## Security
 - Provisioning copies files; it grants no new tool capability by itself. Capability in a Claude Architect
   pane is bounded by (a) the E-208 `Write|Edit` sovereignty gate, (b) the pre-tool-use Bash gate keyed on
@@ -100,3 +113,6 @@ agy Architects keep using the Engineer proxy.
 - **E-218** (Tier 2, D-055 R4): Git Lane stamp waiver only from the verified session record.
 - **E-219** (Tier 3, D-056 R1): `patch-mcp` / `propose-patch-mcp` fail-closed server-side role derivation (T-PATCHMCP-001).
 - **E-220** (Tier 2, D-056 R2): manifest-scoped pruning in `ai sync` (`_SYNC_MANIFEST.json`; delete only in-manifest + unmodified + gone-from-source; `--prune-known` for rename leftovers). Sync stays additive for anything it did not write.
+- **E-221** (Tier 3, D-057 §1): pending patches bound to `project_root` + relative path; every check re-run at `confirm_patch` (T-PROPOSEPATCH-001).
+- **E-222** (Tier 2, D-057 §2): `run_review` PATH_TRAVERSAL becomes context-aware — script-relative anchors are P1 advisory, runtime path handling stays P0.
+- **E-223** (Tier 3, D-057 §3): install-first helper resolver; dev tree only inside the framework clone; replaces every `git rev-parse` locator chain in `src/bin/ai` and the six hooks.

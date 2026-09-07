@@ -59,8 +59,9 @@ assert_status 0 "do_sync() invokes _regenerate_blueprints_index" \
   python3 -c "import re,sys; s=open('${BIN_AI}').read(); m=re.search(r'^do_sync\(\)\s*\{(.*?)^\}', s, re.S|re.M); sys.exit(0 if m and '_regenerate_blueprints_index' in m.group(1) else 1)"
 assert_status 0 "helper guards on node availability" \
   grep -q 'node not found — skipping _INDEX.md' "$BIN_AI"
-assert_status 0 "helper falls back to ~/.ai-os/scripts/" \
-  grep -q '${AIOS}/scripts/generate_blueprints_index.mjs' "$BIN_AI"
+# E-223: install-first via the shared helper (was cwd-relative first).
+assert_status 0 "helper resolves the generator via the shared install-first locator" \
+  grep -q '_ai_os_helper scripts/generate_blueprints_index.mjs' "$BIN_AI"
 
 # ── T-BPI-S05: fail-open — no .ai/blueprints → exit 0, no file written ────────
 SANDBOX="$(mktemp -d)"

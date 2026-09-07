@@ -458,9 +458,15 @@ assert_status 0 "AQG re-runs tests/run.sh"     grep -qE 'tests/run\.sh' "$HOOK"
 # New telemetry block invokes --record-tool via the locator chain.
 assert_status 0 "hook references --record-tool" \
   grep -qE '\-\-record-tool' "$HOOK"
-assert_status 0 "hook uses locator chain (src/shared first, ~/.ai-os fallback)" \
-  bash -c "grep -qE 'src/shared/telemetry\.mjs' '$HOOK' \
-        && grep -qE '\\\$\\{HOME\\}/\\.ai-os/shared/telemetry\\.mjs' '$HOOK'"
+# E-223 REVERSED this order deliberately, so the assertion is rewritten rather than
+# relaxed. "src/shared first" meant the VISITED repository's copy won: any project
+# containing src/shared/telemetry.mjs had that file executed by node from inside this
+# hook. Resolution is now install-first through the shared resolver, and the dev tree is
+# reachable only inside the framework clone.
+assert_status 0 "hook resolves telemetry via the shared install-first locator" \
+  grep -qE 'ai_os_locate shared/telemetry\.mjs' "$HOOK"
+assert_status 1 "hook no longer prefers the visited repo's own src/shared copy" \
+  bash -c "sed 's/[[:space:]]*#.*\$//' '$HOOK' | grep -qE 'show-toplevel.*src/shared/telemetry'"
 
 # Fail-open: backgrounded via & + disown, stderr/stdout swallowed.
 assert_status 0 "telemetry call is backgrounded (& + disown)" \

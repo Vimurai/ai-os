@@ -29,8 +29,14 @@ assert_status 0 "hook invokes cache-manager --build" \
   grep -qE 'cache-manager-mcp/index\.js' "$HOOK"
 assert_status 0 "hook honors AI_OS_DISABLE_CACHE rollback" \
   grep -qF 'AI_OS_DISABLE_CACHE' "$HOOK"
-assert_status 0 "hook locator falls back to ~/.ai-os mirror" \
-  grep -qF '${HOME}/.ai-os/mcp/cache-manager-mcp/index.js' "$HOOK"
+# E-223: the hook no longer spells the mirror path itself — it asks the shared resolver,
+# which is install-mirror-first by policy. The assertion keeps its INTENT (the hook can
+# still reach the installed server) and follows the code to where that is now decided,
+# rather than pinning a literal the implementation has moved past.
+assert_status 0 "hook resolves cache-manager via the shared install-first locator" \
+  grep -qF 'ai_os_locate mcp/cache-manager-mcp/index.js' "$HOOK"
+assert_status 0 "the resolver it bootstraps prefers the ~/.ai-os mirror" \
+  grep -qF 'shared/locate.sh' "$HOOK"
 
 # ── S03: detection logic — blueprint/architect REBUILD, src/Bash do not ──────
 det() { HOOK_INPUT="$1" python3 - <<'PY' 2>/dev/null
