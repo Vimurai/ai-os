@@ -1257,12 +1257,12 @@
     {
       "id": "E-213",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Bring the Architect settings overlay and identity labels to parity per .ai/blueprints/architect-provider-parity.md §Components 3-4: .claude/settings.architect.json adds Bash(ai add-task *), Bash(ai handoff *), mcp__task-synchronizer-mcp__handoff_control/add_topic_seed/add_cluster_page and mcp__context-guardian-mcp__check_role_access allow rules; drop the legacy Bash(gemini -p *) from the base settings template; owner labels in src/shared/cli-add-task.mjs and state-db become 'Architect (<provider>)' / 'Engineer (<provider>)' from .ai/roles.json; hooks/stop-hook.sh stamps 'Actor: <provider> (<role>)'. Acceptance: from an 'ai pane architect' session safe-exec analyze_command reports caller_role=architect (MCP spawn identity parity with agy); cli_add_task + handoff + stop-hook suites green; mirrors synced.",
       "created_at": "2026-09-04T21:32:54.518Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-07T11:57:01.098Z",
+      "summary": "Architect overlay gains its allow rules (no deny list — the hooks are the boundary); legacy Bash(gemini -p *) dropped and pruned; owner labels and the Stop hook Actor stamp resolve t …[full in LOG.md]",
       "depends_on": [
         "E-208"
       ],
@@ -2777,6 +2777,13 @@
       "task_id": "E-215",
       "timestamp": "2026-09-07T10:36:11.350Z",
       "summary": "[TIER_2] ARCHITECT.md runtime ladder + ai doctor per-role provisioning report (D-054). Also fixed a real E-212 bug this surfaced: role-manifest.mjs's _isMain used a filename-suffix test, so a dynamic import printed the CLI usage banner and exit 2 into the caller — it aborted the doctor report mid-run. role_runtime 40/0, role_provisioning 63/0, full suite 3376/0. Forbidden Zone, §35 and both @import shims verified byte-unchanged."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-213",
+      "timestamp": "2026-09-07T11:56:40.683Z",
+      "summary": "[TIER_2] Architect overlay allow rules + provider-aware identity labels (D-054). align_diff WARN-only (ORPHANED_WORK advisory — covered by architect-provider-parity.md §Components 3-4, which the aligner does not read). Acceptance verified live: an architect-spawned MCP server reports caller_role=architect and blocks git push with ARCH_GIT_PUSH; engineer-spawned passes with no ARCH_ rules. role_identity 27/0, full suite 3403/0."
     }
   ],
   "deltas": [

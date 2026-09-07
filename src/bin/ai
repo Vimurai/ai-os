@@ -765,11 +765,35 @@ for role, cfg in roles.items():
     env["AI_OS_CALLER_ROLE"] = role
     # NEVER register hooks here — see the comment above _write_role_settings_overlays.
     data.pop("hooks", None)
+
+    # E-213 (§Components 3): the Architect's own tool surface. --settings MERGES with
+    # the base file, so these are ADDITIVE to the Engineer allow-list; they are the
+    # tools an Architect needs to plan and hand off without a permission prompt.
+    #
+    # These are ALLOW rules only. Deny rules are deliberately NOT used as the
+    # sovereignty mechanism — the pre-tool-use hook (E-208) and the Git Lane (E-214)
+    # are, because a settings file is advisory config while the hooks are enforced.
+    if role == "architect":
+        arch_allow = [
+            "Bash(ai add-task *)",
+            "Bash(ai handoff *)",
+            "mcp__task-synchronizer-mcp__handoff_control",
+            "mcp__task-synchronizer-mcp__add_topic_seed",
+            "mcp__task-synchronizer-mcp__add_cluster_page",
+            "mcp__context-guardian-mcp__check_role_access",
+        ]
+        ov_perms = data.setdefault("permissions", {})
+        ov_allow = ov_perms.get("allow", [])
+        for rule in arch_allow:
+            if rule not in ov_allow:
+                ov_allow.append(rule)
+        ov_perms["allow"] = ov_allow
     os.makedirs(target_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
-    print(f"  .claude/settings.{role}.json written (role overlay, env only)")
+    _kind = "env + allow rules" if role == "architect" else "env only"
+    print(f"  .claude/settings.{role}.json written (role overlay, {_kind})")
 PY
 }
 
@@ -820,19 +844,19 @@ if _aios_ws:
 # (not setdefault) so a stale/forged value can never linger.
 env["AI_OS_CALLER_ROLE"] = "engineer"
 
-# Permissions: scoped Gemini CLI + registry-driven MCP tools
+# Permissions: registry-driven MCP tools.
+# E-213: the legacy `Bash(gemini -p *)` grant is DROPPED. The Gemini CLI was retired
+# (D-050) and the A2A bridge is provider-aware as of E-210, so the base Engineer
+# settings no longer need a vendor-specific shell grant. Existing entries are pruned
+# on sync so the rule does not linger in projects that already have it.
 perms = data.setdefault("permissions", {})
 allow = perms.get("allow", [])
 new_allow = []
 for entry in allow:
-    if entry == "Bash(gemini *)":
-        new_allow.append("Bash(gemini -p *)")
-        print("Tightened: Bash(gemini *) → Bash(gemini -p *)")
-    else:
-        new_allow.append(entry)
-if "Bash(gemini -p *)" not in new_allow and "Bash(gemini *)" not in new_allow:
-    new_allow.append("Bash(gemini -p *)")
-    print("Added: Bash(gemini -p *)")
+    if entry in ("Bash(gemini *)", "Bash(gemini -p *)"):
+        print(f"Removed legacy grant: {entry} (E-213)")
+        continue
+    new_allow.append(entry)
 if os.path.exists(registry_path):
     with open(registry_path) as rf:
         reg = json.load(rf)
