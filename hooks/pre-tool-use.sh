@@ -19,12 +19,15 @@
 # `architect`, a write to any path outside .ai/ or plans/ is BLOCKED. The Engineer
 # path is unchanged: for role=engineer the write gate is a fast no-op.
 #
-# SCOPE — this NARROWS gap G2, it does NOT close it. Shell writes (`>`, tee, cp, mv,
-# sed -i, ln -s, git apply, python3 -c) and the MCP write tools (mcp__filesystem__*,
-# mcp__patch-mcp__*) are NOT covered: they fall outside this matcher and safe-exec's
-# analyzeSovereignty has no concept of redirection. Treat this as defence-in-depth,
-# not a boundary. Closing those channels is a policy expansion beyond §Components 5
-# and needs an Architect ruling (escalated 2026-09-05).
+# SCOPE (widened by E-216 / D-055 R1). The Architect write gate now has THREE layers:
+#   1. this hook — the native Write/Edit tools, path-checked against .ai//plans/
+#   2. safe-exec analyzeArchitectWrites — shell redirections, tee/cp/mv/install/ln/
+#      rsync/dd/truncate/patch, sed -i / perl -i, git apply; inline interpreters
+#      (python3 -c, node -e, bash -c, eval, heredoc-fed) blocked outright
+#   3. permissions.deny in .claude/settings.architect.json — the MCP write tools
+# STATED RESIDUAL: exotic encodings, git plumbing (hash-object/update-index), and
+# interactive editors are NOT covered. Strong defence in depth; not airtight. The Git
+# Lane (E-214) remains the last checkpoint before anything reaches history.
 #
 # Rollback / emergency bypass: AI_OS_SAFE_EXEC_GATE=0.
 set -uo pipefail

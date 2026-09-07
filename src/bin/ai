@@ -770,9 +770,12 @@ for role, cfg in roles.items():
     # the base file, so these are ADDITIVE to the Engineer allow-list; they are the
     # tools an Architect needs to plan and hand off without a permission prompt.
     #
-    # These are ALLOW rules only. Deny rules are deliberately NOT used as the
-    # sovereignty mechanism — the pre-tool-use hook (E-208) and the Git Lane (E-214)
-    # are, because a settings file is advisory config while the hooks are enforced.
+    # E-216 (D-055 R1): deny rules are now ALSO applied, for the filesystem-mutating
+    # MCP tools. They remain a SECOND layer, not the mechanism — the pre-tool-use hook
+    # (E-208, widened here) and the Git Lane (E-214) are what is enforced, because a
+    # settings file is config the session could in principle be started without. The
+    # hook cannot see a pre-approved MCP call's arguments reliably, which is exactly
+    # why the MCP channel needs the deny list rather than a path check.
     if role == "architect":
         arch_allow = [
             "Bash(ai add-task *)",
@@ -782,17 +785,44 @@ for role, cfg in roles.items():
             "mcp__task-synchronizer-mcp__add_cluster_page",
             "mcp__context-guardian-mcp__check_role_access",
         ]
+        # Every MCP tool that can mutate the filesystem. The Architect writes through
+        # Write/Edit under .ai//plans/ (path-gated by the hook); these bypass that gate
+        # entirely, so they are denied outright rather than scoped.
+        arch_deny = [
+            "mcp__filesystem__write_file",
+            "mcp__filesystem__edit_file",
+            "mcp__filesystem__move_file",
+            "mcp__filesystem__create_directory",
+            "mcp__patch-mcp__patch_file",
+            "mcp__propose-patch-mcp__propose_patch",
+            "mcp__propose-patch-mcp__confirm_patch",
+            # E-216 audit: the deny list matches TOOL NAMES, so a router that forwards
+            # to the same server under a different name walks straight past it.
+            # mcp-router's "Code" domain routes patch-mcp / propose-patch-mcp, whose own
+            # role guard is self-declared (it trusts a caller_role argument), so
+            # proxy_call reaches the exact tools denied above.
+            "mcp__mcp-router__proxy_call",
+            # The MCP analogue of the "interactive editors" residual: these drive any
+            # GUI editor to write any file.
+            "mcp__computer-use-mcp__type_text",
+            "mcp__computer-use-mcp__key_press",
+        ]
         ov_perms = data.setdefault("permissions", {})
         ov_allow = ov_perms.get("allow", [])
         for rule in arch_allow:
             if rule not in ov_allow:
                 ov_allow.append(rule)
         ov_perms["allow"] = ov_allow
+        ov_deny = ov_perms.get("deny", [])
+        for rule in arch_deny:
+            if rule not in ov_deny:
+                ov_deny.append(rule)
+        ov_perms["deny"] = ov_deny
     os.makedirs(target_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
-    _kind = "env + allow rules" if role == "architect" else "env only"
+    _kind = "env + allow/deny rules" if role == "architect" else "env only"
     print(f"  .claude/settings.{role}.json written (role overlay, {_kind})")
 PY
 }

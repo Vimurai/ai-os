@@ -22,6 +22,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { parse } from "shell-quote";
+import {
+  isSafeArchitectPath,
+  architectPathVerdict,
+  findProjectRootFrom,
+  analyzeArchitectWrites,
+} from "./architect-writes.mjs";
 import { createLogger } from "../shared/logger.js";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, realpathSync, lstatSync } from "node:fs";
@@ -222,156 +228,6 @@ function usesCommandPair(raw, a, b) {
   return new RegExp(CMD_HEAD + a + "\\s+" + b + "\\b", "i").test(raw);
 }
 
-// A path operand the Architect is allowed to touch: within .ai/ or plans/
-// (optionally prefixed with ./). Bare commit-ish refs (HEAD, hashes, branch
-// names) are NOT safe paths, so an unscoped `git reset --hard HEAD` blocks.
-const SAFE_ARCHITECT_PATH = /^(\.\/)?(\.ai|plans)(\/|$)/;
-
-function isSafeArchitectPath(tok) {
-  return SAFE_ARCHITECT_PATH.test(tok);
-}
-
-// ── E-208 (D-054, role-abstraction.md §Components 5): Write/Edit sovereignty ───
-// SAFE_ARCHITECT_PATH above matches the RELATIVE operands that appear in a shell
-// command. The Write/Edit tools hand the hook an ABSOLUTE path instead, so it must
-// first be normalised against the project root before the same .ai/ | plans/ rule
-// can be applied. Kept separate from the token-based command analyser because the
-// input shape differs: one path, already parsed, no shell quoting to reason about.
-//
-// WHY THIS EXISTS: under a same-provider Triad the Architect pane is Claude, which
-// unlike agy HAS Write/Edit tools. §35 ANTI-DRIFT was prompt-level only for those.
-//
-// SCOPE — READ THIS BEFORE RELYING ON IT (E-208 security audit, 2026-09-05):
-// this gate covers the NATIVE write tools only (Write|Edit|MultiEdit|NotebookEdit).
-// It does NOT cover shell writes (`>`, tee, cp, mv, sed -i, ln -s, git apply,
-// python3 -c) — analyzeSovereignty has no concept of redirection — nor the MCP write
-// tools (mcp__filesystem__*, mcp__patch-mcp__*), which sit outside the hook matcher
-// and are pre-approved in the allow-list. Gap G2 is therefore NARROWED, not closed:
-// treat this as defence-in-depth, not a boundary. Closing the remaining channels is
-// a policy expansion beyond role-abstraction.md §Components 5 and needs an Architect
-// ruling (escalated 2026-09-05).
-//
-// PATH GATING ITSELF also has limits, so do not read the list above as "everything
-// else is airtight":
-//   - HARDLINKS are handled below by an nlink check, NOT by path resolution — no
-//     resolution algorithm can see through one (see the check in this function).
-//   - TOCTOU: the hook approves a path, then the tool opens it. A concurrent
-//     `ln -sf` between those two moments is not observable here. Inherent to
-//     hook-based gating, and it needs the same shell channel already declared open.
-function architectPathVerdict(rawPath, projectRoot) {
-  if (!rawPath || typeof rawPath !== "string") {
-    return { blocked: false }; // nothing to gate — never invent a block
-  }
-  // A parent-directory segment must be rejected BEFORE any resolution, because
-  // `normalize` and `resolve` collapse it LEXICALLY (a pure string operation) while
-  // the kernel applies it to the SYMLINK TARGET. Given a link inside .ai/ pointing at
-  // a directory under src/, a path that walks through that link and then back up one
-  // level collapses, as a string, to something still inside .ai/ — so the gate allowed
-  // it — while the kernel resolved it to a file under src/. That wrote real bytes to a
-  // real source file through the native Write tool (E-208 audit round 2).
-  // Resolving symlinks first does not fix it — the two orders disagree by design.
-  // The Write/Edit tools always hand us a clean absolute path, so such a segment has
-  // no legitimate use here, and rejecting it removes the whole class rather than one
-  // instance. Checked on the RAW input, before normalize can hide it.
-  for (const seg of String(rawPath).split(/[\\/]+/)) {
-    if (seg === "..") {
-      return { blocked: true, reason: "path contains a '..' segment, which cannot be resolved safely across symlinks" };
-    }
-  }
-
-  // Strip trailing separators BEFORE resolving. `existsSync(".ai/link/")` is false for
-  // a symlink-to-FILE (ENOTDIR), so the ancestor walk would skip the leaf, re-attach
-  // it as an unresolved tail, and hand back `.ai/link` — inside the allowed root,
-  // never resolved to its target. `.ai/link` blocked while `.ai/link/` allowed
-  // (E-208 audit round 2). basename() already discards the slash, so this only makes
-  // the existence probe see the same path the kernel would.
-  const cleanedPath = String(rawPath).replace(/[\\/]+$/, "") || rawPath;
-
-  let rel;
-  try {
-    const abs = isAbsolute(cleanedPath) ? normalize(cleanedPath) : resolvePath(projectRoot, cleanedPath);
-    // Symlinks must be resolved BEFORE the .ai|plans test, or a link planted inside
-    // .ai/ (which the Architect may legitimately write) silently forwards a write to
-    // any target: `.ai/link -> src/bin/ai` passed the normalise-only check.
-    // The write target itself may not exist yet, so resolve the nearest EXISTING
-    // ancestor and re-attach the unresolved tail.
-    rel = relative(realpathRoot(projectRoot), realpathNearest(abs));
-  } catch {
-    return { blocked: true, reason: "path could not be resolved against the project root" };
-  }
-  // Outside the project entirely (rel starts with ".." or is another absolute root).
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
-    return { blocked: true, reason: "path is outside the project root" };
-  }
-  // Already normalised above, so any embedded parent-directory segments have been
-  // collapsed — an escape attempt shows up as a rel that leaves the root, caught above.
-  if (isSafeArchitectPath(rel)) {
-    // HARDLINK check — the one place path resolution genuinely cannot help. A
-    // hardlink is not a REFERENCE to a file, it IS the file under a second equally
-    // canonical name, so realpath has nothing to see through: `ln src/bin/ai .ai/h`
-    // then `Write .ai/h` writes src/bin/ai, and every path-based check agrees the
-    // target is inside .ai/. Only an inode property distinguishes it. One lstat, and
-    // it can only ever ADD restriction to a write we were about to allow.
-    // Directories legitimately carry nlink > 1 (subdirectory back-references), so
-    // this is restricted to regular files. A missing target is not yet a file and
-    // cannot be an alias for one.
-    try {
-      const st = lstatSync(join(realpathRoot(projectRoot), rel));
-      if (st.isFile() && st.nlink > 1) {
-        return {
-          blocked: true,
-          reason: `target has ${st.nlink} hard links — it is the same inode as a file elsewhere, so writing it would write outside .ai//plans/`,
-        };
-      }
-    } catch {
-      // Target does not exist yet (the common case for a new file) — nothing to alias.
-    }
-    return { blocked: false };
-  }
-  return { blocked: true, reason: "the Architect may only write under .ai/ or plans/" };
-}
-
-// realpath of the project root itself (the root may sit under a symlinked prefix,
-// e.g. /tmp -> /private/tmp on macOS; without this every path would look "outside").
-function realpathRoot(root) {
-  try { return realpathSync(root); } catch { return root; }
-}
-
-// realpath the deepest EXISTING ancestor of `abs`, then re-attach the not-yet-created
-// tail. A write target usually does not exist yet, so realpathSync(abs) would throw;
-// resolving the ancestor still defeats a symlinked directory component.
-function realpathNearest(abs) {
-  let cur = abs;
-  const tail = [];
-  for (let i = 0; i < 64; i++) {
-    if (existsSync(cur)) {
-      // FAIL CLOSED: a realpath error must NOT degrade to the unresolved path — that
-      // is a fail-open in a security decision, and it is what let a trailing slash on
-      // a symlinked leaf (ENOTDIR) slip through (E-208 audit round 2). Throwing here
-      // is caught by architectPathVerdict, which returns blocked.
-      const real = realpathSync(cur); // may throw — intentional
-      return tail.length ? join(real, ...tail.reverse()) : real;
-    }
-    const parent = dirname(cur);
-    if (parent === cur) break;
-    tail.push(basename(cur));
-    cur = parent;
-  }
-  return abs;
-}
-
-// Project root for the path gate: nearest ancestor of cwd containing .ai/.
-function findProjectRootFrom(start) {
-  let dir = resolvePath(start || process.cwd());
-  for (let i = 0; i < 40; i++) {
-    if (existsSync(join(dir, ".ai"))) return dir;
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return resolvePath(start || process.cwd());
-}
-
 // Non-flag operand tokens appearing after the first occurrence of `cmd`
 // (and, when given, after `sub`). `--` is treated as a separator and dropped.
 function operandsAfter(tokens, cmd, sub) {
@@ -384,6 +240,7 @@ function operandsAfter(tokens, cmd, sub) {
   }
   return rest.filter((t) => t && t !== "--" && !t.startsWith("-"));
 }
+
 
 // Returns [{id, message}] sovereignty violations for an architect caller.
 function analyzeSovereignty(tokens, raw) {
@@ -443,6 +300,11 @@ function analyzeSovereignty(tokens, raw) {
       violations.push({ id: `ARCH_DEPLOY_${a.toUpperCase()}_${b.toUpperCase()}`, message: `${a} ${b} is a forbidden Architect operation — deployments are strictly Engineer tasks` });
     }
   }
+
+  // E-216: shell write channel (redirections, write verbs, in-place editors,
+  // inline interpreters). Appended last so its ids read after the historical ones.
+  violations.push(...analyzeArchitectWrites(tokens, raw));
+
   return violations;
 }
 
@@ -702,9 +564,9 @@ if (_verifyRoleIdx !== -1) {
 // the session's HMAC-verified role is `architect` and the path lies outside .ai/ or
 // plans/, 0 otherwise. hooks/pre-tool-use.sh calls this for Write|Edit|MultiEdit|
 // NotebookEdit. The ENGINEER path is a fast exit 0 — this gate adds no restriction
-// for the Engineer. For a Claude Architect it NARROWS gap G2; it does not close it
-// (shell writes and MCP write tools are still open — see the scope note on
-// architectPathVerdict above).
+// for the Engineer. For a Claude Architect this is now ONE of three channels — see the
+// scope note on architectPathVerdict above for the other two and for what remains
+// uncovered (exotic encodings, git plumbing, interactive editors).
 const _checkPathIdx = process.argv.indexOf("--check-path");
 if (_checkPathIdx !== -1) {
   const target = process.argv[_checkPathIdx + 1] || "";

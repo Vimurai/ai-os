@@ -14,6 +14,9 @@ AI_BIN="${REPO_ROOT}/src/bin/ai"
 HOOK="${REPO_ROOT}/hooks/pre-tool-use.sh"
 SS_HOOK="${REPO_ROOT}/hooks/session-start.sh"
 SAFE_EXEC="${REPO_ROOT}/src/mcp/safe-exec-mcp/index.js"
+# E-216 split the Architect scope/write policy into its own module (index.js passed
+# the 1000-line standards limit); the scope notes moved with it.
+ARCH_WRITES="${REPO_ROOT}/src/mcp/safe-exec-mcp/architect-writes.mjs"
 ADAPTER="${REPO_ROOT}/src/shared/provider-adapter.mjs"
 
 echo "── Suite: pane_binding_test (E-208) ─────────────────────────────────"
@@ -256,10 +259,18 @@ assert_status 0 "E-208.08j: the valid sibling role is still generated" \
 assert_status 0 "E-208.08k: launcher validates the provider name before exec" \
   grep -q "refusing to exec provider" "$AI_BIN"
 
-# (f) SCOPE HONESTY — the code must not claim to close G2 while shell and MCP write
-# channels remain open. This assertion fails loudly if someone re-inflates the claim.
-assert_status 0 "E-208.08l: code documents the gate's real scope (narrowed, not closed)" \
-  grep -q "NARROWED, not closed" "$SAFE_EXEC"
+# (f) SCOPE HONESTY — E-216/D-055 widened the gate to three layers, so the old
+# "NARROWED, not closed" wording no longer applies. What must still hold is that the
+# code names its REMAINING residual instead of claiming the channel is airtight.
+assert_status 0 "E-208.08l: the scope note enumerates all three write channels" \
+  grep -q "analyzeArchitectWrites" "$ARCH_WRITES"
+assert_status 0 "E-208.08l2: and still states a residual rather than claiming closure" \
+  grep -q "STATED RESIDUAL" "$ARCH_WRITES"
+# Assert the honest statement POSITIVELY. A keyword-absence test was worse than
+# useless here: it matched the word "airtight" inside the sentence that correctly says
+# the channel is NOT airtight, i.e. it failed on the very wording it existed to require.
+assert_status 0 "E-208.08l3: the code states plainly that the channel is not airtight" \
+  grep -q "not airtight" "$ARCH_WRITES"
 
 
 # ── E-208.9: do_pane error branches + _find_ai_dir walk (critic_tests P2) ────
@@ -354,14 +365,14 @@ rmdir "$REPO_ROOT/src/__e208_deep" 2>/dev/null
 rm -f "${HOME}/.ai-os/run/role-${SID_R2}.lock" "${HOME}/.ai-os/run/role-${SID_R2E}.lock"
 
 # Scope honesty must hold at ALL THREE sites, not just the one that was pinned.
-assert_status 0 "E-208.10i: safe-exec scope note is honest (narrowed, not closed)" \
-  grep -q "NARROWED, not closed" "$SAFE_EXEC"
+assert_status 0 "E-208.10i: the policy module names its residual (E-216 wording)" \
+  grep -q "STATED RESIDUAL" "$ARCH_WRITES"
 assert_status 0 "E-208.10j: the check-path CLI comment does not claim G2 is closed" \
   bash -c "! grep -q 'only closes gap G2' '$SAFE_EXEC'"
 assert_status 0 "E-208.10k: the hook comment does not claim G2 is closed" \
   bash -c "! grep -q 'This closes gap G2' '$HOOK'"
-assert_status 0 "E-208.10l: the hook documents the uncovered channels" \
-  grep -q "NARROWS gap G2" "$HOOK"
+assert_status 0 "E-208.10l: the hook enumerates the three layers and the residual" \
+  bash -c "grep -q 'THREE layers' '$HOOK' && grep -q 'STATED RESIDUAL' '$HOOK'"
 # The mint guard must not be described as immutability — it is a partial guard.
 assert_status 0 "E-208.10m: mint refusal does not over-claim immutability" \
   bash -c "! grep -q \"role is immutable for its lifetime\" '$SAFE_EXEC'"
@@ -396,9 +407,9 @@ rm -f "$REPO_ROOT/.ai/__e208_hl" "${HOME}/.ai-os/run/role-${SID_HL}.lock" "${HOM
 
 # The scope block must name path gating's own limits, not just uncovered channels.
 assert_status 0 "E-208.11f: scope note documents the hardlink limit" \
-  grep -q "HARDLINKS are handled below by an nlink check" "$SAFE_EXEC"
+  grep -q "HARDLINKS are handled below by an nlink check" "$ARCH_WRITES"
 assert_status 0 "E-208.11g: scope note documents the TOCTOU limit" \
-  grep -q "TOCTOU" "$SAFE_EXEC"
+  grep -q "TOCTOU" "$ARCH_WRITES"
 
 
 assert_summary

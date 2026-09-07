@@ -2823,6 +2823,13 @@
       "task_id": "E-213",
       "timestamp": "2026-09-07T11:56:40.683Z",
       "summary": "[TIER_2] Architect overlay allow rules + provider-aware identity labels (D-054). align_diff WARN-only (ORPHANED_WORK advisory — covered by architect-provider-parity.md §Components 3-4, which the aligner does not read). Acceptance verified live: an architect-spawned MCP server reports caller_role=architect and blocks git push with ARCH_GIT_PUSH; engineer-spawned passes with no ARCH_ rules. role_identity 27/0, full suite 3403/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-216",
+      "timestamp": "2026-09-07T13:18:20.117Z",
+      "summary": "[TIER_3] Architect write gate widened to three layers (D-055 R1). security_engineer: SEC_BLOCKED x7, SEC_CLEARED on round 8 (87/87 regression, 109 cases, 0 mismatches). Every finding was one invariant — data read as syntax; 5 of 11 were over-blocks I introduced. Fixture-driven cases (108, argv-passed) replace bash cases that ate quoting twice. architect_write_gate 237/0, full suite 3650/0, live acceptance proven through the real hook. Residual and T-PATCHMCP-001 recorded."
     }
   ],
   "deltas": [

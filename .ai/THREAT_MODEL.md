@@ -1,7 +1,7 @@
 # THREAT_MODEL.md — AI-OS v2
 
 > Companion to `.ai/SECURITY.md`. Contains full threat entries for all external integrations and trust boundaries.
-> Last updated: 2026-09-07 (E-214 Architect Git Lane residual risks)
+> Last updated: 2026-09-07 (E-216 write-gate widening; patch-mcp default-open guard)
 
 ---
 
@@ -314,6 +314,33 @@ through as in-scope; the role comparison is case/whitespace normalized; and
 
 **Rollback**: `AI_OS_SKIP_GIT_LANE=1` — it resolves the role to `engineer`, so it
 removes the path restriction WITHOUT opening the waiver.
+
+---
+
+### T-PATCHMCP-001 — patch-mcp's role guard defaults OPEN (E-216 audit, 2026-09-07)
+
+**Boundary**: `src/mcp/patch-mcp/index.js` — `roleGuard()` returns `null` (allow) unless
+the CALLER voluntarily passes `caller_role: "architect"`. Omit the field and the tool
+writes anywhere, regardless of the session's actual role.
+
+**Why this is recorded now rather than only queued as a task**: the E-216 mitigation for
+the MCP write channel is `permissions.deny` in `.claude/settings.architect.json`. That is
+settings-file config, so it is the layer most likely to be ABSENT — a session started
+without the overlay, a fresh clone before `ai sync`, a different host. In exactly that
+case patch-mcp's self-declared guard is the only thing between an Architect and an
+arbitrary write, and it defaults open. A queued task that has not run yet is not a
+mitigation; this entry at least makes the assumption visible.
+
+**Same class**: `mcp__mcp-router__proxy_call` reaches `patch-mcp` and
+`propose-patch-mcp` under a DIFFERENT tool name, so a deny list keyed on tool names does
+not stop it. E-216 denies `proxy_call` itself for the architect role; that closes the
+named route, not the underlying default-open guard.
+
+**Not fixed in E-216** — it is a defect in patch-mcp, outside the ratified scope of the
+write-gate widening, and widening a Tier 3 task silently to cover it would be exactly
+the drift these gates exist to prevent. Fix shape: derive the role from the
+HMAC-verified session record (`safe-exec --verify-role`) instead of trusting an
+argument, and fail closed when no record is available.
 
 ---
 

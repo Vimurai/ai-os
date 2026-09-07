@@ -82,10 +82,18 @@ assert_not_contains "E-213.02g: the engineer overlay gains no permissions block"
 # Still no hooks — the E-208 double-mint guard must survive this change.
 assert_not_contains "E-213.02h: the architect overlay still registers NO hooks" \
   '"hooks"' "$_ARCH_OV"
-# Deny rules are NOT the sovereignty mechanism (blueprint §Components 3) — the
-# pre-tool-use hook and the Git Lane are. Assert we did not quietly add one.
-assert_not_contains "E-213.02i: the overlay uses allow rules only, no deny list" \
-  '"deny"' "$_ARCH_OV"
+# E-216 (D-055 R1) ADDS a deny list for the filesystem-mutating MCP tools — the one
+# channel a path-checking hook cannot see, because it never observes a pre-approved
+# MCP call's arguments. Deny is a SECOND layer here, not the mechanism.
+assert_contains "E-213.02i: the overlay now carries a deny list (E-216)" '"deny"' "$_ARCH_OV"
+for _d in "mcp__filesystem__write_file" "mcp__filesystem__edit_file" \
+          "mcp__filesystem__move_file" "mcp__filesystem__create_directory" \
+          "mcp__patch-mcp__patch_file" "mcp__propose-patch-mcp__propose_patch" \
+          "mcp__propose-patch-mcp__confirm_patch"; do
+  assert_contains "E-213.02i [$_d]: denied in the architect overlay" "$_d" "$_ARCH_OV"
+done
+# The Engineer must NOT inherit the deny list — these are its everyday tools.
+assert_not_contains "E-213.02j: the engineer overlay carries no deny list" '"deny"' "$_ENG_OV"
 
 # ── E-213.3: the legacy gemini grant is gone from the base settings ────────
 assert_status 1 "E-213.03a: the generator no longer ADDS Bash(gemini -p *)" \
