@@ -598,3 +598,38 @@ The Architect persona (Antigravity `agy`) runs shell reliably but does not depen
 
 ### Rollback
 Deprecate the `ai add-task` command and enforce MCP-only routing if/when Antigravity natively supports stable local MCP tool execution for all project servers.
+---
+
+## [[D-054]] — Same-Provider Triad (All-Claude) Is a Supported Topology; Role Binding Is Per-Pane
+
+**Date**: 2026-09-04
+**Task**: E-208, E-209, E-210, E-211 (Engineer findings handoff of 2026-09-04 21:14 UTC, COMM.md)
+**Decision**: Ratify the same-provider Triad (both `architect` and `engineer` on `claude`, distinct tmux panes, optionally distinct models) as a supported topology, and rule that **role identity is bound per pane at launch — never per project**. The binding surface is a single launcher, `ai pane <role>`, that (1) mints the E-129 HMAC role token for that role, (2) sets `AI_OS_CALLER_ROLE` for that pane, (3) injects the role's canonical rulefile as the governing persona, and (4) pins the tmux pane title to the role name. `role-abstraction.md §Same-Provider Triad` and `interactive-bridge.md §Pane Resolution Precedence` are amended to match.
+
+### Why needed
+D-050 decoupled persona from vendor and `role-abstraction.md` already *claims* the dual-Claude case, but the Engineer's live evaluation (COMM.md 2026-09-04) shows the claim is not wired end-to-end: G1 `CLAUDE.md` always imports `ENGINEER.md`; G2 `.claude/settings.json` bakes `AI_OS_CALLER_ROLE=engineer` and `session-start.sh engineer` project-wide, so both panes are Engineers to the enforcement layer; G3 `resolve_pane` Pass 2 fuzzy title match fires before the roles.json ordinal and swallowed an Architect handoff into the Engineer pane twice; G4 `advisor-mcp` hardcodes `agy`. The blueprint is ahead of the implementation — a divergence the Architect must reconcile, not the Engineer.
+
+### Alternatives considered
+1. **Reject the topology; revert `.ai/roles.json` to `agy:1`** — rejected. The user needs it (agy auth lapses, and the Architect benefits from a stronger model); D-050's whole point was provider independence, and the blueprint already promises this case.
+2. **Role-aware `CLAUDE.md` shim that branches on the role** — rejected. `@import` is static; the shim cannot branch. Rewriting the shim into a role-neutral "read the stamp" preamble would strip the Engineer's rulefile from the default pane and weaken the documented D-051 shim contract.
+3. **Two project settings files, one per role, selected via `claude --settings`** — accepted as the *mechanism for the settings layer*, but rejected as the *sole* binding: `--settings` merges hooks rather than replacing them, so both `session-start.sh engineer` (project) and `session-start.sh architect` (per-role file) would mint tokens for the same session id with undefined ordering. The launch-time role must therefore be a single authoritative input consumed by the hook (see Constraints).
+4. **Per-pane launcher `ai pane <role>` + launch-time role input + role-precedence clause in both rulefiles** — chosen. Symmetric to `ai handoff <role>` / `ai add-task` (D-053): the shell primitive is the provider-agnostic surface; every provider adapter maps it to its own argv.
+
+### Constraints driving this decision
+- **Security (E-129 token remains authoritative)**: the HMAC token is the enforcement surface; the env var stays advisory. The role the hook mints is `${AI_OS_PANE_ROLE:-$1}`. `AI_OS_PANE_ROLE` is set only in the *launch* environment of the CLI process by `ai pane` and is read by the SessionStart hook before any agent tool call executes. This is within the E-129 threat model: E-129 protects against **in-session** mutation from a Bash subprocess reaching the gate, and launch-time environment is exactly as trusted as the settings file on disk. The positional default (`engineer`) is unchanged for the plain `claude` launch path.
+- **Sovereignty must be enforced, not just prompted, in the Architect pane**: the pre-tool-use gate currently matches `Bash` only. With a Claude Architect, `Write`/`Edit` outside `.ai/` and `plans/` must be blocked by the hook when the minted role is `architect` (Tier 3 — this is the ANTI-DRIFT §35 enforcement layer).
+- **Persona precedence is explicit**: both `ENGINEER.md` and `ARCHITECT.md` gain a leading *Role Resolution* clause: when the session context carries an `[AI_OS_ROLE] <role>` stamp (emitted by the SessionStart hook) naming a different role, that role's rulefile governs and this file is inert. `CLAUDE.md` keeps importing `ENGINEER.md` (D-051 unchanged); the Architect pane additionally receives `ARCHITECT.md` via `--append-system-prompt-file`.
+- **Deterministic routing**: explicit configuration beats heuristics. When `.ai/roles.json` maps the requested semantic role, `resolve_pane` order becomes exact-title → roles.json ordinal → fuzzy title → window name. `ai pane` pins the pane title so Pass 1 wins deterministically; the ordinal is the safety net; fuzzy passes are last-resort only.
+- **Provider-aware A2A bridge**: `advisor-mcp::ask_architect` resolves the executable and argv from `roles.json architect.provider` through the Provider Adapter Registry (`providers.json` gains a `print_mode` argv template). A `claude` Architect child must be launched with `ARCHITECT.md` appended and `CLAUDECODE` unset from the child env (nested-session guard), read-only (`-p`, no permission bypass).
+- **Legacy provider targets (`claude`, `gemini`) are deprecated**: warn on use; when both roles resolve to the same provider the target is ambiguous and MUST fail closed with a hint to use `architect`/`engineer`. Removal scheduled for v4.0.
+- **Optional per-role model**: `roles.json` role entries MAY carry `"model"`; `ai pane` forwards it to the provider's model flag. Absent → provider default.
+
+### Impact
+- Unlocks: E-208 (per-pane role binding + `ai pane` launcher + Write/Edit sovereignty gate + Role Resolution clause), E-209 (`resolve_pane` precedence), E-210 (provider-aware `advisor-mcp`), E-211 (legacy target deprecation + same-provider ambiguity guard).
+- Interim rule (until E-208 ships): a dual-Claude Triad is prompt-level only. Operators MUST pin pane titles (`tmux select-pane -T architect` / `-T engineer`) and MUST NOT rely on the enforcement layer to stop the Architect pane from writing `src/`. `.ai/roles.json` (`architect.provider: claude`) is retained and committed with this decision.
+- Risk if wrong: if `claude --settings` precedence or the launch-env read proves unreliable, the Architect pane silently keeps Engineer write rights. Mitigated by E-208 acceptance criteria requiring a live negative test (Architect pane `Write` to `src/` → BLOCKED) before DONE.
+
+### Rollback
+Revert `.ai/roles.json` to `architect: agy:1`, delete the `ai pane` launcher and the per-role settings file, restore the `session-start.sh engineer` positional-only mint, and restore the E-117 resolution order. The Role Resolution clause in the rulefiles is inert when no stamp is present, so it may stay.
+
+---

@@ -17,6 +17,18 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
 
+
+# E-212: .gemini/agents is NOT byte-identical to src/gemini/agents any more. The
+# personas now carry the Claude agent contract (so a Claude-bound Architect can load
+# them), and strip_gemini_agent_fields deliberately removes the three Claude-only keys
+# for the Gemini CLI. Compare ignoring exactly those keys — real content drift still fails.
+_diff_ignoring_claude_keys() {  # <src> <mirror>
+  diff -q \
+    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$1") \
+    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$2") \
+    >/dev/null 2>&1
+}
+
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo "===== multimodal_memory_test.sh ====="
@@ -150,14 +162,20 @@ done
 echo ""
 echo "  [T-MM-S08] Source-of-truth ⇄ project mirror byte-identical"
 
-CURATOR_SRC="$(md5sum "${REPO_ROOT}/src/gemini/agents/memory_curator.md" | awk '{print $1}')"
-CURATOR_MIR="$(md5sum "${REPO_ROOT}/.gemini/agents/memory_curator.md"     | awk '{print $1}')"
-assert_status 0 "memory_curator mirror = src" \
-  bash -c "[[ '$CURATOR_SRC' == '$CURATOR_MIR' ]]"
+assert_status 0 "memory_curator mirror = src (modulo stripped Claude keys, E-212)" \
+  _diff_ignoring_claude_keys "${REPO_ROOT}/src/gemini/agents/memory_curator.md" \
+                             "${REPO_ROOT}/.gemini/agents/memory_curator.md"
 
-ARCH_SRC="$(md5sum "${REPO_ROOT}/src/gemini/agents/knowledge_architect.md" | awk '{print $1}')"
-ARCH_MIR="$(md5sum "${REPO_ROOT}/.gemini/agents/knowledge_architect.md"    | awk '{print $1}')"
-assert_status 0 "knowledge_architect mirror = src" \
-  bash -c "[[ '$ARCH_SRC' == '$ARCH_MIR' ]]"
+assert_status 0 "knowledge_architect mirror = src (modulo stripped Claude keys, E-212)" \
+  _diff_ignoring_claude_keys "${REPO_ROOT}/src/gemini/agents/knowledge_architect.md" \
+                             "${REPO_ROOT}/.gemini/agents/knowledge_architect.md"
+
+# The stripped keys must ACTUALLY be absent from the Gemini workspace — otherwise the
+# comparison above would pass by ignoring keys that were never removed.
+assert_status 1 "memory_curator .gemini copy carries no Claude-only keys" \
+  grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' \
+    "${REPO_ROOT}/.gemini/agents/memory_curator.md"
+assert_status 0 "memory_curator src DOES carry the Claude contract (E-212)" \
+  grep -qE '^allowed-tools:' "${REPO_ROOT}/src/gemini/agents/memory_curator.md"
 
 assert_summary

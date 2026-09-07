@@ -36,17 +36,30 @@ assert \"AI-OS SYSTEM CONTEXT CACHE\" in h[\"additionalContext\"], \"cache prese
 assert len(h[\"additionalContext\"]) > 1000, \"non-trivial blob\"
 '"
 
-# ── S04: rollback — AI_OS_DISABLE_CACHE=1 → hook emits nothing (no injection) ─
-assert_status 0 "S04: rollback flag → hook emits nothing" bash -c \
-  "[ -z \"\$(AI_OS_DISABLE_CACHE=1 bash '$HOOK' </dev/null 2>/dev/null)\" ]"
+# ── S04: rollback — AI_OS_DISABLE_CACHE=1 suppresses the CACHE ───────────────
+# E-208 (D-054) changed this contract deliberately: the hook still emits the
+# `[AI_OS_ROLE] <role>` stamp, because the ROLE BINDING is not part of the cache
+# feature. If disabling the cache also dropped the stamp, an Architect-bound pane
+# would silently lose its persona binding (gap G1 would reopen) purely as a
+# side-effect of a caching rollback. The cache blob itself must still be absent.
+assert_status 0 "S04: rollback flag → cache blob suppressed" bash -c \
+  "! AI_OS_DISABLE_CACHE=1 bash '$HOOK' </dev/null 2>/dev/null | grep -q 'AI-OS SYSTEM CONTEXT CACHE'"
+assert_status 0 "S04: rollback flag → role stamp still emitted (E-208)" bash -c \
+  "AI_OS_DISABLE_CACHE=1 bash '$HOOK' </dev/null 2>/dev/null | grep -q 'AI_OS_ROLE'"
 
 # ── S05: fail-open — node unavailable → hook exits 0, emits nothing (no block) ─
 # A node-free PATH (keep coreutils via /usr/bin:/bin) must not break session start.
 if [[ -x /usr/bin/env ]] && ! PATH="/usr/bin:/bin" command -v node >/dev/null 2>&1; then
   assert_status 0 "S05: no node → hook exits 0 (fail-open)" bash -c \
     "PATH='/usr/bin:/bin' bash '$HOOK' </dev/null >/dev/null 2>&1"
-  assert_status 0 "S05: no node → hook emits nothing" bash -c \
-    "[ -z \"\$(PATH='/usr/bin:/bin' bash '$HOOK' </dev/null 2>/dev/null)\" ]"
+  # E-208: no node → no cache blob, but the role stamp still binds the persona
+  # (building it needs only python3).
+  assert_status 0 "S05: no node → cache blob suppressed" bash -c \
+    "! PATH='/usr/bin:/bin' bash '$HOOK' </dev/null 2>/dev/null | grep -q 'AI-OS SYSTEM CONTEXT CACHE'"
+  # The comment above promises the role stamp still binds without node (building it
+  # needs only python3) — assert it rather than leaving the claim untested.
+  assert_status 0 "S05: no node → role stamp still emitted (E-208)" bash -c \
+    "PATH='/usr/bin:/bin' bash '$HOOK' </dev/null 2>/dev/null | grep -q 'AI_OS_ROLE'"
 else
   echo "  (S05 fail-open test skipped — could not construct a node-free PATH)"
 fi

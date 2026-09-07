@@ -101,7 +101,12 @@ fi
 AI_BIN="${REPO_ROOT}/src/bin/ai"
 assert_status 0 "S10: ai install registers a PreToolUse hook"  grep -qF 'PreToolUse' "$AI_BIN"
 assert_status 0 "S10: gate command is pre-tool-use.sh"        grep -qF 'pre-tool-use.sh' "$AI_BIN"
-assert_status 0 "S10: gate is on the Bash matcher"            grep -qE '"matcher": "Bash"' "$AI_BIN"
+# E-208 (D-054): the matcher covers the WRITE tools too, so an architect-bound pane
+# cannot write outside .ai//plans/. Bash gating is unchanged — it is now one arm of
+# an alternation rather than the whole matcher.
+assert_status 0 "S10: gate matcher still covers Bash"        grep -qE 'PRE_MATCHER = "Bash\|' "$AI_BIN"
+assert_status 0 "S10: gate matcher also covers the write tools (E-208)" \
+  grep -qE '"Bash\|Write\|Edit\|MultiEdit\|NotebookEdit"' "$AI_BIN"
 
 # Behavioural: replicate the installer's idempotent registration against a temp
 # settings.json (same shape the python block writes) and assert the wiring + that

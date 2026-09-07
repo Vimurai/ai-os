@@ -5,33 +5,72 @@
     "default_model": "gemini-3.1-pro",
     "interactions_api_schema": "steps",
     "_note": "E-45: gemini-2.x series shuts down 2026-06-01. The Interactions API switched the request payload key from 'outputs' to 'steps' on 2026-05-20. bin/ai writes default_model into .gemini/settings.json on init/sync; user values are preserved. Override via env GEMINI_MODEL or by editing .gemini/settings.json after sync.",
-    "_rollback": "Per may-2026-upgrades.md §Rollback Plan: set GEMINI_MODEL=gemini-2.5-pro (while still available) if 3.1-pro shows prompt drift."
+    "_rollback": "Per may-2026-upgrades.md \u00a7Rollback Plan: set GEMINI_MODEL=gemini-2.5-pro (while still available) if 3.1-pro shows prompt drift."
+  },
+  "roles": {
+    "_comment": "E-212 (architect-provider-parity.md \u00a7Components 1): the ONLY place that says which role a vendor-named source directory serves. Directory names stay vendor-named per D-052; do_sync unions 'shared' with every role a provider serves per .ai/roles.json, so an all-Claude Triad provisions .claude/ with BOTH role sets.",
+    "architect": {
+      "skill_dirs": [
+        "agents/skills"
+      ],
+      "agent_dirs": [
+        "gemini/agents"
+      ],
+      "rulefile": "ARCHITECT.md"
+    },
+    "engineer": {
+      "skill_dirs": [
+        "claude/skills"
+      ],
+      "agent_dirs": [
+        "claude/agents"
+      ],
+      "rulefile": "ENGINEER.md"
+    },
+    "shared": {
+      "skill_dirs": [
+        "shared/skills"
+      ],
+      "agent_dirs": []
+    }
   },
   "mcp_servers": {
     "filesystem": {
       "package": "@modelcontextprotocol/server-filesystem",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["Read", "Glob", "Grep"]
+      "allowed-tools": [
+        "Read",
+        "Glob",
+        "Grep"
+      ]
     },
     "memory": {
       "package": "@modelcontextprotocol/server-memory",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["*"]
+      "allowed-tools": [
+        "*"
+      ]
     },
     "TestSprite": {
       "package": "@testsprite/testsprite-mcp",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["*"],
+      "allowed-tools": [
+        "*"
+      ],
       "requires_api_key": true
     },
     "vibe-check-mcp": {
       "path": "src/mcp/vibe-check-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["run_vibe_audit", "run_chaos_test", "get_performance_metrics"],
+      "allowed-tools": [
+        "run_vibe_audit",
+        "run_chaos_test",
+        "get_performance_metrics"
+      ],
       "requires_playwright": true,
       "disable-model-invocation": false
     },
@@ -39,54 +78,81 @@
       "path": "src/mcp/task-synchronizer-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["get_state", "add_task", "update_task_status", "add_stamp", "set_project_focus", "verify_markdown_sync", "archive_done_tasks", "validate_payload", "mark_deltas_read"],
+      "allowed-tools": [
+        "get_state",
+        "add_task",
+        "update_task_status",
+        "add_stamp",
+        "set_project_focus",
+        "verify_markdown_sync",
+        "archive_done_tasks",
+        "validate_payload",
+        "mark_deltas_read"
+      ],
       "disable-model-invocation": false,
       "_note": "Exclusive State Mutator (P-39): manages .ai/state.json, regenerates TASKS.md and REVIEWS.md as views",
-      "_mandate": "v3.1 (P-44): state.json is the exclusive write target. TASKS.md and REVIEWS.md are generated views only. Write tools reject calls when state.json is absent — run: ai migrate-state to seed it."
+      "_mandate": "v3.1 (P-44): state.json is the exclusive write target. TASKS.md and REVIEWS.md are generated views only. Write tools reject calls when state.json is absent \u2014 run: ai migrate-state to seed it."
     },
     "safe-exec-mcp": {
       "path": "src/mcp/safe-exec-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["analyze_command"],
+      "allowed-tools": [
+        "analyze_command"
+      ],
       "disable-model-invocation": true,
-      "_note": "disable-model-invocation: true — Claude cannot self-authorize execution bypass"
+      "_note": "disable-model-invocation: true \u2014 Claude cannot self-authorize execution bypass"
     },
     "blueprint-aligner-mcp": {
       "path": "src/mcp/blueprint-aligner-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["align_diff", "validate_blueprint_section", "generate_implementation_delta"],
+      "allowed-tools": [
+        "align_diff",
+        "validate_blueprint_section",
+        "generate_implementation_delta"
+      ],
       "disable-model-invocation": false
     },
     "context-guardian-mcp": {
       "path": "src/mcp/context-guardian-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["check_workspace"],
+      "allowed-tools": [
+        "check_workspace"
+      ],
       "disable-model-invocation": false
     },
     "risk-analyzer-mcp": {
       "path": "src/mcp/risk-analyzer-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["classify_risk", "get_tier_actions"],
+      "allowed-tools": [
+        "classify_risk",
+        "get_tier_actions"
+      ],
       "disable-model-invocation": false,
-      "_note": "TSRT classifier — invoked automatically by ai update and ai review"
+      "_note": "TSRT classifier \u2014 invoked automatically by ai update and ai review"
     },
     "context-invoker-mcp": {
       "path": "src/mcp/context-invoker-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["activate_skill", "activate_agent"],
+      "allowed-tools": [
+        "activate_skill",
+        "activate_agent"
+      ],
       "disable-model-invocation": false,
-      "_note": "Dynamic skill/agent loader — call activate_skill or activate_agent by name to inject instructions into context"
+      "_note": "Dynamic skill/agent loader \u2014 call activate_skill or activate_agent by name to inject instructions into context"
     },
     "archive-manager-mcp": {
       "path": "src/mcp/archive-manager-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["check_context_health", "execute_archive"],
+      "allowed-tools": [
+        "check_context_health",
+        "execute_archive"
+      ],
       "disable-model-invocation": false,
       "_note": "Auto-Pilot Archive (P-27): monitors .ai/ context health and triggers archive when thresholds are exceeded"
     },
@@ -94,101 +160,153 @@
       "path": "src/mcp/orchestrator-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["run_preflight", "run_handover", "run_review", "run_dispatch"],
+      "allowed-tools": [
+        "run_preflight",
+        "run_handover",
+        "run_review",
+        "run_dispatch"
+      ],
       "disable-model-invocation": false,
-      "_note": "Deterministic workflow execution (P-38): replaces LLM-interpreted skills with programmatic orchestration. run_dispatch (E-92) is a read-only DAG dispatch planner — listed so mcp-router proxy_call can reach it."
+      "_note": "Deterministic workflow execution (P-38): replaces LLM-interpreted skills with programmatic orchestration. run_dispatch (E-92) is a read-only DAG dispatch planner \u2014 listed so mcp-router proxy_call can reach it."
     },
     "memory-manager-mcp": {
       "path": "src/mcp/memory-manager-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["export_signature", "query_signatures"],
+      "allowed-tools": [
+        "export_signature",
+        "query_signatures"
+      ],
       "disable-model-invocation": false,
-      "_note": "§31 Cross-Project Memory Palace: stores high-level project signatures in ~/.ai-os/memory/signatures.json"
+      "_note": "\u00a731 Cross-Project Memory Palace: stores high-level project signatures in ~/.ai-os/memory/signatures.json"
     },
     "verification-mcp": {
       "path": "src/mcp/verification-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["verify_compliance"],
+      "allowed-tools": [
+        "verify_compliance"
+      ],
       "disable-model-invocation": false,
-      "_note": "§32 Verification Audit: checks agent YAML frontmatter allowed-tools against registry; flags Ghost Tools as CRITICAL"
+      "_note": "\u00a732 Verification Audit: checks agent YAML frontmatter allowed-tools against registry; flags Ghost Tools as CRITICAL"
     },
     "lsp-mcp": {
       "path": "src/mcp/lsp-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["get_definitions", "get_references", "get_diagnostics"],
+      "allowed-tools": [
+        "get_definitions",
+        "get_references",
+        "get_diagnostics"
+      ],
       "disable-model-invocation": false,
-      "_note": "§23 Code Intelligence Layer: TypeScript compiler API — symbol/type awareness for Tier 3 refactors"
+      "_note": "\u00a723 Code Intelligence Layer: TypeScript compiler API \u2014 symbol/type awareness for Tier 3 refactors"
     },
     "patch-mcp": {
       "path": "src/mcp/patch-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["patch_file", "get_file_md5"],
+      "allowed-tools": [
+        "patch_file",
+        "get_file_md5"
+      ],
       "disable-model-invocation": false,
-      "_note": "§25 Staleness-Aware Patching: MD5-verified atomic writes — prevents race-condition overwrites"
+      "_note": "\u00a725 Staleness-Aware Patching: MD5-verified atomic writes \u2014 prevents race-condition overwrites"
     },
     "token-budget-mcp": {
       "path": "src/mcp/token-budget-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["report_cost", "get_token_budget", "get_usage_report", "set_budget", "reset_session"],
+      "allowed-tools": [
+        "report_cost",
+        "get_token_budget",
+        "get_usage_report",
+        "set_budget",
+        "reset_session"
+      ],
       "disable-model-invocation": false,
-      "_note": "§27 Token Budget & Cost Governance: real-time LLM spend tracking persisted in ~/.ai-os/usage.sqlite"
+      "_note": "\u00a727 Token Budget & Cost Governance: real-time LLM spend tracking persisted in ~/.ai-os/usage.sqlite"
     },
     "propose-patch-mcp": {
       "path": "src/mcp/propose-patch-mcp/index.js",
       "capability": "WRITE",
       "status": "approved",
-      "allowed-tools": ["propose_patch", "confirm_patch", "reject_patch", "list_pending_patches", "preview_patch"],
+      "allowed-tools": [
+        "propose_patch",
+        "confirm_patch",
+        "reject_patch",
+        "list_pending_patches",
+        "preview_patch"
+      ],
       "disable-model-invocation": false,
-      "_note": "§30 Human-in-the-Loop Safe Diff Flow: propose_patch requires explicit confirm_patch before writing to disk"
+      "_note": "\u00a730 Human-in-the-Loop Safe Diff Flow: propose_patch requires explicit confirm_patch before writing to disk"
     },
     "github-bridge-mcp": {
       "path": "src/mcp/github-bridge-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["check_gh_auth", "fetch_assigned_issues", "get_issue", "create_intent_from_issues", "get_pr_status"],
+      "allowed-tools": [
+        "check_gh_auth",
+        "fetch_assigned_issues",
+        "get_issue",
+        "create_intent_from_issues",
+        "get_pr_status"
+      ],
       "disable-model-invocation": false,
-      "_note": "§28 GitHub Bridge: fetches assigned issues via gh CLI and seeds state.json for autonomous Architect cycles"
+      "_note": "\u00a728 GitHub Bridge: fetches assigned issues via gh CLI and seeds state.json for autonomous Architect cycles"
     },
     "approval-mcp": {
       "path": "src/mcp/approval-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["request_approval"],
+      "allowed-tools": [
+        "request_approval"
+      ],
       "disable-model-invocation": false,
-      "_note": "E-10 HITL Gate: blocks Tier 3 ops until human types y/Y in terminal. Audit trail in ~/.ai-os/approvals.sqlite. Cannot be bypassed. Blueprint: interop.md §2. SEC_CLEARED 2026-04-24.",
+      "_note": "E-10 HITL Gate: blocks Tier 3 ops until human types y/Y in terminal. Audit trail in ~/.ai-os/approvals.sqlite. Cannot be bypassed. Blueprint: interop.md \u00a72. SEC_CLEARED 2026-04-24.",
       "_security": "T-HITL-001: ANSI stripped. T-HITL-002: DB_PATH hardcoded. T-HITL-003: stdin.isTTY required. T-HITL-004: SQLite write before response. T-HITL-005: maxLength 200/500 enforced."
     },
     "advisor-mcp": {
       "path": "src/mcp/advisor-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["ask_architect"],
+      "allowed-tools": [
+        "ask_architect"
+      ],
       "disable-model-invocation": false,
-      "_note": "E-9 A2A Bridge: Claude queries Gemini Architect mid-execution via `gemini -p`. Read-only — Gemini cannot write files. All rulings logged as [A2A_RULING] in .ai/LOG.md. Blueprint: interop.md §1."
+      "_note": "E-9 A2A Bridge: Claude queries Gemini Architect mid-execution via `gemini -p`. Read-only \u2014 Gemini cannot write files. All rulings logged as [A2A_RULING] in .ai/LOG.md. Blueprint: interop.md \u00a71."
     },
     "computer-use-mcp": {
       "path": "src/mcp/computer-use-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["capture_screen", "left_click", "right_click", "double_click", "type_text", "key_press", "health_check"],
+      "allowed-tools": [
+        "capture_screen",
+        "left_click",
+        "right_click",
+        "double_click",
+        "type_text",
+        "key_press",
+        "health_check"
+      ],
       "disable-model-invocation": false,
       "env": {
         "DISPLAY": ":99",
         "HOME": "/tmp/computer-use-sandbox"
       },
       "_note": "E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for TestSprite visual QA. Linux: Xvfb DISPLAY=:99. macOS: host display with warning. Decision D-002.",
-      "_security": "SEC_CLEARED E-8 2026-04-21 — DISPLAY hardcoded to :99, HOME=/tmp/computer-use-sandbox, keyboard input sanitized, no persistent screenshots. See .ai/SECURITY.md T-CU-001..T-CU-005. E-38: env block carried in registry so `ai sync` cannot regress the sandbox."
+      "_security": "SEC_CLEARED E-8 2026-04-21 \u2014 DISPLAY hardcoded to :99, HOME=/tmp/computer-use-sandbox, keyboard input sanitized, no persistent screenshots. See .ai/SECURITY.md T-CU-001..T-CU-005. E-38: env block carried in registry so `ai sync` cannot regress the sandbox."
     },
     "cache-manager-mcp": {
       "path": "src/mcp/cache-manager-mcp/index.js",
       "capability": "READ",
       "status": "approved",
-      "allowed-tools": ["build_cache", "get_cached_context", "invalidate_cache", "get_cache_status"],
+      "allowed-tools": [
+        "build_cache",
+        "get_cached_context",
+        "invalidate_cache",
+        "get_cache_status"
+      ],
       "disable-model-invocation": false,
       "_note": "E-11 Explicit Context Cache: assembles .ai/blueprints/*.md, architect.md, state.sqlite schema, and registry.json into a prompt-cacheable System Context blob. mtime-based invalidation. Cache in ~/.ai-os/cache.sqlite. Blueprint: caching.md."
     },
@@ -196,19 +314,25 @@
       "path": "src/mcp/mcp-router/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["list_domains", "activate_domain", "proxy_call"],
+      "allowed-tools": [
+        "list_domains",
+        "activate_domain",
+        "proxy_call"
+      ],
       "disable-model-invocation": false,
-      "_note": "E-40 MCP Router/Proxy: progressive tool discovery — list_domains/activate_domain expose only the active category's servers; proxy_call forwards JSON-RPC over stdio. Mitigates 23-server schema bloat. Blueprint: mcp-router.md.",
-      "_security": "RBAC mirror — proxy_call rejects targets outside the active domain or absent from registry allowed-tools. Targets spawned with explicit env allowlist (PATH, HOME) plus registry-declared env block (e.g. computer-use-mcp DISPLAY/HOME). No shell, no eval. Cannot bypass project .claude/settings.json permissions."
+      "_note": "E-40 MCP Router/Proxy: progressive tool discovery \u2014 list_domains/activate_domain expose only the active category's servers; proxy_call forwards JSON-RPC over stdio. Mitigates 23-server schema bloat. Blueprint: mcp-router.md.",
+      "_security": "RBAC mirror \u2014 proxy_call rejects targets outside the active domain or absent from registry allowed-tools. Targets spawned with explicit env allowlist (PATH, HOME) plus registry-declared env block (e.g. computer-use-mcp DISPLAY/HOME). No shell, no eval. Cannot bypass project .claude/settings.json permissions."
     },
     "code-execution-mcp": {
       "path": "src/mcp/code-execution-mcp/index.js",
       "capability": "EXECUTE",
       "status": "approved",
-      "allowed-tools": ["execute_code"],
+      "allowed-tools": [
+        "execute_code"
+      ],
       "disable-model-invocation": false,
       "_note": "E-39 Sandboxed Code Execution: ephemeral Docker REPL for Python (python:3.12-slim) and Node (node:22-alpine). Fail-closed [SANDBOX_UNAVAILABLE] when Docker daemon is missing. Blueprint: code-execution.md.",
-      "_security": "Network=none, --read-only root FS, no volume mounts, --memory=512m --cpus=0.5 --pids-limit=64, --user=65534:65534 (nobody), --cap-drop=ALL, --security-opt=no-new-privileges, tmpfs /tmp size-capped (64m, noexec). Wall-clock timeout enforced by parent (SIGKILL on overrun). stdout/stderr capped at 4096 chars. Code length capped at 16384 chars. Language whitelist {python, typescript}. No bare-metal fallback — sandbox is the only execution path."
+      "_security": "Network=none, --read-only root FS, no volume mounts, --memory=512m --cpus=0.5 --pids-limit=64, --user=65534:65534 (nobody), --cap-drop=ALL, --security-opt=no-new-privileges, tmpfs /tmp size-capped (64m, noexec). Wall-clock timeout enforced by parent (SIGKILL on overrun). stdout/stderr capped at 4096 chars. Code length capped at 16384 chars. Language whitelist {python, typescript}. No bare-metal fallback \u2014 sandbox is the only execution path."
     }
   }
 }

@@ -4,6 +4,21 @@
 > vendor; the Engineer defaults to the `claude` provider but any provider may assume it.
 > `CLAUDE.md` is a thin shim that `@import`s this file so vendor auto-load still works.
 
+## Role Resolution (D-054 / E-208 — READ FIRST)
+This session's role is stamped into the injected context by the SessionStart hook as
+`[AI_OS_ROLE] <role>` (first line). **That stamp is authoritative.**
+
+- If the stamp names a role **other than `engineer`**, then **ARCHITECT.md governs this
+  session and THIS FILE IS INERT** — stop reading here and follow ARCHITECT.md instead.
+- If the stamp is absent, this file governs (the plain-launch default).
+
+Why this exists: `CLAUDE.md` statically `@import`s `ENGINEER.md` and an `@import` cannot
+branch, so a second Claude pane bound to the Architect role would otherwise boot the
+Engineer persona (gap G1). `ai pane <role>` binds the pane, the hook mints the matching
+E-129 role token, and this clause resolves the resulting rulefile conflict deterministically.
+The enforcement layer does not depend on your cooperation: for `architect`, the pre-tool-use
+gate BLOCKS `Write`/`Edit` outside `.ai/` and `plans/` regardless of what this file says.
+
 ## Session Start (MANDATORY)
 At the start of EVERY session, BEFORE answering ANY question, run preflight:
 

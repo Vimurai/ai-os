@@ -19,6 +19,18 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
 
+
+# E-212: .gemini/agents is no longer byte-identical to src/gemini/agents — the persona
+# carries the Claude agent contract so a Claude-bound Architect can load it, and
+# strip_gemini_agent_fields deliberately removes the three Claude-only keys for the
+# Gemini CLI's own workspace. Compare ignoring exactly those keys; real drift fails.
+_diff_ignoring_claude_keys() {  # <src> <mirror>
+  diff -q \
+    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$1") \
+    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$2") \
+    >/dev/null 2>&1
+}
+
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 AGENT_SRC="${REPO_ROOT}/src/gemini/agents/seo_manager.md"
 AGENT_GEM="${REPO_ROOT}/.gemini/agents/seo_manager.md"
@@ -154,8 +166,10 @@ assert_status 0 "Rollback acknowledges content-file purge is out-of-scope" \
 echo ""
 echo "  [T-SEO-S09] .gemini/ + ~/.ai-os/gemini/ mirrors match src/"
 
-assert_status 0 ".gemini/ mirror byte-identical to src/" \
-  diff -q "$AGENT_SRC" "$AGENT_GEM"
+assert_status 0 ".gemini/ mirror matches src/ (modulo stripped Claude keys, E-212)" \
+  _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
+assert_status 1 ".gemini/ copy carries no Claude-only keys (strip actually ran)" \
+  grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_GEM"
 if [[ -f "$AGENT_MIRROR" ]]; then
   assert_status 0 "~/.ai-os mirror byte-identical to src/" \
     diff -q "$AGENT_SRC" "$AGENT_MIRROR"

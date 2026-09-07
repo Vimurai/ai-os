@@ -38,8 +38,16 @@ assert_status 0 "send-keys uses literal -l -- (no key/shell interpretation)" \
   grep -qE 'send-keys -t "\$pane" -l -- "\$message"' "$WATCH"
 
 # ── S05: target→pane mapping (claude→0, gemini→1, or pane title) ─────────────
-assert_status 0 "maps claude→index 0" grep -qE 'claude\) want_idx=0' "$WATCH"
-assert_status 0 "maps gemini→index 1" grep -qE 'gemini\) want_idx=1' "$WATCH"
+# E-211 prepended a deprecation guard to these arms, so assert the BEHAVIOUR
+# (which ordinal each legacy target resolves to) rather than the source layout.
+_legacy_ordinal() {  # <target> → resolved pane id, non-colliding roles map
+  ( source "$WATCH" 2>/dev/null
+    ROLES_MAPPING='architect:agy:1|engineer:claude:0'
+    _project_panes() { printf '%b' '%p0\t0\tMac.lan\twin\t/p\t2.1.1\n%p1\t1\tMac.lan\twin\t/p\t2.1.1\n'; }
+    resolve_pane "$1" ) 2>/dev/null
+}
+assert_contains "maps claude→index 0" "%p0" "$(_legacy_ordinal claude)"
+assert_contains "maps gemini→index 1" "%p1" "$(_legacy_ordinal gemini)"
 assert_status 0 "prefers pane title match" grep -qE 'ptitle" == "\$target"' "$WATCH"
 
 # ── S06: behavioural — run outside an AI-OS project exits fast (never loops) ──

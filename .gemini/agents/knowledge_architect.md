@@ -1,6 +1,8 @@
 ---
 name: knowledge_architect
 description: "Cross-project RAG over the Memory Palace. Inputs natural-language queries. Outputs text summaries combined with page-level citations from ingested PDFs and references to retrieved visual diagrams. Multimodal retrieval via Gemini Embedding 2 with department=Architecture|UX metadata filtering. Triggered by `ai init` (text-only seed) or explicit user query (full multimodal)."
+context: fork
+agent: general-purpose
 ---
 
 ROLE: KNOWLEDGE_ARCHITECT (Gemini 1M+ Context)

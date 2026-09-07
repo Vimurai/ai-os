@@ -10,9 +10,27 @@
 # Fail-open everywhere — emit nothing / skip the mint rather than block a session.
 # Arg $1 = the agent role baked in by `ai install` (engineer for Claude); the
 # session id comes from the harness payload, never the env (no circularity).
+#
+# E-208 (D-054, role-abstraction.md §Components 2): the LAUNCH-TIME role wins over
+# the positional default. `ai pane <role>` exports AI_OS_PANE_ROLE in the launch
+# environment of the provider CLI, so a second Claude pane bound to `architect`
+# mints an ARCHITECT token even though the project settings bake `engineer`. The
+# positional default is unchanged, so a plain `claude` launch still mints engineer.
+#
+# Why launch env is trusted here: E-129 defends against IN-SESSION mutation (a Bash
+# subprocess exporting a role before reaching the gate). Launch-time environment is
+# set before the CLI starts and is exactly as trusted as the settings file on disk —
+# this is inside the E-129 threat model, not a widening of it (D-054 §Constraints).
 set -uo pipefail
 
-ROLE="${1:-engineer}"
+ROLE="${AI_OS_PANE_ROLE:-${1:-engineer}}"
+
+# Only ever mint a role the system actually defines — an unknown value falls back to
+# the positional default rather than minting a token for a role no gate understands.
+case "$ROLE" in
+  architect|engineer) : ;;
+  *) ROLE="${1:-engineer}" ;;
+esac
 
 # Read the SessionStart payload ONCE for the E-129 session id. (The E-126 cache
 # step below sources its content from `--emit-context`, not stdin, so consuming
@@ -34,22 +52,31 @@ except Exception: pass' 2>/dev/null)"
   fi
 fi
 
-# ── E-126: inject the compiled System Context Cache as a prompt-prefix ─────────
-[[ "${AI_OS_DISABLE_CACHE:-0}" == "1" ]] && exit 0
-command -v node    >/dev/null 2>&1 || exit 0
+# ── E-126 + E-208: emit additionalContext ─────────────────────────────────────
+# E-208 (D-054, role-abstraction.md §Components 2): the FIRST line of the injected
+# context is an `[AI_OS_ROLE] <role>` stamp naming the role this session actually
+# minted. The Role Resolution clause at the top of ENGINEER.md / ARCHITECT.md keys
+# off it, so a Claude pane bound to `architect` is governed by ARCHITECT.md even
+# though CLAUDE.md statically imports ENGINEER.md (gap G1 — @import cannot branch).
+#
+# The stamp is emitted even when the E-126 cache is unavailable or disabled: the
+# persona layer must never silently lose its role binding just because the cache is
+# off. Only a missing python3 (no way to build the JSON envelope) skips it.
+ROLE_STAMP="[AI_OS_ROLE] ${ROLE}"
+
 command -v python3 >/dev/null 2>&1 || exit 0
 
-CM=""
-for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/cache-manager-mcp/index.js" \
-         "${HOME}/.ai-os/mcp/cache-manager-mcp/index.js"; do
-  [[ -f "$c" ]] && { CM="$c"; break; }
-done
-[[ -z "$CM" ]] && exit 0
+BLOB=""
+if [[ "${AI_OS_DISABLE_CACHE:-0}" != "1" ]] && command -v node >/dev/null 2>&1; then
+  CM=""
+  for c in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/cache-manager-mcp/index.js" \
+           "${HOME}/.ai-os/mcp/cache-manager-mcp/index.js"; do
+    [[ -f "$c" ]] && { CM="$c"; break; }
+  done
+  [[ -n "$CM" ]] && BLOB="$(node --no-warnings "$CM" --emit-context 2>/dev/null)"
+fi
 
-BLOB="$(node --no-warnings "$CM" --emit-context 2>/dev/null)"
-[[ -z "$BLOB" ]] && exit 0
-
-printf '%s' "$BLOB" | python3 -c '
+printf '%s\n\n%s' "$ROLE_STAMP" "$BLOB" | python3 -c '
 import json, sys
 blob = sys.stdin.read()
 sys.stdout.write(json.dumps({
