@@ -133,7 +133,7 @@ Report:
 Creating tasks is only half the loop — the Engineer is **not** polling the queue;
 it must be *woken*. After the tasks are registered (Step 5), ALWAYS emit a handoff so
 control routes to the Engineer. This is **non-optional** and mirrors the Engineer's
-mandatory hand-back (`skill: ai-task` Step 4): the autonomous ping-pong loop only
+mandatory hand-back (`skill: arch-task` Step 4): the autonomous ping-pong loop only
 advances if each side hands off when its turn ends. Registering tasks without handing
 off is the failure that strands a planned sprint (and leaves the Engineer idle).
 

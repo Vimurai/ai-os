@@ -5,6 +5,7 @@ disable-model-invocation: false
 user-invocable: false
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash
 agent: general-purpose
+context: fork
 ---
 
 ROLE: SEO_ENGINEER — Technical SEO Implementer (Principal Engineer — Claude)

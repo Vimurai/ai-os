@@ -131,4 +131,64 @@ process.stdout.write(bad.length ? "WIDENED "+bad.join(" ") : "OK");
 ' 2>&1)"
 assert_contains "E-212.08: no persona declares a tool beyond its agy plugin grant" "OK" "$_parity"
 
+# ── E-217 (D-055 R2): collision resolved by renaming; guard is now fatal ────
+echo "  [E-217] skill-name collision resolution"
+
+# The Architect's task/history skills are RENAMED, not deduplicated — they do a
+# different job for a different role. Same reason arch-review is not ai-review (E-149).
+assert_status 0 "E-217.01a: arch-task exists in the Architect set" \
+  test -f "${REPO_ROOT}/src/agents/skills/arch-task/SKILL.md"
+assert_status 0 "E-217.01b: arch-oracle exists in the Architect set" \
+  test -f "${REPO_ROOT}/src/agents/skills/arch-oracle/SKILL.md"
+assert_status 1 "E-217.01c: the Architect set no longer ships ai-task" \
+  test -e "${REPO_ROOT}/src/agents/skills/ai-task"
+assert_status 1 "E-217.01d: the Architect set no longer ships repo-oracle" \
+  test -e "${REPO_ROOT}/src/agents/skills/repo-oracle"
+# The ENGINEER keeps the original names — that is the point of the rename.
+assert_status 0 "E-217.01e: the Engineer keeps ai-task" \
+  test -f "${REPO_ROOT}/src/shared/skills/ai-task/SKILL.md"
+assert_status 0 "E-217.01f: the Engineer keeps repo-oracle" \
+  test -f "${REPO_ROOT}/src/shared/skills/repo-oracle/SKILL.md"
+# Frontmatter name must match the directory, or the skill loads under the old name.
+assert_status 0 "E-217.01g: arch-task frontmatter name matches" \
+  grep -qE '^name: arch-task$' "${REPO_ROOT}/src/agents/skills/arch-task/SKILL.md"
+assert_status 0 "E-217.01h: arch-oracle frontmatter name matches" \
+  grep -qE '^name: arch-oracle$' "${REPO_ROOT}/src/agents/skills/arch-oracle/SKILL.md"
+
+# References must follow the rename, and ARCHITECT.md must explain WHY the names
+# differ so nobody "corrects" them back to match the Engineer's.
+assert_status 0 "E-217.02a: ARCHITECT.md points at arch-task" \
+  grep -q 'arch-task' "${REPO_ROOT}/src/templates/ARCHITECT.md"
+assert_status 0 "E-217.02b: ARCHITECT.md records why the names differ" \
+  grep -q 'must not collide' "${REPO_ROOT}/src/templates/ARCHITECT.md"
+assert_status 0 "E-217.02c: task-planner hands back to arch-task" \
+  grep -q 'skill: arch-task' "${REPO_ROOT}/src/agents/skills/task-planner/SKILL.md"
+assert_status 0 "E-217.02d: root ARCHITECT.md matches its template" \
+  diff -q "${REPO_ROOT}/src/templates/ARCHITECT.md" "${REPO_ROOT}/ARCHITECT.md"
+
+# All 20 agents now satisfy the frontmatter contract (seo_engineer lacked `context:`
+# since E-90 — the only one failing, deliberately left alone in E-212 and fixed here).
+assert_status 0 "E-217.03a: seo_engineer declares context:" \
+  grep -qE '^context: fork$' "${REPO_ROOT}/src/claude/agents/seo_engineer.md"
+_E217_BAD=0
+for _f in "${REPO_ROOT}"/src/claude/agents/*.md "${REPO_ROOT}"/src/gemini/agents/*.md; do
+  for _k in name description allowed-tools context agent; do
+    grep -qE "^${_k}:" "$_f" || _E217_BAD=$((_E217_BAD + 1))
+  done
+done
+assert_contains "E-217.03b: every agent satisfies the frontmatter contract" "0" "$_E217_BAD"
+
+# The guard is FATAL in a multi-role workspace and inert in a single-role one.
+assert_status 0 "E-217.04a: sync returns non-zero on an unresolved collision" \
+  grep -q 'unresolved skill-name collision' "$AI_BIN"
+assert_status 0 "E-217.04b: the error names the rename precedent" \
+  grep -q 'arch-task, arch-oracle, arch-review' "$AI_BIN"
+# A name already on DISK is not a collision — it may be a stale copy from an earlier
+# sync. Only a name claimed by ANOTHER SOURCE in the same run counts; comparing against
+# disk residue reported task-planner, which exists in exactly one source dir.
+assert_status 0 "E-217.04c: collisions compare sources within a run, not disk residue" \
+  grep -q '_SKILL_CLAIMS' "$AI_BIN"
+assert_status 0 "E-217.04d: sync returns success explicitly (no stray git status)" \
+  grep -q 'Explicit success: without it do_sync returns' "$AI_BIN"
+
 assert_summary

@@ -521,15 +521,31 @@ _sync_skills_no_clobber() {
   for skill_dir in "${src_dir}"/*/; do
     [[ -d "$skill_dir" && -f "${skill_dir}SKILL.md" ]] || continue
     name="$(basename "$skill_dir")"
-    if [[ -e "${dst_dir}/${name}" ]]; then
+    # A name already on DISK is not evidence of a collision: it may simply be a stale
+    # copy this same source wrote on an earlier sync. Only a name PROVIDED BY ANOTHER
+    # SOURCE IN THIS RUN is a real two-role collision. Comparing against disk residue
+    # reported `task-planner` — a skill that exists in exactly one source dir — the
+    # moment its content was edited. bash 3.2 has no associative arrays, so the claim
+    # set is a delimited string.
+    if [[ -e "${dst_dir}/${name}" ]] && [[ "${_SKILL_CLAIMS:-}" == *"|${name}|"* ]]; then
       # Identical content is not a collision — it is the same skill shipped twice.
       if ! diff -rq "${skill_dir%/}" "${dst_dir}/${name}" >/dev/null 2>&1; then
-        echo "  ! COLLISION: '${name}' from ${label} differs from the copy already in ${dst_dir} — KEPT the existing one (E-212; pending Architect ruling)" >&2
+        # E-217 (D-055 R2): a collision in a MULTI-ROLE workspace is now an ERROR, not
+        # a warning. The Architect ruled the resolution is renaming (arch-task /
+        # arch-oracle), so a remaining collision means a skill was added without one —
+        # and silently keeping the older copy is exactly how the Engineer pane ended up
+        # loading the Architect's ai-task. Single-role workspaces never reach here:
+        # they keep the historical role-overrides-shared behaviour.
+        echo "  ✗ COLLISION: '${name}' from ${label} differs from the copy already in ${dst_dir}." >&2
+        echo "    A multi-role workspace cannot hold two different skills under one name." >&2
+        echo "    Rename the role-specific one (see arch-task / arch-oracle, D-055 R2)." >&2
         skipped=$((skipped + 1))
+        SKILL_COLLISIONS=$((${SKILL_COLLISIONS:-0} + 1))
       fi
       continue
     fi
     cp -rf "${skill_dir%/}" "${dst_dir}/"
+    _SKILL_CLAIMS="${_SKILL_CLAIMS:-|}${name}|"
     count=$((count + 1))
   done
   # Legacy flat .md files: same first-wins rule.
@@ -539,7 +555,7 @@ _sync_skills_no_clobber() {
     [[ -e "${dst_dir}/$(basename "$f")" ]] && continue
     cp -f "$f" "${dst_dir}/"
   done
-  echo "  $count Skills 2.0 folder(s) synced from ${src_dir}$([[ "$skipped" -gt 0 ]] && echo " (${skipped} name collision(s) skipped)")"
+  echo "  $count Skills 2.0 folder(s) synced from ${src_dir}$([[ "$skipped" -gt 0 ]] && echo " (${skipped} name collision(s) — see errors above)")"
   _generate_skills_index "${dst_dir}"
 }
 
@@ -571,6 +587,8 @@ _provision_workspace() {
   [[ "${#served_roles[@]}" -gt 1 ]] && multi_role=1
 
   if [[ "$copy_skills" == "yes" ]]; then
+  # Names claimed by an earlier SOURCE while provisioning THIS workspace.
+  _SKILL_CLAIMS="|"
   mkdir -p "${ws}/skills"
   if [[ "${#skill_dirs[@]}" -gt 0 ]]; then
     local first=1
@@ -603,6 +621,8 @@ _provision_workspace() {
 
 _sync_workspace_dirs() {
   local mode="${1:-sync}"
+  # E-217: counts unresolved multi-role skill-name collisions across every workspace.
+  SKILL_COLLISIONS=0
 
   mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
   # E-212: role-aware. Under an all-Claude Triad (D-054) this pulls in the Architect's
@@ -1611,6 +1631,7 @@ sync_skills_20() {
       local skill_name
       skill_name=$(basename "$skill_dir")
       cp -rf "${skill_dir%/}" "${dst_dir}/"
+      _SKILL_CLAIMS="${_SKILL_CLAIMS:-|}${skill_name}|"
       count=$((count + 1))
     fi
   done
@@ -1797,6 +1818,18 @@ do_sync() {
     # Native agy subagents ship as an installed plugin (ai provider install-plugin agy),
     # not loose .agents/agents/ files — so they are not synced here.
     _sync_workspace_dirs sync
+    if [[ "${SKILL_COLLISIONS:-0}" -gt 0 ]]; then
+      echo "" >&2
+      echo "ai sync: ${SKILL_COLLISIONS} unresolved skill-name collision(s) — see the errors above." >&2
+      echo "  A provider serving BOTH roles cannot hold two different skills under one name," >&2
+      echo "  and sync cannot know which role the reading pane holds. Rename the role-specific" >&2
+      echo "  skill (D-055 R2 precedent: arch-task, arch-oracle, arch-review)." >&2
+      return 1
+    fi
+    # Explicit success: without it do_sync returns the status of whatever ran last,
+    # which picked up a stray 128 from a `git rev-parse` in a non-git directory and
+    # made a clean sync look like a failure.
+    return 0
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
     echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."

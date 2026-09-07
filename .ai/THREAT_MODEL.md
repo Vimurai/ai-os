@@ -1,7 +1,7 @@
 # THREAT_MODEL.md — AI-OS v2
 
 > Companion to `.ai/SECURITY.md`. Contains full threat entries for all external integrations and trust boundaries.
-> Last updated: 2026-09-07 (E-216 write-gate widening; patch-mcp default-open guard)
+> Last updated: 2026-09-07 (E-218 stamp waiver requires a verified record)
 
 ---
 
@@ -300,11 +300,14 @@ reviewer is not misled about what this gate guarantees):
 3. **`--no-verify` bypasses the lane entirely**, as it bypasses every pre-commit gate.
    So do `git merge` and `git cherry-pick` auto-commits, which never invoke the hook.
    Pre-existing for Gate 2 as a whole; not introduced by E-214.
-4. **The waiver is reachable by a non-Architect** who exports
-   `AI_OS_CALLER_ROLE=architect` with no session record present. What it buys is bounded
-   to a `.ai/`-or-`plans/`-only commit — but note `.ai/` contains `REVIEWS.md`, the very
-   file Gate 2 reads, so bookkeeping commits (including edits to the stamp file) can be
-   made without a stamp. Bounded and arguably intended; stated here rather than implied.
+4. ~~**The waiver is reachable by a non-Architect**~~ — **FIXED in E-218 (D-055 R4).**
+   The `[CRITIC_STAMP]` waiver now requires the role to have come from the HMAC-verified
+   session record; the `AI_OS_PANE_ROLE` / `AI_OS_CALLER_ROLE` fallbacks may still drive
+   the path-scope BLOCK but never the waiver. An architect-role session that cannot be
+   verified therefore keeps the FULL stamp requirement while still being path-restricted
+   — strict in both directions. This mattered because `.ai/` contains `REVIEWS.md`, the
+   very file Gate 2 reads, so the old behaviour let anyone exporting
+   `AI_OS_CALLER_ROLE=architect` commit stamp-file edits without a stamp.
 
 **Not residual — fixed in E-214 and regression-tested** (`tests/suites/git_lane_test.sh`
 E-214.10a-j): a failed `git diff` no longer fails OPEN into a full Gate 2 bypass; an

@@ -1302,12 +1302,12 @@
     {
       "id": "E-216",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 3,
       "description": "Widen the Architect write gate per D-055 R1 and .ai/blueprints/role-abstraction.md §Security 'Write-gate coverage': (a) add permissions.deny to the generated .claude/settings.architect.json for mcp__filesystem__write_file/edit_file/move_file/create_directory, mcp__patch-mcp__patch_file, mcp__propose-patch-mcp__propose_patch/confirm_patch; (b) extend analyzeSovereignty in src/mcp/safe-exec-mcp/index.js with a write-redirect policy for caller_role=architect: redirections (>, >>, tee), cp/mv/install/ln/sed -i/perl -i/rsync/dd/truncate/git apply/patch with a resolved target outside .ai/ or plans/ → [SOVEREIGNTY_BLOCK]; inline interpreters (python3 -c, node -e, perl -e, ruby -e, bash -c, sh -c, eval) and heredoc-fed interpreters BLOCKED outright for architect with the hint to use Write/Edit; fail closed on unparsable targets; reads unaffected. Update the three code-comment sites and tests to state the new coverage and the remaining residual (exotic encodings, git plumbing, interactive editors). Dispatch security_engineer. Acceptance: safe_exec + sovereignty + role_config suites green with positive/negative cases per form; live test from an ai pane architect session — 'echo x > src/x' BLOCKED, 'echo x > .ai/x' allowed, python3 -c BLOCKED; Engineer role unchanged; mirrors synced.",
       "created_at": "2026-09-07T12:08:11.576Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-07T13:39:23.442Z",
+      "summary": "Architect write gate widened to three layers: native Write/Edit (E-208), shell channel via new analyzeArchitectWrites, MCP channel via permissions.deny incl. mcp-router proxy_call. S …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -2830,6 +2830,20 @@
       "task_id": "E-216",
       "timestamp": "2026-09-07T13:18:20.117Z",
       "summary": "[TIER_3] Architect write gate widened to three layers (D-055 R1). security_engineer: SEC_BLOCKED x7, SEC_CLEARED on round 8 (87/87 regression, 109 cases, 0 mismatches). Every finding was one invariant — data read as syntax; 5 of 11 were over-blocks I introduced. Fixture-driven cases (108, argv-passed) replace bash cases that ate quoting twice. architect_write_gate 237/0, full suite 3650/0, live acceptance proven through the real hook. Residual and T-PATCHMCP-001 recorded."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-217",
+      "timestamp": "2026-09-07T15:12:24.478Z",
+      "summary": "[TIER_2] Skill collision resolved by renaming to arch-task/arch-oracle (E-149 pattern); collision guard promoted to a fatal error in multi-role workspaces; seo_engineer context key added. Found and fixed two bugs in my own E-212 guard: it compared against disk residue (flagged task-planner, a single-source skill) and do_sync returned 128 on a clean sync in a non-git dir. role_provisioning 81/0, full suite 3683/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-218",
+      "timestamp": "2026-09-07T15:12:30.702Z",
+      "summary": "[TIER_2] Git Lane stamp waiver now requires the HMAC-verified session record; env fallbacks may restrict but never waive. Closes the hole where exporting AI_OS_CALLER_ROLE=architect allowed stamp-free commits to .ai/, which holds REVIEWS.md. Hit the command-substitution subshell trap again and pinned it with an assertion. THREAT_MODEL T-GITLANE-001 item 4 marked FIXED. git_lane 57/0, full suite 3683/0."
     }
   ],
   "deltas": [

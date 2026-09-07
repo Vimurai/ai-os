@@ -350,32 +350,50 @@ check_standards_gate
 # Rollback: AI_OS_SKIP_GIT_LANE=1.
 ARCHITECT_SCOPED=0
 
+# Prints "<source>:<role>", where source is "record" or "env".
+#
+# It PRINTS both rather than setting a global: the caller invokes this in a command
+# substitution, so any variable assigned inside is set in the SUBSHELL and lost. That
+# is not hypothetical — the first cut of this change set ROLE_SOURCE internally and the
+# waiver silently never fired, because the parent always saw the default.
+#
+# E-218 (D-055 R4): the two are NOT interchangeable. The path-scope BLOCK may act on
+# either — restricting an unverified session is safe in the strict direction. The
+# [CRITIC_STAMP] WAIVER may act only on the verified record, because the waiver is a
+# hole in the Engineer's own quality gate: anyone can export AI_OS_CALLER_ROLE=architect
+# and commit `.ai/` without a stamp, and `.ai/` contains REVIEWS.md — the very file
+# Gate 2 reads. Requiring the record closes that without weakening the restriction.
 _resolve_commit_role() {
-  [[ "${AI_OS_SKIP_GIT_LANE:-0}" == "1" ]] && { printf 'engineer'; return 0; }
+  [[ "${AI_OS_SKIP_GIT_LANE:-0}" == "1" ]] && { printf 'env:engineer'; return 0; }
 
-  # 1. HMAC-verified session record (authoritative).
+  # 1. HMAC-verified session record (authoritative, and the ONLY source that may
+  #    unlock the stamp waiver).
   local se sid role
   sid="${CLAUDE_CODE_SESSION_ID:-}"
   if [[ -n "$sid" ]] && command -v node >/dev/null 2>&1; then
     for se in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/safe-exec-mcp/index.js" \
               "${HOME}/.ai-os/mcp/safe-exec-mcp/index.js"; do
       if [[ -f "$se" ]]; then
-        role="$(node --no-warnings "$se" --verify-role "$sid" 2>/dev/null)" && [[ -n "$role" ]] && { printf '%s' "$role"; return 0; }
+        role="$(node --no-warnings "$se" --verify-role "$sid" 2>/dev/null)" && [[ -n "$role" ]] && {
+          printf 'record:%s' "$role"; return 0; }
         break
       fi
     done
   fi
 
-  # 2. Launch-time pane role (set by `ai pane`), then the advisory env.
-  if [[ -n "${AI_OS_PANE_ROLE:-}" ]]; then printf '%s' "$AI_OS_PANE_ROLE"; return 0; fi
-  if [[ -n "${AI_OS_CALLER_ROLE:-}" ]]; then printf '%s' "$AI_OS_CALLER_ROLE"; return 0; fi
+  # 2. Launch-time pane role (set by `ai pane`), then the advisory env. These may
+  #    RESTRICT but never WAIVE.
+  if [[ -n "${AI_OS_PANE_ROLE:-}" ]]; then printf 'env:%s' "$AI_OS_PANE_ROLE"; return 0; fi
+  if [[ -n "${AI_OS_CALLER_ROLE:-}" ]]; then printf 'env:%s' "$AI_OS_CALLER_ROLE"; return 0; fi
 
   # 3. Default — unchanged Engineer behaviour.
-  printf 'engineer'
+  printf 'env:engineer'
 }
 
 check_architect_git_lane() {
-  local role; role="$(_resolve_commit_role)"
+  local resolved; resolved="$(_resolve_commit_role)"
+  local ROLE_SOURCE="${resolved%%:*}"
+  local role="${resolved#*:}"
   # Normalize before comparing: an exact match meant `Architect` or a trailing space
   # silently DISABLED the lane for a real Architect. safe-exec already lower-cases its
   # role comparison; match that. (Fails safe for Gate 2 either way, but a silently
@@ -470,8 +488,15 @@ check_architect_git_lane() {
   # would just push the Architect to fabricate one. Every OTHER gate above has already
   # run (markdown sync, co-modification warning, registry drift, MCP stdout purity, and
   # the standards gate, which is where the credential scan lives).
-  ARCHITECT_SCOPED=1
-  echo "[ARCHITECT_LANE] All staged paths are within .ai//plans/ — Gate 2 stamp waived for this commit." >&2
+  if [[ "$ROLE_SOURCE" == "record" ]]; then
+    ARCHITECT_SCOPED=1
+    echo "[ARCHITECT_LANE] All staged paths are within .ai//plans/ — Gate 2 stamp waived for this commit." >&2
+  else
+    echo "[ARCHITECT_LANE] All staged paths are within .ai//plans/, but this session's role came" >&2
+    echo "  from the environment rather than a verified session record, so the [CRITIC_STAMP]" >&2
+    echo "  requirement still applies (D-055 R4). The path restriction was enforced either way." >&2
+    echo "  Start the pane with \`ai pane architect\` so the role is minted and verifiable." >&2
+  fi
 }
 
 check_architect_git_lane

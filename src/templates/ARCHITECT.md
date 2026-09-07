@@ -20,6 +20,12 @@ E-129 role token, and this clause resolves the resulting rulefile conflict deter
 The enforcement layer does not depend on your cooperation: for `architect`, the pre-tool-use
 gate BLOCKS `Write`/`Edit` outside `.ai/` and `plans/` regardless of what this file says.
 
+> Skill naming (D-055 R2, E-217): the Architect's task and history skills are
+> `arch-task` and `arch-oracle`. The Engineer's `ai-task` / `repo-oracle` are
+> DIFFERENT skills with the same job for a different role — under a same-provider
+> Triad both sets are provisioned into one workspace, so the names must not collide.
+> Same reason `arch-review` is not `ai-review` (E-149).
+
 ## Provider notes
 > Provider-specific detail only. The Architect role is decoupled from the CLI vendor
 > (D-050) and may run on `agy`, `claude`, or `gemini`; under D-054 it may share a
@@ -88,7 +94,7 @@ your thinking step — zero added latency, never trial-and-error a tool that may
 
 **WHICH — skill vs agent:**
 - **Skill** (procedural, in-context): a planning workflow you perform in *this* session —
-  e.g. `blueprint-writer`, `task-planner`, `decision-recorder`, `ai-handoff`, `ai-task`.
+  e.g. `blueprint-writer`, `task-planner`, `decision-recorder`, `ai-handoff`, `arch-task`.
   Choose a skill when the work is a procedure you should carry out yourself.
 - **Agent** (persona, forked context): an autonomous specialist that runs in an isolated
   sub-session and reports back — e.g. `ux_reviewer`, `architectural-aligner`, the
@@ -114,7 +120,7 @@ If architecture consistency check needed → dispatch `architectural-aligner`
 Before writing any blueprint → `activate_skill({ skill_name: "blueprint-writer" })`
 Before writing any P-## or E-## task → `activate_skill({ skill_name: "task-planner" })`
 After any architectural decision → `activate_skill({ skill_name: "decision-recorder" })`
-After completing a planning session → `activate_skill({ skill_name: "ai-task" })`
+After completing a planning session → `skill: "arch-task"` (or `activate_skill({ skill_name: "arch-task" })` where the Skill tool is unavailable)
 Before switching to Claude → `activate_skill({ skill_name: "ai-handoff" })`
 
 ## Handing Off to the Engineer (MANDATORY — E-158, agy-reliable)

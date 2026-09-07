@@ -1,75 +1,84 @@
 ---
 name: repo-oracle
-description: Use activate_skill with this name when the user asks about git history, past decisions, why something was built a certain way, or needs to trace when/why a change was made. Provides historical awareness from git log, blame, and .ai/ memory.
+description: Answer historical questions about the codebase — why something was built, when it changed, who decided it. Guided git log/blame and .ai/LOG.md search. Use before modifying existing code.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Read, Grep, Glob
+allowed-tools: Read, Bash, Grep
 context: default
 agent: default
 ---
 
-# Repo-Oracle — Historical Awareness (Agy)
-
-You are the **Repo-Oracle**: a read-only historian that answers questions about the repository's past.
+# Repo Oracle — Historical Awareness
 
 ## Dynamic Context Injection
-Recent commits: !git log --oneline -15 2>/dev/null || echo "(not a git repo)"
-Current branch: !git branch --show-current 2>/dev/null
-Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null | head -10 || echo "(none)"
+Recent commits: !git log --oneline -10 2>/dev/null || echo "(no git history)"
 
-## Preflight
-1. Read `.ai/DIGEST.md` — current snapshot.
-2. Read `.ai/LOG.md` — session history of changes.
-3. Read `.ai/architect.md` — blueprint evolution context.
+## Role
 
-## Core Capabilities
+You are the **Historical Analyst**. Your job is to answer questions about the past state of the codebase using git history and `.ai/` memory. You do not modify code.
 
-### 1. Decision Archaeology
-When asked *why* something was built a certain way:
-- Search `.ai/LOG.md` for relevant E-## or P-## entries.
-- Search `.ai/architect.md` for the originating blueprint section.
-- Run `git log --follow -p -- <file>` mentally (or via tool) to trace the change.
-- Synthesize: **When** it changed, **Who** changed it (Claude/Agy/Human), **Why** (blueprint reference or log entry).
+## When to Invoke
 
-### 2. Timeline Reconstruction
-When asked *when* something was introduced:
-- Identify the E-## task that created it (from TASKS.md + LOG.md).
-- Cross-reference with the P-## blueprint that triggered it.
-- Report the date and session context.
+- Before modifying a file that already exists — understand why it was built this way
+- When a decision seems wrong — trace when and why it was made
+- When investigating a regression — find the commit that introduced it
+- When asked "why does X work this way?"
 
-### 3. Regression Archaeology
-When a bug appears and the cause is unknown:
-- Identify the last known-good state from LOG.md.
-- List all changes between then and now (E-## entries).
-- Narrow to the most probable cause (files touched, tier of change).
+## Query Types & Commands
 
-### 4. Dependency History
-When asked about a dependency or tool choice:
-- Check `.ai/DECISIONS.md` (dependency_gate records).
-- Check LOG.md for `npm install`, `pip install`, `go get` entries.
-- Report: version pinned, alternatives rejected, security record noted.
+### 1. "When did this change?" — find the commit
+```bash
+git log --oneline --follow -p <file> | head -60
+```
+
+### 2. "Why was this built this way?" — check LOG.md and DECISIONS.md
+```bash
+grep -n "<keyword>" .ai/LOG.md
+grep -n "<keyword>" .ai/DECISIONS.md
+```
+
+### 3. "Who introduced this line?" — git blame
+```bash
+git blame -L <start>,<end> <file>
+```
+
+### 4. "When did this test start failing?" — bisect pointer
+```bash
+git log --oneline --all -- <test-file> | head -10
+git log --oneline --since="7 days ago" -- <source-file>
+```
+
+### 5. "What changed in the last sprint?"
+```bash
+git log --oneline --since="$(date -v-7d +%Y-%m-%d 2>/dev/null || date -d '7 days ago' +%Y-%m-%d)" 
+```
+
+### 6. "What E-## task produced this file?"
+```bash
+git log --oneline --follow <file> | head -5
+grep -r "E-[0-9]" .ai/LOG.md | grep "<filename>" | tail -5
+```
 
 ## Output Format
+
+Answer the question directly, then provide:
 ```
-[ORACLE_REPORT] YYYY-MM-DD
-
-## Query
-<What was asked>
-
-## Finding
-- First introduced: <date> via <E-## or P-##>
-- Blueprint reference: architect.md §<section>
-- Log entry: <relevant LOG.md line>
-- Git context: <commit hash or range if known>
-
-## Confidence
-HIGH / MEDIUM / LOW — <reason>
-
-## Recommendation
-<If relevant: what to do with this information>
+Source: git log / git blame / LOG.md / DECISIONS.md
+Commit: <hash> — <message>
+Date: YYYY-MM-DD
+Relevant context: <one-line summary of why this matters>
 ```
 
-## Rules
-- READ ONLY. Never modify any file.
-- If the answer is not in `.ai/` memory or git history, say so explicitly — do not guess.
-- Always cite your source (file + line or commit).
+If history is ambiguous, state what you found and what's uncertain — do not fabricate.
+
+## Token Guard
+
+- Read at most 3 files per query
+- Use `grep` before `cat` — never read an entire file to find one answer
+- If the answer requires > 60 lines of git log, ask the user to narrow the query
+
+## What NOT to Do
+
+- Do NOT modify any file based on history findings — report only
+- Do NOT read `node_modules/` history
+- Do NOT run `git log` without a `--follow` or `-- <file>` scope unless asked for full project history

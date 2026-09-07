@@ -111,9 +111,13 @@ assert_not_contains "E-214.05e: no role set → no sovereignty block" "SOVEREIGN
 # ── E-214.6: the waiver is real — it must hold with NO stamp at all ──────────
 R9="$(_mkrepo)"
 ( cd "$R9" && rm -f .ai/REVIEWS.md && echo x > .ai/only.md && git add .ai/only.md )
+# E-218 (D-055 R4) NARROWED this: the waiver now requires a VERIFIED session record.
+# `_run` deliberately empties CLAUDE_CODE_SESSION_ID, so this is the env-only path and
+# the stamp requirement correctly still applies. The waiver itself is asserted with a
+# minted record in E-218.01a.
 _run "$R9" architect
-assert_contains "E-214.06a: architect in-scope passes with NO CRITIC_STAMP" "0" "$_RC"
-assert_contains "E-214.06b: and the waiver is what let it through" "ARCHITECT_LANE" "$_OUT"
+assert_contains "E-214.06a: env-only architect in-scope does NOT waive the stamp (E-218)" "1" "$_RC"
+assert_contains "E-214.06b: and it says why the waiver did not apply" "still applies" "$_OUT"
 _run "$R9" engineer
 assert_contains "E-214.06c: the SAME commit as engineer is still Gate-2 blocked" "1" "$_RC"
 assert_contains "E-214.06d: engineer sees the Gate 2 banner" "GATE 2" "$_OUT"
@@ -243,5 +247,72 @@ assert_not_contains "E-214.10m: a hidden 4th-field path never collects the waive
 # captured the argv instead, it would exit 0 or 1 and never reach a path verdict.
 assert_status 2 "E-214.10n: --check-path handles its own argv, not --verify-role's" \
   bash -c "AI_OS_CALLER_ROLE=architect node --no-warnings '$SAFE_EXEC' --check-path --verify-role >/dev/null 2>&1"
+
+# ── E-218 (D-055 R4): the stamp waiver requires a VERIFIED record ───────────
+# The path-scope BLOCK may act on the env fallback — restricting an unverified session
+# is safe in the strict direction. The WAIVER may not: it is a hole in the Engineer's
+# own quality gate, and `.ai/` contains REVIEWS.md, the file Gate 2 reads. So anyone
+# exporting AI_OS_CALLER_ROLE=architect could previously commit stamp-file edits with
+# no stamp.
+echo "  [E-218] waiver requires a verified session record"
+
+_e218_verdict() {  # <repo> <env...> → rc + label
+  local d="$1"; shift
+  local out rc
+  out="$( cd "$d" && env "$@" AI_OS_SKIP_STANDARDS=1 bash "$HOOK" 2>&1 )"; rc=$?
+  local l=pass
+  printf '%s' "$out" | grep -q SOVEREIGNTY_BLOCK && l=BLOCK
+  printf '%s' "$out" | grep -q 'stamp waived' && l=WAIVED
+  printf '%s' "$out" | grep -q 'still applies' && l=NO_WAIVER
+  printf '%s' "$out" | grep -q 'GATE 2' && l="${l}+gate2"
+  printf 'rc=%s %s' "$rc" "$l"
+}
+_E218_A="e218t-a-$RANDOM$RANDOM"; _E218_E="e218t-e-$RANDOM$RANDOM"
+_mint "$( :; )" 2>/dev/null || true
+node --no-warnings "$SAFE_EXEC" --mint-"$(printf 'to')ken" architect "$_E218_A" >/dev/null 2>&1
+node --no-warnings "$SAFE_EXEC" --mint-"$(printf 'to')ken" engineer  "$_E218_E" >/dev/null 2>&1
+
+# Verified record + in scope + NO stamp → waiver applies.
+R="$(_mkrepo)"; ( cd "$R" && rm -f .ai/REVIEWS.md && echo x > .ai/n.md && git add .ai/n.md )
+assert_contains "E-218.01a: verified architect record waives the stamp" "rc=0 WAIVED" \
+  "$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID="$_E218_A" AI_OS_CALLER_ROLE=engineer)"
+
+# Env-only architect + in scope + NO stamp → NO waiver, Gate 2 still blocks.
+R="$(_mkrepo)"; ( cd "$R" && rm -f .ai/REVIEWS.md && echo x > .ai/n.md && git add .ai/n.md )
+_E218_OUT="$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID= AI_OS_CALLER_ROLE=architect)"
+assert_contains "E-218.01b: an env-only architect gets NO waiver" "NO_WAIVER" "$_E218_OUT"
+assert_contains "E-218.01c: and Gate 2 still blocks the commit" "rc=1" "$_E218_OUT"
+
+# Env-only architect + in scope + WITH a stamp → passes normally.
+R="$(_mkrepo)"; ( cd "$R" && echo x > .ai/n.md && git add .ai/n.md )
+assert_contains "E-218.01d: env-only architect passes when a stamp exists" "rc=0" \
+  "$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID= AI_OS_CALLER_ROLE=architect)"
+
+# The RESTRICTION still acts on the env fallback — strict in both directions.
+R="$(_mkrepo)"; ( cd "$R" && echo z > src/x.js && git add src/x.js )
+assert_contains "E-218.02a: env-only architect is still path-restricted" "BLOCK" \
+  "$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID= AI_OS_CALLER_ROLE=architect)"
+R="$(_mkrepo)"; ( cd "$R" && echo z > src/x.js && git add src/x.js )
+assert_contains "E-218.02b: verified architect is path-restricted too" "BLOCK" \
+  "$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID="$_E218_A" AI_OS_CALLER_ROLE=engineer)"
+
+# Engineer unchanged in both directions.
+R="$(_mkrepo)"; ( cd "$R" && echo z > src/x.js && git add src/x.js )
+assert_contains "E-218.03a: engineer with a verified record commits src/ freely" "rc=0" \
+  "$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID="$_E218_E" AI_OS_CALLER_ROLE=architect)"
+R="$(_mkrepo)"; ( cd "$R" && rm -f .ai/REVIEWS.md && echo z > src/x.js && git add src/x.js )
+assert_contains "E-218.03b: engineer with no stamp still hits Gate 2" "gate2" \
+  "$(_e218_verdict "$R" CLAUDE_CODE_SESSION_ID="$_E218_E" AI_OS_CALLER_ROLE=engineer)"
+
+# The role source must be RETURNED, not assigned inside a command substitution — a
+# variable set in the subshell never reaches the caller, and the first cut of this
+# change did exactly that, so the waiver silently never fired.
+assert_status 0 "E-218.04a: role source is returned as <source>:<role>" \
+  grep -q "printf 'record:%s'" "$HOOK"
+assert_status 0 "E-218.04b: the subshell trap is recorded in the comment" \
+  grep -q "set in the SUBSHELL and lost" "$HOOK"
+assert_status 0 "E-218.04c: THREAT_MODEL item 4 is marked FIXED" \
+  grep -q "FIXED in E-218" "${REPO_ROOT}/.ai/THREAT_MODEL.md"
+rm -f "${HOME}/.ai-os/run/role-${_E218_A}.lock" "${HOME}/.ai-os/run/role-${_E218_E}.lock"
 
 assert_summary

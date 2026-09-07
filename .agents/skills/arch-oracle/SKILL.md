@@ -1,5 +1,5 @@
 ---
-name: repo-oracle
+name: arch-oracle
 description: Use activate_skill with this name when the user asks about git history, past decisions, why something was built a certain way, or needs to trace when/why a change was made. Provides historical awareness from git log, blame, and .ai/ memory.
 disable-model-invocation: false
 user-invocable: true

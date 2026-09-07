@@ -1,5 +1,5 @@
 ---
-name: ai-task
+name: arch-task
 description: Agy task lifecycle — mark P-## tasks DONE, log completion, and trigger ai-handoff to Claude. Use after completing any planning or blueprint session. Never leave P-## tasks open without closure.
 disable-model-invocation: false
 user-invocable: true
