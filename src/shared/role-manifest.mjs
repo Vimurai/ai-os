@@ -19,6 +19,7 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 function readJson(path) {
   try {
@@ -74,9 +75,15 @@ export function rulefileForRole(registryPath, role) {
 // Prints one source dir per line (skills by default, agent dirs with --agents) so
 // bash callers can consume it with a plain `while read` loop. Exit 0 even when the
 // list is empty — an unserved provider is a normal state, not an error.
+// Compare the RESOLVED entrypoint URL, not a filename suffix: when this module is
+// imported dynamically (e.g. `node -e 'import(...)'`), argv[1] is the module path
+// itself, so a suffix test wrongly concluded "I am the CLI" and printed usage +
+// exit 2 into an importing caller. Caught by `ai doctor` aborting mid-report.
 const _isMain = (() => {
-  try { return process.argv[1] && process.argv[1].endsWith("role-manifest.mjs"); }
-  catch { return false; }
+  try {
+    if (!process.argv[1]) return false;
+    return import.meta.url === pathToFileURL(process.argv[1]).href;
+  } catch { return false; }
 })();
 
 if (_isMain) {

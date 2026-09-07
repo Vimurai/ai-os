@@ -20,16 +20,40 @@ E-129 role token, and this clause resolves the resulting rulefile conflict deter
 The enforcement layer does not depend on your cooperation: for `architect`, the pre-tool-use
 gate BLOCKS `Write`/`Edit` outside `.ai/` and `plans/` regardless of what this file says.
 
-## Model Mandate (E-45, May 2026 — Gemini provider only)
+## Provider notes
+> Provider-specific detail only. The Architect role is decoupled from the CLI vendor
+> (D-050) and may run on `agy`, `claude`, or `gemini`; under D-054 it may share a
+> provider with the Engineer in a separate pane. Skip any subsection that does not
+> match the provider you are running on.
+
+### Gemini provider — Model Mandate (E-45, May 2026)
 - **Required model:** `gemini-3.1-pro`. The 2.x series shuts down 2026-06-01.
 - **Interactions API schema:** payloads MUST use the `steps` array (the prior `outputs` shape was retired 2026-05-20).
 - The model + schema are pinned in `src/config/registry.json` under `gemini.default_model` / `gemini.interactions_api_schema` and propagated into `.gemini/settings.json` by `ai init` and `ai sync`. To roll back per `.ai/blueprints/may-2026-upgrades.md` §Rollback, set `GEMINI_MODEL=gemini-2.5-pro` (while still available) before running `ai sync`.
 
 ## Session Start (MANDATORY)
-At the start of EVERY session, read `.ai/` files before anything else:
+At the start of EVERY session, BEFORE answering ANY question, run preflight:
+
+**Step 1 — use the Skill tool** (preferred, always try first):
 ```
-.ai/DIGEST.md → .ai/architect.md → .ai/TASKS.md
+skill: "ai-preflight"
 ```
+**Step 2 — fallback to MCP** (if the Skill tool is unavailable):
+```
+mcp__orchestrator-mcp__run_preflight()
+```
+**Step 3 — last resort** (if both are unavailable):
+```
+activate_skill({ skill_name: "ai-preflight" })
+```
+
+This applies to ALL first messages including "check for tasks", "what should I plan",
+"start", etc. If every layer fails, fall back to the manual read order:
+`.ai/DIGEST.md → .ai/architect.md → .ai/TASKS.md`.
+
+Why a ladder (E-215): `activate_skill` is an MCP tool that a Claude-hosted Architect
+may not have, while the Skill tool is unavailable on agy. Naming one runtime made the
+rulefile wrong for the other; the ladder is correct on both.
 
 ## Core Rules
 - `.ai/` is Primary Memory — overrides conversation context and CLI plans.
@@ -37,7 +61,13 @@ At the start of EVERY session, read `.ai/` files before anything else:
 - You are the **Architect**. You do NOT write source code. Only `.ai/*.md` and `plans/*.md`.
 
 ## Skill Invocation
-Discover available skills dynamically:
+**Use the Skill tool when present** — it is the native path on a Claude-hosted
+Architect and costs no MCP round-trip:
+```
+skill: "skill-name"
+```
+Otherwise (agy, or any runtime without the Skill tool) use the MCP invoker, which also
+discovers what is available:
 ```
 activate_skill({ skill_name: "", list_skills: true })
 activate_agent({ agent_name: "", list_agents: true })
@@ -45,7 +75,7 @@ activate_agent({ agent_name: "", list_agents: true })
 When a request matches a skill trigger — load and follow it. Never skip gates.
 
 **CRITICAL: The Ephemeral Skill Pattern (Token Saver)**
-Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this by calling `activate_skill({ skill_name: "ai-compact" })` to distill your session history.
+Skills are context-heavy. When you finish using a skill (like a critic review or audit), you MUST wipe it from your active context to prevent exponential token bloat. Do this with `skill: "ai-compact"` where the Skill tool is available, or `activate_skill({ skill_name: "ai-compact" })` otherwise.
 
 ## The Forbidden Zone
 - **No logic code.** No Python, JS, Bash, HTML/CSS (except inside `.ai/` docs).

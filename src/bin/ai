@@ -1787,6 +1787,102 @@ do_sync() {
   echo "Done."
 }
 
+# ── E-215 (architect-provider-parity.md §Components 6): per-role provisioning ──
+# Answers the question a same-provider Triad actually raises: "is the pane bound to
+# THIS role actually equipped for it?" Provisioning is role-aware as of E-212, so a
+# per-provider view is no longer enough — one provider dir can serve two roles, and a
+# role can be bound to a provider whose workspace was never synced for it.
+#
+# Purely diagnostic: reads only, changes nothing, and never fails the doctor run.
+_report_role_provisioning() {
+  [[ -d ".ai" ]] || return 0
+  command -v node >/dev/null 2>&1 || return 0
+  local rm; rm="$(_locate_role_manifest || true)"
+  [[ -n "$rm" ]] || return 0
+
+  echo "Per-role provisioning (E-215):"
+
+  local roles_json=".ai/roles.json"
+  if [[ ! -f "$roles_json" ]]; then
+    echo "  ! .ai/roles.json missing — falling back to the D-050 defaults (architect=agy, engineer=claude)"
+  fi
+
+  # Role -> provider straight from roles.json, defaults applied by the shared helper.
+  local role provider ws skills_dir agents_dir rulefile n_sk n_ag
+  for role in architect engineer; do
+    provider="$(node --no-warnings -e '
+const { pathToFileURL } = require("node:url");
+import(pathToFileURL(process.argv[1]).href).then(m =>
+  process.stdout.write(m.roleProvider(".ai", process.argv[2]) || ""));
+' "${AIOS}/shared/provider-adapter.mjs" "$role" 2>/dev/null || true)"
+    [[ -z "$provider" ]] && provider="(unmapped)"
+
+    # Vendor workspace for that provider (D-052 keeps these vendor-named).
+    case "$provider" in
+      claude) ws=".claude" ;;
+      gemini) ws=".gemini" ;;
+      agy)    ws=".agents" ;;
+      *)      ws="" ;;
+    esac
+
+    echo "  ${role} → ${provider}"
+    if [[ -z "$ws" ]]; then
+      echo "      ! no known workspace directory for provider '${provider}'"
+      continue
+    fi
+
+    # Skills: does the workspace hold this role's skill set?
+    skills_dir="${ws}/skills"
+    if [[ -d "$skills_dir" ]]; then
+      n_sk="$(find "$skills_dir" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d " ")"
+      echo "      ✓ skills   ${skills_dir} (${n_sk})"
+    else
+      # agy takes skills; gemini deliberately does not (E-132/E-212).
+      if [[ "$ws" == ".gemini" ]]; then
+        echo "      - skills   n/a for gemini (workspace skills live in .agents/skills)"
+      else
+        echo "      ✗ skills   ${skills_dir} missing — run: ai sync"
+      fi
+    fi
+
+    # Agents: agy ships subagents as an installed plugin (E-144), not loose files.
+    agents_dir="${ws}/agents"
+    if [[ "$ws" == ".agents" ]]; then
+      echo "      - agents   n/a for agy (subagents ship as a plugin: ai provider install-plugin agy)"
+    elif [[ -d "$agents_dir" ]]; then
+      n_ag="$(find "$agents_dir" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d " ")"
+      echo "      ✓ agents   ${agents_dir} (${n_ag})"
+    else
+      echo "      ✗ agents   ${agents_dir} missing — run: ai sync"
+    fi
+
+    # Settings overlay (E-208) — only meaningful for a claude-hosted role.
+    if [[ "$provider" == "claude" ]]; then
+      if [[ -f "${ws}/settings.${role}.json" ]]; then
+        echo "      ✓ overlay  ${ws}/settings.${role}.json"
+      else
+        echo "      ✗ overlay  ${ws}/settings.${role}.json missing — run: ai sync"
+      fi
+    else
+      echo "      - overlay  n/a for provider '${provider}'"
+    fi
+
+    # Rulefile, named by the registry manifest rather than hardcoded here.
+    rulefile="$(node --no-warnings -e '
+const { pathToFileURL } = require("node:url");
+import(pathToFileURL(process.argv[1]).href).then(m =>
+  process.stdout.write(m.rulefileForRole(process.argv[2], process.argv[3]) || ""));
+' "${AIOS}/shared/role-manifest.mjs" "${AIOS}/config/registry.json" "$role" 2>/dev/null || true)"
+    [[ -z "$rulefile" ]] && rulefile="$( [[ "$role" == "architect" ]] && echo ARCHITECT.md || echo ENGINEER.md )"
+    if [[ -f "$rulefile" ]]; then
+      echo "      ✓ rulefile ${rulefile}"
+    else
+      echo "      ✗ rulefile ${rulefile} missing — run: ai sync"
+    fi
+  done
+  echo ""
+}
+
 doctor() {
   local REPAIR=0
   local COMPLIANCE=0
@@ -1840,6 +1936,8 @@ doctor() {
     echo "SQLite WAL:"
     _wal_checkpoint_state_db
     echo ""
+
+    _report_role_provisioning
 
     echo "Project-Scoped (.claude/ / .gemini/ / .agents/):"
     for agent_dir in ".claude" ".gemini"; do

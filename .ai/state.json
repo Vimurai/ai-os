@@ -1272,12 +1272,12 @@
     {
       "id": "E-214",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 3,
       "description": "Implement the Architect-scoped Git Lane in hooks/pre-commit.sh per .ai/blueprints/architect-provider-parity.md §Git Lane: read the E-129 session role (role-stamp file first, AI_OS_CALLER_ROLE fallback); when role=architect BLOCK the commit if any staged path is outside .ai/ or plans/ ([SOVEREIGNTY_BLOCK] with a hint to hand the change list to the Engineer); waive the CRITIC_STAMP requirement for architect-scoped commits while keeping the credential scan and the E-122 co-modification warning; Engineer role behaviour unchanged. Dispatch security_engineer (Gate 2 contract change). Acceptance: git_hooks/pre_commit suites cover architect-in-scope PASS, architect-out-of-scope BLOCK, engineer unchanged; live test from the Architect pane; mirror synced.",
       "created_at": "2026-09-04T21:32:54.572Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-07T09:11:43.251Z",
+      "summary": "Architect Git Lane: architect commits restricted to .ai//plans/, CRITIC_STAMP waived in scope, other gates intact. Role from the HMAC record via new safe-exec --verify-role. security …[full in LOG.md]",
       "depends_on": [
         "E-208"
       ],
@@ -2770,6 +2770,13 @@
       "task_id": "E-214",
       "timestamp": "2026-09-07T09:11:11.869Z",
       "summary": "[TIER_3] Architect Git Lane (D-054). security_engineer round 1 NOT CLEARED (blocking fail-open: a failed git diff granted the stamp waiver with arbitrary staged content), round 2 [SEC_CLEARED]. Fixed S1/S3/S5/S6 + a 4-field diff-shape guard, all exploit-regressed. Residual risks (--amend, sid selection, --no-verify) recorded as THREAT_MODEL T-GITLANE-001. git_lane 46/0, full suite 3336/0, live Architect-pane test passes both directions."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-215",
+      "timestamp": "2026-09-07T10:36:11.350Z",
+      "summary": "[TIER_2] ARCHITECT.md runtime ladder + ai doctor per-role provisioning report (D-054). Also fixed a real E-212 bug this surfaced: role-manifest.mjs's _isMain used a filename-suffix test, so a dynamic import printed the CLI usage banner and exit 2 into the caller — it aborted the doctor report mid-run. role_runtime 40/0, role_provisioning 63/0, full suite 3376/0. Forbidden Zone, §35 and both @import shims verified byte-unchanged."
     }
   ],
   "deltas": [
