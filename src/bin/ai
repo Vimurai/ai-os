@@ -543,8 +543,9 @@ _sync_skills_no_clobber() {
   _generate_skills_index "${dst_dir}"
 }
 
+# _provision_workspace <provider> <ws> <copy_skills:yes|no> <copy_agents:yes|no> [legacy_skill_dirs...]
 _provision_workspace() {
-  local provider="$1" ws="$2" copy_agents="$3"; shift 3
+  local provider="$1" ws="$2" copy_skills="$3" copy_agents="$4"; shift 4
   local -a legacy=()
   [[ "$#" -gt 0 ]] && legacy=("$@")
   local -a skill_dirs=() agent_dirs=()
@@ -569,6 +570,7 @@ _provision_workspace() {
   local multi_role=0
   [[ "${#served_roles[@]}" -gt 1 ]] && multi_role=1
 
+  if [[ "$copy_skills" == "yes" ]]; then
   mkdir -p "${ws}/skills"
   if [[ "${#skill_dirs[@]}" -gt 0 ]]; then
     local first=1
@@ -581,6 +583,7 @@ _provision_workspace() {
         _sync_skills_no_clobber "${AIOS}/${line}" "${ws}/skills" "$line"
       fi
     done
+  fi
   fi
 
   if [[ "$copy_agents" == "yes" ]]; then
@@ -604,7 +607,7 @@ _sync_workspace_dirs() {
   mkdir -p ".claude/agents" ".claude/skills" ".claude/commands"
   # E-212: role-aware. Under an all-Claude Triad (D-054) this pulls in the Architect's
   # skills and agents too, instead of only the Engineer-side src/claude/* dirs.
-  _provision_workspace "claude" ".claude" "yes" "shared/skills" "claude/skills"
+  _provision_workspace "claude" ".claude" "yes" "yes" "shared/skills" "claude/skills"
   _configure_project_claude_settings ".claude"
   _write_role_settings_overlays ".claude" ".ai"   # E-208: per-role overlays
   if [[ "$mode" == "init" ]]; then
@@ -618,7 +621,9 @@ _sync_workspace_dirs() {
   mkdir -p ".gemini/agents"
   # E-212: gemini receives the agent dirs of whatever role it serves; when it serves
   # none the legacy set still lands, so a gemini-Architect project is unchanged.
-  _provision_workspace "gemini" ".gemini" "yes" "shared/skills"
+  # gemini takes AGENTS ONLY — E-132 moved the workspace skills to .agents/skills,
+  # and nothing reads .gemini/skills, so provisioning it would create dead dirs.
+  _provision_workspace "gemini" ".gemini" "no" "yes"
   cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
   # Claude-only frontmatter keys are stripped for the Gemini CLI. This runs AFTER the
   # copy, so the E-212 normalization (which targets the Claude contract) is undone here
@@ -635,7 +640,7 @@ _sync_workspace_dirs() {
   mkdir -p ".agents/skills"
   # E-212: skills only — agy subagents ship as an installed plugin (E-144), never as
   # loose .agents/agents/ files, so agent_dirs are deliberately NOT provisioned here.
-  _provision_workspace "agy" ".agents" "no" "shared/skills" "agents/skills"
+  _provision_workspace "agy" ".agents" "yes" "no" "shared/skills" "agents/skills"
   # E-195: scaffold the Architect bootloader shim into the agy workspace so
   # Antigravity auto-loads ARCHITECT.md and stays in the Architect persona
   # (no source-code drift, §35). AGENTS.md @imports the root ARCHITECT.md.
