@@ -329,7 +329,158 @@ STANDARDS_BLOCK
 
 check_standards_gate
 
+
+# ── E-214: Architect-scoped Git Lane (architect-provider-parity.md §Git Lane) ──
+# A Claude Architect HAS git, unlike agy — so the D-053 proxy-commit workaround (the
+# Engineer commits the Architect's .ai/ edits) is no longer needed for a same-provider
+# Triad. The ruling: an Architect may commit ONLY when every staged path is under
+# .ai/ or plans/. Anything else is implementation work and belongs to the Engineer.
+#
+# ROLE RESOLUTION — record first, env fallback. A git hook receives no PreToolUse
+# payload, but Claude Code exports CLAUDE_CODE_SESSION_ID, so the hook can resolve the
+# same HMAC-verified role record the Bash and Write gates use (safe-exec --verify-role,
+# E-214) rather than trusting the mutable env. AI_OS_PANE_ROLE / AI_OS_CALLER_ROLE are
+# the fallbacks; absent everything, the role is `engineer` and NOTHING below changes.
+#
+# HONEST SCOPE: when the record is unavailable this degrades to env, which an Architect
+# session could unset — the same limitation the E-208 write gate carries. This lane's
+# value is that it is the LAST checkpoint before history, and it catches the accidental
+# case (which is the realistic one) deterministically.
+#
+# Rollback: AI_OS_SKIP_GIT_LANE=1.
+ARCHITECT_SCOPED=0
+
+_resolve_commit_role() {
+  [[ "${AI_OS_SKIP_GIT_LANE:-0}" == "1" ]] && { printf 'engineer'; return 0; }
+
+  # 1. HMAC-verified session record (authoritative).
+  local se sid role
+  sid="${CLAUDE_CODE_SESSION_ID:-}"
+  if [[ -n "$sid" ]] && command -v node >/dev/null 2>&1; then
+    for se in "$(git rev-parse --show-toplevel 2>/dev/null || pwd)/src/mcp/safe-exec-mcp/index.js" \
+              "${HOME}/.ai-os/mcp/safe-exec-mcp/index.js"; do
+      if [[ -f "$se" ]]; then
+        role="$(node --no-warnings "$se" --verify-role "$sid" 2>/dev/null)" && [[ -n "$role" ]] && { printf '%s' "$role"; return 0; }
+        break
+      fi
+    done
+  fi
+
+  # 2. Launch-time pane role (set by `ai pane`), then the advisory env.
+  if [[ -n "${AI_OS_PANE_ROLE:-}" ]]; then printf '%s' "$AI_OS_PANE_ROLE"; return 0; fi
+  if [[ -n "${AI_OS_CALLER_ROLE:-}" ]]; then printf '%s' "$AI_OS_CALLER_ROLE"; return 0; fi
+
+  # 3. Default — unchanged Engineer behaviour.
+  printf 'engineer'
+}
+
+check_architect_git_lane() {
+  local role; role="$(_resolve_commit_role)"
+  # Normalize before comparing: an exact match meant `Architect` or a trailing space
+  # silently DISABLED the lane for a real Architect. safe-exec already lower-cases its
+  # role comparison; match that. (Fails safe for Gate 2 either way, but a silently
+  # un-laned Architect is exactly the drift this gate exists to catch.)
+  role="$(printf '%s' "$role" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+  [[ "$role" == "architect" ]] || return 0
+
+  # Every staged path must be under .ai/ or plans/. --name-status is used (rather than
+  # --name-only) so a RENAME's BOTH sides are checked: moving a file OUT of .ai/ is
+  # exactly the escape a name-only check would miss.
+  # FAIL CLOSED on a broken diff. Reading straight from a process substitution meant
+  # git's exit status was never seen: a failed `git diff` produced ZERO records, the
+  # out-of-scope list stayed empty, and the lane granted the waiver — so any diff
+  # hiccup silently turned into a full Gate 2 bypass with arbitrary staged content.
+  # Proven with a stubbed non-zero `git diff`: rc=0 and src/evil.js waived through.
+  # This is the same rule already codified for --check-path in safe-exec: an error
+  # must BLOCK, never allow.
+  local records
+  if ! records="$(git diff --cached --name-status -M 2>/dev/null)"; then
+    {
+      echo ""
+      echo "[GIT_LANE] Could not read the staged file list (git diff failed)."
+      echo "Blocking rather than assuming the commit is in scope (fail-closed)."
+      echo "Rollback (only if you are certain): AI_OS_SKIP_GIT_LANE=1 git commit ..."
+    } >&2
+    exit 1
+  fi
+
+  # Nothing staged: NOT an architect-scoped commit. Returning without setting
+  # ARCHITECT_SCOPED lets the commit fall through to the normal Gate 2 stamp check,
+  # instead of handing out a waiver for a diff that was never classified.
+  [[ -z "$records" ]] && return 0
+
+  local out_of_scope="" classified=0
+  while IFS=$'\t' read -r _status path1 path2 rest; do
+    [[ -z "${_status:-}" ]] && continue
+    # `read` folds every EXTRA tab field into the last variable, so a 4-field record
+    # would hide a path inside path2 — `.ai/b<TAB>src/c` matches the .ai/* arm and the
+    # src/ path is never classified, while the counter still reports progress. git's
+    # --name-status emits at most 3 fields today (renames/copies), so this is not
+    # reachable from git — but an unexpected shape is exactly what this loop must not
+    # wave through, and the counter cannot catch it because it counts fields, not paths.
+    if [[ -n "${rest:-}" ]]; then
+      echo "[GIT_LANE] Unexpected diff record shape — blocking (fail-closed)." >&2
+      exit 1
+    fi
+    local p
+    for p in "$path1" "$path2"; do
+      [[ -z "$p" ]] && continue
+      classified=$((classified + 1))
+      case "$p" in
+        # NOTE: no bare `.ai` / `plans` arms. Git emits a bare entry only when the
+        # path is NOT a directory — i.e. .ai/ was replaced by a file or a symlink,
+        # which stages the deletion of every .ai/ file at once. That is precisely the
+        # change that must NOT ride through on the stamp waiver.
+        .ai/*|plans/*) ;;
+        *) out_of_scope="${out_of_scope}  ${p}"$'\n' ;;
+      esac
+    done
+  done <<< "$records"
+
+  # Belt-and-braces: records were present but nothing was classified (an unexpected
+  # diff shape). Never waive on an unparsed diff.
+  if [[ "$classified" -eq 0 ]]; then
+    echo "[GIT_LANE] Staged changes could not be classified — blocking (fail-closed)." >&2
+    exit 1
+  fi
+
+  if [[ -n "$out_of_scope" ]]; then
+    {
+      echo ""
+      echo "╔══════════════════════════════════════════════════════════════════════════╗"
+      echo "║  [SOVEREIGNTY_BLOCK] ARCHITECT GIT LANE — COMMIT BLOCKED                 ║"
+      echo "╚══════════════════════════════════════════════════════════════════════════╝"
+      echo ""
+      echo "Session role: architect. An Architect may commit only paths under .ai/ or plans/."
+      echo "These staged paths are outside that scope:"
+      echo ""
+      printf '%s' "$out_of_scope"
+      echo ""
+      echo "The Architect designs; the Engineer implements (§35 ANTI-DRIFT, D-054)."
+      echo "Hand the change list to the Engineer:  ai handoff engineer \"<what to implement>\""
+      echo "Then unstage the out-of-scope paths:   git restore --staged <path>"
+      echo ""
+      echo "Rollback (only if you are certain): AI_OS_SKIP_GIT_LANE=1 git commit ..."
+    } >&2
+    exit 1
+  fi
+
+  # In scope. The [CRITIC_STAMP] requirement is WAIVED for this commit: the critics
+  # review src/, and an .ai/-only diff gives them nothing to review — requiring a stamp
+  # would just push the Architect to fabricate one. Every OTHER gate above has already
+  # run (markdown sync, co-modification warning, registry drift, MCP stdout purity, and
+  # the standards gate, which is where the credential scan lives).
+  ARCHITECT_SCOPED=1
+  echo "[ARCHITECT_LANE] All staged paths are within .ai//plans/ — Gate 2 stamp waived for this commit." >&2
+}
+
+check_architect_git_lane
+
 # ── Gate 2 check ─────────────────────────────────────────────────────────────
+if [[ "$ARCHITECT_SCOPED" == "1" ]]; then
+  exit 0
+fi
+
 if has_recent_critic_stamp; then
   exit 0
 fi

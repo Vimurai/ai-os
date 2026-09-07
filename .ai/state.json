@@ -1242,12 +1242,12 @@
     {
       "id": "E-212",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement the role manifest and role-aware provisioning per .ai/blueprints/architect-provider-parity.md §Components 1-2: add registry.json 'roles' (architect: agents/skills + gemini/agents; engineer: claude/skills + claude/agents; shared: shared/skills); make do_sync in src/bin/ai give each provider dir from .ai/roles.json the shared assets plus every role that provider serves (union, byte-identical, _SKILLS_INDEX regenerated); normalize the 7 src/gemini/agents personas (ux_reviewer, docs-architect, knowledge_architect, meta_analyst, memory_curator, seo_manager, seo_content_generator) to the Claude agent frontmatter contract WITHOUT widening allowed-tools beyond the agy plugin toolNames. Acceptance: with architect=claude, .claude/skills contains the 15 Architect skills and .claude/agents the 7 agents and all load in /agents; with architect=agy the layout is unchanged; sync/skill_context/role_config suites green; ~/.ai-os mirror synced.",
       "created_at": "2026-09-04T21:32:54.462Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-07T08:26:42.682Z",
+      "summary": "Role manifest (registry.json roles) + role-manifest.mjs join + role-aware do_sync. architect=claude now gets 47 skills/20 agents; architect=agy unchanged. 7 Architect personas normal …[full in LOG.md]",
       "depends_on": [
         "E-208"
       ],
@@ -1287,7 +1287,7 @@
     {
       "id": "E-215",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "OPEN",
       "tier": 2,
       "description": "Make ARCHITECT.md runtime-aware and add the ai doctor per-role provisioning report per .ai/blueprints/architect-provider-parity.md §Components 5-6: mirror ENGINEER.md's Session Start ladder (Step 1 Skill tool ai-preflight, Step 2 run_preflight, Step 3 activate_skill) and 'use the Skill tool when present' in Skill Invocation; move the Gemini Model Mandate under a 'Provider notes' heading; leave the Forbidden Zone and §35 text unchanged; extend 'ai doctor' in src/bin/ai to print, per role → provider, whether the provider dir holds that role's skills/agents, whether the settings overlay exists, and whether the rulefile is present. Acceptance: GEMINI.md/CLAUDE.md shims unchanged; rulefile + doctor suites green; mirrors synced.",
       "created_at": "2026-09-04T21:32:54.629Z",
@@ -1296,10 +1296,8 @@
       "depends_on": [
         "E-212"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-212"
-      ]
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2765,6 +2763,13 @@
       "task_id": "E-212",
       "timestamp": "2026-09-07T08:20:29.993Z",
       "summary": "[TIER_2] Role manifest + role-aware provisioning (D-054). align_diff WARN-only (ORPHANED_WORK advisory — the 7 personas are covered by architect-provider-parity.md, which the aligner does not read). Found+fixed 3 unanticipated problems: ai-task/repo-oracle skill-name collision (Engineer pane was loading the Architect's skill — verified live), a bash 3.2 empty-array abort that left .agents//.gemini/ unprovisioned, and unserved-provider stripping. role_provisioning 63/0, full suite 3290/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Engineer (Claude)",
+      "task_id": "E-214",
+      "timestamp": "2026-09-07T09:11:11.869Z",
+      "summary": "[TIER_3] Architect Git Lane (D-054). security_engineer round 1 NOT CLEARED (blocking fail-open: a failed git diff granted the stamp waiver with arbitrary staged content), round 2 [SEC_CLEARED]. Fixed S1/S3/S5/S6 + a 4-field diff-shape guard, all exploit-regressed. Residual risks (--amend, sid selection, --no-verify) recorded as THREAT_MODEL T-GITLANE-001. git_lane 46/0, full suite 3336/0, live Architect-pane test passes both directions."
     }
   ],
   "deltas": [

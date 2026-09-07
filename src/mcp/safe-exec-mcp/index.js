@@ -668,9 +668,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // `node index.js --mint-token <role> <session_id>` is invoked by the SessionStart
 // hook (role baked into which agent's settings registered the hook; sid from the
 // harness payload). Fail-open: never blocks session start.
-const _mintIdx = process.argv.indexOf("--mint-token");
+// Bound to argv[2]: a bare indexOf scan let `--verify-role --mint-token` be captured
+// by THIS block, which exits 0 printing nothing — violating --verify-role's contract
+// that exit 0 means a role on stdout. Same class as the E-208 --session confusion.
+// Every caller invokes the mode as the first argument, so this is behaviour-preserving.
+const _mintIdx = process.argv[2] === "--mint-token" ? 2 : -1;
 if (_mintIdx !== -1) {
   mintToken(process.argv[_mintIdx + 1], process.argv[_mintIdx + 2]);
+  process.exit(0);
+}
+
+// ── E-214: role lookup for callers that hold a session id but no payload ──────
+// `node index.js --verify-role <session_id>` prints the HMAC-VERIFIED role for that
+// session and exits 0, or prints nothing and exits 1 when there is no valid record.
+//
+// WHY: the git pre-commit hook has no PreToolUse payload to read a session id from,
+// but Claude Code exports CLAUDE_CODE_SESSION_ID into the environment, so the hook can
+// resolve the same tamper-resistant record the Bash and Write gates use instead of
+// trusting the mutable AI_OS_CALLER_ROLE alone. Read-only: it never mints.
+// Bound to argv[2] for the same reason as --mint-token: a bare indexOf let another
+// mode's arguments capture this block. Every caller passes the mode first.
+const _verifyRoleIdx = process.argv[2] === "--verify-role" ? 2 : -1;
+if (_verifyRoleIdx !== -1) {
+  const vrSid = process.argv[_verifyRoleIdx + 1] || "";
+  const verified = vrSid ? verifyToken(vrSid) : null;
+  if (!verified) process.exit(1);
+  process.stdout.write(verified);
   process.exit(0);
 }
 

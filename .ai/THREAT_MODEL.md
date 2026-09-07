@@ -1,7 +1,7 @@
 # THREAT_MODEL.md — AI-OS v2
 
 > Companion to `.ai/SECURITY.md`. Contains full threat entries for all external integrations and trust boundaries.
-> Last updated: 2026-04-14 (E-8 computer-use-mcp added)
+> Last updated: 2026-09-07 (E-214 Architect Git Lane residual risks)
 
 ---
 
@@ -260,6 +260,60 @@ project root       Xvfb :99 only       terminal TTY     subprocess (RO)      Tes
 - **Residual risk**: Low with hard caps enforced at the schema and DB layers.
 - **Status**: UNMITIGATED (E-10 not yet implemented)
 - **Owner**: Engineer (E-10)
+
+---
+
+### T-GITLANE-001 — Architect Git Lane: accepted residual risks (E-214, D-054)
+
+**Boundary**: `hooks/pre-commit.sh` — the last checkpoint before an Architect-authored
+change enters git history. The lane blocks an `architect`-role commit whose staged paths
+leave `.ai/` or `plans/`, and waives the `[CRITIC_STAMP]` for an in-scope one.
+
+**Enforcement strength**: a LOWER ceiling than the E-208 write gate — `--no-verify` is
+a first-class, documented, zero-cost bypass of this hook, and the `--amend` gap below
+has no analogue in E-208. Do not read the two gates as equally strong. Role resolution
+prefers the HMAC-verified session record (`safe-exec --verify-role`) and falls back to
+`AI_OS_PANE_ROLE` / `AI_OS_CALLER_ROLE`. Failure direction is deliberately toward
+`engineer`, which for THIS gate is the stricter outcome (no waiver, full stamp
+requirement) — the opposite tradeoff from E-208, where `engineer` was the less
+restricted role. That asymmetry is intentional in both places.
+
+**Accepted residual risks** (audited 2026-09-07, not fixed — recorded so the next
+reviewer is not misled about what this gate guarantees):
+
+1. **`git commit --amend` escapes the scope check.** The lane compares index↔HEAD, but
+   an amend produces index↔HEAD~. An Architect can amend a commit that already carries
+   `src/` paths and receive the stamp waiver — but ONLY with at least one `.ai/` or
+   `plans/` path staged alongside: the empty-diff fix means a no-op
+   `git commit --amend --no-edit` now falls through to Gate 2 with no waiver (verified).
+   `pre-commit` receives no argv, and the available env signals (`GIT_REFLOG_ACTION`, a
+   prefilled `COMMIT_EDITMSG`) are not reliably set for `commit --amend`, so detection
+   is not possible from inside the hook; a detector that works most of the time on a
+   sovereignty gate is worse than a documented gap, because the next reviewer stops
+   looking. Verified reproducible in the staged-alongside form.
+2. **The session record is selected by an unauthenticated environment variable.** The
+   hook reads `CLAUDE_CODE_SESSION_ID` to choose which record to verify, so pointing it
+   at another session's record changes the effective role. Records are bound to a
+   session id, not to a process — the same ceiling `mintToken` already admits. Impact
+   is bounded: it can only ADD the path restriction, or grant a waiver for a diff that
+   is already `.ai/`-or-`plans/`-only.
+3. **`--no-verify` bypasses the lane entirely**, as it bypasses every pre-commit gate.
+   So do `git merge` and `git cherry-pick` auto-commits, which never invoke the hook.
+   Pre-existing for Gate 2 as a whole; not introduced by E-214.
+4. **The waiver is reachable by a non-Architect** who exports
+   `AI_OS_CALLER_ROLE=architect` with no session record present. What it buys is bounded
+   to a `.ai/`-or-`plans/`-only commit — but note `.ai/` contains `REVIEWS.md`, the very
+   file Gate 2 reads, so bookkeeping commits (including edits to the stamp file) can be
+   made without a stamp. Bounded and arguably intended; stated here rather than implied.
+
+**Not residual — fixed in E-214 and regression-tested** (`tests/suites/git_lane_test.sh`
+E-214.10a-j): a failed `git diff` no longer fails OPEN into a full Gate 2 bypass; an
+empty diff no longer collects a waiver; replacing `.ai/` with a symlink no longer rides
+through as in-scope; the role comparison is case/whitespace normalized; and
+`--verify-role` can no longer be captured by the mint-mode argv scan.
+
+**Rollback**: `AI_OS_SKIP_GIT_LANE=1` — it resolves the role to `engineer`, so it
+removes the path restriction WITHOUT opening the waiver.
 
 ---
 
