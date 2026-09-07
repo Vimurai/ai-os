@@ -168,7 +168,19 @@ while `CLAUDECODE=1` is inherited).
   `install`/`ln`, `sed -i`/`perl -i`, `rsync`, `dd`, `truncate`, `git apply`/`patch`) with a target
   outside `.ai/`+`plans/`. Inline interpreters (`python3 -c`, `node -e`, `bash -c`, `eval`, …) are
   blocked outright for the architect role; unparsable targets fail closed. Stated residual (tests
-  fail if a stronger claim is reinserted): exotic encodings, git plumbing, interactive editors.
+  fail if a stronger claim is reinserted): exotic encodings, git plumbing, interactive editors,
+  MCP proxying beyond the denied names, `find -delete` / `-exec rm`, awk `-f` program files.
+- **Widening freeze (D-056 R3)**: the shell layer is NOT widened further. The E-216 review showed
+  five of eleven findings were over-blocks of ordinary Architect work (prose with `->` into `.ai/`,
+  `> /dev/null`, `awk '$1 > 5'`, `sed -i .ai/n && git diff`); an over-block on this gate is a
+  defect of the same severity as a bypass. `tests/fixtures/arch-write-cases.json` (argv-passed,
+  READ positives beside the write forms they resemble) is the analyser's contract: any change to
+  `architect-writes.mjs` MUST add cases in both directions, and turning a READ positive into a
+  block is a regression. Over-blocks outrank under-blocks in review ordering. The Git Lane is the
+  last checkpoint for the accepted residual.
+- **MCP write tools without the overlay (D-056 R1, E-219)**: `patch-mcp` / `propose-patch-mcp`
+  derive the role server-side (verified session record → spawn-frozen `AI_OS_CALLER_ROLE` → no
+  evidence = `architect`); a volunteered `caller_role` can only add restriction.
 - **A2A child environment (E-210, amended per measurement)**: the bridge never spreads
   `process.env`. The allowlist is `PATH`, `HOME`, `USER` plus any `child_env_keep` names the
   provider adapter declares. `USER` is REQUIRED for a `claude` child — without it the CLI exits

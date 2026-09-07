@@ -98,3 +98,5 @@ agy Architects keep using the Engineer proxy.
 - **E-216** (Tier 3, D-055 R1): widen the Architect write gate — overlay deny rules for MCP write tools + shell write-redirect policy in `analyzeSovereignty` (see `role-abstraction.md §Security`).
 - **E-217** (Tier 2, D-055 R2): rename the Architect's `ai-task`/`repo-oracle` to `arch-task`/`arch-oracle`; collision guard → sync error in multi-role workspaces; add the missing `context:` key to `seo_engineer.md`.
 - **E-218** (Tier 2, D-055 R4): Git Lane stamp waiver only from the verified session record.
+- **E-219** (Tier 3, D-056 R1): `patch-mcp` / `propose-patch-mcp` fail-closed server-side role derivation (T-PATCHMCP-001).
+- **E-220** (Tier 2, D-056 R2): manifest-scoped pruning in `ai sync` (`_SYNC_MANIFEST.json`; delete only in-manifest + unmodified + gone-from-source; `--prune-known` for rename leftovers). Sync stays additive for anything it did not write.

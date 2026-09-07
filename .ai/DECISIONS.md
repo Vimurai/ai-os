@@ -684,3 +684,42 @@ D-053 was ratified 2026-07-31 (`DECISIONS.md` line "[[D-053]]") and §32 carries
 `AI_OS_SOVEREIGNTY_LOCK=0` disables the widened shell policy; remove the overlay deny rules; rename the skills back; `AI_OS_SKIP_GIT_LANE=1` for the waiver rule. R3/R5/R6 are documentation-only.
 
 ---
+
+---
+
+## [[D-056]] — Write-Gate Widening Freeze; patch-mcp Fail-Closed Role; Manifest-Scoped Sync Pruning
+
+**Date**: 2026-09-07
+**Task**: E-219, E-220 (Engineer handoff 2026-09-07 15:14 UTC; E-216..E-218 on branch `engineer/e216-e218-writegate-hardening`)
+**Decision**: (R3) Freeze further widening of the Architect shell write gate at the E-216 three-layer shape and adopt the fixture corpus as the gate's contract; (R1) make `patch-mcp`'s role guard derive the role from the verified session record and fail closed; (R2) let `ai sync` prune only skills it provably wrote and that were never modified, via a sync manifest.
+
+### R3 — Widening freeze (the over-block ratio is the governing constraint)
+The E-216 review needed seven rounds for eleven findings, and **five of the eleven were over-blocks** — legitimate Architect work refused: prose with `->` written into `.ai/`, `> /dev/null`, `awk '$1 > 5'`, and `sed -i .ai/n && git diff`. Every finding was one invariant broken: text already classified as DATA re-read as SYNTAX. An over-block on a sovereignty gate is not a safe failure; it is a broken Architect that will route around the gate. Ruling:
+- **No further widening of the shell layer.** The listed residual (exotic encodings, git plumbing, interactive editors, MCP proxying beyond the denied names, `find -delete` / `-exec rm`, awk `-f` program files) is ACCEPTED. The Git Lane is the last checkpoint for anything that slips through, and that is the intended layering.
+- **The fixture corpus is the contract.** `tests/fixtures/arch-write-cases.json` (argv-passed; READ forms asserted as positives beside the write forms they resemble) is the specification of `architect-writes.mjs`. Any change to the analyser MUST add cases in both directions, and a change that turns a READ positive into a block is a regression, not a hardening.
+- **Over-blocks outrank under-blocks in review ordering** for this gate (the auditor weighting the Engineer adopted from round 4 becomes the rule).
+
+### R1 — `patch-mcp` role guard: FUND, fail closed (T-PATCHMCP-001)
+`roleGuard()` allows unless the caller volunteers `caller_role`; with the overlay `permissions.deny` absent (it is settings-file config, the layer most likely to be missing), a default-open guard is the only barrier. Ruling: the role is derived server-side in this order — (1) the verified session record via `safe-exec --verify-role` using the harness session id; (2) the server's spawn-frozen `AI_OS_CALLER_ROLE` env (the E-129 per-server pattern); (3) **no evidence → treat as `architect`** (restrictive default: writes confined to `.ai/` and `plans/`). A self-reported `caller_role` can only *add* restriction, never lift it. A properly installed Engineer session always has a record (the SessionStart hook mints one), so the restrictive default cannot strand a legitimate Engineer. Same rule applies to `propose-patch-mcp::confirm_patch`.
+
+### R2 — Stale skills after a rename: prune by manifest only
+`ai sync` is additive; the E-217 rename left `ai-task` / `repo-oracle` in `.agents/skills` (harmless today, agy serves no role). Blind pruning could delete a user-authored skill, so: `ai sync` writes `_SYNC_MANIFEST.json` in each target skill/agent dir recording every path it wrote with a content hash. On the next sync a path is deleted **only if** it is in the manifest, its hash still equals what sync wrote (unmodified since), and it is no longer in the source set. Anything absent from the manifest or modified is never touched and is reported as `orphan (kept)`. First run after this ships has no manifest, so nothing is pruned; a `--prune-known` flag deletes an orphan that is byte-identical to a current canonical skill under another name (the E-217 leftovers qualify) so the migration does not need hand deletion.
+
+### Alternatives considered
+1. **R3: keep widening the shell layer toward completeness** — rejected; the measured over-block ratio shows each increment costs Architect usability faster than it buys coverage, and the Git Lane already backstops.
+2. **R1: fail open with a warning when no record exists** — rejected; that is the current gap restated.
+3. **R2: prune everything not in the source set** — rejected; deletes user-authored skills. **R2: never prune** — rejected; every rename leaves permanent residue in every workspace.
+
+### Constraints driving this decision
+- A sovereignty gate that blocks ordinary role work is a defect of the same severity as a bypass (D-054 §35 enforcement must be usable to be real).
+- Restrictive defaults when evidence is missing (D-055 R4 pattern), never permissive ones.
+- Sync must remain safe to run in any workspace, including ones with user-authored skills (E-201 lesson: never touch what you did not write).
+
+### Impact
+- Unlocks: E-219 (R1, Tier 3, `security_engineer`), E-220 (R2, Tier 2). R3 is documentation only.
+- Risk if wrong: R1's restrictive default could block a host that never mints a record and never sets the per-server env — that host is not an installed AI-OS provider; `AI_OS_SOVEREIGNTY_LOCK=0` remains the escape hatch.
+
+### Rollback
+R1: `AI_OS_SOVEREIGNTY_LOCK=0` restores the legacy guard. R2: delete `_SYNC_MANIFEST.json` files; sync reverts to additive-only. R3: a later decision may lift the freeze only with a fixture-corpus delta showing zero new over-blocks.
+
+---

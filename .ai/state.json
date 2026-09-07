@@ -1337,6 +1337,32 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-219",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 3,
+      "description": "Close T-PATCHMCP-001 per D-056 R1: make patch-mcp roleGuard (and propose-patch-mcp confirm_patch) derive the caller role server-side instead of trusting a volunteered caller_role — order: (1) verified session record via safe-exec --verify-role using the harness session id, (2) the server's spawn-frozen AI_OS_CALLER_ROLE env, (3) no evidence → treat as architect (writes confined to .ai/ and plans/). A self-reported caller_role may only ADD restriction, never lift it. AI_OS_SOVEREIGNTY_LOCK=0 restores the legacy guard. Dispatch security_engineer. Acceptance: patch_mcp + propose_patch suites cover verified-engineer allowed, verified-architect blocked outside scope, no-record+no-env → blocked outside scope, volunteered engineer with verified architect → still blocked; live test from the Architect pane with the overlay deny rules removed; THREAT_MODEL T-PATCHMCP-001 marked fixed; mirrors synced.",
+      "created_at": "2026-09-07T15:16:55.643Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-220",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement manifest-scoped pruning in ai sync per D-056 R2: write _SYNC_MANIFEST.json in each target skill/agent dir (.claude/skills, .claude/agents, .agents/skills, ~/.ai-os mirrors) recording every path sync wrote with a content hash; on the next sync delete a path ONLY if it is in the manifest, its hash still matches (unmodified), and it is no longer in the source set — everything else is reported as 'orphan (kept)'; add --prune-known to remove an orphan that is byte-identical to a current canonical skill under another name (the E-217 leftovers .agents/skills/ai-task and repo-oracle). First run with no manifest prunes nothing. Acceptance: sync suite covers write→rename→prune, user-authored skill kept, user-modified synced skill kept and reported, --prune-known removes only byte-identical leftovers, fresh clone in a non-git dir exits 0; mirrors synced.",
+      "created_at": "2026-09-07T15:16:55.704Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
