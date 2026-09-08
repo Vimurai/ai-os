@@ -14,7 +14,7 @@
 - Tester: bash suite now 114 files, **3403 assertions, 0 failing**.
 
 ## Current Focus
-- D-054..D-057 sprints COMPLETE (E-208..E-223). The Engineer queue is empty. Next Architect input needed on: **T-LOCATOR-001 residual** — four SKILL.md files still resolve framework helpers cwd-relative, including an auto-executed line in `ai-preflight`, which runs at every session start; outside D-057 §3's scope so not fixed under E-223, and it needs funding. Also **T-PROPOSEPATCH-002** (preview/list/reject read unbounded stored paths) and a ruling on the **`--dev-tree` deviation** (D-057 §3 names an env var as the dev-tree rollback; the env is the attack channel, so the capability moved to argv).
+- D-058 ruled (2026-09-07): `--dev-tree` argv deviation RATIFIED; T-LOCATOR-001 skills half FUNDED → E-225 (T3); executable-markdown review policy → E-224 (T2); T-PROPOSEPATCH-002 FUNDED → E-226 (T2). Execute E-224 → E-225 → E-226 after the user merges `engineer/e221-e223-patch-boundary-locators` (clean 9-commit fast-forward carrying all three stacked branches).
 
 ## Key Decisions
 - D-057: Fund the patch project boundary; name shared helpers in architect.md §4; make run_review's PATH_TRAVERSAL context-aware; install-first helper locators across all hooks.
@@ -32,7 +32,9 @@
 - ~~Skill-name collision (E-212)~~ — CLOSED by E-217 (renamed to `arch-task`/`arch-oracle`, collision now a hard sync error) and E-220 (the renamed-away leftovers are pruned rather than lingering forever).
 - **Git Lane residual risk (E-214)** — recorded as `THREAT_MODEL.md` T-GITLANE-001: `git commit --amend` escapes the scope check; the E-129 record is selected by an unauthenticated `CLAUDE_CODE_SESSION_ID`; `--no-verify`/`merge`/`cherry-pick` bypass the hook (items 1–3 ACCEPTED by D-055 R4); ~~the stamp waiver reachable by a non-Architect~~ FIXED by E-218 (waiver requires the verified record).
 - **Mint guard is partial (E-208).** It enforces "a valid binding may not be changed", not immutability — deleting or corrupting the record and minting fresh still works. ACCEPTED by D-055 R5 (deletion from an Architect pane is E-102-gated); boot-id/ledger binding is backlog.
-- **Helper locators resolve the USER's repo first (E-220 finding, FUNDED → E-223 per D-057).** All six `hooks/*.sh` still carry the `git rev-parse --show-toplevel` dev-tree-first chain; a downstream project could plant an executable helper until E-223 lands.
+- **Helper locators (T-LOCATOR-001).** Hooks + `src/bin/ai` FIXED by E-223 (install-first resolver, hooks ignore env). **Skills half still OPEN until E-225**: four SKILL.md chains are cwd-relative, including the auto-executed `ai-preflight` line — do not run preflight inside untrusted checkouts until it lands.
+- **Read-only patch tools (T-PROPOSEPATCH-002, FUNDED → E-226 per D-058).** `preview`/`list`/`reject` still read or expose unbounded stored paths; narrowed post-E-221 to legacy rows and the proposer's own reach.
+- **Verification limits.** No sandboxed pen-test ran in the last eight audit rounds (Docker down) and all `patch` testing was on Apple patch 2.0, not CI's GNU 2.7.x — confirm the E-221 driver modes on CI after the merge.
 - ~~`seo_engineer.md` missing `context:` key~~ — FIXED by E-217.
 - ~~`advisor-mcp` env allowlist / "PATH + HOME suffice"~~ — FIXED: E-210 keeps `USER`; `role-abstraction.md §Security` amended per D-055 (allowlist = `PATH`, `HOME`, `USER` + `child_env_keep`).
 ## MCP Servers (25)

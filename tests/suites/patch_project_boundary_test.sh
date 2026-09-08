@@ -242,6 +242,45 @@ assert_contains "E-221.16c: an ABSOLUTE header path is refused, not just a relat
 +b
 ')"
 
+# ── E-221.17: containment does NOT depend on which patch(1) is installed ────
+# All local testing ran against `patch 2.0-12u11-Apple`; GNU patch 2.7.x was never
+# exercised (no Docker, and this repo has no CI configuration at all). That gap is bounded
+# rather than argued: both redirect payloads are refused by the JS validator BEFORE
+# `patch` is spawned, so no behaviour of the binary can change the outcome. These
+# assertions call the validator directly — no subprocess, nothing platform-specific —
+# so they hold identically wherever the suite runs.
+assert_contains "E-221.17a: the multi-section payload is refused in JS" "REFUSED" \
+  "$(_dg '--- a
++++ a
+@@ -1,1 +1,1 @@
+-A
++B
+--- ../outside/v.txt
++++ ../outside/v.txt
+@@ -1,1 +1,1 @@
+-C
++D
+')"
+assert_contains "E-221.17b: the ed-prelude payload is refused in JS" "REFUSED" \
+  "$(_dg '1c
+ATTACKER
+.
+w
+--- z.txt
++++ z.txt
+@@ -1,1 +1,1 @@
+-ORIGINAL_LINE_1
++z
+')"
+assert_status 0 "E-221.17c: the blob is validated before patch(1) is ever spawned" \
+  bash -c "python3 - '$SERVER' <<'PYX'
+import sys
+s = open(sys.argv[1]).read()
+i = s.index('validateDiffContent(args.diff_content)')      # propose-time gate
+j = s.index('spawnSync(\"patch\"')                          # first patch invocation
+sys.exit(0 if i < j else 1)
+PYX"
+
 # ── E-221.9: roots compare by realpath ──────────────────────────────────────
 # /tmp is a symlink to /private/tmp on macOS: a string compare would reject legitimate
 # confirms there, and every case above runs under mktemp.

@@ -127,6 +127,12 @@ TASKS
 # downstream check_critic_stamp gate isn't the one tripping the test.
 cp "${REPO_ROOT}/src/shared/standards.json" "${PROJ}/src/shared/standards.json" 2>/dev/null || mkdir -p "${PROJ}/src/shared" && cp "${REPO_ROOT}/src/shared/standards.json" "${PROJ}/src/shared/standards.json"
 cp "${REPO_ROOT}/src/shared/standards-checker.mjs" "${PROJ}/src/shared/standards-checker.mjs"
+# E-225: the checker imports the E-224 markdown classifier (one definition of "executable
+# markdown", shared with run_review). It is a real runtime dependency — without it the CLI
+# throws, the hook prints its banner with no report, and a CLEAN diff trips the gate. Both
+# of those showed up as test failures rather than as an import error, which is why the
+# fixture has to mirror the deployed file set rather than a subset of it.
+cp "${REPO_ROOT}/src/shared/markdown-exec.mjs" "${PROJ}/src/shared/markdown-exec.mjs"
 cp "${REPO_ROOT}/scripts/standards.mjs" "${PROJ}/scripts/standards.mjs"
 
 # Hook helper: source the file with a controlled environment.

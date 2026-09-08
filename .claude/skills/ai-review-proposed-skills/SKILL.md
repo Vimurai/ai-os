@@ -21,9 +21,17 @@ Proposed skills awaiting review: !ls -1 .agents/skills/proposed 2>/dev/null || e
 
 ## Locate the promoter (locator chain — mirrors E-58/E-65/E-75)
 ```bash
-for c in "src/shared/skill-promoter.mjs" "${HOME}/.ai-os/shared/skill-promoter.mjs"; do
-  [ -f "$c" ] && { PROMOTER="$c"; break; }
-done
+# E-225: install-first via the shared locator, never the visited project's own copy.
+AI_OS_LOCATE_UNTRUSTED_ENV=1
+# `declare -f` inside locate.sh's own fallback asks whether a NAME is defined, and bash
+# imports EXPORTED functions from the environment at startup — so without this unset an
+# inherited `ai_os_locate` is the resolver whenever locate.sh is unreachable. The hooks
+# carry this guard (E-223 F13); the first cut of E-225 ported the pattern and not the
+# guard, and a decoy executed at session start. Sourcing is gated on the FILE so a missing
+# resolver fails CLOSED — skills may, unlike the hooks, simply report "unavailable".
+unset -f ai_os_locate ai_os_locate_enable_dev_tree ai_os_is_framework_clone 2>/dev/null
+[ -f "${HOME}/.ai-os/shared/locate.sh" ] && . "${HOME}/.ai-os/shared/locate.sh"
+PROMOTER="$(ai_os_locate shared/skill-promoter.mjs 2>/dev/null)"
 [ -z "$PROMOTER" ] && { echo "skill-promoter.mjs not found — run: ai install"; exit 1; }
 ```
 

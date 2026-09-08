@@ -1,7 +1,7 @@
 # THREAT_MODEL.md — AI-OS v2
 
 > Companion to `.ai/SECURITY.md`. Contains full threat entries for all external integrations and trust boundaries.
-> Last updated: 2026-09-07 (E-221 patch boundary + diff-target validation; E-223 install-first locators)
+> Last updated: 2026-09-07 (E-225 skills locator closed; E-226 read-only patch tools scoped)
 
 ---
 
@@ -460,8 +460,18 @@ already read — but the check is genuinely absent, not merely redundant.
 rows from any project reachable in the same store, giving path disclosure and
 cross-project queue deletion respectively.
 
-**Fix shape**: re-bound `patch.path` (or prefer `project_root` + `rel_path`) before
-rendering, and scope the pending-patch queries to the current project root.
+**FIXED in E-226 (D-058 §4).** All three read-only tools now derive from `project_root` +
+`rel_path` through one shared `rowScope` classifier and require project equality:
+`preview_patch` renders a foreign row's stored diff behind a `[FOREIGN_PROJECT]` banner
+and reads NO file, `reject_patch` refuses with `[PROJECT_MISMATCH]` rather than deleting
+another project's pending row, and `list_pending_patches` shows own-project rows by
+default — with `all: true` foreign rows appear as id + `rel_path` + the root's BASENAME,
+never an absolute path. Legacy rows are listed as legacy and never read.
+`AI_OS_PATCH_LEGACY=1` restores the old behaviour.
+
+**Non-vacuity**: against the pre-fix server the same driver modes returned `LEAKED` (the
+canary file's contents rendered into tool output), `ABS_PATH_LEAKED` + `row-deleted` (a
+cross-project reject destroyed the row), and `ABS_PATH_LEAKED` for `list all:true`.
 
 ---
 
@@ -508,7 +518,89 @@ file. Separately, the shell and node implementations disagreed: a substring `gre
 the node twin's `JSON.parse` did not, and the shell side is the one every hook uses. Both
 now parse.
 
-**STILL OPEN — the same class, in the skills (needs funding).** Four SKILL.md files carry
+**SKILLS HALF FIXED in E-225 (D-058 §2).** The five sites below now set
+`AI_OS_LOCATE_UNTRUSTED_ENV=1`, `unset -f` any inherited resolver functions, source
+`${HOME}/.ai-os/shared/locate.sh` only if the file exists, and resolve via `ai_os_locate`.
+An E-80 standards rule (`skill_locator_install_first`) fails any executable markdown line
+that hands an interpreter a project-relative path, across `src/**` AND the `.claude/` and
+`.agents/` mirrors. Verified by a canary: the pre-fix skills executed a decoy project's
+`incident-aggregate`, `insights-staleness` and `telemetry`; post-fix, nothing.
+
+**Two audit findings recorded rather than closed:**
+
+*New exposure introduced by the fix itself* — the rewritten lines now SOURCE shell from
+`${HOME}/.ai-os/shared/locate.sh`. `HOME` is honoured by design (E-223 accepted it as a
+pre-existing residual for the hooks), but the delta matters and is stated here rather than
+left implicit: the pre-fix line only `node`-executed one named file, whereas a redirected
+`HOME` now yields arbitrary shell sourced into the session-start shell. Same shape E-223
+wrote up for `AI_OS_HOME` and fixed; `AI_OS_HOME` itself is correctly ignored under the
+untrusted flag.
+
+*ACCEPTED — skills that run the visited project's own entrypoint.* The complete set, after
+a second sweep found the first list was short:
+
+    src/shared/skills/ai-debug/SKILL.md:14        !bash tests/run.sh          AUTO-EXECUTED
+    src/claude/skills/bug-reproducer/SKILL.md:15  !bash tests/run.sh          AUTO-EXECUTED
+    src/shared/skills/ai-debug/SKILL.md:63        bash tests/suites/<s>.sh    agent-initiated
+    src/shared/skills/ai-upgrade/SKILL.md:17      npm run test                agent-initiated
+    src/claude/skills/bug-reproducer/SKILL.md:77  bash repro.sh               agent-initiated
+    src/agents/skills/aqg-resolver/SKILL.md:32,60 project test invocations    agent-initiated
+
+These execute code the visited project controls, and unlike the framework-helper class the
+execution IS the skill's stated purpose. The distinction is worth keeping: with
+`post-tool-use` the agent CHOSE to run the tests, whereas the two marked AUTO-EXECUTED run
+because the skill was LOADED — a consent question rather than a resolution one, and the
+reason the auto-executed pair are listed first. `repro.sh` is a script the skill instructs
+the agent to WRITE and then run, so it is the skill's own output rather than something
+resolved from the project.
+
+The standards rule allowlists these BY EXACT SHAPE — `tests/run.sh`,
+`tests/suites/<name>.sh`, `package.json`, and `repro.sh` ONLY inside
+`bug-reproducer/SKILL.md` — and rejects any token containing a `..` segment, because the
+first cut tested a PREFIX and `bash tests/../src/shared/evil.sh` walked straight back out
+of the allowlist. A new instance of the framework-helper class still fails. Closing the
+consent gap needs its own ruling.
+
+**KNOWN UNCAUGHT by the standards rule** — recorded so the next reader does not mistake
+the rule's silence for a clean bill:
+
+    cat src/bin/ai | bash                    the path never reaches an interpreter argument
+    find . -name "*.mjs" -exec node {} \;     the target is `{}`, expanded by find
+    ls src/shared/*.mjs | xargs node          the path arrives on stdin
+    bash setup                               no separator and no extension
+    bash -c "node src/bin/ai"                the interpreter is INSIDE a quoted operand
+    eval "bash src/bin/ai"                   same, via eval
+    node <<'EOF' … EOF                       the program arrives on stdin (heredoc)
+
+The `bash -c "…"` family is the one worth funding: the tokeniser correctly keeps the
+quoted run as one word and correctly skips an inline-code operand as CODE, so nothing
+inside it is examined and an extension-less target survives (an `.mjs` target is still
+caught by the second signal). The fix is to re-tokenise a skipped code operand and scan it
+recursively, depth 1 — cheap, but it is the change most likely to resurrect an over-block,
+and the shipped surface has none of these shapes. Filed rather than landed at the end of a
+five-round review; see the E-225 handoff.
+
+The `bash setup` entry is a TRADE-OFF a fix introduced, recorded so nobody "restores" the earlier
+behaviour and reopens what it fixed: requiring a path to carry a `/` or a `.` is what stops
+the bare file descriptor `2` — left behind when `2>/dev/null` has its inline code stripped
+— from reading as a path. It narrows the earlier "bare root-level targets count" rule:
+`node helper.mjs` is still caught, `bash setup` is not.
+
+Nothing in the tree uses these shapes, and each requires the skill author to write an
+indirection no current skill needs — but they are executions the rule cannot see, and they
+are in the E-225.06 matrix as expected-uncaught rather than absent from it.
+
+**Also closed in passing (E-224 classifier):** Claude Code auto-executes `!`-lines in
+slash-command markdown (`.claude/commands/*.md`), which `classifyMarkdown` did not
+recognise — so such a file would have been graded as prose by both this rule and
+`run_review`'s traversal check. No such file exists in the repo today; the pattern now
+covers it before one does.
+
+**STILL OPEN — none.** (Historic list, for the record: the four sites were
+`ai-preflight/SKILL.md:18` and `:129`, `ai-insights/SKILL.md:54` plus its two `!`-lines,
+and `ai-review-proposed-skills/SKILL.md:24`.)
+
+**Superseded description of the original defect:** Four SKILL.md files carried
 the pre-E-223 chain in a WORSE form: plain cwd-relative, so not even a git repo is needed.
 
     src/shared/skills/ai-preflight/SKILL.md:18   incident-aggregate.mjs   (auto-executed `!` line)

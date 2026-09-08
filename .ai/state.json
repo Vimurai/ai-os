@@ -1402,6 +1402,45 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-224",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Implement the executable-markdown classifier per D-058 §3: add one shared classifier (src/shared/markdown-exec.mjs) that marks a markdown line as EXECUTABLE when it is a !-prefixed line in a skill/agent file or sits inside a fenced block tagged bash/sh/zsh/js/mjs/javascript/python/node, and DOCUMENTATION otherwise; run_review in src/mcp/orchestrator-mcp/index.js applies PATH_TRAVERSAL (with the E-222 anchor exemptions) only to EXECUTABLE markdown lines and to non-markdown files, keeps HARDCODED_SECRET on every line, and FAILS when a !-line appears in .ai/*.md or .ai/blueprints/*.md (no executable lines there by construction); AI_OS_REVIEW_STRICT_TRAVERSAL=1 grades all lines as code. Acceptance: orchestrator suite covers DECISIONS.md prose quoting join(req.path, '../') → no P0, a SKILL.md !-line with ../ → P0, a bash fence with an E-222 anchor → P1, a !-line in a blueprint → FAIL; mirrors synced.",
+      "created_at": "2026-09-07T19:10:27.925Z",
+      "completed_at": "2026-09-08T10:13:53.821Z",
+      "summary": "Executable-markdown classifier (D-058 §3): !-lines and executable fences are code, other markdown is prose; PATH_TRAVERSAL applies to code only, a !-line in .ai/ docs is itself a P0. …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-225",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 3,
+      "description": "Close the skills half of T-LOCATOR-001 per D-058 §2: rewrite the four cwd-relative helper chains — src/shared/skills/ai-preflight/SKILL.md lines 18 and 129, ai-insights/SKILL.md line 54 (and its two !-lines importing ./src/shared/telemetry.mjs), ai-review-proposed-skills/SKILL.md line 24 — to source \"${HOME}/.ai-os/shared/locate.sh\" with AI_OS_LOCATE_UNTRUSTED_ENV=1 and resolve via ai_os_locate <helper>; never a cwd-relative or repo-relative path; sync the .claude/ and .agents/ and ~/.ai-os mirrors byte-identically; add an E-80 standards-checker rule (using the E-226 classifier) that FAILS any EXECUTABLE markdown line in src/**/SKILL.md or src/**/agents/*.md referencing src/ or ./ for execution (AI_OS_STANDARDS_SKIP=skill-locator to bypass). Dispatch security_engineer. Acceptance: negative test — a decoy project containing src/shared/incident-aggregate.mjs with a canary never has it executed by ai-preflight, ai-insights or ai-review-proposed-skills; standards suite covers the new rule both ways; THREAT_MODEL T-LOCATOR-001 skills section marked fixed; all skill suites green.",
+      "created_at": "2026-09-07T19:10:28.023Z",
+      "completed_at": "2026-09-08T10:13:58.630Z",
+      "summary": "Skills half of T-LOCATOR-001 closed (D-058 §2): five sites resolve via ai_os_locate with the unset -f guard, failing closed on a degraded install; new E-80 rule with a tokenising inv …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-226",
+      "owner": "Engineer (Claude)",
+      "status": "DONE",
+      "tier": 2,
+      "description": "Close T-PROPOSEPATCH-002 per D-058 §4 in src/mcp/propose-patch-mcp/index.js: preview_patch, list_pending_patches and reject_patch derive the target from project_root + rel_path and require equality with their own project root; on mismatch preview renders the stored diff only with a [FOREIGN_PROJECT] banner and reads no file, reject refuses with [PROJECT_MISMATCH], and list shows own-project rows by default and with all:true shows foreign rows as id + rel_path + project_root basename only (never an absolute path); legacy rows without project_root are listed as legacy and never read; AI_OS_PATCH_LEGACY=1 restores the old behaviour. Acceptance: propose_patch suite covers same-project preview with baseline, foreign preview without file read (canary file outside root is never rendered), foreign reject refused, list default vs all:true shapes, legacy row handling; THREAT_MODEL T-PROPOSEPATCH-002 marked fixed; mirrors synced.",
+      "created_at": "2026-09-07T19:10:28.112Z",
+      "completed_at": "2026-09-08T10:14:03.844Z",
+      "summary": "T-PROPOSEPATCH-002 closed (D-058 §4): preview/list/reject share one rowScope derivation and require project equality; foreign preview reads no file, foreign reject refuses, list hide …[full in LOG.md]",
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -2951,6 +2990,20 @@
       "task_id": "E-223",
       "timestamp": "2026-09-07T19:05:38.690Z",
       "summary": "[TIER_3] E-223 install-first helper locators — SEC_CLEARED after 5 rounds. F1/F2 (env-reachable downgrades, one introduced by the fix), F5/F6 (hardening not carried to bin/ai and the node twin), F8 (argv-only implemented as another env var), F12 (8 unconverted chains), F13 (forgeable bootstrap guard). No sandboxed pen-test — Docker down all 5 rounds."
+    },
+    {
+      "type": "SEC_CLEARED",
+      "agent": "security_engineer",
+      "task_id": "E-225",
+      "timestamp": "2026-09-08T10:13:32.467Z",
+      "summary": "[TIER_3] E-225 skills locator — SEC_CLEARED after 5 rounds. Exploit closed in round 2 (F1: the unset -f guard was not ported from E-223); rounds 3-5 hardened the standards rule, ending in a tokenising rewrite after 4 rounds of single-regex holes. P1 over-block landed pre-merge; P2 (bash -c recursion) filed. No sandboxed pen-test — Docker down all 5 rounds."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "claude",
+      "task_id": "E-225",
+      "timestamp": "2026-09-08T10:13:37.094Z",
+      "summary": "[TIER_3] E-224/E-225/E-226 (D-058): executable-markdown classifier, skills locator closure, read-only patch tool scoping. Full suite 4117/0."
     }
   ],
   "deltas": [

@@ -361,6 +361,11 @@ mkdir -p "${INSTALL}/scripts" "${INSTALL}/shared"
 cp "$CLI"      "${INSTALL}/scripts/standards.mjs"
 cp "$CHECKER"  "${INSTALL}/shared/standards-checker.mjs"
 cp "$STANDARDS_JSON" "${INSTALL}/shared/standards.json"
+# E-225: the checker now imports the E-224 markdown classifier (so "executable markdown"
+# has one definition). It is a real runtime dependency of the installed layout, and the
+# installer ships it alongside — this fixture must mirror that or it tests a layout that
+# does not exist.
+cp "${REPO_ROOT}/src/shared/markdown-exec.mjs" "${INSTALL}/shared/markdown-exec.mjs"
 
 assert_status 0 "list-rules works from installed-mode layout (Candidate 2)" \
   bash -c "node '${INSTALL}/scripts/standards.mjs' list-rules --json >/dev/null 2>&1"

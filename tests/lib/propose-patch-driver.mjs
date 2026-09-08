@@ -14,6 +14,7 @@
 //   same | cross | tampered-rel | legacy | legacy-ok | legacy-escape | preview | reject
 //   symlink-escape | root-target | failed-apply | orig-collateral
 //   multi-section-redirect | ed-prelude
+//   foreign-preview | foreign-reject | foreign-list | foreign-list-all | own-preview
 // Prints one line: the verdict token, then a tab, then the applied file content ("-" if
 // the file was not written).
 
@@ -239,6 +240,45 @@ try {
       contentOf(join(A, "z.txt")),
       contentOf(join(base, "outside", "victim.txt")),
     ].join("|");
+
+  } else if (mode === "foreign-preview" || mode === "foreign-reject" || mode === "foreign-list") {
+    // E-226 (D-058 §4): the read-only tools were out of D-057 §1's scope, so they kept
+    // trusting the stored ABSOLUTE path. preview_patch read it to build a diff baseline,
+    // so a file outside the previewing project was rendered into tool output.
+    const A = newProject("a"); const B = siblingSharing(A, "b"); cleanup.push(A, B);
+    // A canary OUTSIDE B's root, named by the row A proposed.
+    writeFileSync(join(A, "src", "target.txt"), "TOP_SECRET_CANARY_CONTENT\n");
+    const id = proposeIn(A);
+    let out = "";
+    if (mode === "foreign-preview") out = rpc(B, [{ name: "preview_patch", args: { patch_id: id } }]);
+    if (mode === "foreign-reject")  out = rpc(B, [{ name: "reject_patch",  args: { patch_id: id } }]);
+    if (mode === "foreign-list")    out = rpc(B, [{ name: "list_pending_patches", args: {} }]);
+    const leaked = out.includes("TOP_SECRET_CANARY_CONTENT");
+    const absLeak = out.includes(A);   // an absolute path from the other project
+    verdict = leaked ? "LEAKED"
+      : absLeak ? "ABS_PATH_LEAKED"
+      : /\[FOREIGN_PROJECT\]/.test(out) ? "FOREIGN_BANNER"
+      : verdictOf(out);
+    // For reject, also confirm the row SURVIVED (it is another project's queue).
+    const still = rpc(A, [{ name: "list_pending_patches", args: {} }]).includes(id);
+    content = `${still ? "row-kept" : "row-deleted"}`;
+
+  } else if (mode === "foreign-list-all") {
+    const A = newProject("a"); const B = siblingSharing(A, "b"); cleanup.push(A, B);
+    const id = proposeIn(A);
+    const out = rpc(B, [{ name: "list_pending_patches", args: { all: true } }]);
+    verdict = out.includes(A) ? "ABS_PATH_LEAKED"
+      : (out.includes("FOREIGN_PROJECT") && out.includes(id) ? "listed-safely" : "other");
+    content = "-";
+
+  } else if (mode === "own-preview") {
+    // The legitimate case must still render a real baseline.
+    const A = newProject("a"); cleanup.push(A);
+    const id = proposeIn(A);
+    const out = rpc(A, [{ name: "preview_patch", args: { patch_id: id } }]);
+    verdict = /FOREIGN_PROJECT|LEGACY_PATCH/.test(out) ? "wrongly-foreign"
+      : (/patched|target\.txt/.test(out) ? "previewed" : "other");
+    content = contentOf(join(A, "src", "target.txt"));
 
   } else if (mode === "preview") {
     const A = newProject("a"); cleanup.push(A);

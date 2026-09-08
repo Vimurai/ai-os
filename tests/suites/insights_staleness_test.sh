@@ -256,8 +256,14 @@ assert_status 0 "Step 7 heading present"               \
 assert_status 0 "Step 7 names E-86"                    grep -q  'E-86' "$SKILL_SRC"
 assert_status 0 "Step 7 references blueprint"          \
   grep -qE 'meta-cognition' "$SKILL_SRC"
-assert_status 0 "Step 7 names locator chain (in-repo)" \
-  grep -qE 'src/shared/insights-staleness\.mjs' "$SKILL_SRC"
+# E-225 REMOVED the in-repo candidate deliberately: `for c in src/shared/...` executed
+# the VISITED project's copy, and this skill runs at session start. The assertion is
+# rewritten to the policy that replaced it rather than relaxed — pinning the old text
+# would have been pinning the bug.
+assert_status 0 "Step 7 resolves the probe via the shared install-first locator" \
+  grep -q 'ai_os_locate shared/insights-staleness.mjs' "$SKILL_SRC"
+assert_status 1 "Step 7 no longer names a cwd-relative candidate" \
+  grep -qE 'for c in src/shared/insights-staleness\.mjs' "$SKILL_SRC"
 assert_status 0 "Step 7 names locator chain (installed)" \
   grep -qE '\.ai-os/shared/insights-staleness\.mjs' "$SKILL_SRC"
 assert_status 0 "Step 7 documents AI_INSIGHTS_STALENESS_DISABLE" \

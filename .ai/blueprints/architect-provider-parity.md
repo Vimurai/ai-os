@@ -83,7 +83,8 @@ agy Architects keep using the Engineer proxy.
 | `src/shared/provider-adapter.mjs` | E-210 | Provider `launch` / `print_mode` argv templates and child-env allowlist (`PATH`, `HOME`, `USER`, `child_env_keep`). |
 | `src/shared/role-manifest.mjs` | E-212 | Role → source-directory manifest from `registry.json`. |
 | `src/shared/sync-manifest.mjs` | E-220 | `_SYNC_MANIFEST.json` writer/reader; prune only in-manifest + unmodified + gone-from-source. |
-| install-first resolver (`ai-os-locate` shell + `.mjs` twin) | E-223 | Helpers resolve from `~/.ai-os` first; dev tree only inside the framework clone. |
+| install-first resolver (`src/shared/locate.sh` + `locate.mjs`) | E-223 | Helpers resolve from `~/.ai-os` first; dev tree only inside the framework clone. Hooks set `AI_OS_LOCATE_UNTRUSTED_ENV=1` (env is attacker-supplied). Dev-tree rollback is **`ai --dev-tree` (argv)** — D-058 §1 superseded D-057's env-var sentence. Skills reach it via the installed mirror (E-225). |
+| `src/shared/markdown-exec.mjs` | E-224 | Executable-markdown classifier: `!`-lines and executable-tagged fences are code, the rest is documentation; shared by `run_review` and the standards checker. |
 
 Two-phase writes (`propose_patch` → `confirm_patch`, E-221) bind the pending record to `project_root` + a
 project-relative path and re-run every check (`safePath`, role, project equality) at confirm time.
@@ -116,3 +117,6 @@ project-relative path and re-run every check (`safePath`, role, project equality
 - **E-221** (Tier 3, D-057 §1): pending patches bound to `project_root` + relative path; every check re-run at `confirm_patch` (T-PROPOSEPATCH-001).
 - **E-222** (Tier 2, D-057 §2): `run_review` PATH_TRAVERSAL becomes context-aware — script-relative anchors are P1 advisory, runtime path handling stays P0.
 - **E-223** (Tier 3, D-057 §3): install-first helper resolver; dev tree only inside the framework clone; replaces every `git rev-parse` locator chain in `src/bin/ai` and the six hooks.
+- **E-224** (Tier 2, D-058 §3): executable-markdown classifier; `run_review` grades markdown by executability.
+- **E-225** (Tier 3, D-058 §2): skills half of T-LOCATOR-001 — four SKILL.md chains through the installed resolver + standards rule (uses the E-224 classifier).
+- **E-226** (Tier 2, D-058 §4): read-only patch tools project-bound (T-PROPOSEPATCH-002).

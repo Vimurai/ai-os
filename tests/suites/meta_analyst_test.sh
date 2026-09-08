@@ -163,8 +163,11 @@ assert_status 1 "skill carries no raw SELECT statements" \
 # Locator chain for the telemetry helper smoke check.
 assert_status 0 "skill references telemetry.mjs locator chain" \
   grep -qE 'src/shared/telemetry\.mjs' "$SKILL_SRC"
-assert_status 0 "skill references installed mirror" \
-  grep -qE '\.ai-os/shared/telemetry\.mjs' "$SKILL_SRC"
+# E-225: the skill no longer spells the mirror path itself — it asks the resolver, which
+# is install-first by policy. Same INTENT (the installed helper is reachable), asserted
+# where the code now decides it.
+assert_status 0 "skill resolves telemetry via the shared install-first locator" \
+  grep -q 'ai_os_locate shared/telemetry.mjs' "$SKILL_SRC"
 
 # Skill respects AI_TELEMETRY_DISABLE rollback wiring.
 assert_status 0 "skill documents AI_TELEMETRY_DISABLE rollback" \

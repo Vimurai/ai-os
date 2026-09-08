@@ -131,6 +131,41 @@ function roleGuard(callerRole, absPath, cwd) {
 }
 
 /**
+ * E-226 (D-058 §4): how a stored row relates to THIS project.
+ *
+ * `preview_patch` called `formatDiff(patch.diff_content, patch.path)`, which STATS AND
+ * READS the stored absolute path to build a diff baseline — with no check that the path
+ * belongs to the previewing project. During the E-221 audit a secret-bearing file outside
+ * the project root was rendered straight into tool output (T-PROPOSEPATCH-002). `list` and
+ * `reject` had the same shape: rows from any project reachable in the store, giving path
+ * disclosure and cross-project queue deletion.
+ *
+ * E-221 fixed the WRITE path by re-deriving the target from `project_root` + `rel_path`.
+ * These three read-only tools were explicitly out of that ruling's scope, so they kept
+ * trusting the stored absolute path. Same derivation, same equality test, applied here.
+ *
+ * @returns {"own"|"foreign"|"legacy"} — `legacy` rows predate the E-221 columns and carry
+ *   no project at all, so they are never read from disk, only listed.
+ */
+function rowScope(patch, ownRoot) {
+  if (patch.project_root == null || patch.rel_path == null) return "legacy";
+  return canonicalRoot(patch.project_root) === ownRoot ? "own" : "foreign";
+}
+
+/** The path a row names in THIS project, or null when it does not belong here. */
+function rowTargetPath(patch, ownRoot) {
+  if (rowScope(patch, ownRoot) !== "own") return null;
+  if (patch.rel_path === "") return null;
+  return safePath(patch.rel_path, ownRoot);
+}
+
+/** basename only — never leak an absolute path from another project. */
+function rootLabel(root) {
+  const parts = String(root || "").split(/[\\/]+/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "(unknown)";
+}
+
+/**
  * Attempt to format diff_content using delta, diff --color, or plain text.
  * Returns the formatted string.
  */
@@ -256,15 +291,27 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "list_pending_patches",
       description:
-        "Lists all patches currently awaiting confirmation. " +
-        "Use to review outstanding patches before committing.",
-      inputSchema: { type: "object", properties: {} },
+        "Lists patches awaiting confirmation IN THIS PROJECT. " +
+        "Pass all:true to also list rows proposed in other projects — those are shown as " +
+        "id plus the path relative to their own root, never an absolute path, and they " +
+        "cannot be previewed against a file or rejected from here (E-226).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          all: {
+            type: "boolean",
+            description: "Include rows from other projects and legacy rows (identifiers only).",
+          },
+        },
+      },
     },
     {
       name: "preview_patch",
       description:
         "Re-displays the formatted diff for a pending patch without applying it. " +
-        "Use to re-review a patch before confirming.",
+        "For a patch proposed in ANOTHER project the stored diff is shown with a " +
+        "[FOREIGN_PROJECT] banner and no file is read, so the rendered diff has no " +
+        "baseline from disk (E-226).",
       inputSchema: {
         type: "object",
         properties: {
@@ -571,18 +618,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!db) {
         return { content: [{ type: "text", text: "✗ state.sqlite not found — run: ai init" }], isError: true };
       }
-      const patch = db.prepare("SELECT id, path, description FROM patches WHERE id = ?").get(args.patch_id);
+      const patch = db.prepare("SELECT id, path, description, project_root, rel_path FROM patches WHERE id = ?").get(args.patch_id);
       if (!patch) {
         return {
           content: [{ type: "text", text: `✗ Patch not found: '${args.patch_id}'.` }],
           isError: true,
         };
       }
+      // Rejecting is a WRITE to another project's queue: it destroys a pending patch its
+      // owner is waiting to confirm. Refuse rather than delete.
+      const rejectRoot = projectRootFor(cwd);
+      const rejectScope = rowScope(patch, rejectRoot);
+      if (rejectScope !== "own" && process.env.AI_OS_PATCH_LEGACY !== "1") {
+        return rejection(
+          rejectScope === "legacy"
+            ? `✗ [LEGACY_PATCH] Patch '${args.patch_id}' records no project root, so it cannot be verified against this project. Re-propose it here, or set AI_OS_PATCH_LEGACY=1.`
+            : `✗ [PROJECT_MISMATCH] Patch '${args.patch_id}' was proposed in '${rootLabel(patch.project_root)}', not this project — refusing to discard another project's pending patch.`
+        );
+      }
       db.prepare("DELETE FROM patches WHERE id = ?").run(args.patch_id);
       return {
         content: [{
           type: "text",
-          text: `✓ Patch rejected and discarded.\n  ID: ${args.patch_id}\n  File: ${patch.path}\n  No changes were made.`,
+          text: `✓ Patch rejected and discarded.\n  ID: ${args.patch_id}\n  File: ${patch.rel_path ?? patch.path}\n  No changes were made.`,
         }],
       };
     }
@@ -594,10 +652,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (pending.length === 0) {
         return { content: [{ type: "text", text: "No pending patches." }] };
       }
-      const lines = [`Pending patches (${pending.length}):`, ""];
+      // Own-project rows by default. `all: true` also shows foreign rows, but as
+      // id + rel_path + the root's BASENAME — never an absolute path, which is the
+      // disclosure T-PROPOSEPATCH-002 records.
+      const listRoot = projectRootFor(cwd);
+      const legacyMode = process.env.AI_OS_PATCH_LEGACY === "1";
+      const own = [], foreign = [], legacyRows = [];
       for (const p of pending) {
-        lines.push(`  ${p.id} — ${p.path}`);
+        const sc = legacyMode ? "own" : rowScope(p, listRoot);
+        if (sc === "own") own.push(p);
+        else if (sc === "legacy") legacyRows.push(p);
+        else foreign.push(p);
+      }
+      const shown = args.all ? own.length + foreign.length + legacyRows.length : own.length;
+      if (shown === 0) {
+        const hidden = foreign.length + legacyRows.length;
+        return {
+          content: [{
+            type: "text",
+            text: hidden > 0
+              ? `No pending patches for this project. (${hidden} row(s) belong to other projects or predate the boundary check — pass all:true to list them.)`
+              : "No pending patches.",
+          }],
+        };
+      }
+      const lines = [`Pending patches (${shown}):`, ""];
+      for (const p of own) {
+        lines.push(`  ${p.id} — ${legacyMode ? p.path : (p.rel_path ?? p.path)}`);
         lines.push(`    Desc: ${p.description || "(none)"} | Created: ${p.created_at}`);
+      }
+      if (args.all) {
+        for (const p of foreign) {
+          lines.push(`  ${p.id} — ${rootLabel(p.project_root)}/${p.rel_path}  [FOREIGN_PROJECT]`);
+        }
+        for (const p of legacyRows) {
+          lines.push(`  ${p.id} — (legacy row, no project recorded)  [LEGACY_PATCH]`);
+        }
+      } else if (foreign.length + legacyRows.length > 0) {
+        lines.push("", `  (${foreign.length + legacyRows.length} row(s) hidden — other projects or legacy; pass all:true)`);
       }
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
@@ -615,8 +707,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           isError: true,
         };
       }
-      const formatted = formatDiff(patch.diff_content, patch.path);
-      return { content: [{ type: "text", text: renderPatch(patch, formatted) }] };
+      // A baseline is only read for a row that belongs to THIS project. For anything
+      // else the stored diff is still shown — the operator can see what was proposed —
+      // but no file is touched, so a path from another project cannot render its
+      // contents into the output.
+      const ownRoot = projectRootFor(cwd);
+      const scope = rowScope(patch, ownRoot);
+      if (process.env.AI_OS_PATCH_LEGACY === "1") {
+        const formatted = formatDiff(patch.diff_content, patch.path);
+        return { content: [{ type: "text", text: renderPatch(patch, formatted) }] };
+      }
+      if (scope === "own") {
+        const target = rowTargetPath(patch, ownRoot);
+        const formatted = target
+          ? formatDiff(patch.diff_content, target)
+          : patch.diff_content;
+        return { content: [{ type: "text", text: renderPatch({ ...patch, path: target || patch.rel_path }, formatted) }] };
+      }
+      const banner = scope === "legacy"
+        ? "[LEGACY_PATCH] this row predates the project-boundary columns — showing the stored diff only, no file was read."
+        : `[FOREIGN_PROJECT] proposed in '${rootLabel(patch.project_root)}', not this project — showing the stored diff only, no file was read.`;
+      return {
+        content: [{
+          type: "text",
+          text: `${banner}\n\n` + renderPatch(
+            { ...patch, path: scope === "legacy" ? "(unknown — legacy row)" : `${rootLabel(patch.project_root)}/${patch.rel_path}` },
+            patch.diff_content,
+          ),
+        }],
+      };
     }
 
     default:

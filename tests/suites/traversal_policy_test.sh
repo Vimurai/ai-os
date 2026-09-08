@@ -41,7 +41,7 @@ join with a request field|+  const target = join(req.query.path, "../", name);
 concatenated user input|+  fs.readFileSync("../../" + userInput);
 variable base|+  const p = userDir + "/../" + name;
 template with a param|+  const f = `${base}/../${name}`;
-bare traversal in prose|+  // see the note above ../ nothing
+commented-out code still counts? no — see E-222.09|+  const p = userDir + "/../" + n; // note
 shell with an unknown var|+  cat "${INPUT_DIR}/../elsewhere"
 absolute /etc/|+  const cfg = "/etc/hosts";
 absolute /root/|+  open("/root/.config/thing")
@@ -65,6 +65,20 @@ install mirror root|+  local m="${AIOS}/../mcp/x.js"
 AI_OS_HOME root|+  c="${AI_OS_HOME:-$HOME/.ai-os}/../shared/y.mjs"
 CASES
 
+# ── E-222.9: a WHOLE-LINE comment is documentation, not runtime path handling ─
+# This suite originally asserted "bare traversal in prose → P0" with a `//` comment as the
+# fixture, which was wrong about its own intent: a comment cannot execute. It was found
+# when the E-224 wiring commit tripped P0 on its OWN comment — the one quoting
+# `join(req.path, "../")` as the example of what must stay blocking.
+assert_contains "E-222.09a: a // comment line is not graded"  "none" "$(_grade '+  // see ../ in the note above')"
+assert_contains "E-222.09b: a # comment line is not graded"   "none" "$(_grade '+  # resolve ../shared/x from here')"
+assert_contains "E-222.09c: a block-comment body is not graded" "none" "$(_grade '+   * the ../ case is handled below')"
+# But a comment must not excuse CODE on the same line, and strict mode grades everything.
+assert_contains "E-222.09d: a trailing comment leaves the code graded" "P0" \
+  "$(_grade '+  const p = base + "/../" + n; // fine')"
+assert_contains "E-222.09e: strict mode grades comments too" "P0" \
+  "$(_grade '+  // see ../ in the note above' strict)"
+
 # ── E-222.3: lines with no traversal at all are silent ──────────────────────
 assert_contains "E-222.03a: an ordinary line grades none" "none" "$(_grade '+  echo hello world')"
 assert_contains "E-222.03b: a removed line is ignored"     "none" "$(_grade '-  fs.read("../../" + x)')"
@@ -86,8 +100,10 @@ assert_status 0 "E-222.06a: the anchor list is exported from one module" \
   bash -c "grep -q 'export const SCRIPT_RELATIVE_ANCHORS' '$POLICY'"
 assert_status 1 "E-222.06b: run_review keeps no second copy of the regex" \
   bash -c "grep -q 'traversalPattern' '$ORCH'"
+# E-224 moved the per-line loop itself into the shared module (classifyDiffTraversal), so
+# the gate and its tests run the same code rather than two copies of the loop.
 assert_status 0 "E-222.06c: run_review delegates to the shared policy" \
-  bash -c "grep -q 'classifyTraversal(diff' '$ORCH'"
+  bash -c "grep -q 'classifyDiffTraversal(diff' '$ORCH'"
 
 # ── E-222.7: an advisory is REPORTED, never dropped ────────────────────────
 # "Downgraded to P1" must not become "silently ignored" — a reviewer still sees it.

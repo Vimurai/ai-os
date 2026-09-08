@@ -33,6 +33,8 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { resolve, relative, basename, dirname } from "node:path";
 import { spawnSync } from "node:child_process";
+// E-225 reuses the E-224 classifier so "executable markdown" has ONE definition.
+import { classifyMarkdown } from "./markdown-exec.mjs";
 
 const SERVICE = "standards-checker";
 
@@ -128,6 +130,202 @@ const SECRET_PATTERNS = [
 ];
 
 export const RULE_REGISTRY = {
+  /**
+   * E-225 (D-058 §2): an executable markdown line must not execute a helper by a cwd- or
+   * repo-relative path.
+   *
+   * `!`-prefixed lines in skill files are AUTO-EXECUTED by the harness at session start,
+   * so `for c in src/shared/incident-aggregate.mjs ...` ran the VISITED project's copy —
+   * the same defect E-223 removed from the hooks, surviving in the highest-frequency
+   * skill in the system (T-LOCATOR-001).
+   *
+   * Two things keep this from over-blocking, and both matter: it reuses the E-224
+   * classifier rather than its own idea of "executable" (so the review gate and this rule
+   * cannot disagree), and it only counts paths with an EXECUTABLE EXTENSION. A skill
+   * reading `src/db/schema.sql`, grepping `src/`, or `test -f src/claude/agents/x.md` is
+   * handling the project's own data and is none of this rule's business — a scan of the
+   * tree found 23 executable lines mentioning `src/` and only 5 that actually executed a
+   * framework helper.
+   */
+  skill_locator_install_first(ctx) {
+    if (process.env.AI_OS_STANDARDS_SKIP === "skill-locator") return null;
+    let executable;
+    try {
+      ({ executable } = classifyMarkdown(ctx.content, ctx.relPath));
+    } catch {
+      return null; // classifier unavailable — never invent a violation
+    }
+    if (!executable || executable.size === 0) return null;
+
+    // The question the rule asks: does this line hand an INTERPRETER a path the VISITED
+    // PROJECT controls?
+    //
+    // THE INVOCATION IS TOKENISED, NOT REGEX-MATCHED. Four audit rounds each found a new
+    // hole in a single-regex parser — an unparsed `--flag=value` silently ended the scan
+    // for the whole line, `$'…'` and unquoted code defeated the inline-code strip,
+    // backticks terminated the token — and the shapes were not running out. A tokeniser
+    // answers all of them at once because it stops trying to describe every invocation
+    // shape in one pattern: split on whitespace, drop the flags, look at what is left.
+    const INTERPRETERS = new Set([
+      "node", "bash", "sh", "zsh", "ksh", "dash",
+      "python", "python3", "perl", "ruby", "source", ".",
+      "tsx", "ts-node", "deno", "bun",
+    ]);
+    // Flags whose OPERAND is code, not a path.
+    const INLINE_CODE_FLAG = /^-{1,2}(e|c|p|eval|print|exec|X)$/;
+    // Shell keywords that introduce command position, so `then . src/bin/ai` is a source.
+    const CMD_KEYWORDS = new Set(["then", "do", "else", "elif", "in", "{", "!", "&&", "||", ";", "|", "("]);
+
+    /**
+     * Split a line into shell-ish tokens, keeping quoted runs together. Good enough to
+     * find the operand of a command — it is not a shell parser and does not need to be.
+     */
+    const tokenise = (t) => {
+      const toks = [];
+      let i = 0;
+      while (i < t.length) {
+        if (/\s/.test(t[i])) { i++; continue; }
+        // A token runs to the next UNQUOTED whitespace. Quotes group whitespace INSIDE a
+        // token, they do not end it: `` `pwd`/src/shared/evil.mjs `` is one shell word,
+        // and ending the token at the closing backtick split the root away from the path
+        // so the operand read as a harmless `pwd`.
+        let j = i;
+        while (j < t.length && !/\s/.test(t[j])) {
+          const ch = t[j];
+          if (ch === '"' || ch === "'" || ch === "`") {
+            const q = ch;
+            j++;
+            while (j < t.length && (t[j] !== q || t[j - 1] === "\\")) j++;
+            j++;                       // consume the closing quote
+            continue;
+          }
+          j++;
+        }
+        toks.push(t.slice(i, j));
+        i = j;
+      }
+      return toks;
+    };
+
+    // `${PWD}` / `$(pwd)` / backtick-pwd / `$OLDPWD` all name the VISITED PROJECT's root,
+    // so they are project-CONTROLLED rather than a safe absolute anchor.
+    const PROJECT_ROOTED = /^[`$][{(]?\s*(PWD|OLDPWD|pwd|git\s+rev-parse)/;
+
+    // Trailing shell punctuation is not part of the path. The tokeniser splits on
+    // whitespace only, so `bash tests/run.sh; echo done` yields the operand
+    // `tests/run.sh;` — which then missed the allowlist and FLAGGED an entrypoint the
+    // rule explicitly permits. An over-block on a permitted shape is how a commit gate
+    // teaches people to bypass it, which is the failure this whole sprint kept removing.
+    const trimOperand = (t) => String(t).replace(/^["'`]+/, "").replace(/["'`]+$/, "").replace(/[;&|)]+$/, "");
+
+    const isProjectControlled = (raw) => {
+      const rawTok = String(raw);
+      const t = trimOperand(rawTok);
+      if (/^\d*[<>]/.test(t)) return false;              // a redirect, not a path
+      // Tested on the RAW token as well: the leading backtick IS the marker, so stripping
+      // quotes first hid `` `pwd`/src/... `` from the project-root check.
+      if (PROJECT_ROOTED.test(rawTok) || PROJECT_ROOTED.test(t)) return true;
+      if (t.startsWith("-")) return false;               // a flag
+      if (t.startsWith("/")) return false;               // absolute
+      if (t.startsWith("~")) return false;               // home
+      if (/^\$/.test(t)) return false;                   // a variable we cannot read
+      // A path carries a separator or an extension. Without this the bare fd `2` left by
+      // `2>/dev/null` qualified. Trade-off recorded in T-LOCATOR-001 KNOWN UNCAUGHT:
+      // an extension-less bare word like `bash setup` is no longer caught.
+      return /[./]/.test(t);
+    };
+
+    const ACCEPTED = [
+      /^tests\/run\.sh$/,
+      /^tests\/suites\/[\w.@<>-]+\.sh$/,
+      /^package\.json$/,
+    ];
+    const SELF_AUTHORED = /(^|\/)bug-reproducer\/SKILL\.md$/.test(ctx.relPath)
+      ? [/^repro\.sh$/]
+      : [];
+    const isAccepted = (raw) => {
+      const t = trimOperand(raw).replace(/^\.\//, "");
+      if (t.split("/").some((seg) => seg === "..")) return false;
+      return [...ACCEPTED, ...SELF_AUTHORED].some((re) => re.test(t));
+    };
+
+    // SECOND SIGNAL: a locator chain puts the path in a LIST and hands the interpreter a
+    // variable — `for c in src/shared/x.mjs; do node "$c"; done` — so an operand test
+    // alone misses the original defect.
+    const BARE_EXEC_PATH =
+      /(^|[\s"'`(=:}])((?:\.\.?\/)?(?:[\w.@-]+\/)*[\w.@-]+\.(?:mjs|cjs|js|sh|bash|py|pl|rb))\b/;
+
+    const COMMENT = /^\s*(#|\/\/|\*)/;
+    const out = [];
+    for (const num of executable) {
+      const line = ctx.lines[num - 1] ?? "";
+      if (COMMENT.test(line)) continue;
+
+      const toks = tokenise(line);
+      let bad = null;
+      let invokes = false;
+
+      for (let i = 0; i < toks.length && !bad; i++) {
+        // Strip a leading `!` (the harness prefix) and any `Label:` before the command.
+        const word = toks[i].replace(/^!+/, "").replace(/^[^:\s]*:$/, "");
+        // Match on the BASENAME: `/usr/local/bin/node` and `./node_modules/.bin/tsx` are
+        // the same invocation as `node`, and an exact-match set never sees them.
+        const base = word.replace(/^["'`]+/, "").split("/").pop();
+        if (!INTERPRETERS.has(word) && !INTERPRETERS.has(base)) continue;
+        // `.` counts only in command position — otherwise every `find . -name` reads as a
+        // source, which over-blocked 33 files when `.` was a bare regex alternative.
+        if (word === "." || base === ".") {
+          const prev = i > 0 ? toks[i - 1].replace(/^!+/, "") : "";
+          const atCmdPos = i === 0 || CMD_KEYWORDS.has(prev) || /[;&|({!]$/.test(prev) || prev.endsWith(":");
+          if (!atCmdPos) continue;
+        }
+        invokes = true;
+        // Walk the operands: skip flags, and skip the operand of an inline-code flag.
+        for (let j = i + 1; j < toks.length; j++) {
+          const t = toks[j];
+          if (/^-/.test(t)) {
+            if (INLINE_CODE_FLAG.test(t.split("=")[0])) j++;   // its operand is CODE
+            continue;
+          }
+          if (/^[;&|)]/.test(t)) break;                         // end of this command
+          if (isProjectControlled(t) && !isAccepted(t)) {
+            bad = trimOperand(t);
+            break;
+          }
+          // Keep walking — but only within THIS command. Breaking unconditionally after
+          // the first non-flag token stopped the scan on an operand that was merely
+          // REJECTED ("a variable we cannot read") or ACCEPTED (allowlisted), so
+          // `node "$HELPER" src/bin/ai` and `bash tests/run.sh src/bin/ai` went clean.
+          //
+          // A token ENDING in a terminator ends the command, and that matters: without
+          // it the walk ran on past `. "${HOME}/…/locate.sh";` into the NEXT command and
+          // read the resolver's own logical argument (`shared/x.mjs`) as a path — an
+          // over-block on the exact line this task ships. Walking further than the shell
+          // would is how a scan invents a finding.
+          if (/[;&|)]$/.test(t)) break;
+        }
+      }
+
+      if (!bad && invokes) {
+        const scrubbed = line.replace(
+          /ai_os_locate\s+(["'`]?)([\w@-]+\/[\w.@-]+)\1/g,
+          "ai_os_locate _",
+        );
+        const bare = BARE_EXEC_PATH.exec(scrubbed);
+        if (bare && isProjectControlled(bare[2]) && !isAccepted(bare[2])) bad = bare[2];
+      }
+      if (!bad) continue;
+
+      out.push({
+        rule_id: ctx.rule.rule_id,
+        severity: "error",
+        line: num,
+        detail: `executable markdown hands an interpreter a project-controlled path ('${bad}') — resolve it with ai_os_locate: ${line.trim().slice(0, 70)}`,
+      });
+    }
+    return out.length ? out : null;
+  },
+
   file_size_limit_lines(ctx) {
     const n = ctx.lines.length;
     const warn = ctx.rule.warn_threshold ?? 500;

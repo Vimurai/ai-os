@@ -762,3 +762,49 @@ E-220 found three `git rev-parse --show-toplevel` locators in `src/bin/ai` that 
 (1) Accept legacy absolute records with `AI_OS_PATCH_LEGACY=1`. (2) `AI_OS_REVIEW_STRICT_TRAVERSAL=1` restores the flat regex. (3) `AI_OS_LOCATE_DEV=1` restores dev-tree-first. (4) documentation only.
 
 ---
+
+---
+
+## [[D-058]] — Locator Class Closure in Skills; Executable-Markdown Policy; Project-Bound Read-Only Patch Tools; argv Rollback Ratified; Tier 3 Acceptance = Threat Property
+
+**Date**: 2026-09-07
+**Task**: E-225, E-226, E-224 (Engineer handoff 2026-09-07, E-221..E-223 complete)
+**Decision**: (§1) Ratify the E-223 deviation: the dev-tree rollback is `ai --dev-tree` (argv), and D-057 §3's `AI_OS_LOCATE_DEV=1` sentence is superseded. (§2) Fund closure of T-LOCATOR-001 in the skills and make "no cwd-relative framework execution in any markdown" a standards-checker rule. (§3) `run_review` grades markdown by executability, not by extension. (§4) Fund T-PROPOSEPATCH-002: the read-only patch tools are project-bound. (§5) Tier 3 acceptance is the threat entry's property; pre-authorised in-boundary widening replaces a re-filing round trip.
+
+### §1 — D-057 §3 deviation: RATIFIED
+An environment variable cannot be the rollback for an env-borne attack: a project's `.claude/settings.json` `env` block is inherited by hooks and is written by `ai init`, so env is attacker-supplied at the same capability level as the repo. `ai --dev-tree` (argv) carries the same capability and cannot be supplied by a settings file. The hooks' own `AI_OS_LOCATE_UNTRUSTED_ENV=1` and the installer-written workspace file are the trust roots. D-057 §3's rollback sentence is superseded by this section; the parity blueprint's helper table is amended.
+
+### §2 — T-LOCATOR-001 in skills: FUND (E-225, Tier 3) + standards rule
+Four `SKILL.md` files (and their `.claude/`/`.agents/` mirrors) execute framework helpers cwd-relative, one of them an auto-executed `!` line in `ai-preflight`, which every session runs. Ruling: every executable line in a skill or agent file resolves helpers through the installed resolver — `. "${HOME}/.ai-os/shared/locate.sh"` with `AI_OS_LOCATE_UNTRUSTED_ENV=1`, then `ai_os_locate <helper>` — and never through a cwd-relative or repo-relative path. The E-80 standards checker gains a rule: any `!`-prefixed line or executable fenced block in `src/**/SKILL.md` / `src/**/agents/*.md` that references `src/` or `./` for execution is a FAIL. The `ai-preflight` line is fixed first and mirrored byte-identically.
+
+### §3 — Documentation vs executable markdown: GRADE BY EXECUTABILITY (E-224, Tier 2)
+`run_review` currently grades prose in `DECISIONS.md` as code (the D-057 text quoting `join(req.path, "../")` trips P0), while a blanket `.md` skip would blind the gate to the `!` lines from §2. Ruling — one classifier, shared by the review gate and the §2 standards rule:
+- **Executable markdown lines** = `!`-prefixed lines in skill/agent files, and lines inside fenced blocks whose tag is an executable language (`bash`, `sh`, `zsh`, `js`, `mjs`, `javascript`, `python`, `node`). These are graded as code (P0 PATH_TRAVERSAL rules apply, including the E-222 anchor exemptions).
+- **Everything else in markdown** (prose, untagged/`text`/`json`/`md` fences, inline code) is documentation: PATH_TRAVERSAL does not fire; HARDCODED_SECRET still fires (a pasted credential in a doc is a leak regardless of context).
+- `.ai/DECISIONS.md`, `COMM.md`, `LOG.md`, `DIGEST.md`, `THREAT_MODEL.md` and `.ai/blueprints/*.md` contain no executable lines by construction; a `!`-line appearing there is itself a FAIL.
+
+### §4 — T-PROPOSEPATCH-002: FUND (E-226, Tier 2)
+`preview_patch` reads the stored path to build a baseline; `list_pending_patches` and `reject_patch` operate on rows from any project. Ruling: all three derive the target from `project_root` + `rel_path` and require project equality with their own root. On mismatch: `preview_patch` renders the stored diff only (no file read, banner `[FOREIGN_PROJECT] baseline not shown`), `reject_patch` refuses (`[PROJECT_MISMATCH]`), `list_pending_patches` shows only own-project rows by default and, with `all: true`, foreign rows as id + `rel_path` + `project_root` basename only — never an absolute path. Legacy rows (no `project_root`) are listed as `legacy`, never read.
+
+### §5 — Tier 3 acceptance = the threat property (process ruling)
+Three of E-223's five audit rounds found holes the fix introduced; both Tier 3 rulings' stated scope was "the easy half", and the signed-off property was still false after implementing the ruling exactly. Ruling: a Tier 3 task is DONE when the **property named in its THREAT_MODEL entry** holds under the negative test, not when the ruling's letter is implemented. When implementing the letter leaves the property false, the Engineer is **pre-authorised to widen within the same boundary files and the same threat entry**, reporting the widening in the handoff; only new files, new tools or a new threat class require filing. The ruling gives the shape; the threat entry gives the property.
+
+### Alternatives considered
+1. **§1: keep the env rollback and document the risk** — rejected; a documented hole in a fail-closed gate is still a hole.
+2. **§3: skip `.md` entirely (as the coverage check does)** — rejected; blinds the gate to auto-executed lines. **§3: grade all `.md` as code** — rejected; the Architect's decision log would need to avoid quoting attack patterns.
+3. **§4: fold into E-221** — rejected at the time by the Engineer, correctly; D-057 §1 scoped the read-only tools as unchanged.
+4. **§5: keep strict letter-of-ruling scope** — rejected; it cost two extra Tier 3 rounds per task while the property was measurably false.
+
+### Constraints driving this decision
+- Env is untrusted wherever a project can write a settings file (T-LOCATOR-001 audit).
+- Gates must not block the project's own documentation idiom (D-056 R3, D-057 §2 lineage).
+- Two-phase and read-only tools re-validate against their own project (D-057 §1 pattern).
+
+### Impact
+- Unlocks: E-225 (T3, `security_engineer`), E-226 (T2), E-224 (T2). Execution order E-224 → E-225 → E-226 so the classifier exists before the standards rule that uses it.
+- Risk if wrong: §2 breaks skills on a host with no `~/.ai-os` install — acceptable, that host has no framework either; the skill prints "(helper unavailable)" as today.
+
+### Rollback
+§1 none (argv only). §2 revert the four SKILL.md lines; the standards rule is gated by `AI_OS_STANDARDS_SKIP=skill-locator`. §3 `AI_OS_REVIEW_STRICT_TRAVERSAL=1` (already exists) grades all lines as code. §4 `AI_OS_PATCH_LEGACY=1` restores unbounded reads. §5 process only.
+
+---

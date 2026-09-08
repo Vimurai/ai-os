@@ -14,7 +14,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { instrument } from "../../shared/mcp-telemetry.mjs";
-import { classifyTraversal } from "../../shared/traversal-policy.mjs";
+import { classifyDiffTraversal } from "../../shared/traversal-policy.mjs";
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
@@ -357,20 +357,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         checks.push({ id: "HARDCODED_SECRET", severity: "P0", status: "FAIL", detail: secretMatches[0] });
       }
 
-      // Check 2: Path traversal — context-aware since E-222 (D-057 §2).
+      // Check 2: Path traversal — context-aware since E-222 (D-057 §2), and applied
+      // only to EXECUTABLE lines since E-224 (D-058 §3).
       //
-      // This was one flat regex: any added line containing `../` was a P0 that BLOCKED
-      // the commit. That is right for a path assembled from runtime input and wrong for
-      // resolving a file relative to the script that needs it — it blocked E-220's fix
-      // for a real vulnerability, on an idiom already present at four other sites in the
-      // same file. A gate that fires on correct code teaches people to route around it.
+      // E-222 made the check anchor-aware. E-224 makes it file-aware, because grading
+      // prose as code blocked the Architect's own D-057 text: it QUOTES
+      // `join(req.path, "../")` as the example of what must stay blocking, and the gate
+      // dutifully blocked the document describing the gate.
       //
-      // `/etc/` and `/root/` stay P0. A `../` anchored to a script-relative base is P1
-      // ADVISORY — still reported, so no traversal disappears from the review; only the
-      // blocking changes. The policy and its anchor list live in one place
-      // (src/shared/traversal-policy.mjs) so the checker and the fixtures cannot drift.
-      const traversal = classifyTraversal(diff, {
-        strict: process.env.AI_OS_REVIEW_STRICT_TRAVERSAL === "1",
+      // The obvious fix — skip `.md` — is the dangerous one: skill files carry
+      // `!`-prefixed lines the harness AUTO-EXECUTES at session start, and one of them
+      // resolves a helper cwd-relative (T-LOCATOR-001). Skipping markdown would blind the
+      // gate to the only markdown that actually runs. So `src/shared/markdown-exec.mjs`
+      // decides per line, and non-markdown files are graded in full as before.
+      const strictTraversal = process.env.AI_OS_REVIEW_STRICT_TRAVERSAL === "1";
+      const { traversal, proseExec } = classifyDiffTraversal(diff, {
+        strict: strictTraversal,
+        readFile: (f) => readFileSync(resolve(cwd, f), "utf8"),
       });
       if (traversal) {
         checks.push({
@@ -378,8 +381,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           severity: traversal.severity,
           status: traversal.severity === "P0" ? "FAIL" : "WARN",
           detail: traversal.anchor
-            ? `${traversal.detail}  (anchored to ${traversal.anchor} — advisory)`
-            : traversal.detail,
+            ? `${traversal.file}:${traversal.line} ${traversal.detail}  (anchored to ${traversal.anchor} — advisory)`
+            : `${traversal.file}:${traversal.line} ${traversal.detail}`,
+        });
+      }
+      if (proseExec.length > 0) {
+        checks.push({
+          id: "EXECUTABLE_IN_PROSE",
+          severity: "P0",
+          status: "FAIL",
+          detail: `auto-executed '!' line in documentation: ${proseExec.slice(0, 3).join(", ")}`,
         });
       }
 

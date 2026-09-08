@@ -10,7 +10,12 @@
       "warn_threshold": 500,
       "description": "Source files MUST stay ≤ 1000 lines (warn at 500). Beyond that, split into focused modules under src/shared/ per blueprint §Core Concept Delegated Architecture.",
       "auto_fix_available": false,
-      "applies_to": ["src/**/*.js", "src/**/*.mjs", "src/**/*.ts", "src/**/*.tsx"]
+      "applies_to": [
+        "src/**/*.js",
+        "src/**/*.mjs",
+        "src/**/*.ts",
+        "src/**/*.tsx"
+      ]
     },
     {
       "rule_id": "mcp_stdout_purity",
@@ -18,7 +23,10 @@
       "threshold": 0,
       "description": "src/mcp/** files MUST NOT call console.log() or console.info() — stdout is reserved for JSON-RPC frames. Use the structured stderr logger (src/mcp/shared/logger.js) instead. Mirrors E-48 pre-commit gate.",
       "auto_fix_available": false,
-      "applies_to": ["src/mcp/**/*.js", "src/mcp/**/*.mjs"]
+      "applies_to": [
+        "src/mcp/**/*.js",
+        "src/mcp/**/*.mjs"
+      ]
     },
     {
       "rule_id": "no_committed_tmp_files",
@@ -26,7 +34,9 @@
       "threshold": 0,
       "description": "Staged paths MUST NOT end in .tmp, .bak, .swp, or .orig. Strip editor/merge cruft before committing.",
       "auto_fix_available": true,
-      "applies_to": ["**/*"]
+      "applies_to": [
+        "**/*"
+      ]
     },
     {
       "rule_id": "kebab_case_filenames",
@@ -34,7 +44,12 @@
       "threshold": 0,
       "description": "Source filenames under src/ SHOULD be kebab-case (memory-batch-scanner.mjs) or single-camelCase (memoryCurator.md). Mixed_Snake.Case is forbidden — breaks ESM resolver case-sensitivity guarantees across platforms.",
       "auto_fix_available": false,
-      "applies_to": ["src/**/*.js", "src/**/*.mjs", "src/**/*.ts", "src/**/*.tsx"]
+      "applies_to": [
+        "src/**/*.js",
+        "src/**/*.mjs",
+        "src/**/*.ts",
+        "src/**/*.tsx"
+      ]
     },
     {
       "rule_id": "no_secrets_in_diff",
@@ -42,8 +57,13 @@
       "threshold": 0,
       "description": "Refuse to commit obvious secret patterns: AWS access keys (AKIA…), Stripe live keys (sk_live_…), Slack tokens (xox[bp]-…), GitHub PATs (ghp_…/ghs_…), or BEGIN PRIVATE KEY blocks. Defence-in-depth alongside identity_guardian. Test files under tests/** are exempted — they document detection fixtures that must contain the patterns verbatim.",
       "auto_fix_available": false,
-      "applies_to": ["**/*"],
-      "applies_to_excludes": ["tests/**", ".ai/**"]
+      "applies_to": [
+        "**/*"
+      ],
+      "applies_to_excludes": [
+        "tests/**",
+        ".ai/**"
+      ]
     },
     {
       "rule_id": "mandatory_shared_helper",
@@ -51,7 +71,23 @@
       "threshold": 0,
       "description": "Files under src/mcp/** importing node:sqlite directly SHOULD go through src/shared/wal-flusher.mjs or src/mcp/shared/state-db.js — duplicating SQLite plumbing fragments the schema-bootstrap contract (P-13, E-79). Per blueprint §Core Concept Mandatory reuse of src/shared/.",
       "auto_fix_available": false,
-      "applies_to": ["src/mcp/**/*.js", "src/mcp/**/*.mjs"]
+      "applies_to": [
+        "src/mcp/**/*.js",
+        "src/mcp/**/*.mjs"
+      ]
+    },
+    {
+      "rule_id": "skill_locator_install_first",
+      "severity": "error",
+      "threshold": 0,
+      "description": "An EXECUTABLE markdown line (a `!`-prefixed line in a skill/agent file, or a line inside a bash/js/python fence) must not execute a helper by a cwd- or repo-relative path. `!`-lines are auto-executed at session start, so a chain beginning src/shared/x.mjs runs the VISITED project's copy — T-LOCATOR-001. Resolve through `ai_os_locate` after sourcing ${HOME}/.ai-os/shared/locate.sh. Only paths with an EXECUTABLE extension count: reading the project's own src/db/schema.sql or grepping src/ is legitimate and must not be flagged. Bypass: AI_OS_STANDARDS_SKIP=skill-locator.",
+      "auto_fix_available": false,
+      "applies_to": [
+        "src/**/SKILL.md",
+        "src/**/agents/*.md",
+        ".claude/skills/**/SKILL.md",
+        ".agents/skills/**/SKILL.md"
+      ]
     }
   ]
 }

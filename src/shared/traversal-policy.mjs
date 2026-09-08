@@ -25,6 +25,8 @@
  * exported constant so the policy has a single definition and the fixtures can enumerate
  * it — a second copy in the checker is how the two would drift apart.
  */
+import { classifyMarkdown, addedLines, isProseOnlyFile, isGeneratedRecord } from "./markdown-exec.mjs";
+
 /**
  * Build an anchor matcher: the base pattern, then only the characters that can
  * legitimately sit between a script-relative base and the `../` it prefixes.
@@ -56,6 +58,14 @@ export const SCRIPT_RELATIVE_ANCHORS = [
   { name: "install mirror",   re: anchored(/(\$\{?AIOS\}?|\$\{?AI_OS_HOME[^}]*\}?|\.ai-os|\$\{?HOME\}?)/) },
   // node's own "resolve relative to this module" idiom.
   { name: "new URL(...)",     re: /new URL\(\s*["'`]?$/ },
+  // A STATIC MODULE SPECIFIER is script-relative by definition — the runtime resolves it
+  // against the importing module, never against cwd or any input. `import x from "../y"`
+  // is the purest anchored case there is, and it was missing: the E-224 wiring commit
+  // tripped P0 on its own import line. The quote must follow the keyword immediately, so
+  // `require(userInput + "../")` still has no anchor and stays blocking.
+  // Built with anchored() so a MULTI-LEVEL specifier works: in "../../shared/y.mjs"
+  // every `../` must be anchored, and the second one is not adjacent to the quote.
+  { name: "module specifier", re: anchored(/\b(from|import|require)\s*\(?\s*["'`]/) },
 ];
 
 const RUNTIME_P0 = /(\/etc\/|\/root\/)/;
@@ -64,9 +74,25 @@ const RUNTIME_P0 = /(\/etc\/|\/root\/)/;
  * Grade one added diff line.
  * @returns {{severity: "P0"|"P1"|null, detail: string, anchor?: string}}
  */
+/**
+ * A whole-line comment. Not executed, so not runtime path handling — the same principle
+ * D-058 §3 applies to markdown prose, applied consistently one level in.
+ *
+ * This was found the hard way: the E-224 wiring commit tripped P0 on its OWN comment,
+ * which quotes `join(req.path, "../")` as the example of what must stay blocking. The
+ * original E-222 fixture asserted "bare traversal in prose → P0" and that fixture was
+ * wrong about its own intent — it was describing a COMMENT, which cannot execute.
+ *
+ * Only WHOLE-line comments. A trailing comment on a code line leaves the line graded,
+ * because the code on it is still code.
+ */
+const WHOLE_LINE_COMMENT = /^\+?\s*(\/\/|#|\*|\/\*|<!--)/;
+
 export function classifyTraversalLine(line, { strict = false } = {}) {
   const text = String(line ?? "");
   const detail = text.trim().slice(0, 80);
+
+  if (!strict && WHOLE_LINE_COMMENT.test(text)) return { severity: null, detail };
 
   // Absolute system paths are never anchored to anything and stay P0 in both modes.
   if (RUNTIME_P0.test(text)) return { severity: "P0", detail };
@@ -91,6 +117,9 @@ export function classifyTraversalLine(line, { strict = false } = {}) {
 /**
  * Grade a whole diff. Returns the worst severity found plus its detail, or null.
  * Added lines only (`^+` and not `+++`), matching the original check.
+ *
+ * Line-shape only — no file awareness. `classifyDiffTraversal` below is what the review
+ * gate uses; this remains for callers grading a blob of lines.
  */
 export function classifyTraversal(diff, { strict = false } = {}) {
   const added = String(diff ?? "").split("\n").filter((l) => /^\+[^+]/.test(l));
@@ -101,4 +130,48 @@ export function classifyTraversal(diff, { strict = false } = {}) {
     if (v.severity === "P1" && !advisory) advisory = v;
   }
   return advisory;
+}
+
+/**
+ * Grade a diff the way `run_review` does: per file, per line, markdown-aware (E-224).
+ *
+ * Exported so the review gate and its tests run THE SAME CODE. A test that re-implements
+ * the loop it is checking certifies the copy, not the shipped behaviour — E-219 F4 was
+ * exactly that, an inline duplicate of a guard asserting the bug was fine.
+ *
+ * @param {string} diff
+ * @param {{ strict?: boolean, readFile: (relPath: string) => string }} opts
+ *   `readFile` must throw for a path it cannot read; unreadable files are graded in full
+ *   (fail closed — an unclassifiable file must not become an exempt one).
+ * @returns {{ traversal: object|null, proseExec: string[] }}
+ */
+export function classifyDiffTraversal(diff, { strict = false, readFile } = {}) {
+  const cache = new Map();
+  const classify = (f) => {
+    if (!cache.has(f)) {
+      let parsed;
+      try { parsed = classifyMarkdown(readFile(f), f); }
+      catch { parsed = { executable: null, bangLines: [] }; }
+      cache.set(f, parsed);
+    }
+    return cache.get(f);
+  };
+
+  let worst = null;
+  const proseExec = [];
+  for (const { file, line, text } of addedLines(diff)) {
+    const isMd = file.endsWith(".md");
+    if (isGeneratedRecord(file) && !strict) continue;
+    let grade = true;
+    if (isMd && !strict) {
+      const { executable } = classify(file);
+      grade = executable === null ? true : executable.has(line);
+    }
+    if (isMd && isProseOnlyFile(file) && /^\+\s*!/.test(text)) proseExec.push(`${file}:${line}`);
+    if (!grade) continue;
+    const v = classifyTraversalLine(text, { strict });
+    if (v.severity === "P0") { worst = { ...v, file, line }; break; }
+    if (v.severity === "P1" && !worst) worst = { ...v, file, line };
+  }
+  return { traversal: worst, proseExec };
 }
