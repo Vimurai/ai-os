@@ -600,13 +600,50 @@ the rule's silence for a clean bill:
     eval "bash src/bin/ai"                   same, via eval
     node <<'EOF' … EOF                       the program arrives on stdin (heredoc)
 
-The `bash -c "…"` family is the one worth funding: the tokeniser correctly keeps the
-quoted run as one word and correctly skips an inline-code operand as CODE, so nothing
-inside it is examined and an extension-less target survives (an `.mjs` target is still
-caught by the second signal). The fix is to re-tokenise a skipped code operand and scan it
-recursively, depth 1 — cheap, but it is the change most likely to resurrect an over-block,
-and the shipped surface has none of these shapes. Filed rather than landed at the end of a
-five-round review; see the E-225 handoff.
+**FIXED by E-231 (D-060 §2).** The `bash -c "…"` family and the pipe-fed family are now
+caught. A skipped inline-code operand is RE-TOKENISED and scanned recursively at depth 1,
+`eval`'s operand is treated as code rather than as a path, and a pipeline whose SINK is an
+interpreter (directly, or via `xargs`) has the tokens LEFT of the pipe scanned, because
+that is where the program sits when it arrives on stdin. Caught now:
+
+    bash -c "node src/bin/ai"      sh -c '…'      zsh -c "…"      ksh -c "…"
+    eval "bash src/bin/ai"         cat src/bin/ai | bash          … | sh
+    ls src/shared/helper.mjs | xargs node
+
+Depth is CAPPED AT 1 on purpose: `bash -c "bash -c \"…\""` is not caught. Deeper nesting
+buys shapes nobody writes and adds another chance to invent a finding. The cap is asserted
+in `operand_retokenise_test.sh` (E-231.04b) so it reads as a decision rather than an
+oversight.
+
+Fixtures were written BEFORE the change, as D-060 §2 required, and earned their keep
+immediately: the first implementation passed every catch case and OVER-BLOCKED
+`bash -c "node \"${HOME}/.ai-os/shared/x.mjs\""`. Inside a double-quoted operand a nested
+quote arrives escaped, so the token began with a backslash and defeated the "variable we
+cannot read" test. Treated as a regression and fixed by un-escaping quotes when a code
+operand is re-tokenised, not by narrowing the catch set. Verified over the whole corpus:
+297 markdown files, ZERO new findings versus the pre-E-231 rule.
+
+**STILL UNCAUGHT after E-231** — asserted as uncaught in E-231.05 so the rule's silence is
+never mistaken for a clean bill, and so that closing one of them fails a test and forces
+this section to be updated with it:
+
+    find . -name "*.mjs" -exec node {} \;   the target is `{}`, expanded by find
+    bash setup                              no separator and no extension (E-225 trade-off)
+    node <<'EOF' … EOF                      the program arrives on stdin, spanning lines
+
+**PRE-EXISTING FALSE POSITIVE, unrelated to E-231 but found by its corpus scan and
+recorded rather than left to ambush the next editor:** `memory_curator.md` lines 178-179
+are flagged, and `src/**/agents/*.md` IS in the rule's `applies_to`, so anyone who edits
+that file will be blocked by the commit gate.
+
+    node "${AIOS}/shared/memory-worker-pool.mjs" --dlq-show .ai/memory/dlq.json
+
+The program is correctly resolved through `${AIOS}`; `.ai/memory/dlq.json` is a DATA
+argument to a `--dlq-show` flag, not a program. The operand walk continues past the first
+operand on purpose (so `bash tests/run.sh src/bin/ai` is still seen), and that deliberate
+choice is what makes a trailing data path look like a target. Six hits, identical before
+and after E-231. Fixing it means teaching the walk which operands are arguments rather
+than programs, which is a change to the E-225 rule's core and needs its own ruling.
 
 The `bash setup` entry is a TRADE-OFF a fix introduced, recorded so nobody "restores" the earlier
 behaviour and reopens what it fixed: requiring a path to carry a `/` or a `.` is what stops
