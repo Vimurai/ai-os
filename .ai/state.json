@@ -1458,12 +1458,12 @@
     {
       "id": "E-228",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Finish the 'ai start' surface per D-059: add 'ai start --status' (project panes with role/title/command and watcher lock holder) and 'ai start --kill' (tear down the project window, watcher first, confirm unless --yes); add an 'ai doctor' line reporting start readiness (tmux present, roles mapped, providers on PATH); update README.md and CONTRIBUTING.md tmux workflow docs to point at 'ai start' (closes the cli-collapse 'Tmux Documentation' item) and print an 'ai start' hint at the end of 'ai install'/'ai init'. Acceptance: doctor + start suites green; docs mention the manual fallback recipe; mirrors synced.",
       "created_at": "2026-09-09T10:33:41.097Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-09T18:09:02.654Z",
+      "summary": "`ai start --status` (panes + watcher reported by its LOCK, exits 0 when idle) and `--kill` (watcher first with a wait; REFUSES without --yes on non-interactive stdin), doctor readine …[full in LOG.md]",
       "depends_on": [
         "E-227"
       ],
@@ -3118,6 +3118,13 @@
       "task_id": "E-231",
       "timestamp": "2026-09-09T17:14:07.403Z",
       "summary": "E-231 Tier-2: full suite 4286/0, operand_retokenise 35/0, skill_locator unchanged 169/0. Fixtures written BEFORE the change per D-060 §2; baseline 5 uncaught/0 over-blocked, and the guard then caught a regression I introduced (escaped inner quotes made a ${HOME}-anchored path read as project-controlled) — fixed at the cause, not by narrowing the catch set. Final 0 uncaught / 0 over-blocked. Depth capped at 1 and three residual shapes asserted AS uncaught, so limits are decisions on the record. Corpus: 297 md files, ZERO new findings vs the pre-E-231 rule; the 6 memory_curator hits are PRE-EXISTING (a .json data argument read as a program) and recorded in THREAT_MODEL as needing its own ruling. The single P0 (PATH_TRAVERSAL) is again the stale-process artifact — on-disk classifier grades the line P1/anchor=self_dir."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-228",
+      "timestamp": "2026-09-09T17:41:40.114Z",
+      "summary": "E-228 Tier-1: full suite 4317/0, ai_start_surface 31/0, ai_start 49/0. `ai start --status` reports panes plus the watcher BY ITS LOCK (a pane title proves nothing; the lock enforces single-writer) and distinguishes a live holder from a stale one; exits 0 when idle so callers need no `|| true`. `--kill` stops the watcher first and waits (it releases the lock from an EXIT trap; killing the window first leaves the stale lock E-229 spent a sprint on), and REFUSES with exit 2 without --yes on non-interactive stdin — no prompt exists in a pipeline, so silence must not read as consent. Suite pins the window SURVIVES the refusal, not just that a message printed. doctor reports tmux/roles/provider-on-PATH separately. README keeps the manual recipe (tmux-less hosts still need it). Fixed my own probe bug: `grep -c` prints 0 AND exits 1, so `|| printf 0` yielded \"0\\n0\"."
     }
   ],
   "deltas": [
