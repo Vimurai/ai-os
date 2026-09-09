@@ -3119,6 +3119,268 @@ fi
 #      deterministically (E-209) instead of guessing from a drifting summary title
 #
 # Usage: ai pane <architect|engineer> [-- <extra provider args>]
+# ── E-227 (D-059, cli-collapse.md §`ai start`): the Triad launcher ───────────
+#
+# COMPOSITION ONLY. `ai start` runs exactly two things it does not own — `ai pane <role>`
+# and `ai watch`, both from the installed `ai`. It never launches a provider binary
+# directly (`ai pane` owns role binding, title pinning and the launch argv) and never runs
+# a project-supplied script: the visited project must not be able to choose what a
+# launcher executes, which is the whole T-LOCATOR-001 lesson applied to a new surface.
+
+# _start_shell_re — commands that count as "an interactive shell is ready in this pane".
+_START_SHELL_RE='^(-?(ba|z|k|a|da)?sh|fish|login)$'
+
+# _start_config — read and VALIDATE .ai/start.json, printing "session|layout|watch|main|top".
+# Every value here becomes a tmux argument, so the file is an exec surface: anything
+# outside the blueprint's shapes is rejected rather than sanitised (E-208 audit lesson —
+# an Architect-writable config is attacker-adjacent input, not a trusted source).
+_start_config() {
+  local ai_dir="$1" cfg="${1}/start.json"
+  local session="aios" layout="triad" watch="true" main="50" top="60"
+  if [[ -f "$cfg" ]]; then
+    local parsed
+    parsed="$(python3 - "$cfg" <<'PY' 2>/dev/null
+import json, re, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print("ERR unreadable JSON"); raise SystemExit(0)
+if not isinstance(d, dict):
+    print("ERR top level must be an object"); raise SystemExit(0)
+
+allowed = {"session", "layout", "watch", "sizes"}
+extra = set(d) - allowed
+if extra:
+    print("ERR unknown key(s): " + ", ".join(sorted(extra))); raise SystemExit(0)
+
+session = d.get("session", "aios")
+if not isinstance(session, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", session):
+    print("ERR session must match ^[A-Za-z0-9_-]{1,32}$"); raise SystemExit(0)
+
+layout = d.get("layout", "triad")
+if layout != "triad":
+    print("ERR layout must be 'triad' (no other layout is blueprinted)"); raise SystemExit(0)
+
+watch = d.get("watch", True)
+if not isinstance(watch, bool):
+    print("ERR watch must be true or false"); raise SystemExit(0)
+
+sizes = d.get("sizes", {})
+if not isinstance(sizes, dict) or set(sizes) - {"main", "top"}:
+    print("ERR sizes may only contain 'main' and 'top'"); raise SystemExit(0)
+out = {}
+for k, dflt in (("main", 50), ("top", 60)):
+    v = sizes.get(k, dflt)
+    if isinstance(v, bool) or not isinstance(v, int) or not (1 <= v <= 99):
+        print("ERR sizes.%s must be an integer percentage 1-99" % k); raise SystemExit(0)
+    out[k] = v
+print("OK %s|%s|%s|%d|%d" % (session, layout, "true" if watch else "false", out["main"], out["top"]))
+PY
+)"
+    if [[ "$parsed" != OK\ * ]]; then
+      echo "ai start: .ai/start.json rejected — ${parsed#ERR }" >&2
+      return 2
+    fi
+    IFS='|' read -r session layout watch main top <<< "${parsed#OK }"
+  fi
+  printf '%s|%s|%s|%s|%s' "$session" "$layout" "$watch" "$main" "$top"
+}
+
+# _start_roles — roles from .ai/roles.json ordered by pane_identifier ASCENDING.
+# The role with the lower pane_identifier gets the lower tmux pane_index, so E-209's
+# ordinal fallback and the visible layout agree BY CONSTRUCTION rather than by luck.
+_start_roles() {
+  local ai_dir="$1"
+  python3 - "${ai_dir}/roles.json" <<'PY' 2>/dev/null
+import json, sys
+try:
+    roles = json.load(open(sys.argv[1])).get("roles", {})
+except Exception:
+    roles = {}
+ordered = sorted(
+    ((str(v.get("pane_identifier", "99")), k) for k, v in roles.items() if k in ("engineer", "architect")),
+    key=lambda t: (int(t[0]) if t[0].lstrip("-").isdigit() else 99, t[1]),
+)
+for _, name in ordered:
+    print(name)
+PY
+}
+
+do_start() {
+  local no_watch=0 detach=0 dry=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-watch) no_watch=1 ;;
+      --detach|-d) detach=1 ;;
+      --dry-run) dry=1 ;;
+      -h|--help)
+        echo "Usage: ai start [--no-watch] [--detach] [--dry-run]"
+        echo "  Creates or reuses the project's tmux Triad layout and binds each pane to a role."
+        echo "  Panes are ordered by pane_identifier in .ai/roles.json."
+        return 0 ;;
+      *) echo "ai start: unknown option '$1'" >&2; return 2 ;;
+    esac
+    shift
+  done
+
+  local ai_dir; ai_dir="$(_find_ai_dir)"
+  if [[ ! -d "$ai_dir" ]]; then
+    echo "ai start: not inside an AI-OS project (.ai/ not found). Run 'ai init' first." >&2
+    return 2
+  fi
+
+  local cfg; cfg="$(_start_config "$ai_dir")" || return 2
+  local session layout watch_cfg main_pct top_pct
+  IFS='|' read -r session layout watch_cfg main_pct top_pct <<< "$cfg"
+  [[ "$watch_cfg" == "false" ]] && no_watch=1
+
+  local -a roles=()
+  local r
+  while IFS= read -r r; do [[ -n "$r" ]] && roles+=("$r"); done < <(_start_roles "$ai_dir")
+  if [[ "${#roles[@]}" -eq 0 ]]; then
+    echo "ai start: no roles in .ai/roles.json — run 'ai init' or add engineer/architect." >&2
+    return 2
+  fi
+
+  local project; project="$(cd "$(dirname "$ai_dir")" && pwd)"
+  local window; window="$(basename "$project")"
+
+  # Non-tmux hosts are supported, just not automated: tmux is the recommended UX, not a
+  # requirement, so print the exact commands the launcher would have composed.
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "ai start: tmux not found. Run these in three panes/terminals instead:" >&2
+    for r in "${roles[@]}"; do echo "  ai pane ${r}" >&2; done
+    [[ "$no_watch" -eq 1 ]] || echo "  ai watch" >&2
+    return 2
+  fi
+
+  # `_run` is the single seam through which every tmux call passes, so --dry-run prints
+  # exactly what a real run would execute — nothing is composed twice.
+  local _dry="$dry"
+  _run() {
+    if [[ "$_dry" -eq 1 ]]; then printf 'tmux'; printf ' %q' "$@"; printf '\n'; return 0; fi
+    tmux "$@"
+  }
+
+  # TARGETS ARE tmux IDs (`@3` for windows, `%7` for panes), never "session:name.index".
+  #
+  # Two reasons, one of which only a live run reveals:
+  #   - the window name is the project's directory BASENAME, and tmux parses a target as
+  #     `session:window.pane`. Any project called `my.app` produced an ambiguous target.
+  #   - tmux does not accept `@0.0` at all ("can't find pane: 0") — a window id is a
+  #     WINDOW target, so panes must be addressed by their own `%id`.
+  # Ids are opaque and cannot collide with the separator syntax. The dry run prints
+  # symbolic `pane<N>` placeholders instead, because in that mode no panes exist; it shows
+  # the COMPOSITION (which command reaches which pane, in order), and the live smoke is
+  # what asserts real tmux behaviour.
+  local target existing=0 win_id=""
+  if [[ "$dry" -eq 0 ]] && tmux has-session -t "$session" 2>/dev/null; then
+    win_id="$(tmux list-windows -t "$session" -F '#{window_id} #{window_name}' 2>/dev/null \
+              | awk -v n="$window" '$2 == n { print $1; exit }')"
+    [[ -n "$win_id" ]] && existing=1
+  fi
+
+  # _panes — the window's pane ids, in pane_index order, one per line.
+  _panes() {
+    [[ "$dry" -eq 1 ]] && { printf 'pane0\npane1\npane2\n'; return 0; }
+    tmux list-panes -t "$win_id" -F '#{pane_index} #{pane_id}' 2>/dev/null \
+      | sort -n | awk '{ print $2 }'
+  }
+  _pane_at() {  # <index> → pane id
+    _panes | sed -n "$(( $1 + 1 ))p"
+  }
+
+  if [[ "$existing" -eq 0 ]]; then
+    if [[ "$dry" -eq 1 ]] || ! tmux has-session -t "$session" 2>/dev/null; then
+      _run new-session -d -s "$session" -n "$window" -c "$project"
+    else
+      _run new-window -d -t "$session" -n "$window" -c "$project"
+    fi
+    if [[ "$dry" -eq 0 ]]; then
+      win_id="$(tmux list-windows -t "$session" -F '#{window_id} #{window_name}' 2>/dev/null \
+                | awk -v n="$window" '$2 == n { print $1; exit }')"
+      if [[ -z "$win_id" ]]; then
+        echo "ai start: could not resolve the window just created in session '${session}'." >&2
+        return 2
+      fi
+    fi
+    # Pane 1 (right column), then pane 2 (right-bottom) for the watcher. Splitting in
+    # this order is what makes pane_index follow the role order derived above.
+    _run split-window -h -t "$(_pane_at 0)" -c "$project" -p "$((100 - main_pct))"
+    [[ "$no_watch" -eq 1 ]] || _run split-window -v -t "$(_pane_at 1)" -c "$project" -p "$((100 - top_pct))"
+  fi
+
+  # Bind each agent pane. The pane hosts an INTERACTIVE SHELL and `ai pane <role>` is
+  # SENT to it, so when the provider exits the operator still has a shell and can rerun
+  # the command — a pane whose foreground IS the provider dies with it.
+  local idx=0 pane
+  for r in "${roles[@]}"; do
+    pane="$(_pane_at "$idx")"
+    if [[ -z "$pane" ]]; then
+      echo "ai start: expected a pane at index ${idx} but the window has fewer." >&2
+      return 2
+    fi
+    if [[ "$dry" -eq 0 ]]; then
+      # Wait for the prompt before sending: keys delivered to a pane whose shell has not
+      # finished starting are simply lost, and a fixed sleep is a bet on machine speed.
+      local w=0 cur
+      while [[ "$w" -lt 100 ]]; do
+        cur="$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null || true)"
+        [[ "$cur" =~ $_START_SHELL_RE ]] && break
+        sleep 0.05; w=$((w + 1))
+      done
+    fi
+    _run send-keys -t "$pane" "ai pane ${r}" C-m
+    idx=$((idx + 1))
+  done
+
+  if [[ "$no_watch" -eq 0 ]]; then
+    local wpane; wpane="$(_pane_at "$idx")"
+    if [[ -n "$wpane" ]]; then
+      # Idempotent: `ai watch` is a single writer, so start it only when nothing holds the
+      # lock. A second watcher would exit on the lock anyway; leaving it alone keeps the
+      # pane usable as a shell.
+      if [[ "$existing" -eq 1 ]] && _start_watch_running "$project"; then
+        echo "ai start: a watcher already holds the lock — leaving the watcher pane alone."
+      else
+        _run send-keys -t "$wpane" "ai watch" C-m
+      fi
+    fi
+  fi
+
+  # Re-pin titles on every run, including an idempotent re-run over live panes.
+  idx=0
+  for r in "${roles[@]}"; do
+    _run select-pane -t "$(_pane_at "$idx")" -T "$r"
+    idx=$((idx + 1))
+  done
+
+  if [[ "$dry" -eq 1 ]]; then
+    return 0
+  fi
+  if [[ "$detach" -eq 1 ]]; then
+    echo "ai start: ${session}:${window} ready (detached). Attach with: tmux attach -t ${session}"
+    return 0
+  fi
+  if [[ -n "${TMUX:-}" ]]; then
+    tmux switch-client -t "$win_id"
+  else
+    tmux attach-session -t "$session" \; select-window -t "$win_id"
+  fi
+}
+
+# _start_watch_running — is a live process holding the `ai watch` single-writer lock for
+# this project? Checked by PID, not by the lock file's existence: a stale lock left by a
+# killed watcher must not stop a re-run from starting one.
+_start_watch_running() {
+  local project="$1"
+  local lock="${HOME}/.ai-os/run/ai-watch-$(printf '%s' "$project" | shasum -a 256 2>/dev/null | cut -c1-16).lock"
+  [[ -f "$lock" ]] || return 1
+  local pid; pid="$(head -n 1 "$lock" 2>/dev/null | tr -dc '0-9')"
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
 do_pane() {
   local role="${1:-}"
   case "$role" in
@@ -3254,6 +3516,7 @@ case "$cmd" in
   # E-208 (role-abstraction.md §Same-Provider Triad): bind THIS tmux pane to a role
   # and launch that role's provider CLI. Usage: ai pane <architect|engineer>.
   pane)          do_pane "${@:2}" ;;
+  start)         do_start "${@:2}" ;;
   # E-138 (role-abstraction.md): register a CLI provider in .ai/providers.json and
   # generate its MCP config. Usage: ai provider add <name> --config-path <p> --mcp-key <k>
   # E-144: `ai provider install-plugin agy` installs AI-OS personas as a native agy plugin.

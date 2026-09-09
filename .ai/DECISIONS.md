@@ -808,3 +808,89 @@ Three of E-223's five audit rounds found holes the fix introduced; both Tier 3 r
 §1 none (argv only). §2 revert the four SKILL.md lines; the standards rule is gated by `AI_OS_STANDARDS_SKIP=skill-locator`. §3 `AI_OS_REVIEW_STRICT_TRAVERSAL=1` (already exists) grades all lines as code. §4 `AI_OS_PATCH_LEGACY=1` restores unbounded reads. §5 process only.
 
 ---
+
+---
+
+## [[D-059]] — `ai start`: One-Command Triad Launcher (tmux layout + role panes + watcher)
+
+**Date**: 2026-09-09
+**Task**: E-227, E-228 (user request 2026-09-09)
+**Decision**: Add `ai start` to the `ai` bootloader as a **bridge-level lifecycle command**: it creates (or reuses) the project's tmux session/window, lays out the panes from `.ai/roles.json`, launches each role with `ai pane <role>`, and runs `ai watch` in a dedicated pane — so the operator never opens panes by hand. The command composes existing primitives only; it introduces no new provider, state, or routing logic.
+
+### Why needed
+D-054 bound roles per pane (`ai pane`), E-209 made routing deterministic when titles are pinned, and `ai watch` drives the ping-pong loop — but the operator still has to open three panes, run three commands, and get the pane ORDER right (the roles.json `pane_identifier` is an ordinal among agent panes, so a wrong split order silently misroutes). `ai start` makes the supported topology the default experience.
+
+### Design (cli-collapse.md §`ai start`)
+- **Composition only**: the launcher executes exactly two things it does not own — `ai pane <role>` and `ai watch` — both from the installed `ai` on PATH. Never a project-supplied script.
+- **Layout is derived, not configured**: the role with the lower `pane_identifier` gets the lower tmux `pane_index`, so the ordinal fallback (E-209 step 2) agrees with the layout by construction. Default `triad` layout = engineer left (full height), architect right-top, watcher right-bottom. The watcher pane runs a shell script, which `_is_agent_cmd` excludes, so it never shifts the ordinals.
+- **Shell-hosted panes**: agent panes are interactive shells that receive `ai pane <role>` via `send-keys` — when the provider exits the operator keeps a shell and can rerun `ai pane` (a `split-window 'cmd'` pane would close). `ai pane` pins the title and disables window auto-rename (E-209 Pass 1 stays deterministic).
+- **Idempotent**: a second `ai start` in a project with live panes re-pins titles, starts the watcher only if none holds the single-writer lock, and attaches — it never duplicates panes. `--kill` tears the project's window down (watcher first).
+- **Optional config `.ai/start.json`** (`session`, `layout`, `watch`, `sizes`) with constrained values (session name `^[A-Za-z0-9_-]{1,32}$`, sizes numeric percentages); absent file = defaults (`session: aios`, window = project basename).
+- **Non-tmux hosts**: exit 2 with the manual three-command recipe printed (cli-collapse.md: tmux is the recommended UX, not a hard requirement).
+
+### Alternatives considered
+1. **A `~/.tmux.conf` snippet / tmuxinator profile** (the cli-collapse "Tmux Documentation" idea) — rejected as the primary path: it cannot read `roles.json`, so pane order and role binding drift from the configuration the router trusts.
+2. **Launching providers directly from `split-window`** — rejected: the pane dies with the provider, and `ai pane`'s binding/title logic would be duplicated.
+3. **Do it inside `ai pane` (auto-split when run in a fresh window)** — rejected: `ai pane` binds THIS pane and must stay side-effect-free beyond it (E-208 audit surface).
+
+### Constraints driving this decision
+- cli-collapse.md limits the bootloader to lifecycle/diagnostic commands. `ai start` IS lifecycle (it starts the Triad); the command set is now explicitly: `init`, `sync`, `install`, `doctor`, `uninstall`, `start`, plus the D-053/D-054 shell primitives `handoff`, `add-task`, `pane`, `watch`.
+- No new state: layout comes from `roles.json`; the watcher's existing mkdir lock prevents double injection.
+- Values read from `.ai/start.json` become tmux arguments, so they are validated like `providers.json` provider names (E-208 audit lesson).
+
+### Impact
+- Unlocks: E-227 (launcher, Tier 2), E-228 (`--status`/`--kill`, doctor line, docs + installer hint, Tier 1).
+- Risk if wrong: a layout that disagrees with the ordinal would misroute handoffs — mitigated by deriving the layout from `pane_identifier` and asserting the resulting pane order in tests.
+
+### Rollback
+Remove the `start` dispatch; the three manual commands (`ai pane engineer`, `ai pane architect`, `ai watch`) keep working unchanged.
+
+---
+
+---
+
+## [[D-060]] — D-058 §3 Extensions Ratified; CI Funded; Operand Re-tokenisation; Skill Consent Rule; Manifest Gitignore
+
+**Date**: 2026-09-09
+**Task**: E-230, E-231, E-232, E-233 (Engineer handoff 2026-09-08, delivered 2026-09-09 after the watcher restart; E-224..E-226 complete)
+**Decision**: Ratify the three narrow extensions the Engineer made beyond D-058 §3's letter (they are the same over-block invariant applied to non-markdown text); fund CI because three sprints in a row had nowhere to "verify on CI"; fund the recursive re-tokenisation of interpreter operands under the D-056 over-block guard; rule that auto-executed skill lines may never run a project-supplied program; gitignore the E-220 sync manifests.
+
+### Extensions RATIFIED (all three; they become part of the E-222/E-224 anchor contract)
+1. **`.ai/state.json` exact-path allowlist.** Task descriptions are stored verbatim, so a `../` written into a task text lands in a committed file and blocks the next commit. Exact path, not a `.json` rule — `package.json` scripts genuinely carry paths that matter. Ratified as written.
+2. **ES module specifiers are script-relative anchors.** `import … from "../x.mjs"`, `export … from`, dynamic `import("../")` and `require("../")` resolve against the importing module by definition. Added to the E-222 anchor list; the E-224 wiring commit tripping on its own import line is the proof.
+3. **Whole-line comments are documentation.** A `//` or `#` line cannot execute; the E-222 fixture that asserted "prose → P0" with a comment as its example was wrong about its own intent and is corrected.
+Rule for the future: an over-block of the codebase's own idiom found while implementing a ruling is an in-boundary widening under D-058 §5 — fix narrowly, add fixtures both ways, report. This handoff did exactly that.
+
+### §1 — CI: EXISTS AND IS RED — FIX IT (E-230, Tier 2, `ci_gate`)
+The Engineer's finding "no CI configuration in this repository" is **wrong**: `.github/workflows/test.yml` ("AI-OS Tests") runs `install-ai-os.sh` + `tests/run.sh` on `ubuntu-latest` / Node 22 on every push and pull request, and `.ai/DEVOPS.md` documents it. What is true is worse: the last three completed runs on `master` (2026-09-07 ×2, 2026-09-09) **failed**, and nobody read them — local 4117/0 was reported as the verification while CI was red. Ruling: E-230 is re-scoped from "add CI" to (a) find out why the Engineer's check missed `.github/` (cwd or glob error — record it), (b) make the workflow green on `master` (the Linux/GNU-patch run IS the E-221 verification; add a `patch --version` line to the log), (c) add the `node:test` unit layer as a second job and a README badge, (d) **process rule**: an E-## is not DONE until the CI run for its merge commit is green — `ai-task` surfaces the `gh run` status for the current HEAD before marking DONE. `ci_gate` documents the change in `DEVOPS.md`. The registered E-230 description carries the false "no CI" premise; this section is authoritative.
+
+### §2 — T-LOCATOR-001 known-uncaught operands: FUND (E-231, Tier 2)
+`bash -c "node src/bin/ai"`, `eval`, `xargs`, pipe-fed and heredoc-fed interpreters hide the execution from the E-225 rule. Ruling: re-tokenise the operand recursively. The auditor's warning is adopted as the constraint: this is the change most likely to resurrect an over-block, so fixtures in both directions come BEFORE the widening, and any new over-block is a regression (D-056 R3).
+
+### §3 — Skill consent: RULE
+An auto-executed `!`-line runs because the skill was loaded, not because the agent chose to. Two skills run the visited project's own `tests/run.sh` that way. Ruling: a `!`-line may only run framework helpers through the installed resolver, or read-only inspection commands. It may NEVER execute a project-supplied program (`tests/run.sh`, `npm run`, `make`, `scripts/*`, `./…`). Running project code is an explicit numbered step the agent performs after loading. The E-80 standards checker enforces it with the E-224 classifier. → E-232 (Tier 2).
+
+### §4 — `_SYNC_MANIFEST.json`: GITIGNORE
+Generated per-workspace state, same class as `_SKILLS_INDEX.md`. `ai init`/`ai sync` add the pattern to a project's `.gitignore` idempotently. → E-233 (Tier 1).
+
+### Merge state
+All four previously stacked branches are merged: `origin/master` is at `6b8e5f8` (E-224..E-226 plus the flake fixes). Nothing pending on the user.
+
+### Alternatives considered
+1. **CI: keep asking "verify on CI" without CI** — rejected; a verification step with nowhere to run is a false checkbox. **CI: Docker-based local sandbox instead** — rejected as the primary path; Docker has been down for two sprints and CI is the reproducible Linux/GNU environment anyway.
+2. **§3: allow `!`-lines to run project tests when a `.ai/` opt-in flag exists** — rejected; consent belongs to the agent's explicit action at that moment, not to a config bit set once.
+3. **§2: leave the operand class as a documented residual** — rejected; it is the same class the E-225 rule exists for, only wrapped.
+
+### Constraints driving this decision
+- Over-blocks outrank under-blocks on every gate touching the codebase's own idiom (D-056 R3, D-057 §2, D-058 §3).
+- Auto-executed lines have no consent step; their capability must be bounded by rule, not by review (T-LOCATOR-001 lineage).
+- Verification claims must name an environment that exists.
+
+### Impact
+- Unlocks: E-230 (T2), E-231 (T2), E-232 (T2), E-233 (T1). Order: E-233 → E-230 → E-232 → E-231 (cheap hygiene, then the environment, then the consent rule, then the riskiest widening last with CI in place).
+- Risk if wrong: E-231 over-blocks a skill's legitimate `bash -c` — mitigated by fixtures-first and the regression rule.
+
+### Rollback
+§1 delete the workflow. §2 `AI_OS_STANDARDS_SKIP=operand-retokenise`. §3 revert the two SKILL.md edits; rule gated by `AI_OS_STANDARDS_SKIP=skill-consent`. §4 remove the `.gitignore` lines. Extensions: `AI_OS_REVIEW_STRICT_TRAVERSAL=1` grades everything as code.
+
+---
