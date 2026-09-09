@@ -631,8 +631,26 @@ this section to be updated with it:
     bash setup                              no separator and no extension (E-225 trade-off)
     node <<'EOF' … EOF                      the program arrives on stdin, spanning lines
 
-**PRE-EXISTING FALSE POSITIVE, unrelated to E-231 but found by its corpus scan and
-recorded rather than left to ambush the next editor:** `memory_curator.md` lines 178-179
+**FIXED by E-234 (D-061 §2) — the program-position rule.** A token is walked as a program
+only in PROGRAM POSITION: the segment head, the first non-option operand after an
+interpreter, or the operand after a wrapper that RESTARTS position (`-c`, `eval`, `exec`,
+`xargs`, `env`, `sudo`, `nohup`, `time`, `command`, `source`/`.`). Everything else is an
+argument. Independently, a token with a DATA-typed extension (`.json .md .txt .yml .yaml
+.sqlite .ndjson .csv .log`) is never a program in ANY position, so putting one first
+cannot launder it.
+
+Position deliberately stays OPEN for two kinds of operand, because neither says what
+actually runs: a variable the rule cannot read (`node "$HELPER" …`) and an allowlisted
+entrypoint (`bash tests/run.sh …`). That is what keeps `bash tests/run.sh src/bin/ai`
+caught while `--dlq-show .ai/memory/dlq.json` is not.
+
+Corpus is now clean: 216 markdown files, ZERO findings (was 6). No catch was lost —
+skill_locator 169/0 and operand_retokenise 35/0 unchanged, and `program_position_test.sh`
+pins all twelve previously-caught shapes as still caught, alongside the removed
+over-blocks. Rollback `AI_OS_STANDARDS_SKIP=program-position` restores the old walk
+(verified: memory_curator goes 0 → 2 findings).
+
+**Superseded description of the over-block (kept for the record):** `memory_curator.md` lines 178-179
 are flagged, and `src/**/agents/*.md` IS in the rule's `applies_to`, so anyone who edits
 that file will be blocked by the commit gate.
 
