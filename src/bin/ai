@@ -1561,6 +1561,12 @@ do_init() {
   echo "4) Fill in .github/copilot-instructions.md (project-specific context)"
   echo "5) Open Claude Code or Gemini CLI in this repo — the bootloader auto-runs ai-preflight"
   echo ""
+  # E-228 (D-059): name the one command that does step 5 for you. Without this the
+  # launcher exists but is only discoverable by reading the README.
+  echo "Or let the launcher do it:  ai start"
+  echo "  Builds the tmux Triad layout, binds each pane to its role, starts the watcher."
+  echo "  Idempotent — safe to re-run.  ai start --status | --kill   (ai doctor checks readiness)"
+  echo ""
   local _triad_labels _arch_label _eng_label
   _triad_labels="$(_roles_banner_labels)"
   _arch_label="${_triad_labels%%|*}"; _eng_label="${_triad_labels##*|}"
@@ -2058,6 +2064,11 @@ do_sync() {
   _ensure_generated_gitignore "."
 
   echo "Done."
+  # E-228 (D-059): only when the project can actually use it — printing a tmux hint on a
+  # host without tmux is noise that teaches the reader to ignore the line.
+  if [[ -d ".ai" ]] && command -v tmux >/dev/null 2>&1; then
+    echo "Tip: 'ai start' opens the Triad layout for this project (--status / --kill)."
+  fi
 }
 
 # ── E-215 (architect-provider-parity.md §Components 6): per-role provisioning ──
@@ -2396,6 +2407,52 @@ else:
 PY
   else
     echo "  ✗ .mcp.json not found in $(pwd) — run: ai init"
+  fi
+  echo ""
+
+  # ── E-228 (D-059): is `ai start` actually usable here? ─────────────────────
+  # Three things have to hold, and each fails differently, so each is reported
+  # separately rather than as one "Triad: ok/not ok" verdict a reader cannot act on.
+  echo "Triad launcher (ai start):"
+  if command -v tmux >/dev/null 2>&1; then
+    echo "  ✓ tmux present ($(tmux -V 2>/dev/null || echo 'version unknown'))"
+  else
+    echo "  ✗ tmux not found — 'ai start' exits 2 and prints the manual recipe instead"
+  fi
+
+  local _d_ai; _d_ai="$(_find_ai_dir 2>/dev/null)"
+  if [[ -n "$_d_ai" && -f "${_d_ai}/roles.json" ]]; then
+    local _d_roles _d_n
+    _d_roles="$(_start_roles "$_d_ai" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+    _d_n="$(printf '%s' "$_d_roles" | wc -w | tr -d ' ')"
+    if [[ "${_d_n:-0}" -gt 0 ]]; then
+      echo "  ✓ roles mapped (${_d_n}): ${_d_roles}"
+      # A role whose provider is not on PATH produces a pane that opens and then fails at
+      # the first keystroke, which looks like a launcher bug rather than a missing binary.
+      local _d_r _d_prov
+      for _d_r in $_d_roles; do
+        _d_prov="$(python3 -c "
+import json,sys
+try:
+    d=json.load(open('${_d_ai}/roles.json'))
+except Exception:
+    sys.exit(0)
+r=d.get('roles',{}).get('${_d_r}',{})
+print(r.get('provider',''))
+" 2>/dev/null)"
+        if [[ -z "$_d_prov" ]]; then
+          echo "    ? ${_d_r}: no provider recorded"
+        elif command -v "$_d_prov" >/dev/null 2>&1; then
+          echo "    ✓ ${_d_r} → ${_d_prov} (on PATH)"
+        else
+          echo "    ✗ ${_d_r} → ${_d_prov} NOT on PATH — its pane will open but the agent will not start"
+        fi
+      done
+    else
+      echo "  ✗ roles.json has no usable roles — run: ai init"
+    fi
+  else
+    echo "  ✗ .ai/roles.json not found — run: ai init"
   fi
   echo ""
 
@@ -3252,21 +3309,33 @@ PY
 }
 
 do_start() {
-  local no_watch=0 detach=0 dry=0
+  local no_watch=0 detach=0 dry=0 want_status=0 want_kill=0 assume_yes=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --no-watch) no_watch=1 ;;
       --detach|-d) detach=1 ;;
       --dry-run) dry=1 ;;
+      --status)   want_status=1 ;;
+      --kill)     want_kill=1 ;;
+      --yes|-y)   assume_yes=1 ;;
       -h|--help)
         echo "Usage: ai start [--no-watch] [--detach] [--dry-run]"
+        echo "       ai start --status"
+        echo "       ai start --kill [--yes]"
         echo "  Creates or reuses the project's tmux Triad layout and binds each pane to a role."
         echo "  Panes are ordered by pane_identifier in .ai/roles.json."
+        echo ""
+        echo "  --status  report this project's panes (role, title, command) and the watcher."
+        echo "  --kill    tear the project window down, watcher first. Asks unless --yes."
         return 0 ;;
       *) echo "ai start: unknown option '$1'" >&2; return 2 ;;
     esac
     shift
   done
+  if [[ "$want_status" -eq 1 && "$want_kill" -eq 1 ]]; then
+    echo "ai start: --status and --kill are mutually exclusive." >&2
+    return 2
+  fi
 
   local ai_dir; ai_dir="$(_find_ai_dir)"
   if [[ ! -d "$ai_dir" ]]; then
@@ -3289,6 +3358,15 @@ do_start() {
 
   local project; project="$(cd "$(dirname "$ai_dir")" && pwd)"
   local window; window="$(basename "$project")"
+
+  if [[ "$want_status" -eq 1 ]]; then
+    _start_status "$session" "$window" "$project"
+    return $?
+  fi
+  if [[ "$want_kill" -eq 1 ]]; then
+    _start_kill "$session" "$window" "$project" "$assume_yes" "$dry"
+    return $?
+  fi
 
   # Non-tmux hosts are supported, just not automated: tmux is the recommended UX, not a
   # requirement, so print the exact commands the launcher would have composed.
@@ -3473,6 +3551,127 @@ _start_watch_running() {
       while kill -0 "$pid" 2>/dev/null && [[ "$w" -lt 40 ]]; do sleep 0.05; w=$((w + 1)); done
       return 1
     fi
+  fi
+  return 0
+}
+
+# _start_window_id — resolve the project's window by NAME within a session, returning its
+# window id. Resolving by id matters: the window is named after the project directory, and
+# a mktemp-style name contains a dot, which tmux would otherwise parse as window.pane.
+_start_window_id() {  # <session> <window> → @id | ""
+  # `tmux list-windows` FAILS when the session — or the whole server — does not exist,
+  # which is the normal "nothing is running" case this function has to answer. Under the
+  # script's `set -euo pipefail` a bare pipeline would take tmux's non-zero status and kill
+  # the caller mid-assignment, so `ai start --status` exited 1 having printed NOTHING.
+  # Invisible on a machine that already has a tmux server; reproducible with a socket that
+  # has none, which is what CI is.
+  local out=""
+  out="$(tmux list-windows -t "$1" -F '#{window_id} #{window_name}' 2>/dev/null || true)"
+  printf '%s\n' "$out" | awk -v n="$2" '$2 == n { print $1; exit }'
+}
+
+# `ai start --status` (E-228 / D-059). Reports rather than acts: what panes exist, what
+# each is titled and running, and whether a watcher actually holds the lock.
+#
+# Exit 0 even when nothing is running. "Nothing is up" is a true answer to a status
+# question, not a failure — making it non-zero would turn `ai start --status` into
+# something a script cannot ask without `|| true`.
+_start_status() {  # <session> <window> <project>
+  local session="$1" window="$2" project="$3"
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "ai start --status: tmux is not installed — no panes to report."
+    return 0
+  fi
+  local wid; wid="$(_start_window_id "$session" "$window")"
+  if [[ -z "$wid" ]]; then
+    echo "ai start --status: no window '${window}' in session '${session}' — not running."
+  else
+    echo "ai start --status: ${session}:${window} (${wid})"
+    local idx title cmd
+    while IFS='|' read -r idx title cmd; do
+      [[ -z "$idx" ]] && continue
+      printf '  pane %-3s %-12s %s\n' "$idx" "${title:-(untitled)}" "${cmd:-(no command)}"
+    done < <(tmux list-panes -t "$wid" -F '#{pane_index}|#{pane_title}|#{pane_current_command}' 2>/dev/null | sort -n || true)
+  fi
+
+  # The watcher is reported by its LOCK, not by a pane title: a pane can be titled
+  # anything, whereas the lock is what actually enforces one writer.
+  local lock; lock="$(_start_watch_lock "$project")"
+  local pid=""
+  [[ -f "${lock}/pid" ]] && pid="$(tr -dc '0-9' < "${lock}/pid" 2>/dev/null)"
+  if [[ -z "$pid" ]]; then
+    echo "  watcher: not running (no lock at ${lock})"
+  elif kill -0 "$pid" 2>/dev/null; then
+    echo "  watcher: running (pid ${pid}, lock ${lock})"
+  else
+    echo "  watcher: STALE lock — pid ${pid} is gone (${lock})"
+  fi
+  return 0
+}
+
+# `ai start --kill` (E-228 / D-059). Destructive, so consent is explicit.
+#
+# The watcher is stopped FIRST and given a moment to exit: it releases its lock from an
+# EXIT trap, and killing the window out from under it leaves a stale lock that then makes
+# the next `ai start` believe a watcher is already running.
+#
+# Without --yes on a NON-INTERACTIVE stdin this REFUSES rather than proceeding. There is
+# no prompt to answer in a pipeline or a hook, and "no answer" must not read as consent
+# for a command that tears down a running session.
+_start_kill() {  # <session> <window> <project> <assume_yes> <dry>
+  local session="$1" window="$2" project="$3" assume_yes="$4" dry="$5"
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "ai start --kill: tmux is not installed — nothing to tear down." >&2
+    return 2
+  fi
+  local wid; wid="$(_start_window_id "$session" "$window")"
+  local lock; lock="$(_start_watch_lock "$project")"
+  local pid=""
+  [[ -f "${lock}/pid" ]] && pid="$(tr -dc '0-9' < "${lock}/pid" 2>/dev/null)"
+
+  if [[ -z "$wid" && -z "$pid" ]]; then
+    echo "ai start --kill: nothing to tear down (no window '${window}', no watcher lock)."
+    return 0
+  fi
+
+  if [[ "$dry" -eq 1 ]]; then
+    echo "ai start --kill (dry run) would:"
+    [[ -n "$pid" ]] && echo "  stop the watcher (pid ${pid}) and wait for it to release ${lock}"
+    [[ -n "$wid" ]] && echo "  kill-window -t ${wid}   (${session}:${window})"
+    return 0
+  fi
+
+  if [[ "$assume_yes" -ne 1 ]]; then
+    if [[ ! -t 0 ]]; then
+      echo "ai start --kill: refusing to tear down ${session}:${window} without --yes." >&2
+      echo "  stdin is not a terminal, so there is no prompt to answer; pass --yes to confirm." >&2
+      return 2
+    fi
+    local reply=""
+    printf 'Tear down %s:%s%s? [y/N] ' "$session" "$window" \
+      "$([[ -n "$pid" ]] && printf ' and stop the watcher (pid %s)' "$pid")"
+    read -r reply || true
+    case "$reply" in
+      y|Y|yes|YES) ;;
+      *) echo "ai start --kill: aborted."; return 0 ;;
+    esac
+  fi
+
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null
+    local w=0
+    while kill -0 "$pid" 2>/dev/null && [[ "$w" -lt 60 ]]; do sleep 0.05; w=$((w + 1)); done
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "ai start --kill: watcher pid ${pid} did not exit on TERM — leaving it alone." >&2
+    else
+      echo "ai start --kill: watcher stopped (pid ${pid})."
+    fi
+  fi
+
+  if [[ -n "$wid" ]]; then
+    tmux kill-window -t "$wid" 2>/dev/null \
+      && echo "ai start --kill: window ${session}:${window} (${wid}) killed." \
+      || echo "ai start --kill: tmux refused to kill ${wid}." >&2
   fi
   return 0
 }
