@@ -120,7 +120,13 @@ _corpus() {
     const { readFileSync } = await import("fs");
     const { execSync } = await import("child_process");
     const rule = RULE_REGISTRY.skill_locator_install_first;
-    const out = execSync("find src .claude .agents .gemini -name \"*.md\"",
+    // PRUNE node_modules. CI installs dependencies into every src/mcp/*/ directory, so an
+    // unpruned find walked 3651 files instead of ~300 and "found" 512 hits in vendored
+    // third-party READMEs — a number that says nothing about this repo. The assertion was
+    // therefore ENVIRONMENT-DEPENDENT: it passed on a laptop whose src/mcp/*/node_modules
+    // are sparse and failed on CI, for reasons unrelated to the rule under test.
+    const out = execSync(
+      "find src .claude .agents .gemini -name node_modules -prune -o -name \"*.md\" -print",
       { encoding: "utf8", maxBuffer: 1e8, cwd: process.env.REPO_ROOT });
     const files = out.trim().split("\n").filter(Boolean);
     let n = 0;
