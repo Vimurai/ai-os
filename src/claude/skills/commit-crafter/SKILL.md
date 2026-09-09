@@ -83,6 +83,23 @@ EOF
 )"
 ```
 
+
+## Before staging: the two checks that would have prevented D-062's incident
+
+**1. Never `git stash` bookkeeping between branches.** Commit on the branch and
+`cherry-pick`. A conflicted `stash pop` once put conflict markers inside `.ai/state.json`
+and they were committed to master unread — git had reported the conflict, and the report
+was skimmed past. Master carried invalid JSON for four commits.
+
+**2. Stage named paths, not `git add -A`, after any conflicted operation.** Open every
+conflicted file first. `git add -A` immediately after a conflict is precisely how markers
+reach a commit.
+
+The pre-commit hook now rejects both shapes (conflict markers at line start; a staged
+`.ai/*.json` that does not parse), but a hook is a backstop, not a substitute for reading
+what you are committing.
+
+
 ## What NOT to Do
 
 - Do NOT run `git push` unless the user explicitly requests it.

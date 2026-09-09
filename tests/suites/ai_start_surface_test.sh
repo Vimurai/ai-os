@@ -66,8 +66,16 @@ rm -rf "$_p"
 
 # ── E-228.3: LIVE tmux — status sees real panes, kill removes them ─────────
 if command -v tmux >/dev/null 2>&1; then
-  _sock="aios-e228-$$"
+  # A socket name must be unique PER RUN. `$$` recycles, and a tmux server outlives the
+  # suite that started it, so a later run could attach to a STALE server still holding
+  # windows from a previous run — which is exactly how this suite passed in isolation and
+  # failed in the full run reporting windows=3. 50 leaked servers were found on this
+  # machine. The name now carries mktemp entropy, any pre-existing server on it is killed
+  # first, and an EXIT trap tears it down even when an assertion fails midway.
+  _sock="aios-e228-$(basename "$(mktemp -u)")"
   _tb="$(command -v tmux)"
+  "$_tb" -L "$_sock" kill-server 2>/dev/null || true
+  trap '"'"'"$_tb" -L "$_sock" kill-server 2>/dev/null || true'"'"' EXIT
   _shim="$(mktemp -d)"
   printf '#!/usr/bin/env bash\nexec %s -L %s "$@"\n' "$_tb" "$_sock" > "$_shim/tmux"
   chmod +x "$_shim/tmux"

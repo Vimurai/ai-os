@@ -1586,6 +1586,32 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-238",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Add the no-stash rule and the conflict-marker gate per D-062 §3 and .ai/blueprints/git-hooks.md §Conflict-Marker Gate: (a) hooks/pre-commit.sh rejects any staged file containing a conflict marker at line start (<<<<<<< , a bare ======= between them, >>>>>>> ) and rejects a staged .ai/*.json that does not parse as JSON, printing the file and line; AI_OS_SKIP_CONFLICT_GATE=1 bypasses; (b) add to ENGINEER.md Core Rules and the commit-crafter skill: .ai/ bookkeeping moves between branches by commit + cherry-pick, never git stash; (c) add the triage rule to ai-debug and critic_tests: after a run of environmental failures a new CI failure is presumed REAL until its log is read. Acceptance: git_hooks suite covers marker-at-line-start BLOCK, backticked marker text in .md ALLOWED, invalid state.json BLOCK, valid ALLOW; the historical 44243bc content is a fixture that must BLOCK; mirrors synced.",
+      "created_at": "2026-09-09T20:24:53.865Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-239",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Make performance budgets host-relative per D-062 §2 and .ai/blueprints/test-harness-isolation.md §Performance Budgets: add perf_budget helpers to tests/lib/assert.sh that measure a same-host baseline (bare node spawn for spawn-bound paths, a no-op hook for hook paths) and, when CI=true, enforce the declared absolute budget, otherwise assert elapsed <= k * baseline + slack (defaults k=2, slack=50ms, declared per assertion), printing baseline and elapsed on every run; convert the incident_aggregator ('under 200ms', measured 381ms locally) and telemetry ('hook warm-path under 250ms') assertions and any other absolute budget in the suite; AI_OS_PERF_ABSOLUTE=1 enforces absolute budgets everywhere; add 'absolute budget without a baseline' to the critic_tests checklist. Acceptance: both suites pass locally on the Engineer's machine AND on CI with the absolute budget still enforced there; a synthetic 5x slowdown fails locally; mirrors synced.",
+      "created_at": "2026-09-09T20:24:54.678Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -3205,6 +3231,13 @@
       "task_id": "E-235",
       "timestamp": "2026-09-09T20:10:43.732Z",
       "summary": "E-235 Tier-2 (ci_gate/DEVOPS-006): browser_optin 26/0. The old `|| true` was worthless — the failure mode is HANGING, not erroring — proven during the task when the morning's install was found still running at 5h03m and killed. Download is opt-in (--browsers / AI_OS_INSTALL_BROWSERS=1), bounded by a WATCHDOG rather than timeout(1) which macOS lacks (a bound silently not applied is worse than none), progress no longer swallowed by tail -2, and never fails the install. First use returns [BROWSER_MISSING] naming the fix; all 3 launch sites guarded and the helper exercised with a stub. CI caches on the vibe-check package.json. Non-vacuity: asserts the download still EXISTS in the helper, so a broken removal cannot pass. Reduces install-time network surface (no CDN contact during `ai install`). Separately verified in a clean-master worktree that the two local perf-budget failures are host-SPEED artifacts, green on CI — flagged for a follow-up ruling, not caused by this change."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-238",
+      "timestamp": "2026-09-09T21:13:38.738Z",
+      "summary": "E-238 Tier-2: conflict_gate 26/0, full suite 4445/0. VERIFIED AGAINST THE REAL INCIDENT — replaying 44243bc's corrupted blob blocks on both checks, naming lines 3187/3203. Over-block half guarded as the Architect flagged: line-start anchoring so this repo's own DECISIONS.md (which quotes the markers) passes, and `=======` alone is NOT a marker because seven '=' is a valid Markdown setext underline. JSON gate reads the STAGED blob via `git show :path`, not the worktree. The triage rule paid off within the hour: ai_start_surface failed only in the full run and was REAL — my E-227/E-228 suites leak tmux servers and the `$$` socket name recycles (50 leaked found); fixed with mktemp entropy + pre-emptive kill + EXIT trap, since a failing assertion had been skipping cleanup. Third variety of environment dependence: \"what a previous run left behind\"."
     }
   ],
   "deltas": [

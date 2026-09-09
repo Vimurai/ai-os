@@ -42,3 +42,6 @@ When a user initializes an AI-OS project (`ai init`), the system currently copie
 
 ## E-## Task Breakdown
 - **E-41**: Update `install_git_hooks` in `src/bin/ai` to generate execution stubs instead of copying files, and implement the auto-upgrade logic in `do_sync()`.
+
+## Conflict-Marker Gate + No-Stash Bookkeeping (D-062 §3, 2026-09-09)
+A conflicted `git stash pop` left conflict markers in `.ai/state.json`; they were staged and committed to master without the file being opened, and master carried invalid JSON until the next fix. Rules: (1) `.ai/` bookkeeping moves between branches by commit + cherry-pick, never by stash (ENGINEER.md Core Rules, `commit-crafter`). (2) `pre-commit.sh` rejects any staged file with a conflict marker at line start and any staged `.ai/*.json` that does not parse — deterministic, cheap, and it would have blocked the incident commit. (3) Triage: after a run of environmental failures, a new CI failure is presumed real until its log is read. Rollback `AI_OS_SKIP_CONFLICT_GATE=1`.

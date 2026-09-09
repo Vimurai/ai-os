@@ -9,7 +9,7 @@
 - Node.js 22.5+ (MCP servers, node:sqlite DatabaseSync, ESM, fetch; CI = `.github/workflows/test.yml` on ubuntu-latest/Node 22, two jobs (`test` + `unit` node:test with coverage), GNU patch 2.7.6, Playwright browsers installed in an explicit CACHED step — **GREEN on master since 2026-09-09, E-230**), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
 
 ## Triad Health
-- Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. D-053 + `structured-outputs.md §32` were ratified 2026-07-31 (closed). Ruled D-055, D-056, D-057 (2026-09-07) → E-216..E-223, all shipped.
+- Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. Ruled D-054..D-062 (2026-09-04 → 2026-09-09) → E-208..E-239; everything through E-237 shipped, E-238/E-239 open.
 - Engineer (Claude): shipped **D-059 (E-227, E-228)**, **D-060 (E-229..E-233)** and **D-061 (E-234..E-237)** — 11 tasks, PRs #36-#44, all merged. Queue EXHAUSTED (0 open).
 - Tester: bash suite now **132 files, 4416 assertions, 0 failing** (CI, PR #44). SKIP is a distinct outcome since E-236 — an unmet OPTIONAL requirement is counted separately and never as a pass.
 
