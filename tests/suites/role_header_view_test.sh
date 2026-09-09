@@ -23,7 +23,7 @@ assert_contains "E-136.10e: '' -> Unassigned" "|Unassigned" "$roles"
 
 # ── E-136.11: regenerated TASKS.md uses provider-agnostic headers ────────────
 unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE 2>/dev/null || true
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 cat > "${PROJECT}/.ai/state.json" <<'JSON'
 {

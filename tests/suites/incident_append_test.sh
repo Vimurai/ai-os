@@ -24,7 +24,7 @@ echo "===== incident_append_test.sh ====="
 
 # Sandbox HOME so we don't pollute the real ~/.ai-os/incidents.ndjson.
 SBOX="$(mktemp -d -t incident-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 
 run_helper() {
   # $1 = json arg ("" for none)

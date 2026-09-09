@@ -91,7 +91,7 @@ echo "  [T-SES-S03] End-to-end SQLite migration + capture"
 # Build a DB the *old* way (pre-E-49 schema), then have the new server open
 # it and confirm session_id is added without losing rows.
 SBOX="$(mktemp -d -t e49-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 
 PRE_DB="${SBOX}/approvals.sqlite"
 node --input-type=module <<JS

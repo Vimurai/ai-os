@@ -18,7 +18,7 @@ echo "── Suite: idempotency_test ──────────────�
 
 # ── Setup: create a temporary AI-OS project directory ────────────────────────
 TMPDIR_BASE=$(mktemp -d)
-trap 'rm -rf "$TMPDIR_BASE"' EXIT
+on_exit 'rm -rf "$TMPDIR_BASE"'
 
 PROJECT_DIR="${TMPDIR_BASE}/test_project"
 mkdir -p "$PROJECT_DIR"

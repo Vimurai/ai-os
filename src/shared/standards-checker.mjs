@@ -441,6 +441,67 @@ export const RULE_REGISTRY = {
     return out.length ? out : null;
   },
 
+
+  /**
+   * D-064 / E-241 — RAW `trap … EXIT` IN A TEST SUITE.
+   *
+   * A bare `trap 'cmd' EXIT` REPLACES any existing EXIT handler. 42 suites did this after
+   * sourcing assert.sh, and every one of them silently threw away the cleanup registry —
+   * which is how E-227/E-228 leaked 50 tmux servers with nothing to notice. `on_exit` is
+   * the spelling that chains instead of replacing.
+   *
+   * WHAT THIS MUST NOT FLAG, and it is the whole difficulty: a test that ASSERTS something
+   * about traps quotes the string it is looking for. `ai_watch_test` greps the watcher for
+   * `trap '_release_lock' EXIT`, and `test_harness_isolation_test` asserts the runner
+   * registers `trap _aios_test_cleanup EXIT INT TERM`. Flagging those would make the rule
+   * reject the tests that verify trap behaviour — the same trap E-224 and E-238 both hit,
+   * where a gate blocked the document describing it.
+   *
+   * So: only a line whose COMMAND POSITION is `trap` counts (E-234's lesson applied to a
+   * different rule), comments are skipped, and a `trap` appearing anywhere inside an
+   * assert_* invocation is data, not an invocation.
+   */
+  no_raw_exit_trap_in_tests(ctx) {
+    if (process.env.AI_OS_STANDARDS_SKIP === "raw-exit-trap") return null;
+    if (!/^tests\/.*\.sh$/.test(ctx.relPath)) return null;
+    // The RUNNER is exempt, and only the runner. It does not source the cleanup registry —
+    // it IS the parent process that spawns suites — and it legitimately traps EXIT INT TERM
+    // so a Ctrl-C mid-run still tears down the sandbox. A suite has no such need: it has
+    // on_exit. Named explicitly rather than narrowing the rule's scope, which would also
+    // stop covering tests/lib/*.sh where the same mistake would be worse.
+    if (/^tests\/run\.sh$/.test(ctx.relPath)) return null;
+
+    const out = [];
+    const lines = ctx.lines ?? String(ctx.content ?? "").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const line = String(raw);
+      if (/^\s*#/.test(line)) continue;              // a comment is prose
+      if (/\bassert_\w+/.test(line)) continue;       // an assertion ABOUT traps quotes one
+      if (/\bbuiltin\s+trap\b/.test(line)) continue; // deliberate escape hatch
+      // A PER-LINE escape hatch, because a rule about traps cannot read a heredoc: a suite
+      // that BUILDS a fixture script containing `trap … EXIT` is writing data, not
+      // installing a handler. Requiring an explicit marker keeps that auditable — you can
+      // grep every suppression — rather than widening the pattern until it stops catching
+      // the real thing.
+      if (/#\s*standards:allow-raw-trap\b/.test(line)) continue;
+
+      // `trap` in COMMAND POSITION: line start, or after a separator. Not inside a quoted
+      // string, and not as an argument to something else.
+      const m = /(?:^|[;&|]|\bthen\b|\bdo\b|\belse\b)\s*trap\s+(?:'[^']*'|"[^"]*"|\S+)\s+(?:EXIT|exit|0)\b/.exec(line);
+      if (!m) continue;
+
+      out.push({
+        rule_id: ctx.rule.rule_id,
+        severity: "error",
+        line: i + 1,
+        detail:
+          `raw 'trap … EXIT' REPLACES the cleanup registry — use on_exit: ${line.trim().slice(0, 70)}`,
+      });
+    }
+    return out.length ? out : null;
+  },
+
   /**
    * D-060 §3 / E-232 — SKILL CONSENT. A `!`-prefixed line in a skill or agent file is run
    * by the harness the moment the file LOADS: before the agent has decided anything and

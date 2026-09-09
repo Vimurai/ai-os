@@ -192,7 +192,7 @@ assert_status 0 "blueprint reference present in comments" \
 # Set up sandbox dirs — file-based assertions sidestep quoting traps when
 # response text or stderr contain embedded newlines / JSON quotes.
 SBOX="$(mktemp -d -t e74-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 
 # Helper: persist the harness JSON to two files (response text + stderr) so
 # subsequent assertions can grep them without fighting bash quoting rules.

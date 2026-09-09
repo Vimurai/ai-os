@@ -19,7 +19,7 @@ echo "── Suite: cli_add_task (E-198) ─────────────
 # Fresh temp project with a state.json seed (getDb builds state.sqlite from it).
 PROJ="$(mktemp -d)"
 P9=""; P10=""; P11=""   # E-204 auto-handoff fixtures (created in T-09)
-trap 'rm -rf "$PROJ" "$P9" "$P10" "$P11"' EXIT
+on_exit 'rm -rf "$PROJ" "$P9" "$P10" "$P11"'
 mkdir -p "${PROJ}/.ai"
 cp "$TEMPLATE" "${PROJ}/.ai/state.json"
 

@@ -19,7 +19,7 @@ assert_status 0 "E-145.S0: _generate_memory_palace defined" \
   bash -c "type -t _generate_memory_palace >/dev/null 2>&1 || (source '${REPO_ROOT}/src/bin/ai' 2>/dev/null; type -t _generate_memory_palace >/dev/null)"
 
 # ── T-1: disable flag → skip, exit 0, no manifest ────────────────────────────
-TMP1="$(mktemp -d)"; trap 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}"' EXIT
+TMP1="$(mktemp -d)"; on_exit 'rm -rf "$TMP1" "${TMP2:-}" "${TMP3:-}"'
 ( cd "$TMP1" && mkdir -p .ai
   AIOS="${REPO_ROOT}" AI_OS_DISABLE_MEMORY_PALACE=1 bash -c "source '${REPO_ROOT}/src/bin/ai' 2>/dev/null; _generate_memory_palace" >/dev/null 2>&1 )
 assert_status 1 "T-1: disable flag → no palace-index.json written" test -f "$TMP1/.ai/memory/palace-index.json"

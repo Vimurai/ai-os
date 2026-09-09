@@ -81,7 +81,7 @@ assert_not_contains "P-8: full readFileSync no longer used for architect_v" \
 
 if command -v node &>/dev/null; then
   TMPDIR_P8=$(mktemp -d)
-  trap 'rm -rf "$TMPDIR_P8"' EXIT
+  on_exit 'rm -rf "$TMPDIR_P8"'
 
   # Write a test file with 100 lines
   printf '%s\n' {1..100} > "${TMPDIR_P8}/bigfile.txt"

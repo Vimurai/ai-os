@@ -41,7 +41,7 @@ assert_status 0 "DEFAULT_DLQ_PATH pinned"        grep -q '\.ai/memory/dlq\.json'
 assert_status 0 "blueprint reference present"    grep -q 'multimodal-rag-batching.md' "$POOL"
 
 SBOX="$(mktemp -d -t e76-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 
 # ── T-MWP-S02: Happy path — all sends succeed, concurrency observed ──────────
 echo ""

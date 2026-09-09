@@ -19,7 +19,7 @@ echo "── Suite: migrate_state_test ─────────────�
 
 # ── T-04.01: migrate-state seeds tasks from a well-formed TASKS.md fixture ──
 MIGRATE_DIR=$(mktemp -d)
-trap 'rm -rf "$MIGRATE_DIR"' EXIT
+on_exit 'rm -rf "$MIGRATE_DIR"'
 
 mkdir -p "${MIGRATE_DIR}/.ai"
 cp "$TEMPLATE" "${MIGRATE_DIR}/.ai/state.json"

@@ -70,7 +70,7 @@ rm -f "$SCHEMA_FILE"
 
 # Set up two sandboxed .ai/ dirs to compare local vs framework targets.
 SBOX="$(mktemp -d -t fw-route-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 
 mkdir -p "${SBOX}/local/.ai" "${SBOX}/framework/.ai"
 AIDIR="${SBOX}/local/.ai"     REPO_ROOT="${REPO_ROOT}" node --no-warnings "$SEED_LOCAL"

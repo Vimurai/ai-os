@@ -88,7 +88,7 @@ echo ""
 echo "  [T-WS-S05] _resolve_aios_workspace honours env > file > empty"
 
 SANDBOX="$(mktemp -d -t aios-ws-XXXXXX)"
-trap 'rm -rf "$SANDBOX"' EXIT
+on_exit 'rm -rf "$SANDBOX"'
 
 # Extract just the function to keep the sandbox hermetic.
 cat > "${SANDBOX}/helper.sh" <<'HELPER'

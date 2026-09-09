@@ -22,7 +22,7 @@ echo "===== git_hooks_stub_test.sh ====="
 # so the ai bin uses our sandbox instead of the real ~/.ai-os.
 
 TMP="$(mktemp -d -t aios-git-hooks-XXXXXX)"
-trap 'rm -rf "$TMP"' EXIT
+on_exit 'rm -rf "$TMP"'
 
 PROJECT="${TMP}/project"
 FAKE_AIOS="${TMP}/.ai-os"

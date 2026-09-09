@@ -20,7 +20,7 @@ AGGR_MIRROR="${HOME}/.ai-os/shared/incident-aggregate.mjs"
 echo "===== incident_aggregator_test.sh ====="
 
 SBOX="$(mktemp -d -t aggr-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 
 run_aggr() {
   HOME="$SBOX" node "$AGGR"

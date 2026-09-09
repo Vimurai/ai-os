@@ -102,6 +102,16 @@
         ".agents/**/SKILL.md",
         ".gemini/**/SKILL.md"
       ]
+    },
+    {
+      "rule_id": "no_raw_exit_trap_in_tests",
+      "severity": "error",
+      "threshold": 0,
+      "description": "A raw `trap 'cmd' EXIT` in a test suite REPLACES any existing EXIT handler, silently discarding the assert.sh cleanup registry — which is how 42 suites disabled their own teardown and E-227/E-228 leaked 50 tmux servers. Use `on_exit <cmd>`, which chains (D-064 / E-241). A test that ASSERTS something about traps is not flagged: comments, `assert_*` lines quoting a trap string, and an explicit `builtin trap` are all exempt, because a gate that rejects the tests verifying trap behaviour is the same failure E-224 and E-238 each had to avoid. Rollback: AI_OS_STANDARDS_SKIP=raw-exit-trap.",
+      "auto_fix_available": false,
+      "applies_to": [
+        "tests/**/*.sh"
+      ]
     }
   ]
 }

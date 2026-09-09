@@ -21,7 +21,7 @@ REGISTRY="${REPO_ROOT}/src/config/registry.json"
 echo "── Suite: telemetry_hook_matcher_test (E-105) ──────────────────────"
 
 SANDBOX="$(mktemp -d -t aios-hookmatch-XXXXXX)"
-trap 'rm -rf "$SANDBOX"' EXIT
+on_exit 'rm -rf "$SANDBOX"'
 
 # Extract just the claude-settings generator Python (uniquely prefixed with
 # AIOS_WORKSPACE_VALUE) between its <<'PY' marker and the closing PY.

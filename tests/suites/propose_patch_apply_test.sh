@@ -28,7 +28,7 @@ unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE 2>/dev/null || true
 # not weaken anything: the role gate itself is covered by patch_project_boundary_test, and
 # a caller_role argument may only ADD restriction, never lift it.
 export AI_OS_CALLER_ROLE=engineer
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 cat > "${PROJECT}/.ai/state.json" <<'JSON'
 { "version": "1.0", "project": {}, "tasks": [], "stamps": [], "deltas": [] }
