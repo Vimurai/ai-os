@@ -62,7 +62,12 @@ audit_with_aliases() {
   local content="$1"
   local path_hint="${2:-/claude/skills/test.md}"
   local MD_FILE
-  MD_FILE=$(mktemp /tmp/tmp_alias_XXXXXX.md)
+# `mktemp <tmpl>` only substitutes X's at the END of the template on BSD/macOS, so a
+# suffixed template like `/tmp/name_XXXXXX.mjs` is a FIXED, PREDICTABLE path — it does not
+# randomise at all. Two concurrent runs collide (`mkstemp failed: File exists`) and the
+# suite dies before its summary. A temp DIRECTORY plus a named file inside randomises on
+# both BSD and GNU and keeps the extension, which node needs to pick the ESM loader.
+  MD_DIR=$(mktemp -d); MD_FILE="$MD_DIR/alias.md"
   printf '%s' "$content" > "$MD_FILE"
   node --input-type=module -e "
     import { readFileSync } from 'fs';
@@ -107,7 +112,7 @@ audit_with_aliases() {
     console.log(status + '|' + violations.join(';'));
   " 2>/dev/null
   local rc=$?
-  rm -f "$MD_FILE"
+  rm -rf "$MD_DIR"
   return $rc
 }
 

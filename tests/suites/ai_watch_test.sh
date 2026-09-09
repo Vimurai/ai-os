@@ -494,24 +494,63 @@ assert_status 0 "E-123.SIG: EXIT trap releases the lock"             grep -qE "t
 
 # SIG behavioural: run main() (preconditions/lock/tmux mocked) in the background,
 # send a real SIGINT, and assert the process actually terminates.
-_sig_probe() {  # <signal> → EXITED | ALIVE   (set -m so a backgrounded loop gets a
-                # real, non-ignored SIGINT, mirroring a foreground tmux pane)
-  ( set -m 2>/dev/null
-    source "$WATCH" 2>/dev/null
-    _preconditions() { return 0; }
-    _acquire_lock() { return 0; }
-    _release_lock() { return 0; }
-    _reconcile_startup() { return 0; }
-    _drain_once() { return 0; }
-    SIGNAL="$(mktemp)"; printf '[]' > "$SIGNAL"; POLL_INTERVAL=0.2
-    main >/dev/null 2>&1 &
-    local mp=$!
-    sleep 0.5
-    kill "-$1" "$mp" 2>/dev/null
-    local i=0
-    while kill -0 "$mp" 2>/dev/null && [ "$i" -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
-    if kill -0 "$mp" 2>/dev/null; then kill -9 "$mp" 2>/dev/null; echo ALIVE; else echo EXITED; fi
-    rm -f "$SIGNAL" )
+_sig_probe() {  # <signal> → EXITED | ALIVE
+  # WHY THIS RUNS THROUGH python3 EXEC:
+  #   A shell cannot install a trap for a signal that was IGNORED when it started —
+  #   bash keeps such a signal ignored no matter what `trap` says. Job control ignores
+  #   SIGINT in background jobs, so the moment this suite runs as a background job (two
+  #   concurrent suite runs, which the PostToolUse AQG can produce) `main`'s
+  #   `trap 'exit 130' INT` became a no-op and the probe reported ALIVE on correct code.
+  #   Measured: traps installed (`ready=yes`), yet 92 SIGINTs over 9s did nothing and only
+  #   SIGKILL ended it — while the identical SIGTERM probe passed, because job control
+  #   ignores only INT and QUIT.
+  #
+  #   Dispositions survive exec, so resetting SIGINT/SIGTERM to SIG_DFL immediately
+  #   before exec'ing the probe shell makes the test independent of how the suite itself
+  #   was launched. That is the property a signal test needs and could not previously
+  #   assume.
+  #
+  #   The readiness marker is the other half: `_drain_once` is reached only AFTER main
+  #   installs its traps, so touching it proves the handlers exist. The original probe
+  #   guessed with `sleep 0.5`.
+  python3 - "$1" "$WATCH" <<'PYEOF' 2>/dev/null
+import os, signal, sys
+signal.signal(signal.SIGINT, signal.SIG_DFL)
+signal.signal(signal.SIGTERM, signal.SIG_DFL)
+sig, watch = sys.argv[1], sys.argv[2]
+script = r"""
+set -m 2>/dev/null
+source "$WATCH_PATH" 2>/dev/null
+_preconditions()     { return 0; }
+_acquire_lock()      { return 0; }
+_release_lock()      { return 0; }
+_reconcile_startup() { return 0; }
+READY="$(mktemp)"; rm -f "$READY"
+_drain_once() { : > "$READY"; return 0; }
+SIGNAL="$(mktemp)"; printf '[]' > "$SIGNAL"; POLL_INTERVAL=0.2
+main >/dev/null 2>&1 &
+mp=$!
+w=0
+while [ ! -e "$READY" ] && [ "$w" -lt 400 ]; do sleep 0.05; w=$((w + 1)); done
+( sleep 10; kill -9 "$mp" 2>/dev/null ) &
+wd=$!
+i=0
+while kill -0 "$mp" 2>/dev/null && [ "$i" -lt 60 ]; do
+  kill "-$SIG_NAME" "$mp" 2>/dev/null
+  sleep 0.1
+  i=$((i + 1))
+done
+rc=0
+wait "$mp" 2>/dev/null || rc=$?
+kill "$wd" 2>/dev/null
+rm -f "$SIGNAL" "$READY"
+# 130/143 come from the traps; 137 means only SIGKILL stopped it.
+case "$rc" in 130|143) echo EXITED ;; *) echo ALIVE ;; esac
+"""
+os.environ["WATCH_PATH"] = watch
+os.environ["SIG_NAME"] = sig
+os.execvp("bash", ["bash", "-c", script])
+PYEOF
 }
 assert_contains "E-123.SIG: SIGINT (Ctrl-C) terminates the watch loop" "EXITED" "$(_sig_probe INT)"
 assert_contains "E-123.SIG: SIGTERM terminates the watch loop"         "EXITED" "$(_sig_probe TERM)"

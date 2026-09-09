@@ -62,7 +62,12 @@ if command -v node &>/dev/null; then
   # caller supplying NO role was allowed to write anywhere — so the suite certified the
   # exact default-open behaviour E-219 exists to remove, and it passed because it was
   # testing a copy rather than the shipped code. It now imports the real module.
-  GUARD_SCRIPT=$(mktemp /tmp/e143_guard_XXXXXX.mjs)
+# `mktemp <tmpl>` only substitutes X's at the END of the template on BSD/macOS, so a
+# suffixed template like `/tmp/name_XXXXXX.mjs` is a FIXED, PREDICTABLE path — it does not
+# randomise at all. Two concurrent runs collide (`mkstemp failed: File exists`) and the
+# suite dies before its summary. A temp DIRECTORY plus a named file inside randomises on
+# both BSD and GNU and keeps the extension, which node needs to pick the ESM loader.
+  GUARD_DIR=$(mktemp -d); GUARD_SCRIPT="$GUARD_DIR/guard.mjs"
   cat > "$GUARD_SCRIPT" <<JSEOF
 import { architectScopeGuard, _resetCallerRoleCache } from "file://${REPO_ROOT}/src/mcp/shared/caller-role.mjs";
 
@@ -94,7 +99,7 @@ const ok =
 process.stdout.write(ok ? "PASS" : "FAIL " + JSON.stringify(results));
 JSEOF
   RESULT=$(AI_OS_CALLER_ROLE=architect CLAUDE_CODE_SESSION_ID= node "$GUARD_SCRIPT" 2>/dev/null || echo "error")
-  rm -f "$GUARD_SCRIPT"
+  rm -rf "$GUARD_DIR"
   if [[ "$RESULT" == "PASS" ]]; then
     _pass "e143: shipped guard blocks src/ for architect, allows .ai//plans/, and an OMITTED role no longer allows (E-219)"
   else

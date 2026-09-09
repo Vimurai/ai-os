@@ -1623,8 +1623,14 @@ except:
 
   echo "[MIGRATE-STATE] Parsing .ai/TASKS.md..."
 
-  local PARSED_TMPFILE
-  PARSED_TMPFILE=$(mktemp /tmp/ai_migrate_XXXXXX.json)
+  # `mktemp <tmpl>` only substitutes X's at the END of the template on BSD/macOS, so
+  # `/tmp/ai_migrate_XXXXXX.json` was a FIXED, PREDICTABLE path — it never randomised.
+  # Two concurrent migrations collide, and on a shared machine any other user can
+  # pre-create that exact path (as a symlink, even) because the name is known in advance.
+  # A private temp DIRECTORY randomises on both BSD and GNU and is not world-writable.
+  local PARSED_TMPDIR PARSED_TMPFILE
+  PARSED_TMPDIR=$(mktemp -d)
+  PARSED_TMPFILE="${PARSED_TMPDIR}/parsed.json"
 
   python3 - "$TASKS_FILE" "$PARSED_TMPFILE" <<'PY'
 import json, re, sys
@@ -1703,7 +1709,7 @@ PY
 
   if [[ "$TASK_COUNT" -eq 0 ]]; then
     echo "[MIGRATE-STATE] Warning: 0 tasks parsed. Check TASKS.md format."
-    rm -f "$PARSED_TMPFILE"
+    rm -rf "$PARSED_TMPDIR"
     exit 0
   fi
 
@@ -1746,7 +1752,7 @@ PY
     console.log('[MIGRATE-STATE] state.json: ' + appended + ' new task(s) appended, ' + existingIds.size + ' preserved (non-destructive).');
   " "$STATE_FILE" "$PARSED_TMPFILE"
 
-  rm -f "$PARSED_TMPFILE"
+  rm -rf "$PARSED_TMPDIR"
 
   echo ""
   echo "[MIGRATE-STATE] Migration complete."

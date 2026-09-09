@@ -52,7 +52,12 @@ assert_contains "lsp-mcp: findTsConfig helper"  "findTsConfig" "$LSP"
 
 # ── lsp-mcp: positionToOffset logic test ─────────────────────────────────────
 if command -v node &>/dev/null; then
-  OFFSET_SCRIPT=$(mktemp /tmp/lsp_test_XXXXXX.mjs)
+# `mktemp <tmpl>` only substitutes X's at the END of the template on BSD/macOS, so a
+# suffixed template like `/tmp/name_XXXXXX.mjs` is a FIXED, PREDICTABLE path — it does not
+# randomise at all. Two concurrent runs collide (`mkstemp failed: File exists`) and the
+# suite dies before its summary. A temp DIRECTORY plus a named file inside randomises on
+# both BSD and GNU and keeps the extension, which node needs to pick the ESM loader.
+  OFFSET_DIR=$(mktemp -d); OFFSET_SCRIPT="$OFFSET_DIR/offset.mjs"
   cat > "$OFFSET_SCRIPT" <<'JSEOF'
 function positionToOffset(content, line, col) {
   const lines = content.split("\n");
@@ -66,7 +71,7 @@ const off = positionToOffset(src, 2, 3);
 process.stdout.write(off === 8 ? "OK" : "FAIL:" + off);
 JSEOF
   OFFSET_TEST=$(node "$OFFSET_SCRIPT" 2>/dev/null || echo "ERROR")
-  rm -f "$OFFSET_SCRIPT"
+  rm -rf "$OFFSET_DIR"
   if [[ "$OFFSET_TEST" == "OK" ]]; then
     _pass "lsp-mcp: positionToOffset correctly maps (line=2,col=3) → offset 8"
   else
@@ -115,7 +120,7 @@ EXPECTED_MD5="5eb63bbbe01eeed093cb22bb8f5acdc3"
 
 if command -v node &>/dev/null; then
   # Test 1: MD5 of "hello world"
-  MD5_SCRIPT=$(mktemp /tmp/patch_md5_XXXXXX.mjs)
+  MD5_DIR=$(mktemp -d); MD5_SCRIPT="$MD5_DIR/md5.mjs"
   cat > "$MD5_SCRIPT" <<JSEOF
 import { createHash } from "crypto";
 import { readFileSync } from "fs";
@@ -123,7 +128,7 @@ const content = readFileSync(process.argv[2], "utf8");
 process.stdout.write(createHash("md5").update(content).digest("hex"));
 JSEOF
   ACTUAL_MD5=$(node "$MD5_SCRIPT" "$TEST_FILE" 2>/dev/null || echo "error")
-  rm -f "$MD5_SCRIPT"
+  rm -rf "$MD5_DIR"
   if [[ "$ACTUAL_MD5" == "$EXPECTED_MD5" ]]; then
     _pass "patch-mcp: MD5 of 'hello world' = $EXPECTED_MD5 (correct)"
   else
@@ -132,7 +137,7 @@ JSEOF
 
   # Test 2: patch logic — apply old→new replacement
   echo "foo bar baz" > "${TMPDIR_TEST}/patch_test.txt"
-  PATCH_SCRIPT=$(mktemp /tmp/patch_logic_XXXXXX.mjs)
+  PATCH_DIR=$(mktemp -d); PATCH_SCRIPT="$PATCH_DIR/logic.mjs"
   cat > "$PATCH_SCRIPT" <<'JSEOF'
 import { readFileSync, writeFileSync } from "fs";
 const p = process.argv[2];
@@ -142,7 +147,7 @@ writeFileSync(p, patched);
 process.stdout.write("OK");
 JSEOF
   node "$PATCH_SCRIPT" "${TMPDIR_TEST}/patch_test.txt" 2>/dev/null || true
-  rm -f "$PATCH_SCRIPT"
+  rm -rf "$PATCH_DIR"
   RESULT=$(cat "${TMPDIR_TEST}/patch_test.txt")
   if [[ "$RESULT" == "foo QUX baz" ]]; then
     _pass "patch-mcp: patch logic correctly applies old→new replacement"
@@ -151,7 +156,7 @@ JSEOF
   fi
 
   # Test 3: MD5 changes after patch
-  MD5B_SCRIPT=$(mktemp /tmp/patch_md5b_XXXXXX.mjs)
+  MD5B_DIR=$(mktemp -d); MD5B_SCRIPT="$MD5B_DIR/md5b.mjs"
   cat > "$MD5B_SCRIPT" <<'JSEOF'
 import { createHash } from "crypto";
 process.stdout.write(createHash("md5").update(process.argv[2]).digest("hex"));
@@ -160,7 +165,7 @@ JSEOF
 " 2>/dev/null || echo "")
   AFTER_MD5=$(node "$MD5B_SCRIPT" "foo QUX baz
 " 2>/dev/null || echo "")
-  rm -f "$MD5B_SCRIPT"
+  rm -rf "$MD5B_DIR"
   if [[ "$BEFORE_MD5" != "$AFTER_MD5" && -n "$BEFORE_MD5" && -n "$AFTER_MD5" ]]; then
     _pass "patch-mcp: MD5 changes after applying patch (staleness detection works)"
   else
