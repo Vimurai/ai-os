@@ -171,6 +171,16 @@ export const RULE_REGISTRY = {
       "python", "python3", "perl", "ruby", "source", ".",
       "tsx", "ts-node", "deno", "bun",
     ]);
+    // D-061 §2 rollback: restores the pre-E-234 walk, which graded every operand as a
+    // candidate program. Kept because the narrowing REMOVES findings, and a gate that
+    // stops reporting needs a way back to the louder behaviour if that proves wrong.
+    const PROGRAM_POSITION = process.env.AI_OS_STANDARDS_SKIP !== "program-position";
+    // Wrappers that RESTART program position: what follows them is a program again.
+    // Without this, `env FOO=1 node src/bin/ai` and `command node src/bin/ai` would read
+    // as "a wrapper with arguments" and the real interpreter would never be reached.
+    const POSITION_RESTARTERS = new Set([
+      "env", "sudo", "nohup", "time", "command", "exec", "xargs", "eval",
+    ]);
     // Flags whose OPERAND is code, not a path.
     const INLINE_CODE_FLAG = /^-{1,2}(e|c|p|eval|print|exec|X)$/;
     // Shell keywords that introduce command position, so `then . src/bin/ai` is a source.
@@ -218,10 +228,20 @@ export const RULE_REGISTRY = {
     // teaches people to bypass it, which is the failure this whole sprint kept removing.
     const trimOperand = (t) => String(t).replace(/^["'`]+/, "").replace(/["'`]+$/, "").replace(/[;&|)]+$/, "");
 
+    // D-061 §2 / E-234: a token with a DATA-typed extension is never a program, in any
+    // position. `memory_curator.md` was blocked six times for
+    //   node "${AIOS}/shared/memory-worker-pool.mjs" --dlq-show .ai/memory/dlq.json
+    // where the program is correctly resolved through ${AIOS} and the flagged token is an
+    // argument to a --dlq-show flag. Position alone must not launder one either: putting a
+    // .json first does not make it a program, which is why this is tested on the TOKEN and
+    // not on where it sits.
+    const DATA_EXT = /\.(json|md|txt|yml|yaml|sqlite|ndjson|csv|log)$/i;
+
     const isProjectControlled = (raw) => {
       const rawTok = String(raw);
       const t = trimOperand(rawTok);
       if (/^\d*[<>]/.test(t)) return false;              // a redirect, not a path
+      if (PROGRAM_POSITION && DATA_EXT.test(t)) return false;   // data, not a program
       // Tested on the RAW token as well: the leading backtick IS the marker, so stripping
       // quotes first hid `` `pwd`/src/... `` from the project-root check.
       if (PROJECT_ROOTED.test(rawTok) || PROJECT_ROOTED.test(t)) return true;
@@ -331,6 +351,19 @@ export const RULE_REGISTRY = {
           if (isProjectControlled(t) && !isAccepted(t)) {
             bad = trimOperand(t);
             break;
+          }
+          // D-061 §2: program position CLOSES once an operand resolves the program.
+          //
+          // It deliberately stays OPEN for two kinds of operand, because neither tells us
+          // what actually runs: a variable this rule cannot read (`node "$HELPER" …`), and
+          // an allowlisted entrypoint (`bash tests/run.sh …`). D-061 keeps both of those
+          // walking, so `bash tests/run.sh src/bin/ai` is still caught. Anything else —
+          // an absolute path, a home-anchored path, a plain word — RESOLVES the program,
+          // and every token after it is an argument.
+          if (PROGRAM_POSITION && !POSITION_RESTARTERS.has(trimOperand(t))) {
+            const tt = trimOperand(t);
+            const unresolved = /^\$/.test(tt) || PROJECT_ROOTED.test(t) || isAccepted(t) || DATA_EXT.test(tt);
+            if (!unresolved) break;
           }
           // Keep walking — but only within THIS command. Breaking unconditionally after
           // the first non-flag token stopped the scan on an operand that was merely

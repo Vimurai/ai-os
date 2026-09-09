@@ -1534,6 +1534,58 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-234",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement the program-position rule per D-061 §2 in src/shared/standards-checker.mjs (skill_consent_no_project_exec + the E-231 operand walk): a token is walked as a program ONLY when it is the segment head, the first non-option operand after an interpreter (node/bash/sh/zsh/python*/perl/ruby/deno/bun), or the operand after a wrapper that restarts program position (-c, eval, exec, xargs, env, sudo, nohup, time, command, source/.); every other token is an argument and is not walked; tokens with a data-typed extension (.json .md .txt .yml .yaml .sqlite .ndjson .csv .log) are never programs in any position. Add fixtures in BOTH directions FIRST (D-056 R3), including the six memory_curator.md hits as allowed and 'bash tests/run.sh src/bin/ai' / 'bash -c \"node src/bin/ai\"' as caught; AI_OS_STANDARDS_SKIP=program-position restores the full walk. Acceptance: memory_curator.md passes the rule unchanged; 187-file corpus clean; standards suite green both ways; mirrors synced.",
+      "created_at": "2026-09-09T18:13:19.376Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-235",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Move the Playwright browser download out of the default install per D-061 §3: install-ai-os.sh / do_mcp_setup no longer run 'npx playwright install chromium'; add 'ai mcp-setup --browsers' (explicit, bounded by a timeout, prints progress) and make vibe-check-mcp detect a missing browser and return a clear '[BROWSER_MISSING] run: ai mcp-setup --browsers' rejection instead of hanging; AI_OS_INSTALL_BROWSERS=1 restores the old behaviour. Run skill ci_gate and update .github/workflows/test.yml to install browsers in an explicit cached step so the vibe suites still run. Acceptance: a fresh install completes without network access to the Playwright CDN; ci green; doctor reports browser status; DEVOPS.md updated; mirrors synced.",
+      "created_at": "2026-09-09T18:13:19.460Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-236",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Add the environment-dependence check per D-061 §4: add the standing question 'does this assertion depend on what the running machine happens to have (installed CLIs, ambient tmux server, node_modules contents, mirror state)?' to src/claude/skills/ai-review/SKILL.md and src/claude/agents/critic_tests.md; add skip_unless_cmd and skip_unless_env helpers to tests/lib/assert.sh that record a SKIP line (counted separately in SUITE_RESULT) instead of a PASS/FAIL; convert the three tests fixed this sprint to use them where a requirement is genuinely optional. Acceptance: harness suite covers SKIP accounting; full suite green locally and on CI; mirrors synced.",
+      "created_at": "2026-09-09T18:13:19.556Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-237",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Hot-reload policy modules in long-running MCP servers per D-061 §5: add src/mcp/shared/load-policy.mjs exporting loadPolicy(name) that dynamically imports traversal-policy / markdown-exec / architect-writes / caller-role with a cache-busting query when the module's mtime changed since the last load (E-229 pattern); orchestrator-mcp run_review and the other consumers call it per request instead of a static import; AI_OS_POLICY_HOT_RELOAD=0 restores static imports; 'ai sync' prints a one-line notice naming running servers whose loaded policy is older than the mirror. Acceptance: a test rewrites traversal-policy.mjs while a server is running and the next run_review reflects the change; no double-import leak (module count bounded); orchestrator suite green; mirrors synced.",
+      "created_at": "2026-09-09T18:13:19.637Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -3125,6 +3177,13 @@
       "task_id": "E-228",
       "timestamp": "2026-09-09T17:41:40.114Z",
       "summary": "E-228 Tier-1: full suite 4317/0, ai_start_surface 31/0, ai_start 49/0. `ai start --status` reports panes plus the watcher BY ITS LOCK (a pane title proves nothing; the lock enforces single-writer) and distinguishes a live holder from a stale one; exits 0 when idle so callers need no `|| true`. `--kill` stops the watcher first and waits (it releases the lock from an EXIT trap; killing the window first leaves the stale lock E-229 spent a sprint on), and REFUSES with exit 2 without --yes on non-interactive stdin — no prompt exists in a pipeline, so silence must not read as consent. Suite pins the window SURVIVES the refusal, not just that a message printed. doctor reports tmux/roles/provider-on-PATH separately. README keeps the manual recipe (tmux-less hosts still need it). Fixed my own probe bug: `grep -c` prints 0 AND exits 1, so `|| printf 0` yielded \"0\\n0\"."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-234",
+      "timestamp": "2026-09-09T18:26:22.853Z",
+      "summary": "E-234 Tier-2: full suite 4352/0. Program-position rule per D-061 §2. Fixtures first; baseline 19/16 showed all 16 failures were the over-blocks and all 12 previously-caught shapes ALREADY passed, so the narrowing is verified to trade nothing away. Resolved the ruling's internal tension (bash tests/run.sh src/bin/ai must stay caught) by closing position only on an operand that RESOLVES the program — a variable or an allowlisted entrypoint leaves it open. Data-typed extensions never programs in any position. Corpus 216 files, 0 findings (was 6); tightened E-231.06b from ≤6 to =0. Rollback verified behavioural (0→2). Two P0s adjudicated: PATH_TRAVERSAL is the stale-module artifact E-237 will fix (on-disk classifier says P1/anchor=self_dir), SOVEREIGNTY is the Architect's own .ai/blueprints edits which D-061 directed the Engineer to proxy-commit."
     }
   ],
   "deltas": [

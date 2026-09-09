@@ -894,3 +894,46 @@ All four previously stacked branches are merged: `origin/master` is at `6b8e5f8`
 §1 delete the workflow. §2 `AI_OS_STANDARDS_SKIP=operand-retokenise`. §3 revert the two SKILL.md edits; rule gated by `AI_OS_STANDARDS_SKIP=skill-consent`. §4 remove the `.gitignore` lines. Extensions: `AI_OS_REVIEW_STRICT_TRAVERSAL=1` grades everything as code.
 
 ---
+
+---
+
+## [[D-061]] — Program-Position Rule for Operand Walks; E-231/E-232 Divergences Ratified; Install, Test-Policy and Hot-Module Follow-ups
+
+**Date**: 2026-09-09
+**Task**: E-234, E-235, E-236, E-237 (Engineer handoff 2026-09-09 18:05 UTC; E-227..E-233 complete, master `892f06c`, CI green)
+**Decision**: (§1) Ratify both implementation notes: the consent rule is a denylist of EXECUTION shapes ("execution, not mention"), and operand re-tokenisation is capped at depth 1 with the residual asserted. (§2) Resolve the `memory_curator` over-block by a **program-position rule**: only tokens in program position are walked as programs; everything else is an argument. (§3) Move the Playwright browser download out of the default install path. (§4) Add an environment-dependence check to the test review policy plus a skip helper. (§5) Long-running MCP servers reload policy modules on mtime change.
+
+### §1 — Divergences: RATIFIED
+1. **Denylist of execution shapes.** D-060 §3's "may only (a)… or (b)…" stated intent; an allowlist mechanism would reject every ordinary `git`/`grep` context line. The line is EXECUTION of a project-supplied program, not mention of one: `npm run` blocked, `npm audit` allowed. Ratified as the rule's definition.
+2. **Depth cap 1.** `bash -c "bash -c \"…\""` is asserted as uncaught. A nested wrapper inside a skill file is itself a smell the reviewer sees; ratified.
+
+### §2 — Program-position rule (E-234, Tier 2)
+`memory_curator.md:178-179` is blocked because `.ai/memory/dlq.json` — the DATA argument of `--dlq-show` — is walked as if it were a program. The Engineer correctly declined to change the rule's core alone. Ruling: within a command segment, a token is in **program position** only when it is (a) the segment head; (b) the first non-option operand after an interpreter (`node`, `bash`, `sh`, `zsh`, `python*`, `perl`, `ruby`, `deno`, `bun`); or (c) the operand following a wrapper that restarts program position (`-c`, `eval`, `exec`, `xargs`, `env`, `sudo`, `nohup`, `time`, `command`, `source`/`.`). Every other token is an **argument** and is not walked. Independently, tokens with a data-typed extension (`.json`, `.md`, `.txt`, `.yml`/`.yaml`, `.sqlite`, `.ndjson`, `.csv`, `.log`) are never programs in any position. Consequences, stated: `bash tests/run.sh src/bin/ai` stays caught (b); `node "${AIOS}/shared/x.mjs" tests/run.sh` is NOT flagged — the framework helper, not the skill line, decides what it does with its argument, and that helper is already install-resolved (E-223/E-225). Fixtures in both directions come first (D-056 R3), including the six `memory_curator` hits as positives-for-allow.
+
+### §3 — Playwright download out of the default path (E-235, Tier 2, `ci_gate`)
+`install-ai-os.sh` → `do_mcp_setup` downloads Chromium for `vibe-check-mcp` unbounded; it ran over an hour locally and never finished. Ruling: the default install does NOT download browsers. `ai mcp-setup --browsers` (explicit) or the first `vibe-check` invocation (prompting, bounded by a timeout) does. CI installs browsers in an explicit, cached step so the vibe suites still run there.
+
+### §4 — Environment-dependence review check (E-236, Tier 1)
+Three tests this sprint passed on a developer Mac and failed on CI (mirror byte-identity, an unpruned `node_modules` corpus scan, an ambient tmux server). Ruling: the `ai-review` skill and the `critic_tests` agent gain a standing question — "does this assertion depend on what the running machine happens to have?" — and `tests/lib/assert.sh` gains `skip_unless_cmd` / `skip_unless_env` helpers that record a SKIP rather than a false PASS/FAIL. `test-harness-isolation.md` records the rule.
+
+### §5 — Hot policy modules in long-running servers (E-237, Tier 1)
+`orchestrator-mcp` kept grading with a stale `traversal-policy.mjs` for a whole session after the mirror changed, so `run_review` cried wolf on every review. Ruling: policy modules (`traversal-policy`, `markdown-exec`, `architect-writes`, `caller-role`) are loaded through one `loadPolicy(name)` helper that re-imports on mtime change (cache-busting `import()` query) — the E-229 pattern applied to MCP. `ai sync` prints which running servers hold stale modules until reload.
+
+### Alternatives considered
+1. **§2: stop the walk at the first operand** — rejected; `bash tests/run.sh src/bin/ai`-style chains and wrapper tokens must still restart the walk. **§2: allowlist `.ai/memory/*` paths** — rejected; file-specific, does not fix the class.
+2. **§3: keep the download and add a timeout only** — rejected; a timeout on a required step is a flaky install.
+3. **§5: restart servers after sync** — rejected as the only path; the harness does not restart MCP servers, and the operator cannot see which one is stale.
+
+### Constraints driving this decision
+- Over-blocks outrank under-blocks on gates touching the codebase's own idiom (D-056 R3 lineage).
+- A rule's mechanism may differ from a ruling's phrasing when the phrasing was intent; the divergence note is the contract (D-058 §5).
+- Verification must run where the property is claimed (D-060 §1).
+
+### Impact
+- Unlocks: E-234 (T2), E-235 (T2), E-236 (T1), E-237 (T1). Order: E-234 → E-237 → E-236 → E-235.
+- Risk if wrong: §2 under-flags a project script smuggled as an argument to a framework helper — accepted; the helper is install-resolved and reviewed.
+
+### Rollback
+§2 `AI_OS_STANDARDS_SKIP=program-position` restores the full walk. §3 `AI_OS_INSTALL_BROWSERS=1` restores the download in install. §4 process + helper only. §5 `AI_OS_POLICY_HOT_RELOAD=0`.
+
+---

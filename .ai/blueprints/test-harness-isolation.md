@@ -29,3 +29,6 @@ Revert the test harness changes to point back to the hardcoded `.mcp.json` modif
 ## E-## Task Breakdown
 - **E-156**: Implement `.mcp.test.json` generation and isolated config loading in `tests/run.sh`.
 - **E-157**: Add robust bash trap cleanup logic to remove test artifacts.
+
+## Environment Dependence (D-061 §4, 2026-09-09)
+Three tests in the D-059/D-060 sprint passed on a developer Mac and failed on CI: a mirror byte-identity check, an unpruned `node_modules` corpus scan, and an assertion that assumed an ambient tmux server. Rule: every assertion must state what it requires of the machine, and a requirement that is genuinely optional is expressed with `skip_unless_cmd` / `skip_unless_env` (a recorded SKIP, never a fabricated PASS or FAIL). The `ai-review` skill and the `critic_tests` agent ask the standing question "does this assertion depend on what the running machine happens to have?" on every test diff. → E-236.

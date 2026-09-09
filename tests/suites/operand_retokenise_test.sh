@@ -143,8 +143,12 @@ export REPO_ROOT
 _scan="$(_corpus)"; _files="${_scan%% *}"; _found="${_scan##* }"
 assert_status 0 "E-231.06a: the corpus scan actually read files (files=${_files})" \
   bash -c "[[ '${_files:-0}' -gt 100 ]]"
-assert_status 0 "E-231.06b: no NEW corpus findings — still the 6 pre-existing (found=${_found})" \
-  bash -c "[[ '${_found:-99}' -le 6 ]]"
+# Tightened by E-234 (D-061 §2): the six pre-existing memory_curator hits were a DATA
+# argument read as a program, and the program-position rule removed them. The corpus is
+# now genuinely clean, so assert 0 rather than "at most 6" — a ceiling that no longer
+# binds would let a real new finding slip in under it.
+assert_status 0 "E-231.06b: the corpus has NO findings (found=${_found})" \
+  bash -c "[[ '${_found:-99}' -eq 0 ]]"
 
 echo ""
 assert_summary
