@@ -200,7 +200,9 @@ if [[ -f "$AGENT_MIRROR" ]]; then
   assert_status 1 "~/.ai-os copy carries no Claude-only keys (strip ran)" \
     grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
 else
-  echo "    ⚠  ~/.ai-os mirror absent — skipping"
+  # E-236: an absent install is a SKIP, counted separately from PASS — a pass here would
+  # claim the mirror had been verified when nothing was compared.
+  _skip "~/.ai-os copy comparison (framework not installed)"
 fi
 
 # ── T-SCG-S11: Blueprint reference ──────────────────────────────────────────

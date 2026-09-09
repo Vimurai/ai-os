@@ -9,6 +9,7 @@ PATTERN="${1:-*_test.sh}"
 
 TOTAL_PASS=0
 TOTAL_FAIL=0
+TOTAL_SKIP=0
 SUITE_RESULTS=()
 
 # Colour control — only emit ANSI escapes when stdout is an interactive TTY.
@@ -68,7 +69,10 @@ for suite in "${SUITES[@]}"; do
   summary=$(echo "$output" | grep "^SUITE_RESULT" | tail -1 || true)
   passes=$(echo "$summary" | grep -oE 'PASS=[0-9]+' | grep -oE '[0-9]+' || echo 0)
   fails=$(echo "$summary"  | grep -oE 'FAIL=[0-9]+' | grep -oE '[0-9]+' || echo 0)
-  passes="${passes:-0}"; fails="${fails:-0}"
+  # E-236: SKIP is optional in the summary line, so an older suite that does not emit it
+  # still parses. A skip is neither a pass nor a failure — it is a layer that did not run.
+  skips=$(echo "$summary"  | grep -oE 'SKIP=[0-9]+' | grep -oE '[0-9]+' || echo 0)
+  passes="${passes:-0}"; fails="${fails:-0}"; skips="${skips:-0}"
 
   # If the suite script itself crashed (non-zero exit, no SUITE_RESULT line), count it as 1 failure
   if [[ $suite_exit -ne 0 && -z "$summary" ]]; then
@@ -77,9 +81,14 @@ for suite in "${SUITES[@]}"; do
 
   TOTAL_PASS=$(( TOTAL_PASS + passes ))
   TOTAL_FAIL=$(( TOTAL_FAIL + fails ))
+  TOTAL_SKIP=$(( TOTAL_SKIP + skips ))
 
   if [[ $fails -eq 0 && $suite_exit -eq 0 ]]; then
-    SUITE_RESULTS+=("  ${C_OK}✓${C_RESET} $suite_name ($passes passed)")
+    if [[ $skips -gt 0 ]]; then
+      SUITE_RESULTS+=("  ${C_OK}✓${C_RESET} $suite_name ($passes passed, $skips skipped)")
+    else
+      SUITE_RESULTS+=("  ${C_OK}✓${C_RESET} $suite_name ($passes passed)")
+    fi
   else
     SUITE_RESULTS+=("  ${C_FAIL}✗${C_RESET} $suite_name ($passes passed, $fails failed)")
   fi
@@ -95,7 +104,13 @@ for result in "${SUITE_RESULTS[@]}"; do
   printf "$result\n"
 done
 echo ""
-echo "   Total: $TOTAL_PASS passed, $TOTAL_FAIL failed"
+# E-236: skips are reported alongside the totals, never folded into "passed". A run that
+# quietly stops exercising a layer must be visible here rather than reading as all-green.
+if [[ "${TOTAL_SKIP:-0}" -gt 0 ]]; then
+  echo "   Total: $TOTAL_PASS passed, $TOTAL_FAIL failed, $TOTAL_SKIP skipped"
+else
+  echo "   Total: $TOTAL_PASS passed, $TOTAL_FAIL failed"
+fi
 echo ""
 
 if [[ $TOTAL_FAIL -eq 0 ]]; then

@@ -121,9 +121,16 @@ rm -rf "$SBOX"
 echo ""
 echo "  [T-MCPDOC-S06] --check mode does not modify mcp.md"
 
-MCP_MTIME_BEFORE=$(stat -f %m "$MCP_MD" 2>/dev/null || stat -c %Y "$MCP_MD" 2>/dev/null)
+# E-236: `file_mtime` instead of a `stat -f … || stat -c …` chain. On Linux the BSD form
+# means --file-system, so GNU stat printed a whole filesystem REPORT for the operand and
+# exited non-zero — and the `||` inside one substitution captured BOTH outputs. The
+# resulting blob contains free-block counts, which change as the machine works, so BEFORE
+# and AFTER differed even though --check never touched the file. That is why this assertion
+# flaked on CI (master run 34387218090) while passing on macOS, where the BSD form succeeds
+# first and the GNU form is never reached. Same defect as E-229's `_self_stamp`.
+MCP_MTIME_BEFORE="$(file_mtime "$MCP_MD")"
 node "$GEN" --check >/dev/null 2>&1
-MCP_MTIME_AFTER=$(stat -f %m "$MCP_MD" 2>/dev/null || stat -c %Y "$MCP_MD" 2>/dev/null)
+MCP_MTIME_AFTER="$(file_mtime "$MCP_MD")"
 assert_status 0 "mcp.md mtime unchanged after --check run" \
   test "$MCP_MTIME_BEFORE" = "$MCP_MTIME_AFTER"
 

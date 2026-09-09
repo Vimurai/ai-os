@@ -37,6 +37,36 @@ If new tests were added in this diff:
 - Tests must cover both positive and negative cases where applicable.
 - Empty or stub tests = **P1**.
 
+### Environment dependence (ask this of EVERY assertion — E-236, D-061 §4)
+
+> **Does this assertion depend on what the running machine happens to have?**
+> Installed CLIs, an ambient tmux server, the contents of `node_modules`, the state of the
+> `~/.ai-os` mirror, an inherited environment variable.
+
+If yes, the test is not measuring the code — it is measuring the host, and it will pass on
+a developer machine and fail on CI (or, far worse, pass on CI while asserting nothing).
+
+Five defects in the 2026-09-09 sprint were exactly this, and each was invisible locally:
+
+| Assertion | What it actually measured |
+|---|---|
+| `~/.ai-os` gemini mirror byte-identity | whether that machine's mirror predated a strip |
+| `ls` exit code 1 for a missing path | BSD vs GNU coreutils |
+| an unpruned `node_modules` corpus scan | whether deps happened to be installed |
+| "nothing is running" for tmux | whether a tmux server happened to be up |
+| MCP caller role | an inherited `AI_OS_CALLER_ROLE` from settings |
+
+**Two different fixes, and picking the wrong one hides the problem:**
+
+- The dependency is **accidental** → make the test SUPPLY what it needs (a scratch `HOME`,
+  a private socket with no server, a pruned `find`, an explicit env var). Most cases.
+- The dependency is **genuinely optional** → `skip_unless_cmd` / `skip_unless_env` from
+  `tests/lib/assert.sh`, which record a SKIP counted separately from PASS.
+
+Never let an unmet optional requirement count as a pass: that is how a suite reports
+all-green while testing less than it claims. **P1** when an assertion's verdict depends on
+the host and the test could have supplied the dependency itself.
+
 ### 4. Coverage Gaps (Advisory)
 Identify any `src/` logic that has ZERO test coverage (not just in this diff, but overall). List as P2 advisory items — not blocking.
 
