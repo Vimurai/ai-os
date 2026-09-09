@@ -30,7 +30,8 @@ import { readFileSync, writeFileSync, existsSync, statSync } from "fs";
 import { resolve, relative } from "path";
 import { createHash } from "crypto";
 import { createLogger } from "../shared/logger.js";
-import { architectScopeGuard } from "../shared/caller-role.mjs";
+import { architectScopeGuard as _staticScopeGuard } from "../shared/caller-role.mjs";
+import { loadPolicy } from "../shared/load-policy.mjs";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
 const logger = createLogger("patch-mcp");
@@ -62,8 +63,27 @@ function safePath(filePath, cwd) {
  * falls back to `architect` (the RESTRICTED role) when there is no evidence.
  * The argument survives as advisory: it may add restriction, never lift it.
  */
+
+// ── E-237 (D-061 §5): per-request policy refresh ─────────────────────────────
+// The policy modules are re-read at the TOP of each request rather than awaited at every
+// call site. The guards below are small SYNCHRONOUS helpers used from many places in a
+// security-critical path; making them async would ripple through the whole file, and a
+// security gate is the wrong place for a wide mechanical refactor.
+//
+// The static import stays as the initial value and as the fail-safe: if a reload ever
+// throws, the previous good policy keeps deciding rather than the guard becoming
+// undefined. A gate that disappears is far worse than a gate that is one version behind.
+let _rolePolicy = { architectScopeGuard: _staticScopeGuard };
+async function refreshPolicies() {
+  try {
+    _rolePolicy = await loadPolicy("caller-role");
+  } catch {
+    /* keep the last good policy — never leave the guard undefined */
+  }
+}
+
 function roleGuard(callerRole, absPath, cwd) {
-  return architectScopeGuard(callerRole, absPath, cwd);
+  return _rolePolicy.architectScopeGuard(callerRole, absPath, cwd);
 }
 
 // ── Server ────────────────────────────────────────────────────────────────────
@@ -138,6 +158,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 instrument(server, "patch-mcp", CallToolRequestSchema);
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  await refreshPolicies();   // E-237: pick up a policy `ai sync` refreshed under us
   const { name, arguments: args } = request.params;
   const cwd = process.cwd();
 

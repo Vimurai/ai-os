@@ -14,7 +14,13 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { instrument } from "../../shared/mcp-telemetry.mjs";
-import { classifyDiffTraversal } from "../../shared/traversal-policy.mjs";
+// E-237 (D-061 §5): the traversal POLICY is loaded per request, not once at spawn.
+// This server lives for the whole session and ESM caches a module by URL forever, so a
+// policy refreshed by `ai sync` never reached the running process. Throughout the
+// 2026-09-09 sprint this reported a P0 PATH_TRAVERSAL on a line the on-disk module graded
+// P1 — every review had to be adjudicated by hand. A gate that cries wolf is worse than
+// one that is merely wrong, because people learn to wave it through.
+import { loadPolicy } from "../shared/load-policy.mjs";
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, openSync, readSync, closeSync } from "fs";
 import { resolve } from "path";
 import { spawnSync } from "child_process";
@@ -371,6 +377,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // gate to the only markdown that actually runs. So `src/shared/markdown-exec.mjs`
       // decides per line, and non-markdown files are graded in full as before.
       const strictTraversal = process.env.AI_OS_REVIEW_STRICT_TRAVERSAL === "1";
+      const { classifyDiffTraversal } = await loadPolicy("traversal-policy");
       const { traversal, proseExec } = classifyDiffTraversal(diff, {
         strict: strictTraversal,
         readFile: (f) => readFileSync(resolve(cwd, f), "utf8"),

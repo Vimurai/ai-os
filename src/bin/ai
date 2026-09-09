@@ -1970,6 +1970,78 @@ _ensure_generated_gitignore() {
   echo "  .gitignore: added ${#add[@]} AI-OS generated-artefact pattern(s)"
 }
 
+# _report_policy_staleness — name any MCP server process that started before the policy
+# modules were last written (E-237 / D-061 §5).
+#
+# The comparison is START TIME vs FILE mtime, because that is what actually decides whether
+# a running process can have the new policy: a server older than the file cannot have
+# imported it, hot-reload or not. Reported per server rather than as one global verdict, so
+# the operator knows which pane to restart.
+#
+# Fail-open throughout: this is a NOTICE. A diagnostic that can break `ai sync` is worse
+# than no diagnostic.
+_report_policy_staleness() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  local newest=0 f
+  for f in "${AIOS}/shared/traversal-policy.mjs" "${AIOS}/shared/markdown-exec.mjs" \
+           "${AIOS}/mcp/safe-exec-mcp/architect-writes.mjs" "${AIOS}/mcp/shared/caller-role.mjs"; do
+    [[ -f "$f" ]] || continue
+    local m
+    m="$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)"
+    [[ "${m:-0}" -gt "$newest" ]] && newest="$m"
+  done
+  [[ "$newest" -eq 0 ]] && return 0
+
+  local stale
+  stale="$(NEWEST="$newest" python3 - <<'PY' 2>/dev/null || true
+import os, re, subprocess, time
+newest = int(os.environ.get("NEWEST", "0"))
+try:
+    out = subprocess.run(["ps", "-axo", "pid=,etime=,command="],
+                         capture_output=True, text=True, timeout=5).stdout
+except Exception:
+    raise SystemExit(0)
+
+def secs(et):
+    et = et.strip()
+    d, _, rest = et.partition("-")
+    if not rest:
+        rest, d = d, "0"
+    parts = [int(x) for x in rest.split(":")]
+    while len(parts) < 3:
+        parts.insert(0, 0)
+    return int(d) * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2]
+
+now = time.time()
+names = []
+for line in out.splitlines():
+    m = re.match(r"\s*(\d+)\s+(\S+)\s+(.*)$", line)
+    if not m:
+        continue
+    pid, et, cmd = m.group(1), m.group(2), m.group(3)
+    if "/mcp/" not in cmd or "node" not in cmd:
+        continue
+    try:
+        started = now - secs(et)
+    except Exception:
+        continue
+    if started < newest:
+        srv = re.search(r"/mcp/([^/]+)/", cmd)
+        names.append((srv.group(1) if srv else "mcp-server") + " (pid " + pid + ")")
+
+for n in sorted(set(names)):
+    print(n)
+PY
+)"
+  [[ -z "$stale" ]] && return 0
+  echo ""
+  echo "Note: these MCP servers started before the policy modules were last written:"
+  printf '  %s\n' $stale
+  echo "  They hot-reload policy per request (E-237), so no action is needed unless one was"
+  echo "  started before E-237 shipped — in that case restart it, or the session, to clear"
+  echo "  stale verdicts (AI_OS_POLICY_HOT_RELOAD=0 disables hot reload entirely)."
+}
+
 do_sync() {
   # §28: handle --github flag before normal sync
   for arg in "$@"; do
@@ -2062,6 +2134,12 @@ do_sync() {
 
   # E-233: the artefacts regenerated above must not show up as project diffs.
   _ensure_generated_gitignore "."
+
+  # E-237 (D-061 §5): a server spawned before this sync is still serving the OLD policy.
+  # Hot-reload picks it up on the next request, but a server started before E-237 shipped
+  # will not — and that is exactly the session that produced a day of phantom P0s. Say so
+  # rather than letting the operator discover it through a verdict they have to argue with.
+  _report_policy_staleness
 
   echo "Done."
   # E-228 (D-059): only when the project can actually use it — printing a tmux hint on a
