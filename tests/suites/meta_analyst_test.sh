@@ -214,13 +214,28 @@ assert_status 0 "meta_analyst → .gemini mirror (modulo stripped Claude keys, E
 # 2026-09-07. The correct invariant is "identical apart from the stripped keys",
 # plus a check that the strip actually ran — otherwise this assertion would pass on
 # an untransformed copy too.
-assert_status 0 "meta_analyst → ~/.ai-os copy (modulo stripped Claude keys)" \
-  _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_MIRROR"
-assert_status 1 "meta_analyst → ~/.ai-os copy carries no Claude-only keys (strip ran)" \
-  grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
+# E-236 (D-061 §4): the INSTALL is genuinely optional — a clone with no `ai install` has
+# no ~/.ai-os to compare against. Asserting unconditionally made the verdict depend on
+# whether this machine happened to be installed, which is the pattern this sprint kept
+# removing. Absent install → SKIP, counted separately; never a fabricated pass.
+if [[ -f "$AGENT_MIRROR" ]]; then
+  assert_status 0 "meta_analyst → ~/.ai-os copy (modulo stripped Claude keys)" \
+    _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_MIRROR"
+  assert_status 1 "meta_analyst → ~/.ai-os copy carries no Claude-only keys (strip ran)" \
+    grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
+else
+  _skip "meta_analyst → ~/.ai-os copy comparison (framework not installed)"
+  _skip "meta_analyst → ~/.ai-os strip check (framework not installed)"
+fi
 assert_status 0 "ai-insights  → .claude mirror"     diff -q "$SKILL_SRC" "$SKILL_CLAUDE"
 assert_status 0 "ai-insights  → .gemini mirror"     diff -q "$SKILL_SRC" "$SKILL_GEMINI"
-assert_status 0 "ai-insights  → ~/.ai-os mirror"    diff -q "$SKILL_SRC" "$SKILL_MIRROR"
+# E-236: same reasoning as the agent mirror above — an uninstalled clone has nothing to
+# compare, and asserting anyway makes the verdict a property of the machine.
+if [[ -f "$SKILL_MIRROR" ]]; then
+  assert_status 0 "ai-insights  → ~/.ai-os mirror"  diff -q "$SKILL_SRC" "$SKILL_MIRROR"
+else
+  _skip "ai-insights → ~/.ai-os mirror comparison (framework not installed)"
+fi
 
 echo ""
 assert_summary

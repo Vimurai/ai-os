@@ -176,9 +176,11 @@ if command -v tmux >/dev/null 2>&1; then
   "$_tb" -L "$_sock" kill-server 2>/dev/null
   rm -rf "$_shim" "$_lp"
 else
-  # Keep the assertion count stable across hosts: a missing tmux is a skip, not a gap.
+  # E-236: a missing tmux is a SKIP, not a pass. Recording nine passes for a layer that
+  # never ran is how a suite reports all-green while testing less than it claims — the
+  # totals now say "skipped" so the gap is visible in the run.
   for _n in a b c d e0 e1 e2 f f-pre; do
-    _pass "E-227.06${_n}: live tmux layer skipped (tmux not installed)"
+    _skip "E-227.06${_n}: live tmux layer (tmux not installed)"
   done
 fi
 

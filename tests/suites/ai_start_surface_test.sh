@@ -109,8 +109,9 @@ if command -v tmux >/dev/null 2>&1; then
   "$_tb" -L "$_sock" kill-server 2>/dev/null
   rm -rf "$_shim" "$_lp"
 else
+  # E-236: SKIP, not a fabricated pass — see tests/lib/assert.sh.
   for _n in a b c d e f g h i j; do
-    _pass "E-228.03${_n}: live tmux layer skipped (tmux not installed)"
+    _skip "E-228.03${_n}: live tmux layer (tmux not installed)"
   done
 fi
 
@@ -123,8 +124,8 @@ if command -v tmux >/dev/null 2>&1; then
   assert_status 0 "E-228.04a: --kill on an idle project exits 0 (rc=${_rc})" bash -c "[[ $_rc -eq 0 ]]"
   assert_contains "E-228.04b: and says there was nothing to do" "nothing to tear down" "$_out"
 else
-  _pass "E-228.04a: skipped (no tmux)"
-  _pass "E-228.04b: skipped (no tmux)"
+  _skip "E-228.04a: --kill on an idle project (no tmux)"
+  _skip "E-228.04b: nothing-to-do message (no tmux)"
 fi
 rm -rf "$_p"
 
