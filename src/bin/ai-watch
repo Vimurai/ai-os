@@ -735,21 +735,40 @@ EOF
 # signal.json, not in memory. The re-exec keeps the same PID, so the lock stays ours
 # (see _acquire_lock) and no window opens for a second watcher.
 _self_stamp() {
-  # Sub-second resolution is load-bearing, not a refinement. `ai sync` rewrites this
-  # script milliseconds after the watcher starts, so a whole-second stamp (BSD `stat -f %m`)
-  # reports "unchanged" for the exact rewrite this mechanism exists to catch. BSD exposes
-  # the fractional mtime as %Fm and GNU coreutils as %.9Y; the whole-second forms remain as
-  # a last resort, and the size is appended so a filesystem with 1s granularity still
-  # notices any rewrite that changes the length.
-  local m s
-  m="$(stat -f %Fm "$_SELF" 2>/dev/null \
-    || stat -c %.9Y "$_SELF" 2>/dev/null \
-    || stat -f %m  "$_SELF" 2>/dev/null \
-    || stat -c %Y  "$_SELF" 2>/dev/null \
-    || echo 0)"
-  s="$(stat -f %z "$_SELF" 2>/dev/null || stat -c %s "$_SELF" 2>/dev/null || echo 0)"
+  # An identity for this script file: sub-second mtime plus size.
+  #
+  # NEVER chain the probes with `||` inside one command substitution. The previous version
+  # did, and on Linux `stat -f %Fm FILE` means --file-system with `%Fm` read as a FILENAME:
+  # GNU stat printed a whole filesystem report for the real operand AND exited non-zero, so
+  # `$(bsd || gnu)` captured BOTH outputs. The stamp became a multi-line blob containing
+  # FREE-BLOCK COUNTS, which change constantly on a busy machine — so the identity differed
+  # on every poll and the watcher re-exec'd itself continuously. Invisible on macOS, where
+  # the BSD form succeeds first and the GNU form is never reached.
+  #
+  # Try each form separately and accept a value only if the command SUCCEEDED and the
+  # result is a single plausible token. GNU is tried first because its failure on BSD is
+  # clean (empty stdout, exit 1), whereas the reverse is not.
+  local m="" s=""
+  m="$(stat -c %.9Y "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="$(stat -f %Fm "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="$(stat -c %Y  "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="$(stat -f %m  "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="0"
+
+  s="$(stat -c %s "$_SELF" 2>/dev/null)" || s=""
+  _stamp_ok "$s" || s="$(stat -f %z "$_SELF" 2>/dev/null)" || s=""
+  _stamp_ok "$s" || s="0"
+
   printf '%s:%s' "$m" "$s"
 }
+
+# A stamp component is usable only if it is ONE line of digits (optionally fractional).
+# This is the guard that makes the probe order above safe: anything that leaked a report,
+# an error line, or multiple lines is rejected rather than silently treated as an identity.
+_stamp_ok() {
+  [[ -n "$1" ]] && [[ "$1" != *$'\n'* ]] && [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+}
+
 
 _maybe_reexec() {
   [[ "${AI_WATCH_NO_REEXEC:-0}" == "1" ]] && return 0

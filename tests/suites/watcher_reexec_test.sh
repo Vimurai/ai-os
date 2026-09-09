@@ -136,6 +136,40 @@ _reexec_probe() {
   rm -rf "$d"
   printf '%s reexec=%s' "$out" "$reexeced"
 }
+# ── E-229.06: the stamp must be STABLE, or the re-exec fires forever ────────────
+# This is the property the suite was missing, and its absence let a Linux-only defect
+# through: `stat -f %Fm` means --file-system on GNU, so the BSD probe printed a whole
+# filesystem report (including free-block counts, which change constantly) and exited
+# non-zero — and `$(bsd || gnu)` captured BOTH outputs. The identity therefore differed on
+# every poll and the watcher re-exec'd itself continuously on Linux. Every other assertion
+# here passed throughout, because they all test "does it re-exec when the file CHANGES";
+# none tested "does it stay put when the file does NOT".
+_stamp_n() {  # <count> → the distinct stamps observed
+  ( source "$WATCH" 2>/dev/null
+    _SELF="$WATCH"
+    for _ in $(seq 1 "$1"); do _self_stamp; echo; done ) | sort -u | grep -c .
+}
+# EXACT comparison, not assert_contains: the value is a COUNT, and a substring match
+# would accept "21" as containing "1" — passing precisely when the stamp is at its most
+# unstable. (This assertion did survive the mutation that proved 06b-e, for that reason.)
+_stamp_distinct="$(_stamp_n 8)"
+assert_status 0 "E-229.06a: the stamp is identical across repeated calls (distinct=${_stamp_distinct})" \
+  bash -c "[[ '$_stamp_distinct' -eq 1 ]]"
+
+_one_stamp="$( ( source "$WATCH" 2>/dev/null; _SELF="$WATCH"; _self_stamp ) )"
+assert_status 0 "E-229.06b: the stamp is a single line (no leaked command output)" \
+  bash -c "[[ \"\$(printf '%s' '$_one_stamp' | grep -c .)\" -eq 1 ]]"
+assert_match "E-229.06c: the stamp is <mtime>:<size>, both numeric" \
+  '^[0-9]+(\.[0-9]+)?:[0-9]+$' "$_one_stamp"
+
+# A component that leaked a report must be REJECTED rather than used as an identity.
+assert_status 1 "E-229.06d: a multi-line value is not a usable stamp component" \
+  bash -c "source '$WATCH' 2>/dev/null; _stamp_ok \"\$(printf 'Blocks: 1\nFree: 2')\""
+assert_status 1 "E-229.06e: a non-numeric value is rejected too" \
+  bash -c "source '$WATCH' 2>/dev/null; _stamp_ok 'File: \"x\"'"
+assert_status 0 "E-229.06f: a plain fractional mtime is accepted (non-vacuity)" \
+  bash -c "source '$WATCH' 2>/dev/null; _stamp_ok '1788963935.967854240'"
+
 _deliv="$(_reexec_probe)"
 assert_contains "E-229.03a: the entry queued BEFORE the rewrite was delivered" "MSG-A" "$_deliv"
 assert_contains "E-229.03b: the entry queued AFTER it was delivered too" "MSG-B" "$_deliv"

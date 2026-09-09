@@ -3357,13 +3357,22 @@ do_start() {
     # that claims success while having built one third of the layout is worse than one
     # that fails: the operator believes the Triad is up. Observed on CI (tmux 3.4), where
     # only %0 was ever created.
-    if ! _run split-window -h -t "$(_pane_at 0)" -c "$project" -p "$((100 - main_pct))"; then
+    # `-l N%` is the modern spelling and `-p N` the deprecated one. tmux 3.4 rejects `-p`
+    # with "size missing" while 3.7c still accepts it, which is exactly how this shipped
+    # green on a developer Mac and produced a ONE-PANE window on CI. Try the modern form
+    # first and keep the old one as a fallback for tmux older than 3.1, so both ends of
+    # the supported range work.
+    _split() {  # <-h|-v> <pane> <percent>
+      _run split-window "$1" -t "$2" -c "$project" -l "${3}%" \
+        || _run split-window "$1" -t "$2" -c "$project" -p "$3"
+    }
+    if ! _split -h "$(_pane_at 0)" "$((100 - main_pct))"; then
       echo "ai start: tmux refused to split the window for the right column (main_pct=${main_pct})." >&2
       echo "ai start: the layout was NOT created — not reporting the session as ready." >&2
       return 2
     fi
     if [[ "$no_watch" -ne 1 ]]; then
-      if ! _run split-window -v -t "$(_pane_at 1)" -c "$project" -p "$((100 - top_pct))"; then
+      if ! _split -v "$(_pane_at 1)" "$((100 - top_pct))"; then
         echo "ai start: tmux refused to split the right column for the watcher (top_pct=${top_pct})." >&2
         echo "ai start: the layout was NOT created — not reporting the session as ready." >&2
         return 2

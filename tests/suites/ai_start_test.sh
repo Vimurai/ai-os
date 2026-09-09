@@ -100,7 +100,10 @@ CASES
 _p="$(_proj 0 1 '{"session":"proj","sizes":{"main":40,"top":70}}')"
 _out="$(_dry "$_p")"
 assert_contains "E-227.04v: a valid session is used"      "-s proj" "$_out"
-assert_contains "E-227.04w: a valid main size is applied" "-p 60"   "$_out"
+# The size, in the modern spelling. tmux 3.4 rejects the deprecated `-p N` with
+# "size missing", so `-l N%` is what is emitted now; `-p` survives only as a runtime
+# fallback for tmux older than 3.1 and never appears in a dry run.
+assert_contains "E-227.04w: a valid main size is applied" "-l 60%" "$_out"
 assert_contains "E-227.04x: watch:false implies --no-watch" "split-window -h" \
   "$(_dry "$(_proj 0 1 '{"watch":false}')")"
 rm -rf "$_p"
