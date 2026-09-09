@@ -1629,12 +1629,12 @@
     {
       "id": "E-241",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Close the trap-replacement limitation per D-064 and .ai/blueprints/test-harness-isolation.md §Trap Chaining: (a) tests/lib/assert.sh shadows the trap builtin for EXIT only — 'trap <cmd> EXIT' appends <cmd> to the register_cleanup registry instead of replacing the handler, every other signal/argument shape passes to builtin trap, 'builtin trap - EXIT' still clears; handlers run LIFO each in its own subshell so one failing cleanup cannot skip the next; print 'CLEANUP n handlers' on exit; AI_OS_TEST_NO_TRAP_CHAIN=1 restores the plain builtin; (b) document on_exit <cmd> as the spelling and add an E-80 standards rule (tests/** scope, P1) flagging a raw 'trap ... EXIT' in a suite; (c) mechanically convert the 46 existing 'trap ... EXIT' sites in tests/suites/*.sh to on_exit; (d) add review question #4 'is this helper ever called inside a command substitution, a pipeline, or a while-read loop, and does it set state that must outlive that call?' to critic_tests, ai-review and ai-debug, and the D-064 §2 subshell-state rule to the engineering-standards references they cite. Acceptance: a fixture suite that installs its own trap AFTER sourcing assert.sh still self-cleans; the full run reports LEAKED 0 and CLEANUP counts; standards suite covers the new rule both ways; CI green; mirrors synced.",
       "created_at": "2026-09-09T22:15:03.574Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-09T22:48:43.818Z",
+      "summary": "assert.sh shadows `trap` for EXIT only so it CHAINS instead of replacing; LIFO handlers each in a subshell; CLEANUP n printed; 42 raw sites converted to on_exit; E-80 rule flags raw …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
