@@ -107,8 +107,9 @@ if [[ -f "${HOME}/.ai-os/mcp/shared/load-policy.mjs" ]]; then
   assert_status 0 "E-237.06a: ~/.ai-os mirror of the loader matches src" \
     diff -q "$LOADER" "${HOME}/.ai-os/mcp/shared/load-policy.mjs"
 else
-  echo "    ⚠  ~/.ai-os mirror absent — skipping"
-  _pass "E-237.06a: mirror check skipped (not installed)"
+  # E-236: an absent install is a SKIP, counted separately. A pass here would claim the
+  # mirror had been verified when nothing was compared.
+  _skip "E-237.06a: ~/.ai-os mirror comparison (framework not installed)"
 fi
 
 echo ""
