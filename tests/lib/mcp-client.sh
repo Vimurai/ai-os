@@ -55,18 +55,27 @@ else:
 frames = "\n".join(json.dumps(m) for m in (initialize, initialized, call)) + "\n"
 
 last_exit = 4
+last_stderr = ""
 for attempt in range(ATTEMPTS):
     if attempt:
         time.sleep(0.25 * attempt)  # brief backoff before a retry
+    # Capture stderr rather than discarding it. A server that dies on startup or throws
+    # inside a handler explains itself there, and DEVNULL turned every such failure into
+    # an unactionable "0 passed, 1 failed" on CI with no output whatsoever.
     proc = subprocess.Popen(
         ["node", server],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True,
     )
     try:
-        stdout, _ = proc.communicate(frames, timeout=TIMEOUT_S)
+        stdout, stderr_txt = proc.communicate(frames, timeout=TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        proc.kill(); proc.wait()
+        proc.kill()
+        try:
+            _, late = proc.communicate(timeout=5)
+            last_stderr = late or last_stderr
+        except Exception:
+            proc.wait()
         last_exit = 3  # transport timeout — retry
         continue
 
@@ -83,6 +92,17 @@ for attempt in range(ATTEMPTS):
             print(json.dumps(obj.get("result", {})))
             sys.exit(0)
     last_exit = 4  # id==2 response missing — retry
+    last_stderr = stderr_txt
+
+# Every attempt failed. Report WHY on stderr — the caller's own stderr is captured by
+# tests/run.sh, so this reaches the CI log instead of vanishing.
+if last_stderr:
+    tail = "\n".join(last_stderr.strip().splitlines()[-15:])
+    print(f"[mcp-client] {server} failed after {ATTEMPTS} attempt(s), exit={last_exit}. "
+          f"Server stderr:\n{tail}", file=sys.stderr)
+else:
+    print(f"[mcp-client] {server} failed after {ATTEMPTS} attempt(s), exit={last_exit} "
+          f"(no stderr; 3=timeout after {TIMEOUT_S}s, 4=no id==2 response).", file=sys.stderr)
 
 print("{}"); sys.exit(last_exit)
 PY

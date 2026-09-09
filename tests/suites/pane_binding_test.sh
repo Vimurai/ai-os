@@ -246,14 +246,24 @@ assert_status 0 "E-208.08h: hook blocks on ANY non-zero check-path exit, not jus
 # (e) UNTRUSTED role key / provider name — both files are ARCHITECT-writable, so one
 # feeds a path join and the other an exec target.
 EVIL_AI="$(mktemp -d)/.ai"; mkdir -p "$EVIL_AI"
-EVIL_OUT="$(mktemp -d)/.claude"; mkdir -p "$EVIL_OUT"
+# Nest the output dir inside a root WE own, so the "did anything escape?" probe below
+# globs a directory this test controls. Globbing the shared system temp dir two levels
+# up would let an unrelated suite's stray settings.*.json fail this security assertion,
+# or — worse — mask a real escape by making the check pass for the wrong reason.
+EVIL_ROOT="$(mktemp -d)"
+EVIL_OUT="${EVIL_ROOT}/nest/.claude"; mkdir -p "$EVIL_OUT"
 cat > "$EVIL_AI/roles.json" <<'JSON'
 { "roles": { "../../escape": { "provider": "claude", "pane_identifier": "0" },
              "engineer":     { "provider": "claude", "pane_identifier": "0" } } }
 JSON
 bash -c "source '$AI_BIN' 2>/dev/null; _write_role_settings_overlays '$EVIL_OUT' '$EVIL_AI'" >/dev/null 2>&1
+# `ls` exit codes are NOT portable: GNU coreutils returns 2 for a missing path where
+# BSD/macOS returns 1, so this asserted the mac value and failed on Linux CI from the
+# day it was written. `compgen -G` is a bash builtin — it returns 1 for "no match"
+# everywhere, and answers the question being asked (does any such file exist?) directly
+# rather than inferring it from a tool's error convention.
 assert_status 1 "E-208.08i: a traversal role key writes nothing outside the target dir" \
-  bash -c "ls \"$EVIL_OUT/../..\"/settings.*.json >/dev/null 2>&1"
+  bash -c "compgen -G \"${EVIL_ROOT}/settings.*.json\" >/dev/null"
 assert_status 0 "E-208.08j: the valid sibling role is still generated" \
   test -f "$EVIL_OUT/settings.engineer.json"
 assert_status 0 "E-208.08k: launcher validates the provider name before exec" \

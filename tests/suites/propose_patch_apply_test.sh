@@ -38,14 +38,20 @@ print("ISERROR" if d.get("isError") else "OK")'; }
 
 # JSON payload builder (handles multiline diff_content safely)
 payload() { P="$1" C="$2" python3 -c 'import json,os; print(json.dumps({"path":os.environ["P"],"diff_content":os.environ["C"],"description":"test"}))'; }
-extract_id() { grep -oE 'ID:[[:space:]]*[A-Za-z0-9_-]+' | head -1 | sed -E 's/ID:[[:space:]]*//'; }
+# `|| true`, deliberately. grep exits 1 when the response carries no ID, and under
+# `set -euo pipefail` that killed the SUITE mid-assignment — printing nothing at all.
+# That is how this suite failed on CI from 2026-09-07: "0 passed, 1 failed" with zero
+# diagnostic output, because the one thing that would explain it (the server's actual
+# reply) was destroyed by the abort. Let it return empty; the assertions below then
+# report the reply instead of the suite dying mute.
+extract_id() { grep -oE 'ID:[[:space:]]*[A-Za-z0-9_-]+' | head -1 | sed -E 's/ID:[[:space:]]*//' || true; }
 
 # ── Case 1: full-file content beginning with "---" is written verbatim ───────
 printf 'old line\n' > front.md
 FULL=$'---\ntitle: hello\ntags: [a, b]\n---\n# Body\nverbatim content\n'
 r=$(call propose_patch "$(payload front.md "$FULL")")
 PID=$(printf '%s' "$r" | extract_id)
-assert_match "C1: propose returned an id" '.+' "$PID"
+assert_match "C1: propose returned an id (reply: ${r:-<empty>})" '.+' "$PID"
 call confirm_patch "{\"patch_id\":\"${PID}\"}" >/dev/null
 GOT="$(cat front.md)"
 assert_contains "C1: YAML front-matter written verbatim (title)" "title: hello" "$GOT"
