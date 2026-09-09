@@ -112,18 +112,34 @@ assert_not_contains "158.10: --settle token not in message" "settle" "$(qfield "
 # Background writer inserts 3 tasks ~1s apart into the same WAL state.sqlite; settle
 # must block until the count quiesces at 3, so the Engineer never wakes mid-insertion.
 rm -f "$SIGNAL"
+# The writer announces its FIRST insert. Without that the test raced its own fixture:
+# `node` needs a moment to boot, so `--settle` could start against a table that was still
+# empty and therefore already quiescent, finish at its floor, and the assertion below
+# would fail for a reason that has nothing to do with the barrier. This is the E-207
+# pattern — wait for a readiness marker, never for a guessed interval.
+_wmark="$(mktemp -u)"
 node --input-type=module -e "
 import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js';
+import { writeFileSync } from 'fs';
 const db = getDb('${PROJECT}/.ai');
 const sleep = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,ms);
-for (let i=1;i<=3;i++){ db.prepare('INSERT OR IGNORE INTO tasks(id,owner,status,tier,description,created_at) VALUES (?,?,?,?,?,?)').run('E-9'+i,'Engineer (Claude)','OPEN',2,'race '+i,'2026-07-05T00:00:00Z'); sleep(1000);}
+for (let i=1;i<=3;i++){ db.prepare('INSERT OR IGNORE INTO tasks(id,owner,status,tier,description,created_at) VALUES (?,?,?,?,?,?)').run('E-9'+i,'Engineer (Claude)','OPEN',2,'race '+i,'2026-07-05T00:00:00Z'); if(i===1) writeFileSync('${_wmark}','1'); sleep(1000);}
 " &
 WPID=$!
-start=$(date +%s)
+_w=0
+while [[ ! -e "$_wmark" ]] && [[ "$_w" -lt 400 ]]; do sleep 0.05; _w=$((_w + 1)); done
+assert_status 0 "158.11-pre: the writer really started before settle (guards the race)" \
+  test -e "$_wmark"
+# Sub-second clock. `date +%s` floors BOTH ends, so a true 1.95s elapsed measures as 1 and
+# the assertion fails on a fast runner — which is exactly how this flaked on master while
+# passing on the PR run minutes earlier, with identical code.
+start="$(python3 -c 'import time; print(time.time())')"
 AI_OS_AIDIR="${PROJECT}/.ai" bash "$AI" handoff engineer --settle "all tasks ready" >/dev/null 2>&1
-elapsed=$(( $(date +%s) - start ))
+elapsed="$(python3 -c "import time; print(time.time() - $start)")"
 wait "$WPID" 2>/dev/null || true
-assert_status 0 "158.11: settle blocked while the writer was inserting (>=2s)" bash -c "[ $elapsed -ge 2 ]"
+rm -f "$_wmark"
+assert_status 0 "158.11: settle blocked while the writer was inserting (elapsed=${elapsed}s)" \
+  python3 -c "import sys; sys.exit(0 if $elapsed >= 1.5 else 1)"
 final="$(node --input-type=module -e "import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js'; console.log(getDb('${PROJECT}/.ai').prepare('SELECT COUNT(*) n FROM tasks').get().n);" 2>/dev/null)"
 assert_contains "158.11: all 3 writer tasks landed before the handoff" "3" "$final"
 
