@@ -171,8 +171,18 @@ assert_status 0 ".gemini/ mirror matches src/ (modulo stripped Claude keys, E-21
 assert_status 1 ".gemini/ copy carries no Claude-only keys (strip actually ran)" \
   grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_GEM"
 if [[ -f "$AGENT_MIRROR" ]]; then
-  assert_status 0 "~/.ai-os mirror byte-identical to src/" \
-    diff -q "$AGENT_SRC" "$AGENT_MIRROR"
+  # The ~/.ai-os GEMINI workspace is a TRANSFORMED copy, not a mirror. `ai install`
+  # runs strip_gemini_agent_fields over it because disable-model-invocation,
+  # user-invocable and allowed-tools are unsupported by Gemini CLI v0.37+. Asserting
+  # byte-identity here passed only on a developer machine whose ~/.ai-os predated the
+  # strip; on a fresh install (CI) it failed, and it had been failing on master since
+  # 2026-09-07. The correct invariant is "identical apart from the stripped keys",
+  # plus a check that the strip actually ran — otherwise this assertion would pass on
+  # an untransformed copy too.
+  assert_status 0 "~/.ai-os copy matches src/ (modulo stripped Claude keys)" \
+    _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_MIRROR"
+  assert_status 1 "~/.ai-os copy carries no Claude-only keys (strip ran)" \
+    grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
 else
   echo "    ⚠  ~/.ai-os mirror absent — skipping"
 fi

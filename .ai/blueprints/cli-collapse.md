@@ -9,7 +9,22 @@ The `ai` script transitions from a multi-purpose orchestrator into a strict boot
 ## Components
 1. **Bootloader CLI (`bin/ai`)**: Stripped down to `init`, `sync`, `install`, `doctor`, `uninstall`. Removes bash implementations for `update`, `preflight`, `review`, `test`, `mcp-setup`, `archive`, `digest`, `migrate-state`.
 2. **Conversational Prompts/Skills**: The functionality of removed CLI commands is converted into corresponding agent skills or prompt templates in the documentation/bootloader files.
-3. **Tmux Workflow Setup**: Documentation and potentially a helper script (or part of `ai init`) to scaffold a recommended tmux layout (e.g., one pane for Gemini, one for Claude, one for the underlying bash terminal).
+3. **Tmux Workflow Setup → `ai start` (D-059, 2026-09-09)**: superseded the "helper script" idea. See §`ai start` below.
+
+## `ai start` — Triad Launcher (D-059)
+**Lifecycle command set (explicit)**: `init`, `sync`, `install`, `doctor`, `uninstall`, **`start`**, plus the D-053/D-054 shell primitives `handoff`, `add-task`, `pane`, `watch`. Nothing else belongs in `bin/ai`.
+
+**Contract** — `ai start [--no-watch] [--detach] [--dry-run] [--status] [--kill [--yes]]`:
+1. **Composition only.** The launcher runs exactly two things it does not own — `ai pane <role>` and `ai watch`, both from the installed `ai` on PATH. Never a project-supplied script, never a provider binary directly (`ai pane` owns binding, title pinning and the launch argv).
+2. **Layout is derived from `.ai/roles.json`.** The role with the lower `pane_identifier` receives the lower tmux `pane_index`, so the E-209 ordinal fallback agrees with the layout by construction. Default layout `triad`: engineer left (full height), architect right-top, watcher right-bottom. The watcher pane's foreground is a shell script, which `_is_agent_cmd` excludes — it never shifts the agent ordinals. Tests assert the resulting pane order for BOTH role orders.
+3. **Shell-hosted agent panes.** Each agent pane is an interactive shell; `ai start` waits for the prompt (`pane_current_command` is a shell) and then `send-keys` `ai pane <role>`. When the provider exits the operator keeps a shell and can rerun `ai pane`. `ai pane` pins the title and sets `allow-rename off`.
+4. **Idempotent.** In a project with live panes a re-run re-pins titles, starts the watcher only if no process holds the `ai watch` single-writer lock, and attaches — never duplicates panes. `--kill` tears the project window down, watcher first (confirm unless `--yes`). `--status` lists project panes (role, title, command) and the watcher lock holder.
+5. **Optional `.ai/start.json`**: `session` (`^[A-Za-z0-9_-]{1,32}$`), `layout` (`triad` only until another is blueprinted), `watch` (bool), `sizes` (numeric percentages). Values become tmux arguments, so anything outside these shapes is rejected (E-208 audit lesson: Architect-writable config is an exec surface). Defaults: `session=aios`, window = project basename.
+6. **Non-tmux hosts**: exit 2 and print the manual recipe (`ai pane engineer`, `ai pane architect`, `ai watch`) — tmux remains the recommended UX, not a requirement.
+
+**Reference layout** (the operator's live session, 2026-09-09): `aios:1`, engineer `104x49` left, architect `103x32` right-top, watcher/shell `103x16` right-bottom.
+
+**Rollback**: remove the `start` dispatch; the three manual commands keep working unchanged.
 
 ## Data Model
 No new SQLite state tables are required. The state model remains driven by `TASKS.md` and `state.json` via MCP.
@@ -37,4 +52,6 @@ No new SQLite state tables are required. The state model remains driven by `TASK
 ## E-## Task Breakdown
 - E-## (CLI Reduction): Remove logic for `update`, `preflight`, `review`, `test`, `archive`, `digest`, `migrate-state` from `src/bin/ai`. Replace them with deprecation echo statements guiding users to the agent prompts.
 - E-## (Agent Skills Migration): Ensure all removed CLI functions have a 1:1 mapping to an agent skill (e.g., `ai-review`, `ai-test`, `ai-archive`, `ai-digest`, `ai-preflight`).
-- E-## (Tmux Documentation): Update `README.md`, `CONTRIBUTING.md`, and `docs` to strongly recommend the tmux split-pane workflow, including a snippet for `~/.tmux.conf` or an automated setup script.
+- E-## (Tmux Documentation): Update `README.md`, `CONTRIBUTING.md`, and `docs` to strongly recommend the tmux split-pane workflow, including a snippet for `~/.tmux.conf` or an automated setup script. → closed by **E-228** (docs point at `ai start`).
+- **E-227** (Tier 2, D-059): `ai start` launcher core — session/window reuse, layout derived from `roles.json`, shell-hosted panes + `send-keys ai pane <role>`, watcher pane, idempotency, `--no-watch`/`--detach`/`--dry-run`, constrained `.ai/start.json`, non-tmux exit 2 + recipe.
+- **E-228** (Tier 1, dep E-227): `--status`/`--kill`, `ai doctor` start-readiness line, README/CONTRIBUTING docs, `ai install`/`ai init` hint.

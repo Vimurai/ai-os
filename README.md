@@ -5,7 +5,7 @@
 
   [![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](#)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
+  [![Tests](https://github.com/Vimurai/ai-os/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/Vimurai/ai-os/actions/workflows/test.yml)
 </div>
 
 ---

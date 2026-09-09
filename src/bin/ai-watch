@@ -625,6 +625,11 @@ _acquire_lock() {  # → 0 if acquired (or locking disabled), 1 if a live watche
   fi
   local holder=""
   [[ -f "$LOCK_DIR/pid" ]] && holder="$(cat "$LOCK_DIR/pid" 2>/dev/null)"
+  # OUR OWN pid means we re-exec'd (E-229): `exec` replaces the image but keeps the
+  # process, so the lock we took before the re-exec is still ours and still correct.
+  # Without this the watcher would lock itself out on the first self-update and exit
+  # reporting "another watcher is already running" — pointing at itself.
+  [[ -n "$holder" && "$holder" == "$$" ]] && return 0
   if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then
     return 1                                       # a live watcher already owns it
   fi
@@ -719,12 +724,79 @@ EOF
 }
 
 # ── Watch loop ───────────────────────────────────────────────────────────────
+# ── E-229: survive `ai sync` rewriting this script underneath us ────────────
+# bash reads a script by BYTE OFFSET as it executes, so rewriting the file in place moves
+# the ground under a running watcher: the observed failure was a watcher started
+# 2026-09-04 that survived a 2026-09-07 mirror update, then spammed tmux "not in a mode"
+# every poll and delivered nothing for 24 hours. It was still "running" the whole time,
+# which is why nothing alerted.
+#
+# Re-exec is safe HERE and only here — between polls — because all delivery state lives in
+# signal.json, not in memory. The re-exec keeps the same PID, so the lock stays ours
+# (see _acquire_lock) and no window opens for a second watcher.
+_self_stamp() {
+  # An identity for this script file: sub-second mtime plus size.
+  #
+  # NEVER chain the probes with `||` inside one command substitution. The previous version
+  # did, and on Linux `stat -f %Fm FILE` means --file-system with `%Fm` read as a FILENAME:
+  # GNU stat printed a whole filesystem report for the real operand AND exited non-zero, so
+  # `$(bsd || gnu)` captured BOTH outputs. The stamp became a multi-line blob containing
+  # FREE-BLOCK COUNTS, which change constantly on a busy machine — so the identity differed
+  # on every poll and the watcher re-exec'd itself continuously. Invisible on macOS, where
+  # the BSD form succeeds first and the GNU form is never reached.
+  #
+  # Try each form separately and accept a value only if the command SUCCEEDED and the
+  # result is a single plausible token. GNU is tried first because its failure on BSD is
+  # clean (empty stdout, exit 1), whereas the reverse is not.
+  local m="" s=""
+  m="$(stat -c %.9Y "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="$(stat -f %Fm "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="$(stat -c %Y  "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="$(stat -f %m  "$_SELF" 2>/dev/null)" || m=""
+  _stamp_ok "$m" || m="0"
+
+  s="$(stat -c %s "$_SELF" 2>/dev/null)" || s=""
+  _stamp_ok "$s" || s="$(stat -f %z "$_SELF" 2>/dev/null)" || s=""
+  _stamp_ok "$s" || s="0"
+
+  printf '%s:%s' "$m" "$s"
+}
+
+# A stamp component is usable only if it is ONE line of digits (optionally fractional).
+# This is the guard that makes the probe order above safe: anything that leaked a report,
+# an error line, or multiple lines is rejected rather than silently treated as an identity.
+_stamp_ok() {
+  [[ -n "$1" ]] && [[ "$1" != *$'\n'* ]] && [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]]
+}
+
+
+_maybe_reexec() {
+  [[ "${AI_WATCH_NO_REEXEC:-0}" == "1" ]] && return 0
+  local now; now="$(_self_stamp)"
+  [[ "$now" == "$_SELF_STAMP" ]] && return 0
+  # Do not exec a file that is still being written. `bash -n` is the cheap version of
+  # "is this a complete script": a truncated copy fails to parse, and we simply try again
+  # next poll rather than replacing ourselves with something unrunnable.
+  if [[ ! -s "$_SELF" ]] || ! bash -n "$_SELF" 2>/dev/null; then
+    return 0
+  fi
+  echo "ai-watch: script changed on disk — re-executing to pick up the new version."
+  exec "$_SELF" "$@"
+}
+
 main() {
   case "${1:-}" in
     --clear|clear) _clear_queue; exit $? ;;
     --help|-h)     _usage; exit 0 ;;
   esac
   _preconditions || exit 1
+
+  # Resolved once: `$0` is what exec needs, and its mtime is the change signal.
+  # BASH_SOURCE, not $0: when the script is SOURCED (which is how the suites drive it)
+  # `$0` is the sourcing shell, so exec would replace the wrong program. BASH_SOURCE[0]
+  # is this file in both cases.
+  _SELF="${BASH_SOURCE[0]:-$0}"
+  _SELF_STAMP="$(_self_stamp)"
 
   if ! _acquire_lock; then
     echo "ai-watch: another watcher is already running for ${PROJECT_DIR} (lock: ${LOCK_DIR}) — exiting." >&2
@@ -761,6 +833,7 @@ main() {
   [[ -f "$SIGNAL" ]] && _reconcile_startup "$DRAIN_BACKLOG"
   while true; do
     [[ -f "$SIGNAL" ]] && _drain_once
+    _maybe_reexec "$@"
     sleep "$POLL_INTERVAL"
   done
 }

@@ -38,6 +38,10 @@ Because interactive REPLs block on standard input, they cannot natively listen t
 - **`mcp__task-synchronizer-mcp__handoff_control(target, message)`**:
   - Appends the new payload to the array in `.ai/signal.json` with `delivered: false`.
   - Returns confirmation to the sending agent.
+- **`ai start` (D-059, cli-collapse.md §`ai start`)**: one-command Triad launch — creates/reuses the tmux
+  session, lays out panes from `.ai/roles.json` (lower `pane_identifier` → lower `pane_index`), launches
+  each role via `ai pane <role>`, and runs `ai watch` in its own pane. Idempotent; composes only those two
+  primitives.
 - **`ai watch` execution**:
   - Scopes itself to `$(pwd)`.
   - Maps `target` to panes (supporting fuzzy matches and conventional indices). For semantic

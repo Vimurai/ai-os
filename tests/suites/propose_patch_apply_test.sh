@@ -19,6 +19,15 @@ SERVER="${REPO_ROOT}/src/mcp/propose-patch-mcp/index.js"
 echo "── Suite: propose_patch_apply_test ─────────────────────────────────"
 
 unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE 2>/dev/null || true
+
+# The caller role is derived SERVER-SIDE and fails closed to `architect` when there is no
+# evidence (E-219) — which correctly refuses every write to this fixture project. On a
+# developer machine the suite silently INHERITED AI_OS_CALLER_ROLE=engineer from
+# .claude/settings.json and passed; on CI nothing sets it, so the suite failed. Declare the
+# role the fixture intends rather than depending on whose shell is running it. This does
+# not weaken anything: the role gate itself is covered by patch_project_boundary_test, and
+# a caller_role argument may only ADD restriction, never lift it.
+export AI_OS_CALLER_ROLE=engineer
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 cat > "${PROJECT}/.ai/state.json" <<'JSON'
@@ -38,14 +47,20 @@ print("ISERROR" if d.get("isError") else "OK")'; }
 
 # JSON payload builder (handles multiline diff_content safely)
 payload() { P="$1" C="$2" python3 -c 'import json,os; print(json.dumps({"path":os.environ["P"],"diff_content":os.environ["C"],"description":"test"}))'; }
-extract_id() { grep -oE 'ID:[[:space:]]*[A-Za-z0-9_-]+' | head -1 | sed -E 's/ID:[[:space:]]*//'; }
+# `|| true`, deliberately. grep exits 1 when the response carries no ID, and under
+# `set -euo pipefail` that killed the SUITE mid-assignment — printing nothing at all.
+# That is how this suite failed on CI from 2026-09-07: "0 passed, 1 failed" with zero
+# diagnostic output, because the one thing that would explain it (the server's actual
+# reply) was destroyed by the abort. Let it return empty; the assertions below then
+# report the reply instead of the suite dying mute.
+extract_id() { grep -oE 'ID:[[:space:]]*[A-Za-z0-9_-]+' | head -1 | sed -E 's/ID:[[:space:]]*//' || true; }
 
 # ── Case 1: full-file content beginning with "---" is written verbatim ───────
 printf 'old line\n' > front.md
 FULL=$'---\ntitle: hello\ntags: [a, b]\n---\n# Body\nverbatim content\n'
 r=$(call propose_patch "$(payload front.md "$FULL")")
 PID=$(printf '%s' "$r" | extract_id)
-assert_match "C1: propose returned an id" '.+' "$PID"
+assert_match "C1: propose returned an id (reply: ${r:-<empty>})" '.+' "$PID"
 call confirm_patch "{\"patch_id\":\"${PID}\"}" >/dev/null
 GOT="$(cat front.md)"
 assert_contains "C1: YAML front-matter written verbatim (title)" "title: hello" "$GOT"

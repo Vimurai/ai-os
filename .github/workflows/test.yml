@@ -40,11 +40,58 @@ jobs:
       - name: Install AI-OS framework
         run: bash install-ai-os.sh
 
+      # D-058 asked for the E-221 patch driver modes to be confirmed under GNU patch.
+      # Printing the version puts that evidence in the log rather than leaving it assumed:
+      # the runner ships GNU patch 2.7.x, whereas macOS development machines have Apple
+      # patch 2.0, and the two differ in exit codes and --dry-run behaviour.
+      - name: Record toolchain versions
+        run: |
+          patch --version | head -1
+          node --version
+          bash --version | head -1
+
+      # `shell: bash` is REQUIRED here, not cosmetic. The default runner shell is
+      # `bash -e {0}` with NO pipefail, so `run.sh | tee` reports TEE's exit status and a
+      # failing suite passes the step silently. Naming the shell gets `-eo pipefail`.
+      # This bit me in the first run of this very PR: 17 failures reported as a green job.
       - name: Run tests
-        run: bash tests/run.sh
+        shell: bash
+        run: bash tests/run.sh 2>&1 | tee test-run.log
+
+      # Keep the log even when the suite fails — a red run is exactly the one worth reading.
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-run-log
+          path: test-run.log
+          retention-days: 14
 
       - name: Check .gitignore covers secrets
         run: |
           git check-ignore -v .env 2>/dev/null || { echo ".env not in .gitignore"; exit 1; }
           git check-ignore -v node_modules 2>/dev/null || { echo "node_modules not in .gitignore"; exit 1; }
         continue-on-error: false
+
+  # E-206 added a node:test unit layer under tests/unit/. It runs inside the shell suite
+  # too, but as its own job it reports separately and carries Node's built-in coverage,
+  # so a unit regression is not buried in a 4000-assertion shell log.
+  unit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install root workspace dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run node:test unit layer with coverage
+        env:
+          UNIT_COVERAGE: '1'
+        run: bash tests/suites/node_unit_test.sh

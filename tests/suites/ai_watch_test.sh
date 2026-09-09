@@ -328,13 +328,26 @@ _lock_probe() {  # <mode> → OK|FAIL
     USE_LOCK=1; LOCK_DIR="$(mktemp -d)/ai-watch.lock"
     case "$1" in
       acquire)  _acquire_lock && echo OK || echo FAIL ;;
-      double)   _acquire_lock >/dev/null; _acquire_lock && echo OK || echo FAIL ;;
+      # A SECOND WATCHER is a different process. Calling _acquire_lock twice from one
+      # shell used to stand in for that, but E-229 made same-pid re-acquisition succeed on
+      # purpose: `exec` preserves the pid, so the re-exec'd watcher meets its own lock and
+      # must be allowed through. The single-writer property therefore has to be probed
+      # with a genuinely foreign, genuinely live holder.
+      double)   mkdir -p "$LOCK_DIR"
+                sleep 30 & _other=$!
+                echo "$_other" > "$LOCK_DIR/pid"
+                _acquire_lock && echo OK || echo FAIL
+                kill "$_other" 2>/dev/null; wait "$_other" 2>/dev/null ;;
+      # The E-229 counterpart: our own pid in the lock is us, not a rival.
+      own)      mkdir -p "$LOCK_DIR"; echo $$ > "$LOCK_DIR/pid"
+                _acquire_lock && echo OK || echo FAIL ;;
       stale)    mkdir -p "$LOCK_DIR"; echo 999999 > "$LOCK_DIR/pid"; _acquire_lock && echo OK || echo FAIL ;;
       disabled) USE_LOCK=0; _acquire_lock && echo OK || echo FAIL ;;
     esac )
 }
 assert_contains "E-123.TC07: fresh lock acquired"          "OK"   "$(_lock_probe acquire)"
-assert_contains "E-123.TC07: live holder rejects 2nd watcher" "FAIL" "$(_lock_probe double)"
+assert_contains "E-123.TC07: live FOREIGN holder rejects 2nd watcher" "FAIL" "$(_lock_probe double)"
+assert_contains "E-229.TC07b: our own pid re-acquires (the exec case)"    "OK"   "$(_lock_probe own)"
 assert_contains "E-123.TC07: stale lock (dead pid) reclaimed" "OK"   "$(_lock_probe stale)"
 assert_contains "E-123.TC07: AI_WATCH_LOCK=0 disables locking" "OK"   "$(_lock_probe disabled)"
 
@@ -543,17 +556,31 @@ done
 rc=0
 wait "$mp" 2>/dev/null || rc=$?
 kill "$wd" 2>/dev/null
+ready_seen=no; [ -e "$READY" ] && ready_seen=yes
 rm -f "$SIGNAL" "$READY"
-# 130/143 come from the traps; 137 means only SIGKILL stopped it.
-case "$rc" in 130|143) echo EXITED ;; *) echo ALIVE ;; esac
+# 130/143 come from the traps; 137 means only SIGKILL stopped it. Report the rc and
+# whether the loop was ever reached: a bare "ALIVE" cannot distinguish "the trap did not
+# fire" from "main exited before installing traps", and on CI those look identical.
+case "$rc" in
+  130|143) echo EXITED ;;
+  *)       echo "ALIVE(rc=${rc} ready=${ready_seen} bash=${BASH_VERSION} signals_sent=${i})" ;;
+esac
 """
 os.environ["WATCH_PATH"] = watch
 os.environ["SIG_NAME"] = sig
 os.execvp("bash", ["bash", "-c", script])
 PYEOF
 }
-assert_contains "E-123.SIG: SIGINT (Ctrl-C) terminates the watch loop" "EXITED" "$(_sig_probe INT)"
-assert_contains "E-123.SIG: SIGTERM terminates the watch loop"         "EXITED" "$(_sig_probe TERM)"
+# The probe's diagnosis goes in the LABEL, not only in the compared value: assert_contains
+# prints the EXPECTED string on failure and never the actual one, so the ALIVE(...) detail
+# was computed and then thrown away — on CI these read "expected to contain: EXITED" twice
+# and told me nothing.
+_sig_int="$(_sig_probe INT)"
+assert_contains "E-123.SIG: SIGINT (Ctrl-C) terminates the watch loop [got: ${_sig_int}]" \
+  "EXITED" "$_sig_int"
+_sig_term="$(_sig_probe TERM)"
+assert_contains "E-123.SIG: SIGTERM terminates the watch loop [got: ${_sig_term}]" \
+  "EXITED" "$_sig_term"
 
 # CLR: `ai watch --clear` empties the queue for a fresh start, exits 0, no tmux.
 assert_status 0 "E-123.CLR: --clear handled in arg parse" grep -qE '\-\-clear\|clear\)' "$WATCH"

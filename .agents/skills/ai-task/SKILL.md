@@ -13,6 +13,7 @@ agent: default
 ## Dynamic Context Injection
 Open tasks: !grep "^- \[ \]" .ai/TASKS.md 2>/dev/null || echo "(none)"
 Recent stamps: !tail -3 .ai/LOG.md 2>/dev/null || echo "(no log)"
+CI (master): !gh run list --branch master --limit 1 --json status,conclusion,displayTitle 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); print("(no runs)") if not r else print(r[0]["status"]+"/"+(r[0]["conclusion"] or "pending")+" — "+r[0]["displayTitle"])' 2>/dev/null || echo "(gh unavailable — check CI manually)"
 
 ## Role
 
@@ -43,6 +44,27 @@ Do NOT mark DONE if:
 - Tests are failing
 - The implementation is partial
 - A required gate (dependency_gate, ci_gate, security_engineer) has not been passed
+
+## Step 2.5 — Check CI BEFORE marking anything DONE (E-230 / D-060 §1)
+
+The `CI (master)` line above is injected on every invocation. Read it.
+
+Master was RED for two days (2026-09-07 → 2026-09-09) while three sprints were asked to
+"verify on CI", because nobody looked and the README carried a hardcoded
+`tests-passing` badge. A locally green suite is not evidence about CI: the failures were
+GNU-vs-BSD `ls` exit codes, a `~/.ai-os` mirror that only a developer machine had in the
+pre-strip state, and a suite that died mute on Linux. None of them could reproduce on a
+Mac.
+
+- **CI conclusion `success`** — proceed.
+- **CI `failure`** — do NOT report the task as DONE-and-verified. Mark the work DONE only
+  if it is genuinely complete, and say plainly, in the same breath, that master is red and
+  which run failed (`gh run view <id> --log-failed`). Never describe work as "verified" on
+  the strength of a local run alone.
+- **`pending`/`in_progress`** — say the run is still going rather than implying it passed.
+- **`(gh unavailable)`** — say CI status is unknown. Unknown is not green.
+
+Reporting a red pipeline as green is the failure mode this step exists to prevent.
 
 ## Step 3 — Run Handover
 
