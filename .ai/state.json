@@ -1616,12 +1616,12 @@
     {
       "id": "E-240",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement leaked-state hygiene per D-063 §2 and .ai/blueprints/test-harness-isolation.md §Leaked External State: (a) add register_cleanup to tests/lib/assert.sh that installs an EXIT trap and accumulates cleanup commands, and convert every suite that creates external state (tmux servers/sockets, temp dirs outside the sandbox, background processes, .ai/ lock dirs, ~/.ai-os mirror writes, .ai/signal.json entries) to call it BEFORE creating the state, with names from mktemp entropy never $$; (b) tests/run.sh snapshots before and diffs after the run the tmux servers matching the test socket prefix, processes whose argv names the harness sandbox, lock dirs under .ai/, and temp dirs under the harness root, prints 'LEAKED n <kind>' per suite, fails the run when CI=true, and offers --sweep locally; AI_OS_TEST_NO_SWEEP=1 disables the sweep; (c) add review question #3 'what does this test leave behind when an assertion fails halfway?' to critic_tests and ai-review. Acceptance: a fixture suite that fails mid-way leaves nothing behind; a deliberately leaking fixture is reported as LEAKED and fails under CI=true; the sweep never touches a tmux server outside the test prefix (negative test with a foreign socket); full suite green locally and on CI; mirrors synced.",
       "created_at": "2026-09-09T21:47:37.848Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-09T22:12:37.373Z",
+      "summary": "Leaked-state hygiene: register_cleanup BEFORE creating state (a trap after the resource has a leak window, and that is where failures happen), mktemp names never $$, runner diffs per …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
