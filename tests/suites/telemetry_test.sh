@@ -594,8 +594,15 @@ done
 # overhead is verified separately via the `time` builtin and documented in
 # DEVOPS-004; this assertion is the CI-safe lower bound that catches gross
 # regressions (e.g. someone removes the `&` and makes the write synchronous).
-assert_status 0 "hook warm-path under 250ms wallclock (sync slack budget)" \
-  bash -c "[[ $ELAPSED_MS_MAX -lt 250 ]]"
+# E-239 (D-062 §2): host-relative. The baseline is built to match THIS measurement rather
+# than a bare hook, because the comment above is right — the window is dominated by the two
+# `node -e Date.now` calls used as the clock, not by the hook. So the floor is
+# 2 x node-spawn + one no-op hook, measured on this same host in this same run. Comparing
+# against a bare-hook baseline would flatter the assertion by ignoring its own instrument.
+#
+# The absolute 250ms still governs on CI, where the hardware is known.
+_TEL_BASELINE=$(( 2 * $(perf_baseline_node) + $(perf_baseline_hook) ))
+assert_perf "hook warm-path (steady-state max)" "$ELAPSED_MS_MAX" 250 "$_TEL_BASELINE"
 
 # ── T-TEL-S18: writable preflight probe — warns + fails open (E-173) ──────────
 echo ""

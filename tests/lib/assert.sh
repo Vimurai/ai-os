@@ -100,6 +100,125 @@ file_mtime() {
   printf '%s' "$m"
 }
 
+
+# ── E-239 (D-062 §2): host-relative performance budgets ─────────────────────
+#
+# An absolute millisecond budget measures the MACHINE, not the code. `incident_aggregator`
+# asserted "under 200ms" and measured 381ms on the Engineer's laptop while passing on CI
+# (20/20); `node -e ''` alone costs ~197ms there, so a 250ms wallclock budget was
+# arithmetically unreachable. The same suite then PASSED once 54 leaked tmux servers and a
+# wedged download were cleared — the number was tracking machine load the whole time.
+#
+# So: enforce the declared ABSOLUTE budget where the hardware is known (CI), and a
+# RATIO-TO-BASELINE everywhere else. The baseline is measured on the SAME HOST, in the same
+# run, against the cost the code cannot avoid — a bare interpreter spawn for spawn-bound
+# work, a no-op hook for hook paths.
+#
+# BOTH NUMBERS ARE PRINTED EVERY RUN, pass or fail. A perf assertion that prints only a
+# verdict teaches nothing: you cannot tell "the code got slower" from "the machine is busy"
+# without seeing the baseline next to the elapsed.
+
+# perf_baseline_node → median ms for a bare `node -e ''` spawn on THIS host, cached per run.
+#
+# MEDIAN, not mean: a single scheduling hiccup would otherwise inflate the baseline and
+# hide a real regression behind a generous limit. Measured inside ONE python3 process so
+# the harness's own spawn cost is not folded into the number it is trying to isolate.
+# CACHED IN A FILE, not a variable. Callers write `$(perf_baseline_node)`, which runs in a
+# SUBSHELL — so a variable set inside it dies immediately and every assertion would
+# re-measure with five node spawns. The first version of this helper claimed to cache and
+# did not; the suite's own "identical within a run" assertion caught it.
+#
+# The cache key is the suite's PID, and any file left by a previous process with the same
+# PID is cleared when this library is sourced — PIDs recycle, which is precisely how E-238's
+# tmux sockets went stale.
+_PERF_CACHE_DIR="${TMPDIR:-/tmp}"
+_PERF_CACHE_NODE="${_PERF_CACHE_DIR}/aios-perf-node-$$"
+_PERF_CACHE_HOOK="${_PERF_CACHE_DIR}/aios-perf-hook-$$"
+rm -f "$_PERF_CACHE_NODE" "$_PERF_CACHE_HOOK" 2>/dev/null || true
+
+perf_baseline_node() {
+  if [[ -s "$_PERF_CACHE_NODE" ]]; then
+    cat "$_PERF_CACHE_NODE"
+    return 0
+  fi
+  local _v
+  _v="$(python3 - <<'PYBASE' 2>/dev/null || echo 0
+import subprocess, time
+runs = []
+for _ in range(5):
+    t = time.perf_counter()
+    subprocess.run(["node", "-e", ""], capture_output=True)
+    runs.append((time.perf_counter() - t) * 1000)
+runs.sort()
+print(int(runs[len(runs) // 2]))
+PYBASE
+)"
+  [[ -z "$_v" ]] && _v=0
+  printf '%s' "$_v" > "$_PERF_CACHE_NODE" 2>/dev/null || true
+  printf '%s' "$_v"
+}
+
+# perf_baseline_hook <hook-path> → median ms for invoking a hook that does nothing.
+# The floor for any hook path is "bash starts, reads the file, exits".
+perf_baseline_hook() {
+  if [[ -s "$_PERF_CACHE_HOOK" ]]; then
+    cat "$_PERF_CACHE_HOOK"
+    return 0
+  fi
+  local noop _v; noop="$(mktemp)"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$noop"; chmod +x "$noop"
+  _v="$(NOOP="$noop" python3 - <<'PYHOOK' 2>/dev/null || echo 0
+import os, subprocess, time
+runs = []
+for _ in range(5):
+    t = time.perf_counter()
+    subprocess.run(["bash", os.environ["NOOP"]], capture_output=True)
+    runs.append((time.perf_counter() - t) * 1000)
+runs.sort()
+print(int(runs[len(runs) // 2]))
+PYHOOK
+)"
+  rm -f "$noop"
+  [[ -z "$_v" ]] && _v=0
+  printf '%s' "$_v" > "$_PERF_CACHE_HOOK" 2>/dev/null || true
+  printf '%s' "$_v"
+}
+
+# perf_time_ms <command...> → wallclock ms for one invocation.
+perf_time_ms() {
+  local s e
+  s="$(python3 -c 'import time; print(time.time_ns())')"
+  "$@" >/dev/null 2>&1
+  e="$(python3 -c 'import time; print(time.time_ns())')"
+  printf '%s' "$(( (e - s) / 1000000 ))"
+}
+
+# assert_perf <label> <elapsed_ms> <absolute_ms> <baseline_ms> [k] [slack_ms]
+#
+# CI (or AI_OS_PERF_ABSOLUTE=1) → the declared absolute budget, because the hardware is
+# known and a real regression must not hide behind a slow runner.
+# Anywhere else → elapsed <= k*baseline + slack, which asks the question that actually
+# matters off CI: is this code slow RELATIVE to what this machine can do at all?
+assert_perf() {
+  local label="$1" elapsed="$2" absolute="$3" baseline="$4" k="${5:-2}" slack="${6:-50}"
+  local mode limit
+  if [[ "${AI_OS_PERF_ABSOLUTE:-0}" == "1" || "${CI:-}" == "true" ]]; then
+    mode="absolute"
+    limit="$absolute"
+  else
+    mode="relative"
+    limit=$(( k * baseline + slack ))
+  fi
+  # Both numbers, every run, pass or fail.
+  printf "  ⓘ %s: elapsed=%sms baseline=%sms limit=%sms [%s] (k=%s slack=%sms absolute=%sms)\n" \
+    "$label" "$elapsed" "$baseline" "$limit" "$mode" "$k" "$slack" "$absolute"
+  if [[ "${elapsed:-999999}" -le "${limit:-0}" ]]; then
+    _pass "${label} (${elapsed}ms <= ${limit}ms, ${mode})"
+  else
+    _fail "${label} (${elapsed}ms > ${limit}ms, ${mode}; baseline ${baseline}ms on this host)"
+  fi
+}
+
 # assert_status <expected_code> <label> <command...>
 assert_status() {
   local expected="$1" label="$2"; shift 2
