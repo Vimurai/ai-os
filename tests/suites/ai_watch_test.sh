@@ -556,9 +556,15 @@ done
 rc=0
 wait "$mp" 2>/dev/null || rc=$?
 kill "$wd" 2>/dev/null
+ready_seen=no; [ -e "$READY" ] && ready_seen=yes
 rm -f "$SIGNAL" "$READY"
-# 130/143 come from the traps; 137 means only SIGKILL stopped it.
-case "$rc" in 130|143) echo EXITED ;; *) echo ALIVE ;; esac
+# 130/143 come from the traps; 137 means only SIGKILL stopped it. Report the rc and
+# whether the loop was ever reached: a bare "ALIVE" cannot distinguish "the trap did not
+# fire" from "main exited before installing traps", and on CI those look identical.
+case "$rc" in
+  130|143) echo EXITED ;;
+  *)       echo "ALIVE(rc=${rc} ready=${ready_seen} bash=${BASH_VERSION} signals_sent=${i})" ;;
+esac
 """
 os.environ["WATCH_PATH"] = watch
 os.environ["SIG_NAME"] = sig

@@ -19,6 +19,15 @@ SERVER="${REPO_ROOT}/src/mcp/propose-patch-mcp/index.js"
 echo "── Suite: propose_patch_apply_test ─────────────────────────────────"
 
 unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE 2>/dev/null || true
+
+# The caller role is derived SERVER-SIDE and fails closed to `architect` when there is no
+# evidence (E-219) — which correctly refuses every write to this fixture project. On a
+# developer machine the suite silently INHERITED AI_OS_CALLER_ROLE=engineer from
+# .claude/settings.json and passed; on CI nothing sets it, so the suite failed. Declare the
+# role the fixture intends rather than depending on whose shell is running it. This does
+# not weaken anything: the role gate itself is covered by patch_project_boundary_test, and
+# a caller_role argument may only ADD restriction, never lift it.
+export AI_OS_CALLER_ROLE=engineer
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 cat > "${PROJECT}/.ai/state.json" <<'JSON'

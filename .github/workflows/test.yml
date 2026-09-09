@@ -50,7 +50,12 @@ jobs:
           node --version
           bash --version | head -1
 
+      # `shell: bash` is REQUIRED here, not cosmetic. The default runner shell is
+      # `bash -e {0}` with NO pipefail, so `run.sh | tee` reports TEE's exit status and a
+      # failing suite passes the step silently. Naming the shell gets `-eo pipefail`.
+      # This bit me in the first run of this very PR: 17 failures reported as a green job.
       - name: Run tests
+        shell: bash
         run: bash tests/run.sh 2>&1 | tee test-run.log
 
       # Keep the log even when the suite fails — a red run is exactly the one worth reading.

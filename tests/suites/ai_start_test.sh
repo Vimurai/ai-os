@@ -132,8 +132,15 @@ if command -v tmux >/dev/null 2>&1; then
           | awk -v n="$_win" '$2 == n { print $1; exit }')"
   assert_status 0 "E-227.06a: the project window exists" bash -c "[[ -n '$_wid' ]]"
 
+  # Carry the tmux version and the raw listing into the labels. When this failed on CI
+  # it reported only "expected to contain: 3" — which does not distinguish "two panes were
+  # created" from "list-panes returned nothing", and those have completely different causes.
+  _tmuxv="$("$_tb" -V 2>&1 | head -1)"
   _panes="$("$_tb" -L "$_sock" list-panes -t "$_wid" -F '#{pane_index} #{pane_id}' 2>/dev/null | sort -n | awk '{print $2}')"
-  assert_contains "E-227.06b: three panes were created" "3" "$(printf '%s\n' "$_panes" | grep -c .)"
+  _npanes="$(printf '%s\n' "$_panes" | grep -c .)"
+  _wins="$("$_tb" -L "$_sock" list-windows -a -F '#{session_name}:#{window_id}:#{window_name}' 2>&1 | tr '\n' ' ')"
+  assert_contains "E-227.06b: three panes were created (${_tmuxv}; wid=${_wid}; panes=[${_panes//$'\n'/,}]; windows=[${_wins}])" \
+    "3" "$_npanes"
 
   _titles="$("$_tb" -L "$_sock" list-panes -t "$_wid" -F '#{pane_title}' 2>/dev/null | tr '\n' ' ')"
   assert_contains "E-227.06c: pane 0 titled engineer"  "engineer"  "$_titles"
@@ -149,27 +156,46 @@ if command -v tmux >/dev/null 2>&1; then
   done
 
   # Idempotent: a re-run must not duplicate panes.
-  _before="$(printf '%s\n' "$_panes" | grep -c .)"
+  # NON-VACUITY: on CI this passed while comparing 0 panes to 0 panes — "unchanged" is
+  # trivially true when nothing was ever created, so the idempotence claim was empty.
+  # Pin that there were panes to begin with before comparing counts.
+  _before="$_npanes"
+  assert_status 0 "E-227.06f-pre: there were panes to duplicate (guards 06f)" \
+    bash -c "[[ '$_before' -gt 0 ]]"
   ( cd "$_lp" && PATH="$_shim:$PATH" bash "$AI" start --detach >/dev/null 2>&1 )
   _after="$("$_tb" -L "$_sock" list-panes -t "$_wid" 2>/dev/null | grep -c .)"
-  assert_contains "E-227.06f: a re-run does not duplicate panes" "$_before" "$_after"
+  assert_contains "E-227.06f: a re-run does not duplicate panes (before=${_before} after=${_after})" \
+    "$_before" "$_after"
 
   "$_tb" -L "$_sock" kill-server 2>/dev/null
   rm -rf "$_shim" "$_lp"
 else
   # Keep the assertion count stable across hosts: a missing tmux is a skip, not a gap.
-  for _n in a b c d e0 e1 e2 f; do
+  for _n in a b c d e0 e1 e2 f f-pre; do
     _pass "E-227.06${_n}: live tmux layer skipped (tmux not installed)"
   done
 fi
 
 # ── E-227.7: non-tmux hosts get the manual recipe, not a stack trace ───────
 _p="$(_proj 0 1)"
-# A PATH that still has coreutils but NOT tmux (tmux lives in /opt/homebrew/bin here).
-# An empty PATH is not the same experiment: the script needs python3/basename long before
-# it reaches the tmux check, so it failed for the wrong reason.
-_out="$( cd "$_p" && PATH=/usr/bin:/bin bash "$AI" start 2>&1 )"; _rc=$?
-assert_status 0 "E-227.07a: no tmux → exit 2" bash -c "[[ $_rc -eq 2 ]]"
+# A PATH that still has coreutils but NOT tmux. The previous version hard-coded
+# `PATH=/usr/bin:/bin` with the comment "tmux lives in /opt/homebrew/bin here" — true on
+# macOS, false on Linux, where tmux IS /usr/bin/tmux. So on CI this experiment left tmux
+# on the PATH and tested nothing at all, while asserting it had. Derive the PATH by
+# REMOVING whichever directories actually provide tmux, then verify the condition holds
+# before relying on it — an experiment that can silently stop being the experiment is
+# worse than no test.
+_notmux=""
+while IFS= read -r _d; do
+  [[ -z "$_d" ]] && continue
+  [[ -x "${_d}/tmux" ]] && continue
+  _notmux="${_notmux}${_d}:"
+done < <(printf '%s\n' "$PATH" | tr ':' '\n')
+_notmux="${_notmux%:}"
+assert_status 1 "E-227.07pre: the no-tmux PATH really has no tmux (guards the experiment)" \
+  env PATH="$_notmux" command -v tmux
+_out="$( cd "$_p" && PATH="$_notmux" bash "$AI" start 2>&1 )"; _rc=$?
+assert_status 0 "E-227.07a: no tmux → exit 2 (rc=$_rc)" bash -c "[[ $_rc -eq 2 ]]"
 assert_contains "E-227.07b: the recipe names ai pane engineer"  "ai pane engineer"  "$_out"
 assert_contains "E-227.07c: the recipe names ai pane architect" "ai pane architect" "$_out"
 assert_contains "E-227.07d: the recipe names ai watch"          "ai watch"          "$_out"
