@@ -219,6 +219,102 @@ assert_perf() {
   fi
 }
 
+
+# ── E-240 (D-063 §2): leaked external state ─────────────────────────────────
+#
+# The THIRD variety of environment dependence, after "what the machine has" (E-236) and
+# "how fast it is" (E-239): WHAT A PREVIOUS RUN LEFT BEHIND.
+#
+# The E-227/E-228 suites leaked 50 tmux servers. The socket name used `$$`, which recycles,
+# so a later run attached to a stale server still holding windows and read `windows=3`
+# where it expected none. They leaked because cleanup was the LAST LINE of a block and a
+# FAILING assertion never reached it — so the tests leaked precisely when something was
+# already wrong, which is the worst possible time to lose cleanup.
+#
+# Hence: register the cleanup BEFORE creating the state. A trap that is installed after the
+# resource exists has a window where a failure leaks, and that window is exactly where
+# failures happen.
+
+# THE REGISTRY IS A FILE, and the trap is installed AT SOURCE TIME. Both are forced by the
+# same fact that bit E-239's baseline cache: helpers are called as `$(test_tmux_socket …)`,
+# and a command substitution is a SUBSHELL. An array appended inside it dies instantly, and
+# a trap installed inside it fires when that subshell exits — which is immediately, and in
+# the wrong process. The first version of this did exactly that: the socket was created,
+# the cleanup was registered into a subshell's array, and the array evaporated. The suite's
+# own leak check caught it.
+_CLEANUP_FILE="${TMPDIR:-/tmp}/aios-cleanup-$$"
+# PIDs recycle (E-238), so a file left by a previous process with this PID must not be
+# inherited — it would run someone else's stale teardown.
+rm -f "$_CLEANUP_FILE" 2>/dev/null || true
+: > "$_CLEANUP_FILE" 2>/dev/null || true
+
+# register_cleanup <shell-command>
+#
+# Call this BEFORE creating the thing it cleans up. A trap installed after the resource
+# exists has a window in which a failure leaks — and that window is exactly where failures
+# happen. Commands run in REVERSE order (LIFO, like defer).
+register_cleanup() {
+  printf '%s\n' "$1" >> "$_CLEANUP_FILE" 2>/dev/null || true
+}
+
+_run_cleanups() {
+  local _rc=$?
+  [[ -s "$_CLEANUP_FILE" ]] || { rm -f "$_CLEANUP_FILE" 2>/dev/null; return "$_rc"; }
+  local _line
+  # tail -r / tac: LIFO, so a resource created inside another is torn down first.
+  while IFS= read -r _line; do
+    [[ -z "$_line" ]] && continue
+    # A cleanup must never change the suite's verdict, and one failing cleanup must not
+    # skip the rest — that is how a partial teardown leaks the remainder.
+    eval "$_line" >/dev/null 2>&1 || true
+  done < <(tail -r "$_CLEANUP_FILE" 2>/dev/null || tac "$_CLEANUP_FILE" 2>/dev/null)
+  rm -f "$_CLEANUP_FILE" 2>/dev/null || true
+  return "$_rc"
+}
+
+# Installed HERE, in the sourcing shell, not lazily inside a helper that may run in a
+# subshell. NOTE: a suite that installs its own `trap … EXIT` after sourcing will REPLACE
+# this one; the runner's leak sweep is the backstop for that case.
+trap '_run_cleanups' EXIT
+
+# The prefixes the runner's leak sweep matches. A suite that uses these gets swept; one
+# that invents its own name does not, which is why the helpers below exist.
+AIOS_TEST_SOCK_PREFIX="${AIOS_TEST_SOCK_PREFIX:-aios-test-}"
+AIOS_TEST_TMP_PREFIX="${AIOS_TEST_TMP_PREFIX:-aios-t-}"
+
+# test_tmux_socket [label] → a socket name that is unique, sweepable, and self-cleaning.
+#
+# NEVER `$$`: PIDs recycle, and a recycled name attaches to whatever the previous owner
+# left running. The entropy comes from mktemp, and the server is killed pre-emptively in
+# case a name somehow collides anyway.
+test_tmux_socket() {
+  local label="${1:-s}"
+  local name="${AIOS_TEST_SOCK_PREFIX}${label}-$(basename "$(mktemp -u)")"
+  # `tmux kill-server` stops the server but LEAVES THE SOCKET FILE. A leftover file is
+  # still state a later run can trip over — and it is what the sweep counts — so remove it
+  # too, or every run would report a leak it had actually cleaned up.
+  register_cleanup "tmux -L '${name}' kill-server 2>/dev/null || true; rm -f \"\${TMUX_TMPDIR:-/tmp}/tmux-\$(id -u)/${name}\" 2>/dev/null || true"
+  tmux -L "$name" kill-server 2>/dev/null || true
+  printf '%s' "$name"
+}
+
+# test_tmpdir [label] → a temp dir that the sweep can recognise, removed on EXIT.
+test_tmpdir() {
+  local label="${1:-d}"
+  local d
+  d="$(mktemp -d "${TMPDIR:-/tmp}/${AIOS_TEST_TMP_PREFIX}${label}-XXXXXX")"
+  register_cleanup "rm -rf '${d}'"
+  printf '%s' "$d"
+}
+
+# test_bg <command...> → run in the background, killed on EXIT. Returns the pid.
+test_bg() {
+  "$@" >/dev/null 2>&1 &
+  local pid=$!
+  register_cleanup "kill -TERM ${pid} 2>/dev/null || true"
+  printf '%s' "$pid"
+}
+
 # assert_status <expected_code> <label> <command...>
 assert_status() {
   local expected="$1" label="$2"; shift 2

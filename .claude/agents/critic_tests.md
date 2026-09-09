@@ -82,6 +82,27 @@ on CI where the hardware is known, `elapsed <= k*baseline + slack` elsewhere, an
 numbers printed every run**. A perf assertion that prints only a verdict cannot distinguish
 "the code got slower" from "the machine is busy", which is the whole question.
 
+### Leaked external state (review question #3 — E-240, D-063 §2) — **P1**
+
+> **What does this test leave behind when an assertion fails HALFWAY?**
+
+Not when it passes — when it aborts. Cleanup written as the last line of a block never runs
+on the path that matters, so a suite leaks precisely when something is already wrong.
+
+The E-227/E-228 suites leaked **50 tmux servers** that way. Their socket names used `$$`,
+which recycles, so a later run attached to a leftover server still holding windows and read
+`windows=3` where it expected none. The leak was found by hand, days later.
+
+Look for external state created without a matching `register_cleanup` **registered before
+the state exists**: tmux servers, background processes, temp dirs outside the sandbox,
+`.ai/` lock dirs, `~/.ai-os` writes, `.ai/signal.json` entries.
+
+Required shape: `register_cleanup "…"` FIRST, then create; names from `mktemp` entropy,
+**never `$$`**. `tests/run.sh` reports `LEAKED n <kind>` per suite and fails the run on CI.
+
+This is the third variety of environment dependence, alongside "what the machine has"
+(E-236) and "how fast it is" (E-239).
+
 ### 4. Coverage Gaps (Advisory)
 Identify any `src/` logic that has ZERO test coverage (not just in this diff, but overall). List as P2 advisory items — not blocking.
 

@@ -980,3 +980,39 @@ A conflicted `git stash pop` left conflict markers in `.ai/state.json`; they wer
 §2 `AI_OS_PERF_ABSOLUTE=1` enforces absolute budgets everywhere. §3 `AI_OS_SKIP_CONFLICT_GATE=1`.
 
 ---
+
+---
+
+## [[D-063]] — Baselines Include the Instrument (Ratified); Leaked External State Is the Third Environment Dependence
+
+**Date**: 2026-09-09
+**Task**: E-240 (Engineer handoff 2026-09-09 21:40 UTC; E-238/E-239 complete, master `bf28ec7`, CI green 4471/0)
+**Decision**: (§1) Ratify the E-239 strengthening and generalise it: a performance baseline must include the assertion's own measuring instrument. (§2) "What a previous run left behind" is the third variety of environment dependence after "what the machine has" (E-236) and "how fast it is" (E-239); every suite that creates external state registers cleanup in an EXIT trap before creating it, and the runner sweeps and reports leftovers.
+
+### §1 — Baselines include the instrument: RATIFIED, generalised
+D-062 §2 said "a no-op hook" for hook paths. The telemetry assertion's window is dominated by the two `node -e Date.now` calls it uses as a clock, so a bare-hook baseline would flatter it by ignoring its own instrument. The Engineer's `2 × node-spawn + no-op hook` is the correct reading and becomes the rule: **the baseline is the same operation kind PLUS whatever the assertion itself spends to measure it.** A baseline that omits the instrument is a `critic_tests` finding, same as a missing baseline. The literal reading is not wanted.
+
+### §2 — Leaked external state (E-240, Tier 2)
+The `ai start` suites leaked 50 tmux servers on one machine: the socket name used `$$` (recycled), and a FAILING assertion skipped the cleanup line, so leaks occurred only when something was already wrong — the worst shape, because the leak compounds the failure that caused it. Fixed at the cause; nothing sweeps generally. Ruling:
+- **Register before create.** Any suite that creates external state (tmux servers/sockets, temp dirs outside the per-test sandbox, background processes, lock dirs, `~/.ai-os` mirror writes, `.ai/signal.json` entries) registers its cleanup in an `EXIT` trap BEFORE creating the state; cleanup never depends on reaching a later line. Names come from `mktemp` entropy, never from `$$`.
+- **The runner sweeps.** `tests/run.sh` snapshots the inventory of known external-state kinds before the run and diffs after: tmux servers matching the test socket prefix, processes whose argv names the test sandbox, lock dirs under `.ai/`, and temp dirs under the harness root. Leftovers are reported as `LEAKED n <kind>` per suite and fail the run on CI (the reference machine must stay clean); locally they are reported and cleaned with `--sweep`.
+- **Standing review question #3** in `critic_tests` / `ai-review`: "what does this test leave behind when an assertion fails halfway?" — alongside "what the machine has" and "how fast it is".
+- `test-harness-isolation.md` records all three varieties together.
+
+### Alternatives considered
+1. **§1: keep the literal no-op-hook baseline** — rejected; it measured a smaller thing than the assertion did and would have passed a regression in the instrument itself.
+2. **§2: rely on each suite's own trap** — rejected as the only path; the incident was a suite that believed it cleaned up. **§2: run every suite in a throwaway VM/container** — rejected for now; Docker is down and CI already is the clean reference; the sweep is cheap and works everywhere.
+
+### Constraints driving this decision
+- Evidence printed beats reasoning remembered (D-062): the sweep prints what leaked, per suite, every run.
+- A cleanup that runs only on success is not cleanup.
+- The reference machine (CI) must start and end clean, or its green is not believable (D-060 §1).
+
+### Impact
+- Unlocks: E-240 (T2).
+- Risk if wrong: the sweep itself could kill a developer's unrelated tmux server — mitigated by matching only the test socket prefix and sandbox-named processes, never by age or count.
+
+### Rollback
+§1 none (test-policy wording). §2 `AI_OS_TEST_NO_SWEEP=1` disables the runner sweep; traps remain.
+
+---

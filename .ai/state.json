@@ -1612,6 +1612,19 @@
       "depends_on": [],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-240",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Implement leaked-state hygiene per D-063 §2 and .ai/blueprints/test-harness-isolation.md §Leaked External State: (a) add register_cleanup to tests/lib/assert.sh that installs an EXIT trap and accumulates cleanup commands, and convert every suite that creates external state (tmux servers/sockets, temp dirs outside the sandbox, background processes, .ai/ lock dirs, ~/.ai-os mirror writes, .ai/signal.json entries) to call it BEFORE creating the state, with names from mktemp entropy never $$; (b) tests/run.sh snapshots before and diffs after the run the tmux servers matching the test socket prefix, processes whose argv names the harness sandbox, lock dirs under .ai/, and temp dirs under the harness root, prints 'LEAKED n <kind>' per suite, fails the run when CI=true, and offers --sweep locally; AI_OS_TEST_NO_SWEEP=1 disables the sweep; (c) add review question #3 'what does this test leave behind when an assertion fails halfway?' to critic_tests and ai-review. Acceptance: a fixture suite that fails mid-way leaves nothing behind; a deliberately leaking fixture is reported as LEAKED and fails under CI=true; the sweep never touches a tmux server outside the test prefix (negative test with a foreign socket); full suite green locally and on CI; mirrors synced.",
+      "created_at": "2026-09-09T21:47:37.848Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -3245,6 +3258,13 @@
       "task_id": "E-239",
       "timestamp": "2026-09-09T21:35:55.614Z",
       "summary": "E-239 Tier-2: perf_budget 29/0, full suite 4474/0. assert_perf enforces the absolute budget on CI (or AI_OS_PERF_ABSOLUTE=1) and k*baseline+slack elsewhere, against a same-host same-run MEDIAN baseline. Both opposing properties pinned: the real incident (381ms, baseline 197ms) now PASSES while the same elapsed on a fast host still FAILS, and the ratio explicitly cannot rescue a CI regression. Both numbers print every run — you cannot tell \"code got slower\" from \"machine is busy\" without them. Two of my own defects caught by my own assertions: the cache was a LIE (callers use $(...) which is a subshell — now a PID-keyed file cache with stale entries cleared at source, per the E-238 lesson), and telemetry's baseline now includes its own 2x-node clock overhead rather than a flattering bare-hook figure. critic_tests gained the P1 checklist item; generated plugin agent.json rebuilt proactively (E-236 drift)."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-240",
+      "timestamp": "2026-09-09T21:56:55.289Z",
+      "summary": "E-240 Tier-2: leaked_state 27/0, ai_start 49/0, ai_start_surface 31/0, zero sockets left behind. register_cleanup runs BEFORE the state is created (a trap installed after the resource has a leak window, and that window is where failures happen); runner diffs external state per suite and reports LEAKED n <kind>, failing on CI and offering --sweep locally. SAFETY: the sweep re-checks the test prefix AT THE KILL SITE, with a negative test proving a foreign tmux server survives while a test one is swept — a sweep that can kill the operator's session is worse than the leak. Hit the E-239 subshell bug again (array+lazy trap died inside $(...)); now a file-backed registry with the trap at source time, caught by my own assertion. Also: kill-server leaves the socket FILE. KNOWN LIMIT: a suite installing its own EXIT trap after sourcing replaces the cleanup trap; the sweep is the backstop."
     }
   ],
   "deltas": [
