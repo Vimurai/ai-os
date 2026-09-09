@@ -113,9 +113,14 @@ START_NS=$(python3 -c 'import time; print(time.time_ns())')
 HOME="$SBOX2" node "$AGGR" >/dev/null
 END_NS=$(python3 -c 'import time; print(time.time_ns())')
 ELAPSED_MS=$(( (END_NS - START_NS) / 1000000 ))
-echo "  ⓘ aggregator on 100-record log: ${ELAPSED_MS}ms (budget 200ms)"
-assert_status 0 "aggregator under 200ms" \
-  bash -c "[[ '$ELAPSED_MS' -lt 200 ]]"
+# E-239 (D-062 §2): host-relative. The work here is ONE `node` spawn reading a 100-record
+# log, so the cost the code cannot avoid is a bare node spawn on this same host — that is
+# the baseline. The absolute 200ms is still enforced on CI, where the hardware is known.
+#
+# This assertion is why the rule exists: it measured 381ms on a developer laptop while
+# passing on CI, and then passed on the SAME laptop once 54 leaked tmux servers and a
+# wedged download were cleared. It was tracking machine load, not the aggregator.
+assert_perf "aggregator on a 100-record log" "$ELAPSED_MS" 200 "$(perf_baseline_node)"
 rm -rf "$SBOX2"
 
 # ── T-AG-S09: ai-preflight SKILL.md wires the aggregator (E-67) ─────────────

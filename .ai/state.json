@@ -3238,6 +3238,13 @@
       "task_id": "E-238",
       "timestamp": "2026-09-09T21:13:38.738Z",
       "summary": "E-238 Tier-2: conflict_gate 26/0, full suite 4445/0. VERIFIED AGAINST THE REAL INCIDENT — replaying 44243bc's corrupted blob blocks on both checks, naming lines 3187/3203. Over-block half guarded as the Architect flagged: line-start anchoring so this repo's own DECISIONS.md (which quotes the markers) passes, and `=======` alone is NOT a marker because seven '=' is a valid Markdown setext underline. JSON gate reads the STAGED blob via `git show :path`, not the worktree. The triage rule paid off within the hour: ai_start_surface failed only in the full run and was REAL — my E-227/E-228 suites leak tmux servers and the `$$` socket name recycles (50 leaked found); fixed with mktemp entropy + pre-emptive kill + EXIT trap, since a failing assertion had been skipping cleanup. Third variety of environment dependence: \"what a previous run left behind\"."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-239",
+      "timestamp": "2026-09-09T21:35:55.614Z",
+      "summary": "E-239 Tier-2: perf_budget 29/0, full suite 4474/0. assert_perf enforces the absolute budget on CI (or AI_OS_PERF_ABSOLUTE=1) and k*baseline+slack elsewhere, against a same-host same-run MEDIAN baseline. Both opposing properties pinned: the real incident (381ms, baseline 197ms) now PASSES while the same elapsed on a fast host still FAILS, and the ratio explicitly cannot rescue a CI regression. Both numbers print every run — you cannot tell \"code got slower\" from \"machine is busy\" without them. Two of my own defects caught by my own assertions: the cache was a LIE (callers use $(...) which is a subshell — now a PID-keyed file cache with stale entries cleared at source, per the E-238 lesson), and telemetry's baseline now includes its own 2x-node clock overhead rather than a flattering bare-hook figure. critic_tests gained the P1 checklist item; generated plugin agent.json rebuilt proactively (E-236 drift)."
     }
   ],
   "deltas": [

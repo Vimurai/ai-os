@@ -67,6 +67,21 @@ Never let an unmet optional requirement count as a pass: that is how a suite rep
 all-green while testing less than it claims. **P1** when an assertion's verdict depends on
 the host and the test could have supplied the dependency itself.
 
+### Absolute performance budgets without a baseline (E-239, D-062 §2) — **P1**
+
+A bare millisecond budget (`elapsed < 200`) measures the MACHINE, not the code. Flag any
+perf assertion that declares an absolute limit without a same-host baseline.
+
+`incident_aggregator` asserted "under 200ms" and measured **381ms** on a developer laptop
+while passing on CI — `node -e ''` alone cost ~197ms there. The same assertion then passed
+on that laptop once 54 leaked tmux servers and a wedged download were cleared. It had been
+tracking machine load the entire time.
+
+Required shape: `assert_perf <label> <elapsed> <absolute> <baseline>` — absolute enforced
+on CI where the hardware is known, `elapsed <= k*baseline + slack` elsewhere, and **both
+numbers printed every run**. A perf assertion that prints only a verdict cannot distinguish
+"the code got slower" from "the machine is busy", which is the whole question.
+
 ### 4. Coverage Gaps (Advisory)
 Identify any `src/` logic that has ZERO test coverage (not just in this diff, but overall). List as P2 advisory items — not blocking.
 
