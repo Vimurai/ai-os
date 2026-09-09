@@ -14,7 +14,25 @@ agent: default
 
 Package status: !npm outdated 2>/dev/null || echo "(npm outdated unavailable)"
 Recent vulnerabilities: !npm audit --json 2>/dev/null | jq '.metadata.vulnerabilities.total' || echo "0"
-Test suite status: !npm run test 2>&1 | tail -1 || echo "(no test suite)"
+
+> **Consent rule (D-060 §3, E-232).** This block must never auto-run a program the
+> visited project supplies. A `!`-line executes the moment the skill LOADS — before the
+> agent has decided anything and before the operator has been asked — so a project's own
+> `tests/run.sh` or `package.json` script would execute merely because someone opened a
+> skill. Read-only inspection stays here; anything that runs project code is a numbered
+> step the agent performs deliberately, below.
+
+## Step 0 — Establish the test baseline (do this FIRST, after loading)
+
+`npm run test` executes whatever `package.json` defines, which is project-supplied code,
+so it is not auto-run on load. Run it yourself before touching any dependency:
+
+1. `npm run test 2>&1 | tail -1` — record the result as the pre-upgrade baseline.
+2. If the suite is already red, STOP: an upgrade cannot be evaluated against a red
+   baseline, because you could not tell a new break from an existing one.
+
+(`npm outdated` and `npm audit` above stay auto-executed on purpose: they QUERY the
+manifest and the registry and run none of the project's own code.)
 
 ## When to Invoke
 

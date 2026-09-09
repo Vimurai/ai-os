@@ -539,12 +539,40 @@ untrusted flag.
 *ACCEPTED — skills that run the visited project's own entrypoint.* The complete set, after
 a second sweep found the first list was short:
 
+
     src/shared/skills/ai-debug/SKILL.md:14        !bash tests/run.sh          AUTO-EXECUTED
     src/claude/skills/bug-reproducer/SKILL.md:15  !bash tests/run.sh          AUTO-EXECUTED
+    src/shared/skills/ai-upgrade/SKILL.md:17      !npm run test               AUTO-EXECUTED
     src/shared/skills/ai-debug/SKILL.md:63        bash tests/suites/<s>.sh    agent-initiated
-    src/shared/skills/ai-upgrade/SKILL.md:17      npm run test                agent-initiated
     src/claude/skills/bug-reproducer/SKILL.md:77  bash repro.sh               agent-initiated
     src/agents/skills/aqg-resolver/SKILL.md:32,60 project test invocations    agent-initiated
+
+**CORRECTION (E-232).** `ai-upgrade/SKILL.md:17` was recorded here as *agent-initiated*.
+It is not: the line reads `Test suite status: !npm run test …`, so it is `!`-prefixed and
+runs on LOAD like the other two. The auto-executed set was THREE, not two, and the entry
+that under-counted it was this table. Re-derive such lists from the files, not from the
+previous list.
+
+**CLOSED by E-232 (D-060 §3).** All three AUTO-EXECUTED entries are fixed. Each `!`-line
+that executed a project-supplied program is now a numbered "Step 0" the agent performs
+after loading, so execution requires the agent to act rather than following from the file
+being opened. The capability is unchanged — each skill still names the command to run —
+which is the point: a consent fix, not a removal.
+
+The standards rule `skill_consent_no_project_exec` (severity error, threshold 0) keeps the
+class closed: a `!`-line in a SKILL.md or agents/*.md may not run `tests/`, `scripts/`,
+`bin/`, `src/`, `./…`, `make`, `npx`, or `npm|pnpm|yarn run` — directly, or hidden after a
+pipe or `&&`. The test is EXECUTION, not mention: `npm outdated` and `npm audit` stay
+allowed because they query the manifest and the registry and run none of the project's own
+code. It is a denylist of execution shapes rather than an allowlist of safe commands,
+because an allowlist would reject the next ordinary `git`/`grep` context line somebody
+writes. Verified across the whole corpus — 187 skill/agent files, 0 violations, with a
+non-vacuity assertion that the scan actually read them. Rollback:
+`AI_OS_STANDARDS_SKIP=skill-consent`.
+
+The agent-initiated entries below are DELIBERATE and remain: there the agent CHOSE to run
+the project's tests, which is the skill's stated purpose, and `repro.sh` is a script the
+skill writes itself rather than one resolved from the project.
 
 These execute code the visited project controls, and unlike the framework-helper class the
 execution IS the skill's stated purpose. The distinction is worth keeping: with
