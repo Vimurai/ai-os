@@ -18,7 +18,7 @@ ai doctor   # verify all MCP servers are healthy
 ```
 
 ### Recommended dev environment — tmux
-Contributors are strongly encouraged to develop with `brew install tmux` (or apt) and the three-pane layout described in the [README](README.md#recommended-workflow--tmux-split-panes): Architect (Gemini CLI) ⬌ Engineer (Claude Code) ⬌ Bash. The Triad is designed for concurrent agent work — tmux keeps the Architect's blueprint pane visible while the Engineer is implementing in the next pane, which makes hand-offs cheap and reduces stale-context bugs.
+Contributors are strongly encouraged to develop with `brew install tmux` (or apt) and then simply run **`ai start`** in the project — it builds the three-pane Triad layout, binds each pane to its role from `.ai/roles.json`, and starts the watcher, idempotently. Use `ai start --status` to see what is running and `ai start --kill` to tear it down. `ai doctor` tells you whether the launcher can work on this host (tmux present, roles mapped, providers on `PATH`). The layout it produces, and the manual fallback for hosts without tmux, are described in the [README](README.md#recommended-workflow--tmux-split-panes): Architect (Gemini CLI) ⬌ Engineer (Claude Code) ⬌ Bash. The Triad is designed for concurrent agent work — tmux keeps the Architect's blueprint pane visible while the Engineer is implementing in the next pane, which makes hand-offs cheap and reduces stale-context bugs.
 
 ### Run the test suite
 ```bash

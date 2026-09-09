@@ -115,6 +115,39 @@ set -g pane-border-format ' #{pane_index}: #{pane_current_command} '
 
 ```bash
 cd /path/to/your-project
+ai start
+```
+
+That is the whole thing. `ai start` creates or reuses the project's tmux session and
+window, derives the pane order from `pane_identifier` in `.ai/roles.json`, binds each pane
+to its role, and starts the watcher. It is **idempotent** — re-running it re-pins titles
+and attaches rather than stacking up duplicate panes — so it is safe to run whenever you
+come back to a project.
+
+```bash
+ai start --status        # which panes exist, what each is running, and whether the watcher holds its lock
+ai start --kill          # tear the project window down, watcher first (asks before doing it)
+ai start --kill --yes    # same, without the prompt — for scripts
+ai start --no-watch      # skip the watcher pane
+ai start --detach        # build the layout but do not attach
+ai start --dry-run       # print the tmux commands instead of running them
+```
+
+`ai doctor` reports whether the launcher can work here: tmux present, roles mapped, and
+each role's provider actually on `PATH`. A provider that is missing produces a pane that
+opens and then fails at the first keystroke, which looks like a launcher bug — so it is
+worth checking there first.
+
+On a host without tmux, `ai start` exits 2 and prints the manual three-command recipe
+rather than a stack trace.
+
+<details>
+<summary>Manual fallback — the layout by hand</summary>
+
+If you don't use `ai start` (or don't have tmux), the layout is three panes and three
+commands. Open three terminals, or build it with the keybinding below:
+
+```bash
 tmux new-session -s ai-os
 # Inside tmux: press your prefix (default Ctrl-b) then T
 # Pane 0 (top-left)  → agy         (Architect)
@@ -122,7 +155,7 @@ tmux new-session -s ai-os
 # Pane 1 (bottom)    → bash for `ai *` and git
 ```
 
-If you don't use the keybinding, you can also start the layout manually:
+Or start the layout manually:
 
 ```bash
 tmux new-session -s ai-os -n triad \; \
@@ -138,6 +171,8 @@ tmux new-session -s ai-os -n triad \; \
 ```
 
 The bottom pane is plain bash — that's where you run `ai sync` after pulling, `ai doctor` when something feels off, and git commands. The two agent panes are where the actual engineering happens via prompts and skills.
+
+</details>
 
 > Non-tmux users: the workflow still works. Just open three terminals — one for each role — and switch between them however your terminal handles it. tmux is recommended, not required.
 
