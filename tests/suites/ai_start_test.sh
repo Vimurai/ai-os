@@ -123,7 +123,10 @@ if command -v tmux >/dev/null 2>&1; then
   printf '#!/usr/bin/env bash\nexec %s -L %s "$@"\n' "$_tb" "$_sock" > "$_shim/tmux"
   chmod +x "$_shim/tmux"
   _lp="$(_proj 0 1)"
-  ( cd "$_lp" && PATH="$_shim:$PATH" bash "$AI" start --detach >/dev/null 2>&1 )
+  # Keep `ai start`'s own output. Discarding it meant that when only one pane appeared on
+  # CI, the suite could say the pane count was wrong but not what the launcher had said
+  # about it — which is the only thing that explains a tmux-version difference.
+  _startout="$( cd "$_lp" && PATH="$_shim:$PATH" bash "$AI" start --detach 2>&1 )"
 
   _win="$(basename "$_lp")"
   # Resolve by ID — the window name is the project basename and mktemp names contain a
@@ -139,7 +142,7 @@ if command -v tmux >/dev/null 2>&1; then
   _panes="$("$_tb" -L "$_sock" list-panes -t "$_wid" -F '#{pane_index} #{pane_id}' 2>/dev/null | sort -n | awk '{print $2}')"
   _npanes="$(printf '%s\n' "$_panes" | grep -c .)"
   _wins="$("$_tb" -L "$_sock" list-windows -a -F '#{session_name}:#{window_id}:#{window_name}' 2>&1 | tr '\n' ' ')"
-  assert_contains "E-227.06b: three panes were created (${_tmuxv}; wid=${_wid}; panes=[${_panes//$'\n'/,}]; windows=[${_wins}])" \
+  assert_contains "E-227.06b: three panes were created (${_tmuxv}; wid=${_wid}; panes=[${_panes//$'\n'/,}]; windows=[${_wins}]; start said: ${_startout//$'\n'/ | })" \
     "3" "$_npanes"
 
   _titles="$("$_tb" -L "$_sock" list-panes -t "$_wid" -F '#{pane_title}' 2>/dev/null | tr '\n' ' ')"
@@ -185,20 +188,45 @@ _p="$(_proj 0 1)"
 # REMOVING whichever directories actually provide tmux, then verify the condition holds
 # before relying on it — an experiment that can silently stop being the experiment is
 # worse than no test.
+# Removing the whole directory that provides tmux is not an option on Linux, where tmux is
+# /usr/bin/tmux — dropping /usr/bin takes python3, basename and the rest with it, and the
+# script died with 127 for the wrong reason (my first attempt did exactly that). Instead,
+# for each PATH entry that provides tmux, substitute a symlink FARM of that directory with
+# tmux alone omitted. Everything else stays reachable and only tmux disappears.
+_farmroot="$(mktemp -d)"
 _notmux=""
+_fi=0
 while IFS= read -r _d; do
-  [[ -z "$_d" ]] && continue
-  [[ -x "${_d}/tmux" ]] && continue
-  _notmux="${_notmux}${_d}:"
+  [[ -z "$_d" || ! -d "$_d" ]] && continue
+  if [[ -x "${_d}/tmux" ]]; then
+    _fi=$((_fi + 1))
+    _farm="${_farmroot}/f${_fi}"; mkdir -p "$_farm"
+    for _f in "$_d"/*; do
+      _b="${_f##*/}"
+      [[ "$_b" == "tmux" ]] && continue
+      [[ -e "${_farm}/${_b}" ]] && continue
+      ln -s "$_f" "${_farm}/${_b}" 2>/dev/null || true
+    done
+    _notmux="${_notmux}${_farm}:"
+  else
+    _notmux="${_notmux}${_d}:"
+  fi
 done < <(printf '%s\n' "$PATH" | tr ':' '\n')
 _notmux="${_notmux%:}"
+# `command` is a shell BUILTIN, so `env PATH=... command -v tmux` asks env to exec a
+# binary called `command`. macOS happens to ship /usr/bin/command and Linux does not, so
+# that spelling returned 127 on CI and the guard failed for its own reasons. Run it inside
+# a shell instead.
 assert_status 1 "E-227.07pre: the no-tmux PATH really has no tmux (guards the experiment)" \
-  env PATH="$_notmux" command -v tmux
+  bash -c "PATH='$_notmux' command -v tmux"
+assert_status 0 "E-227.07pre2: but coreutils are still reachable (guards the guard)" \
+  bash -c "PATH='$_notmux' command -v python3 >/dev/null && PATH='$_notmux' command -v basename >/dev/null"
 _out="$( cd "$_p" && PATH="$_notmux" bash "$AI" start 2>&1 )"; _rc=$?
 assert_status 0 "E-227.07a: no tmux → exit 2 (rc=$_rc)" bash -c "[[ $_rc -eq 2 ]]"
 assert_contains "E-227.07b: the recipe names ai pane engineer"  "ai pane engineer"  "$_out"
 assert_contains "E-227.07c: the recipe names ai pane architect" "ai pane architect" "$_out"
 assert_contains "E-227.07d: the recipe names ai watch"          "ai watch"          "$_out"
+rm -rf "$_farmroot"
 rm -rf "$_p"
 
 assert_summary

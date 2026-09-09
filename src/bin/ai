@@ -3351,8 +3351,24 @@ do_start() {
     fi
     # Pane 1 (right column), then pane 2 (right-bottom) for the watcher. Splitting in
     # this order is what makes pane_index follow the role order derived above.
-    _run split-window -h -t "$(_pane_at 0)" -c "$project" -p "$((100 - main_pct))"
-    [[ "$no_watch" -eq 1 ]] || _run split-window -v -t "$(_pane_at 1)" -c "$project" -p "$((100 - top_pct))"
+    # Check the splits. `_run` returns tmux's status and these callers used to DISCARD it,
+    # so a refused split (a window too small to divide, an unsupported flag on an older
+    # tmux) left a one-pane window and `ai start` went on to report "ready". A launcher
+    # that claims success while having built one third of the layout is worse than one
+    # that fails: the operator believes the Triad is up. Observed on CI (tmux 3.4), where
+    # only %0 was ever created.
+    if ! _run split-window -h -t "$(_pane_at 0)" -c "$project" -p "$((100 - main_pct))"; then
+      echo "ai start: tmux refused to split the window for the right column (main_pct=${main_pct})." >&2
+      echo "ai start: the layout was NOT created — not reporting the session as ready." >&2
+      return 2
+    fi
+    if [[ "$no_watch" -ne 1 ]]; then
+      if ! _run split-window -v -t "$(_pane_at 1)" -c "$project" -p "$((100 - top_pct))"; then
+        echo "ai start: tmux refused to split the right column for the watcher (top_pct=${top_pct})." >&2
+        echo "ai start: the layout was NOT created — not reporting the session as ready." >&2
+        return 2
+      fi
+    fi
   fi
 
   # Bind each agent pane. The pane hosts an INTERACTIVE SHELL and `ai pane <role>` is

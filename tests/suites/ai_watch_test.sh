@@ -571,8 +571,16 @@ os.environ["SIG_NAME"] = sig
 os.execvp("bash", ["bash", "-c", script])
 PYEOF
 }
-assert_contains "E-123.SIG: SIGINT (Ctrl-C) terminates the watch loop" "EXITED" "$(_sig_probe INT)"
-assert_contains "E-123.SIG: SIGTERM terminates the watch loop"         "EXITED" "$(_sig_probe TERM)"
+# The probe's diagnosis goes in the LABEL, not only in the compared value: assert_contains
+# prints the EXPECTED string on failure and never the actual one, so the ALIVE(...) detail
+# was computed and then thrown away — on CI these read "expected to contain: EXITED" twice
+# and told me nothing.
+_sig_int="$(_sig_probe INT)"
+assert_contains "E-123.SIG: SIGINT (Ctrl-C) terminates the watch loop [got: ${_sig_int}]" \
+  "EXITED" "$_sig_int"
+_sig_term="$(_sig_probe TERM)"
+assert_contains "E-123.SIG: SIGTERM terminates the watch loop [got: ${_sig_term}]" \
+  "EXITED" "$_sig_term"
 
 # CLR: `ai watch --clear` empties the queue for a fresh start, exits 0, no tmux.
 assert_status 0 "E-123.CLR: --clear handled in arg parse" grep -qE '\-\-clear\|clear\)' "$WATCH"
