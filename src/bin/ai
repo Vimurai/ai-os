@@ -2488,6 +2488,23 @@ PY
   fi
   echo ""
 
+  # ── E-235 (D-061 §3): browsers are opt-in, so say whether they are here ────
+  echo "Vibe-check browsers (ai mcp-setup --browsers):"
+  local _vdir="${AIOS}/mcp/vibe-check-mcp"
+  if [[ ! -d "$_vdir" ]]; then
+    echo "  ⚠  vibe-check-mcp not installed"
+  elif node --input-type=module -e "
+    const { browserStatus } = await import('file://${_vdir}/browser-check.mjs');
+    const { chromium } = await import('file://${_vdir}/node_modules/@playwright/test/index.js');
+    process.exit(browserStatus(chromium).ok ? 0 : 1);
+  " >/dev/null 2>&1; then
+    echo "  ✓ Chromium present"
+  else
+    echo "  ✗ Chromium not installed — vibe-check tools will report [BROWSER_MISSING]"
+    echo "    run: ai mcp-setup --browsers"
+  fi
+  echo ""
+
   # ── E-228 (D-059): is `ai start` actually usable here? ─────────────────────
   # Three things have to hold, and each fails differently, so each is reported
   # separately rather than as one "Triad: ok/not ok" verdict a reader cannot act on.
@@ -2944,6 +2961,40 @@ else:
 PY
 }
 
+# _install_browsers — the Playwright download, BOUNDED and visible (E-235 / D-061 §3).
+#
+# Two things the previous inline version lacked, both of which mattered:
+#
+#   1. A TIMEOUT. It once ran over an hour with no bound. `timeout` is not present on
+#      macOS by default, so the limit is enforced with a watchdog rather than assumed —
+#      a timeout that silently is not applied is worse than none, because it is believed.
+#   2. PROGRESS. Output was piped through `tail -2`, so a long download looked identical
+#      to a hung one. Nothing tells an operator less than a silent process.
+_install_browsers() {
+  local sdir="$1"
+  local budget="${AI_OS_BROWSER_TIMEOUT:-600}"
+  echo "  Installing Playwright Chromium (bounded to ${budget}s; ~150MB download)..."
+
+  ( cd "$sdir" && npx playwright install chromium ) &
+  local dl=$!
+  ( sleep "$budget"; kill -TERM "$dl" 2>/dev/null ) &
+  local wd=$!
+
+  local rc=0
+  wait "$dl" 2>/dev/null || rc=$?
+  kill "$wd" 2>/dev/null
+  wait "$wd" 2>/dev/null || true
+
+  if [[ "$rc" -eq 0 ]]; then
+    echo "  ✓ Chromium installed."
+  else
+    echo "  ✗ Chromium install did not complete (exit ${rc}; budget ${budget}s)." >&2
+    echo "    The vibe-check tools will report [BROWSER_MISSING] until it succeeds." >&2
+    echo "    Retry: ai mcp-setup --browsers    (raise the budget: AI_OS_BROWSER_TIMEOUT=1800)" >&2
+  fi
+  return 0   # never fail the install over an optional browser
+}
+
 do_mcp_setup() {
   local MCP_DIR="${AIOS}/mcp"
   local REGISTRY="${AIOS}/config/registry.json"
@@ -2978,6 +3029,14 @@ for name, info in d.get('mcp_servers', {}).items():
     CUSTOM_SERVERS=(vibe-check-mcp task-synchronizer-mcp safe-exec-mcp blueprint-aligner-mcp context-guardian-mcp risk-analyzer-mcp)
   fi
 
+  # E-235: explicit opt-in, so the default install never blocks on a browser download.
+  local WANT_BROWSERS=0
+  [[ "${AI_OS_INSTALL_BROWSERS:-0}" == "1" ]] && WANT_BROWSERS=1
+  local _a
+  for _a in "$@"; do
+    [[ "$_a" == "--browsers" ]] && WANT_BROWSERS=1
+  done
+
   echo "Installing MCP server dependencies from ${MCP_DIR} ..."
   echo ""
 
@@ -2987,9 +3046,23 @@ for name, info in d.get('mcp_servers', {}).items():
     if [[ -d "$sdir" && -f "${sdir}/package.json" ]]; then
       echo "  Installing ${server}..."
       (cd "$sdir" && npm install --silent 2>&1 | tail -2) || echo "  ✗ ${server}: npm install failed"
+      # E-235 (D-061 §3): the browser download is NO LONGER part of the default install.
+      #
+      # `npx playwright install chromium` is an unbounded ~150MB network fetch. On
+      # 2026-09-09 it ran for over an HOUR here without finishing — inside install-ai-os.sh,
+      # which every user install and every CI run depends on. The `|| true` that used to
+      # wrap it gave no protection whatsoever: the failure mode is HANGING, not erroring,
+      # and you cannot `|| true` your way out of a process that never returns.
+      #
+      # Opt in with `ai mcp-setup --browsers`, or AI_OS_INSTALL_BROWSERS=1 to restore the
+      # old behaviour. Missing browsers now produce a clear [BROWSER_MISSING] rejection at
+      # first use rather than a hang.
       if [[ "$server" == "vibe-check-mcp" ]]; then
-        echo "  Installing Playwright browsers for ${server}..."
-        (cd "$sdir" && npx playwright install chromium 2>&1 | tail -2) || true
+        if [[ "$WANT_BROWSERS" -eq 1 ]]; then
+          _install_browsers "$sdir"
+        else
+          echo "  (skipping Playwright browsers — run: ai mcp-setup --browsers)"
+        fi
       fi
       echo "  ✓ ${server}: ready"
       SETUP_OK=$((SETUP_OK + 1))

@@ -21,6 +21,10 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { instrument } from "../../shared/mcp-telemetry.mjs";
 import { chromium } from "@playwright/test";
+// E-235 (D-061 §3): browsers are no longer downloaded during install, so the FIRST USE has
+// to explain itself. Without this, a missing browser surfaces as Playwright's multi-
+// paragraph installation essay — or, behind a proxy, as a hang.
+import { assertBrowserAvailable } from "./browser-check.mjs";
 import { createLogger } from "../shared/logger.js";
 
 // ── Structured logger (obs_baseline §Logging) ────────────────────────────────
@@ -136,6 +140,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // ── run_vibe_audit ────────────────────────────────────────────────────────────
 
 async function runVibeAudit(baseUrl, routes, timeoutMs) {
+  assertBrowserAvailable(chromium);   // E-235: clear [BROWSER_MISSING], never a hang
   const browser = await chromium.launch({ headless: true });
   const results = [];
 
@@ -304,6 +309,7 @@ function formatVibeReport(results, hasP0) {
 // ── run_chaos_test ────────────────────────────────────────────────────────────
 
 async function runChaosTest(url, interactions, timeoutMs) {
+  assertBrowserAvailable(chromium);   // E-235: clear [BROWSER_MISSING], never a hang
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await context.newPage();
@@ -387,6 +393,7 @@ async function runChaosTest(url, interactions, timeoutMs) {
 // ── get_performance_metrics ───────────────────────────────────────────────────
 
 async function getPerformanceMetrics(url, timeoutMs) {
+  assertBrowserAvailable(chromium);   // E-235: clear [BROWSER_MISSING], never a hang
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
