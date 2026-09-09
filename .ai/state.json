@@ -3184,6 +3184,23 @@
       "task_id": "E-234",
       "timestamp": "2026-09-09T18:26:22.853Z",
       "summary": "E-234 Tier-2: full suite 4352/0. Program-position rule per D-061 §2. Fixtures first; baseline 19/16 showed all 16 failures were the over-blocks and all 12 previously-caught shapes ALREADY passed, so the narrowing is verified to trade nothing away. Resolved the ruling's internal tension (bash tests/run.sh src/bin/ai must stay caught) by closing position only on an operand that RESOLVES the program — a variable or an allowlisted entrypoint leaves it open. Data-typed extensions never programs in any position. Corpus 216 files, 0 findings (was 6); tightened E-231.06b from ≤6 to =0. Rollback verified behavioural (0→2). Two P0s adjudicated: PATH_TRAVERSAL is the stale-module artifact E-237 will fix (on-disk classifier says P1/anchor=self_dir), SOVEREIGNTY is the Architect's own .ai/blueprints edits which D-061 directed the Engineer to proxy-commit."
+<<<<<<< Updated upstream
+=======
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-237",
+      "timestamp": "2026-09-09T18:55:24.370Z",
+      "summary": "E-237 Tier-1: full suite 4372/0, policy_hot_reload 20/0, orchestrator_dispatch 16/0. loadPolicy() re-imports only on an mtime change — both halves asserted, since busting per call leaks an ESM record per request (loadCount pinned at 1 after no-change, 2 after rewrite). Sub-millisecond mtimeMs per the E-229 lesson. patch/propose-patch refresh module-level bindings at handler top rather than awaiting in sync security guards — a security gate is the wrong place for a wide async refactor — with the static import as fail-safe so a failed reload keeps the LAST GOOD policy rather than leaving the guard undefined. VERIFIED END TO END: a live tier-2 run_review through a fresh server now returns P1 WARN advisory + \"Automated checks passed\" where the identical review returned P0 FAIL/BLOCKED all session. Rollback AI_OS_POLICY_HOT_RELOAD=0 verified to reproduce pre-E-237 behaviour."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-236",
+      "timestamp": "2026-09-09T19:20:34.284Z",
+      "summary": "E-236 Tier-1: skip_accounting 21/0, plugin_builder 19/0, mcp_doc_sync 17/0, meta_analyst 63/0 (and 60/0/3-skipped on an uninstalled host). Folded in the mcp_doc_sync mtime flake per the user: it was the SAME `stat -f || stat -c` leak as E-229 — GNU stat prints a filesystem report AND exits non-zero, so the substitution captured both and the free-block counts changed between calls. Now via a shared file_mtime that validates a single numeric token. SKIP is a distinct outcome (SKIP= appended so run.sh's independent PASS=/FAIL= greps still parse); converting the old `_pass \"…skipped…\"` branches removed up to nine fabricated passes per suite, and revealed meta_analyst asserting the mirror unconditionally (twice). Standing question added to critic_tests + ai-review with BOTH remedies, asserted so the framing cannot erode toward skip-everything. Suite caught a real drift: the committed plugin agent.json was stale after the critic_tests edit; rebuilt."
+>>>>>>> Stashed changes
     }
   ],
   "deltas": [
