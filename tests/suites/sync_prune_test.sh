@@ -188,5 +188,80 @@ assert_status 0 "E-220.10a: AI_OS_NO_PRUNE=1 is honoured by the shell caller" \
 assert_status 0 "E-220.10b: pruning is wired into the provisioner, not one workspace" \
   bash -c "grep -q '_prune_workspace_dir \"\${ws}/skills\"' '$AI_BIN'"
 
-rm -rf "$T1" "$T2" "$T3" "$T4" "$T5" "$T6" "$T7" "$T8" "$T9"
+# ── E-233 (D-060 §4): the artefacts sync regenerates must not dirty the project ──
+# The manifest is machine-local by construction — its hashes describe what THIS machine
+# wrote — so committing one hands another machine a manifest that lies, and the prune
+# above then trusts that lie. Ignoring it is therefore a correctness requirement, not
+# just diff hygiene. `ai init` and `ai sync` add the patterns so a project cannot end up
+# permanently dirty (or, worse, tracking one).
+_gi() {
+  # Run the real helper against a scratch repo. Sourced by extraction rather than by
+  # running `ai sync`, which would need a whole provisioned workspace to reach the call.
+  ( eval "$(sed -n '/^_ensure_generated_gitignore() {/,/^}/p' "$AI_BIN")"
+    cd "$1" && _ensure_generated_gitignore "." ) 2>&1
+}
+
+T10="$(mktemp -d)"
+assert_status 0 "E-233.01a: init wires the helper in" \
+  bash -c "grep -q '_ensure_generated_gitignore \"\.\"' '$AI_BIN'"
+assert_status 0 "E-233.01b: sync wires it in too (two call sites)" \
+  bash -c "[ \"\$(grep -c '_ensure_generated_gitignore \"\.\"' '$AI_BIN')\" -eq 2 ]"
+
+# Outside a git work tree there is nothing to ignore — writing a .gitignore anyway would
+# be litter in a directory the user never asked to be a repo.
+_gi "$T10" >/dev/null 2>&1 || true
+assert_status 1 "E-233.02a: a non-git directory gets no .gitignore" test -f "$T10/.gitignore"
+
+G1="$T10/repo"; mkdir -p "$G1"; git -C "$G1" init -q .
+_o="$(_gi "$G1")"
+assert_status 0 "E-233.03a: a fresh repo gets the manifest pattern"      grep -qx '\*\*/_SYNC_MANIFEST.json' "$G1/.gitignore"
+assert_status 0 "E-233.03b: and the skills index pattern"                grep -qx '\*\*/_SKILLS_INDEX.md' "$G1/.gitignore"
+assert_status 0 "E-233.03c: and the blueprint index pattern"             grep -qx '\.ai/blueprints/_INDEX.md' "$G1/.gitignore"
+assert_contains "E-233.03d: the addition is reported"                    "generated-artefact pattern" "$_o"
+
+# Idempotence is the whole point: init and sync both call this, on every run.
+_before="$G1/.before"; cp "$G1/.gitignore" "$_before"
+_gi "$G1" >/dev/null; _gi "$G1" >/dev/null
+assert_status 0 "E-233.04a: repeated runs do not append again" \
+  cmp -s "$_before" "$G1/.gitignore"
+
+# A project that already ignores the artefact by bare name is ALREADY correct; adding a
+# second, differently-spelled pattern for the same file is noise in someone else's file.
+G2="$T10/named"; mkdir -p "$G2"; git -C "$G2" init -q .
+printf '_SKILLS_INDEX.md\n_SYNC_MANIFEST.json\n_INDEX.md\n' > "$G2/.gitignore"
+_gi "$G2" >/dev/null
+assert_status 0 "E-233.05a: an equivalent existing rule suppresses the append" \
+  bash -c "[ \"\$(grep -c . '$G2/.gitignore' | tr -d ' ')\" -eq 3 ]"
+
+# NON-VACUITY for 05a: a mere mention in a COMMENT is not an ignore rule, so the same
+# fixture minus the real rules must still gain the pattern. Without this, 05a would pass
+# just as well if the helper had stopped writing anything at all.
+G3="$T10/comment"; mkdir -p "$G3"; git -C "$G3" init -q .
+printf '# TODO: ignore _SYNC_MANIFEST.json and _SKILLS_INDEX.md and _INDEX.md\n' > "$G3/.gitignore"
+_gi "$G3" >/dev/null
+assert_status 0 "E-233.05b: a commented-out mention does not count (non-vacuity)" \
+  grep -qx '\*\*/_SYNC_MANIFEST.json' "$G3/.gitignore"
+
+# A .gitignore with no final newline: appending naively rewrites the project's LAST RULE
+# into something else entirely, which is a silent change to their ignore semantics.
+G4="$T10/nonl"; mkdir -p "$G4"; git -C "$G4" init -q .
+printf 'node_modules' > "$G4/.gitignore"
+_gi "$G4" >/dev/null
+assert_status 0 "E-233.06a: a missing trailing newline does not splice the last rule" \
+  grep -qx 'node_modules' "$G4/.gitignore"
+assert_status 0 "E-233.06b: and the pattern still lands"  grep -qx '\*\*/_SYNC_MANIFEST.json' "$G4/.gitignore"
+
+# This repo is the reference project: the patterns are already present, so a sync here
+# must be a no-op. If this fails, `ai sync` would start dirtying the framework tree.
+#
+# Run against a COPY, never against $REPO_ROOT itself. A test that invokes a file-writing
+# helper on the repository under test will, the first time the helper regresses, silently
+# edit the real .gitignore and then pass on the next run because it fixed its own input.
+G5="$T10/reference"; mkdir -p "$G5"; git -C "$G5" init -q .
+cp "$REPO_ROOT/.gitignore" "$G5/.gitignore"
+_gi "$G5" >/dev/null
+assert_status 0 "E-233.07a: the framework repo's own rules need no change" \
+  cmp -s "$REPO_ROOT/.gitignore" "$G5/.gitignore"
+
+rm -rf "$T1" "$T2" "$T3" "$T4" "$T5" "$T6" "$T7" "$T8" "$T9" "$T10"
 assert_summary

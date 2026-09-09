@@ -71,6 +71,29 @@ echo ""
 
 mkdir -p "${AIOS}"
 
+# E-229: a MIRROR WRITE MUST BE ATOMIC PER FILE. bash reads a script by byte offset as it
+# runs, so overwriting `bin/ai-watch` in place moves the ground under a live watcher — the
+# observed failure was 24 hours of a running-but-broken watcher after a mirror update.
+# rsync already writes to a temporary file and renames (it is only unsafe with --inplace),
+# so the rsync path below is correct as written; this makes the `cp` fallback match it.
+_atomic_copy_tree() {  # <src-dir> <dst-dir>
+  local src="${1%/}" dst="${2%/}" rel target tmp
+  mkdir -p "$dst"
+  while IFS= read -r rel; do
+    [[ -n "$rel" ]] || continue
+    target="${dst}/${rel}"
+    mkdir -p "$(dirname "$target")"
+    tmp="$(mktemp "$(dirname "$target")/.aios.XXXXXX")" || return 1
+    if cp "${src}/${rel}" "$tmp" 2>/dev/null; then
+      chmod --reference="${src}/${rel}" "$tmp" 2>/dev/null || \
+        { [[ -x "${src}/${rel}" ]] && chmod +x "$tmp"; }
+      mv -f "$tmp" "$target"          # rename is atomic: readers see old or new, never half
+    else
+      rm -f "$tmp"
+    fi
+  done < <(cd "$src" && find . -type f | sed 's|^\./||')
+}
+
 # Use rsync if available (preserves permissions, faster); fall back to cp
 if command -v rsync &>/dev/null; then
   rsync -a --delete "${REPO_DIR}/src/contracts/"  "${AIOS}/contracts/"
@@ -89,16 +112,16 @@ if command -v rsync &>/dev/null; then
     rsync -a --delete "${REPO_DIR}/scripts/"       "${AIOS}/scripts/"
   fi
 else
-  cp -rf "${REPO_DIR}/src/contracts/"  "${AIOS}/contracts/"
-  cp -rf "${REPO_DIR}/src/templates/"  "${AIOS}/templates/"
-  cp -rf "${REPO_DIR}/src/shared/"     "${AIOS}/shared/"
-  cp -rf "${REPO_DIR}/src/claude/"     "${AIOS}/claude/"
-  cp -rf "${REPO_DIR}/src/gemini/"     "${AIOS}/gemini/"
-  cp -rf "${REPO_DIR}/src/agents/"     "${AIOS}/agents/"
-  cp -rf "${REPO_DIR}/src/copilot/"    "${AIOS}/copilot/"
-  cp -rf "${REPO_DIR}/src/bin/"        "${AIOS}/bin/"
-  cp -rf "${REPO_DIR}/src/config/"     "${AIOS}/config/"
-  cp -rf "${REPO_DIR}/src/mcp/"        "${AIOS}/mcp/"
+  _atomic_copy_tree "${REPO_DIR}/src/contracts" "${AIOS}/contracts"
+  _atomic_copy_tree "${REPO_DIR}/src/templates" "${AIOS}/templates"
+  _atomic_copy_tree "${REPO_DIR}/src/shared" "${AIOS}/shared"
+  _atomic_copy_tree "${REPO_DIR}/src/claude" "${AIOS}/claude"
+  _atomic_copy_tree "${REPO_DIR}/src/gemini" "${AIOS}/gemini"
+  _atomic_copy_tree "${REPO_DIR}/src/agents" "${AIOS}/agents"
+  _atomic_copy_tree "${REPO_DIR}/src/copilot" "${AIOS}/copilot"
+  _atomic_copy_tree "${REPO_DIR}/src/bin" "${AIOS}/bin"
+  _atomic_copy_tree "${REPO_DIR}/src/config" "${AIOS}/config"
+  _atomic_copy_tree "${REPO_DIR}/src/mcp" "${AIOS}/mcp"
   cp -rf "${REPO_DIR}/hooks/"          "${AIOS}/hooks/"
   # E-52: ship the MCP doc generator so `ai sync` can regenerate mcp.md.
   if [[ -d "${REPO_DIR}/scripts" ]]; then

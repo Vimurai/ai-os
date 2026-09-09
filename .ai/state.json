@@ -1445,12 +1445,12 @@
     {
       "id": "E-227",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Implement 'ai start' per D-059 and .ai/blueprints/cli-collapse.md §ai start: create or reuse the project's tmux session (default 'aios', window = project basename), derive the pane layout from .ai/roles.json so the role with the lower pane_identifier gets the lower tmux pane_index (default 'triad' layout: engineer left full-height, architect right-top, watcher right-bottom), open each agent pane as an interactive shell and send-keys 'ai pane <role>' after the shell prompt is up, run 'ai watch' in the watcher pane, be idempotent (re-run re-pins titles, starts the watcher only if no lock holder, attaches; never duplicates panes), support --no-watch, --detach, --dry-run, read optional .ai/start.json (session ^[A-Za-z0-9_-]{1,32}$, layout, watch, numeric size percentages — reject anything else), and exit 2 with the manual three-command recipe when tmux is absent. Composes ONLY the installed 'ai pane' and 'ai watch' — never a project-supplied script. Acceptance: a tmux-mocked suite asserts pane order matches pane_identifier for both role orders, idempotent re-run, --no-watch, invalid start.json rejected; a live smoke in a scratch tmux server reproduces the reference layout and ai-watch resolves both roles by exact title; mirrors synced.",
       "created_at": "2026-09-09T10:33:41.014Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-09T13:46:24.563Z",
+      "summary": "`ai start` Triad launcher (D-059): composition over `ai pane`/`ai watch`, layout from roles.json pane_identifier order, shell-hosted panes, idempotent, validated start.json, non-tmux …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -1458,7 +1458,7 @@
     {
       "id": "E-228",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "OPEN",
       "tier": 1,
       "description": "Finish the 'ai start' surface per D-059: add 'ai start --status' (project panes with role/title/command and watcher lock holder) and 'ai start --kill' (tear down the project window, watcher first, confirm unless --yes); add an 'ai doctor' line reporting start readiness (tmux present, roles mapped, providers on PATH); update README.md and CONTRIBUTING.md tmux workflow docs to point at 'ai start' (closes the cli-collapse 'Tmux Documentation' item) and print an 'ai start' hint at the end of 'ai install'/'ai init'. Acceptance: doctor + start suites green; docs mention the manual fallback recipe; mirrors synced.",
       "created_at": "2026-09-09T10:33:41.097Z",
@@ -1467,10 +1467,8 @@
       "depends_on": [
         "E-227"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-227"
-      ]
+      "ready": true,
+      "blocked_by": []
     },
     {
       "id": "E-229",
@@ -3099,6 +3097,13 @@
       "task_id": "E-225",
       "timestamp": "2026-09-08T10:13:37.094Z",
       "summary": "[TIER_3] E-224/E-225/E-226 (D-058): executable-markdown classifier, skills locator closure, read-only patch tool scoping. Full suite 4117/0."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-229",
+      "timestamp": "2026-09-09T14:55:20.391Z",
+      "summary": "E-229 + E-233 Tier-2: full suite 4198/0. Two P0s adjudicated — PATH_TRAVERSAL is a STALE-PROCESS artifact (the on-disk traversal-policy.mjs, byte-identical in src and the ~/.ai-os mirror, grades `source \"${SCRIPT_DIR}/../lib/assert.sh\"` P1/anchor=self_dir; the long-running orchestrator-mcp holds an older module in memory), and SOVEREIGNTY_VIOLATION is the Architect's own .ai/blueprints edit that D-060 directed the Engineer to proxy-commit. E-229: `_self_mtime` used whole-second `stat -f %m` and was INERT for same-second rewrites (the real `ai sync` case) — replaced with sub-second `_self_stamp`; E-123.TC07 was asserting a false model (two watchers cannot share a PID) and was reprobed with a foreign live holder. E-233: two self-inflicted defects caught by mutation testing — a dead trailing-newline guard, and an assertion that wrote to the repo under test."
     }
   ],
   "deltas": [

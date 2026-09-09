@@ -328,13 +328,26 @@ _lock_probe() {  # <mode> → OK|FAIL
     USE_LOCK=1; LOCK_DIR="$(mktemp -d)/ai-watch.lock"
     case "$1" in
       acquire)  _acquire_lock && echo OK || echo FAIL ;;
-      double)   _acquire_lock >/dev/null; _acquire_lock && echo OK || echo FAIL ;;
+      # A SECOND WATCHER is a different process. Calling _acquire_lock twice from one
+      # shell used to stand in for that, but E-229 made same-pid re-acquisition succeed on
+      # purpose: `exec` preserves the pid, so the re-exec'd watcher meets its own lock and
+      # must be allowed through. The single-writer property therefore has to be probed
+      # with a genuinely foreign, genuinely live holder.
+      double)   mkdir -p "$LOCK_DIR"
+                sleep 30 & _other=$!
+                echo "$_other" > "$LOCK_DIR/pid"
+                _acquire_lock && echo OK || echo FAIL
+                kill "$_other" 2>/dev/null; wait "$_other" 2>/dev/null ;;
+      # The E-229 counterpart: our own pid in the lock is us, not a rival.
+      own)      mkdir -p "$LOCK_DIR"; echo $$ > "$LOCK_DIR/pid"
+                _acquire_lock && echo OK || echo FAIL ;;
       stale)    mkdir -p "$LOCK_DIR"; echo 999999 > "$LOCK_DIR/pid"; _acquire_lock && echo OK || echo FAIL ;;
       disabled) USE_LOCK=0; _acquire_lock && echo OK || echo FAIL ;;
     esac )
 }
 assert_contains "E-123.TC07: fresh lock acquired"          "OK"   "$(_lock_probe acquire)"
-assert_contains "E-123.TC07: live holder rejects 2nd watcher" "FAIL" "$(_lock_probe double)"
+assert_contains "E-123.TC07: live FOREIGN holder rejects 2nd watcher" "FAIL" "$(_lock_probe double)"
+assert_contains "E-229.TC07b: our own pid re-acquires (the exec case)"    "OK"   "$(_lock_probe own)"
 assert_contains "E-123.TC07: stale lock (dead pid) reclaimed" "OK"   "$(_lock_probe stale)"
 assert_contains "E-123.TC07: AI_WATCH_LOCK=0 disables locking" "OK"   "$(_lock_probe disabled)"
 

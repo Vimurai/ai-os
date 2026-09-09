@@ -625,6 +625,11 @@ _acquire_lock() {  # → 0 if acquired (or locking disabled), 1 if a live watche
   fi
   local holder=""
   [[ -f "$LOCK_DIR/pid" ]] && holder="$(cat "$LOCK_DIR/pid" 2>/dev/null)"
+  # OUR OWN pid means we re-exec'd (E-229): `exec` replaces the image but keeps the
+  # process, so the lock we took before the re-exec is still ours and still correct.
+  # Without this the watcher would lock itself out on the first self-update and exit
+  # reporting "another watcher is already running" — pointing at itself.
+  [[ -n "$holder" && "$holder" == "$$" ]] && return 0
   if [[ -n "$holder" ]] && kill -0 "$holder" 2>/dev/null; then
     return 1                                       # a live watcher already owns it
   fi
@@ -719,12 +724,60 @@ EOF
 }
 
 # ── Watch loop ───────────────────────────────────────────────────────────────
+# ── E-229: survive `ai sync` rewriting this script underneath us ────────────
+# bash reads a script by BYTE OFFSET as it executes, so rewriting the file in place moves
+# the ground under a running watcher: the observed failure was a watcher started
+# 2026-09-04 that survived a 2026-09-07 mirror update, then spammed tmux "not in a mode"
+# every poll and delivered nothing for 24 hours. It was still "running" the whole time,
+# which is why nothing alerted.
+#
+# Re-exec is safe HERE and only here — between polls — because all delivery state lives in
+# signal.json, not in memory. The re-exec keeps the same PID, so the lock stays ours
+# (see _acquire_lock) and no window opens for a second watcher.
+_self_stamp() {
+  # Sub-second resolution is load-bearing, not a refinement. `ai sync` rewrites this
+  # script milliseconds after the watcher starts, so a whole-second stamp (BSD `stat -f %m`)
+  # reports "unchanged" for the exact rewrite this mechanism exists to catch. BSD exposes
+  # the fractional mtime as %Fm and GNU coreutils as %.9Y; the whole-second forms remain as
+  # a last resort, and the size is appended so a filesystem with 1s granularity still
+  # notices any rewrite that changes the length.
+  local m s
+  m="$(stat -f %Fm "$_SELF" 2>/dev/null \
+    || stat -c %.9Y "$_SELF" 2>/dev/null \
+    || stat -f %m  "$_SELF" 2>/dev/null \
+    || stat -c %Y  "$_SELF" 2>/dev/null \
+    || echo 0)"
+  s="$(stat -f %z "$_SELF" 2>/dev/null || stat -c %s "$_SELF" 2>/dev/null || echo 0)"
+  printf '%s:%s' "$m" "$s"
+}
+
+_maybe_reexec() {
+  [[ "${AI_WATCH_NO_REEXEC:-0}" == "1" ]] && return 0
+  local now; now="$(_self_stamp)"
+  [[ "$now" == "$_SELF_STAMP" ]] && return 0
+  # Do not exec a file that is still being written. `bash -n` is the cheap version of
+  # "is this a complete script": a truncated copy fails to parse, and we simply try again
+  # next poll rather than replacing ourselves with something unrunnable.
+  if [[ ! -s "$_SELF" ]] || ! bash -n "$_SELF" 2>/dev/null; then
+    return 0
+  fi
+  echo "ai-watch: script changed on disk — re-executing to pick up the new version."
+  exec "$_SELF" "$@"
+}
+
 main() {
   case "${1:-}" in
     --clear|clear) _clear_queue; exit $? ;;
     --help|-h)     _usage; exit 0 ;;
   esac
   _preconditions || exit 1
+
+  # Resolved once: `$0` is what exec needs, and its mtime is the change signal.
+  # BASH_SOURCE, not $0: when the script is SOURCED (which is how the suites drive it)
+  # `$0` is the sourcing shell, so exec would replace the wrong program. BASH_SOURCE[0]
+  # is this file in both cases.
+  _SELF="${BASH_SOURCE[0]:-$0}"
+  _SELF_STAMP="$(_self_stamp)"
 
   if ! _acquire_lock; then
     echo "ai-watch: another watcher is already running for ${PROJECT_DIR} (lock: ${LOCK_DIR}) — exiting." >&2
@@ -761,6 +814,7 @@ main() {
   [[ -f "$SIGNAL" ]] && _reconcile_startup "$DRAIN_BACKLOG"
   while true; do
     [[ -f "$SIGNAL" ]] && _drain_once
+    _maybe_reexec "$@"
     sleep "$POLL_INTERVAL"
   done
 }

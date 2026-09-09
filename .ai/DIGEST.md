@@ -6,7 +6,7 @@
 - **D-054 (2026-09-04): the same-provider Triad is a SUPPORTED topology.** Both roles may run on one provider in separate tmux panes; role identity binds PER PANE at launch via `ai pane <role>`, never per project.
 
 ## Stack
-- Node.js 22.5+ (MCP servers, node:sqlite DatabaseSync, ESM, fetch; CI pins Node 22), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
+- Node.js 22.5+ (MCP servers, node:sqlite DatabaseSync, ESM, fetch; CI = `.github/workflows/test.yml` on ubuntu-latest/Node 22 — **RED on master since 2026-09-07, see E-230**), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
 
 ## Triad Health
 - Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. D-053 + `structured-outputs.md §32` were ratified 2026-07-31 (closed). Ruled D-055, D-056, D-057 (2026-09-07) → E-216..E-223, all shipped.
