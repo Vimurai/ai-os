@@ -256,22 +256,43 @@ export const RULE_REGISTRY = {
       /(^|[\s"'`(=:}])((?:\.\.?\/)?(?:[\w.@-]+\/)*[\w.@-]+\.(?:mjs|cjs|js|sh|bash|py|pl|rb))\b/;
 
     const COMMENT = /^\s*(#|\/\/|\*)/;
-    const out = [];
-    for (const num of executable) {
-      const line = ctx.lines[num - 1] ?? "";
-      if (COMMENT.test(line)) continue;
 
-      const toks = tokenise(line);
+    // E-231 (D-060 §2). Two indirections put a project path beyond the operand walk, and
+    // both were recorded as KNOWN UNCAUGHT rather than left to be re-found later as bugs:
+    //
+    //   bash -c "node src/bin/ai"   the interpreter is INSIDE a quoted operand
+    //   cat src/bin/ai | bash       the program arrives on stdin, left of the pipe
+    //
+    // Note what kept them invisible: an .mjs/.sh target is still caught by the second
+    // signal below, so ONLY an extension-less target such as `src/bin/ai` slipped through.
+    // That is why the shipped corpus contains none of these shapes.
+    // Strip the wrapping quotes AND un-escape the inner ones. Inside `bash -c "..."` a
+    // nested quote is written as an escaped quote, so the operand token arrives beginning
+    // with a BACKSLASH — which defeated the "variable we cannot read" check and made a
+    // perfectly safe ${HOME}-anchored helper read as a project path. That was a new
+    // OVER-BLOCK introduced by this very change, caught by the fixture matrix written
+    // before it. D-060 §2 requires treating one as a regression, not shipping it.
+    const stripOuterQuotes = (t) =>
+      String(t).replace(/^(["'`])([\s\S]*)\1$/, "$2").replace(/\\(["'`])/g, "$1");
+    const EVALISH = new Set(["eval"]);
+    const PIPE_FEEDERS = new Set(["xargs"]);
+
+    /**
+     * The operand walk, made recursive. `depth` is capped at 1: a code operand is
+     * re-tokenised and scanned once. Deeper nesting is not funded — it buys shapes nobody
+     * writes, and each extra layer is another chance to invent a finding.
+     */
+    const walk = (toks, depth) => {
       let bad = null;
       let invokes = false;
-
       for (let i = 0; i < toks.length && !bad; i++) {
         // Strip a leading `!` (the harness prefix) and any `Label:` before the command.
         const word = toks[i].replace(/^!+/, "").replace(/^[^:\s]*:$/, "");
         // Match on the BASENAME: `/usr/local/bin/node` and `./node_modules/.bin/tsx` are
         // the same invocation as `node`, and an exact-match set never sees them.
         const base = word.replace(/^["'`]+/, "").split("/").pop();
-        if (!INTERPRETERS.has(word) && !INTERPRETERS.has(base)) continue;
+        const isEval = EVALISH.has(word) || EVALISH.has(base);
+        if (!INTERPRETERS.has(word) && !INTERPRETERS.has(base) && !isEval) continue;
         // `.` counts only in command position — otherwise every `find . -name` reads as a
         // source, which over-blocked 33 files when `.` was a bare regex alternative.
         if (word === "." || base === ".") {
@@ -280,12 +301,31 @@ export const RULE_REGISTRY = {
           if (!atCmdPos) continue;
         }
         invokes = true;
-        // Walk the operands: skip flags, and skip the operand of an inline-code flag.
+        // Walk the operands: skip flags, and RE-SCAN the operand of an inline-code flag.
         for (let j = i + 1; j < toks.length; j++) {
           const t = toks[j];
           if (/^-/.test(t)) {
-            if (INLINE_CODE_FLAG.test(t.split("=")[0])) j++;   // its operand is CODE
+            if (INLINE_CODE_FLAG.test(t.split("=")[0])) {
+              // E-231: this operand is CODE, and code is exactly where the interpreter
+              // was hiding. It used to be skipped wholesale, so `bash -c "node
+              // src/bin/ai"` read as "bash, with one operand we ignore".
+              const inner = toks[++j];
+              if (inner !== undefined && depth < 1) {
+                const r = walk(tokenise(stripOuterQuotes(inner)), depth + 1);
+                if (r.bad) { bad = r.bad; break; }
+              }
+            }
             continue;
+          }
+          if (isEval) {
+            // `eval` takes CODE, never a path — so its operand is re-scanned and must NOT
+            // be tested as a path itself: `eval "$(command -v node)"` is not a project
+            // path, and grading it as one would be an over-block.
+            if (depth < 1) {
+              const r = walk(tokenise(stripOuterQuotes(t)), depth + 1);
+              if (r.bad) bad = r.bad;
+            }
+            break;
           }
           if (/^[;&|)]/.test(t)) break;                         // end of this command
           if (isProjectControlled(t) && !isAccepted(t)) {
@@ -305,6 +345,48 @@ export const RULE_REGISTRY = {
           if (/[;&|)]$/.test(t)) break;
         }
       }
+      return { bad, invokes };
+    };
+
+    /**
+     * A pipeline whose SINK is an interpreter is handed its program on STDIN, so the path
+     * sits to the LEFT of the pipe and never appears as an operand of anything.
+     * `cat src/bin/ai | bash` runs the visited project's file just as surely as
+     * `bash src/bin/ai` does.
+     */
+    const pipeFed = (toks) => {
+      for (let i = 1; i < toks.length; i++) {
+        const cur = toks[i].replace(/^\|+/, "").replace(/^["'`]+/, "");
+        const prev = toks[i - 1];
+        const afterPipe = prev === "|" || /\|$/.test(prev) || /^\|/.test(toks[i]);
+        if (!afterPipe || !cur) continue;
+        let sink = cur.split("/").pop();
+        // `... | xargs node` — the interpreter is xargs' own operand.
+        if (PIPE_FEEDERS.has(sink)) {
+          const next = (toks[i + 1] || "").replace(/^["'`]+/, "");
+          if (!next || /^-/.test(next)) continue;
+          sink = next.split("/").pop();
+        }
+        if (!INTERPRETERS.has(sink)) continue;
+        for (let m = 0; m < i; m++) {
+          const t = toks[m];
+          if (/^-/.test(t)) continue;
+          if (isProjectControlled(t) && !isAccepted(t)) return trimOperand(t);
+        }
+      }
+      return null;
+    };
+
+    const out = [];
+    for (const num of executable) {
+      const line = ctx.lines[num - 1] ?? "";
+      if (COMMENT.test(line)) continue;
+
+      const toks = tokenise(line);
+      const walked = walk(toks, 0);
+      let bad = walked.bad;
+      const invokes = walked.invokes;
+      if (!bad) bad = pipeFed(toks);
 
       if (!bad && invokes) {
         const scrubbed = line.replace(
