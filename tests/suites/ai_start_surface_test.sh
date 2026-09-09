@@ -23,6 +23,19 @@ JSON
   printf '%s' "$d"
 }
 
+# A tmux shim bound to a socket with NO SERVER on it. The "nothing is running" cases below
+# must test exactly that, and they cannot be left to the ambient host: on a developer
+# machine a tmux server is usually already up, so those assertions passed locally while
+# `ai start --status` was exiting 1 and printing nothing on CI, which has no server. A test
+# whose subject depends on whether the machine happens to be running tmux is not a test of
+# the code.
+_nosrv_shim() {  # → dir containing a `tmux` that talks to an empty socket
+  local dir; dir="$(mktemp -d)"
+  printf '#!/usr/bin/env bash\nexec %s -L aios-nosrv-%s "$@"\n' "$(command -v tmux)" "$$" > "${dir}/tmux"
+  chmod +x "${dir}/tmux"
+  printf '%s' "$dir"
+}
+
 # ── E-228.1: the flags are parsed and documented ───────────────────────────
 _help="$(bash "$AI" start --help 2>&1)"
 assert_contains "E-228.01a: --help documents --status" "--status" "$_help"
@@ -39,8 +52,14 @@ rm -rf "$_p"
 # "Nothing is up" is a true answer to a status question. A non-zero exit would force every
 # caller to write `|| true`, which is how a status command stops being usable in scripts.
 _p="$(_proj)"
-_out="$( cd "$_p" && bash "$AI" start --status 2>&1 )"; _rc=$?
-assert_status 0 "E-228.02a: --status exits 0 when nothing is running" bash -c "[[ $_rc -eq 0 ]]"
+if command -v tmux >/dev/null 2>&1; then
+  _ns="$(_nosrv_shim)"
+  _out="$( cd "$_p" && PATH="$_ns:$PATH" bash "$AI" start --status 2>&1 )"; _rc=$?
+  rm -rf "$_ns"
+else
+  _out="$( cd "$_p" && bash "$AI" start --status 2>&1 )"; _rc=$?
+fi
+assert_status 0 "E-228.02a: --status exits 0 when nothing is running (rc=${_rc})" bash -c "[[ $_rc -eq 0 ]]"
 assert_contains "E-228.02b: it says so rather than printing nothing" "not running" "$_out"
 assert_contains "E-228.02c: and reports the watcher too" "watcher:" "$_out"
 rm -rf "$_p"
@@ -97,9 +116,11 @@ fi
 
 # ── E-228.4: --kill with nothing to kill is a no-op, not an error ──────────
 _p="$(_proj)"
-_out="$( cd "$_p" && bash "$AI" start --kill --yes </dev/null 2>&1 )"; _rc=$?
 if command -v tmux >/dev/null 2>&1; then
-  assert_status 0 "E-228.04a: --kill on an idle project exits 0" bash -c "[[ $_rc -eq 0 ]]"
+  _ns="$(_nosrv_shim)"
+  _out="$( cd "$_p" && PATH="$_ns:$PATH" bash "$AI" start --kill --yes </dev/null 2>&1 )"; _rc=$?
+  rm -rf "$_ns"
+  assert_status 0 "E-228.04a: --kill on an idle project exits 0 (rc=${_rc})" bash -c "[[ $_rc -eq 0 ]]"
   assert_contains "E-228.04b: and says there was nothing to do" "nothing to tear down" "$_out"
 else
   _pass "E-228.04a: skipped (no tmux)"

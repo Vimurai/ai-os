@@ -3559,8 +3559,15 @@ _start_watch_running() {
 # window id. Resolving by id matters: the window is named after the project directory, and
 # a mktemp-style name contains a dot, which tmux would otherwise parse as window.pane.
 _start_window_id() {  # <session> <window> → @id | ""
-  tmux list-windows -t "$1" -F '#{window_id} #{window_name}' 2>/dev/null \
-    | awk -v n="$2" '$2 == n { print $1; exit }'
+  # `tmux list-windows` FAILS when the session — or the whole server — does not exist,
+  # which is the normal "nothing is running" case this function has to answer. Under the
+  # script's `set -euo pipefail` a bare pipeline would take tmux's non-zero status and kill
+  # the caller mid-assignment, so `ai start --status` exited 1 having printed NOTHING.
+  # Invisible on a machine that already has a tmux server; reproducible with a socket that
+  # has none, which is what CI is.
+  local out=""
+  out="$(tmux list-windows -t "$1" -F '#{window_id} #{window_name}' 2>/dev/null || true)"
+  printf '%s\n' "$out" | awk -v n="$2" '$2 == n { print $1; exit }'
 }
 
 # `ai start --status` (E-228 / D-059). Reports rather than acts: what panes exist, what
@@ -3584,7 +3591,7 @@ _start_status() {  # <session> <window> <project>
     while IFS='|' read -r idx title cmd; do
       [[ -z "$idx" ]] && continue
       printf '  pane %-3s %-12s %s\n' "$idx" "${title:-(untitled)}" "${cmd:-(no command)}"
-    done < <(tmux list-panes -t "$wid" -F '#{pane_index}|#{pane_title}|#{pane_current_command}' 2>/dev/null | sort -n)
+    done < <(tmux list-panes -t "$wid" -F '#{pane_index}|#{pane_title}|#{pane_current_command}' 2>/dev/null | sort -n || true)
   fi
 
   # The watcher is reported by its LOCK, not by a pane title: a pane can be titled
