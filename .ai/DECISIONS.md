@@ -937,3 +937,46 @@ Three tests this sprint passed on a developer Mac and failed on CI (mirror byte-
 §2 `AI_OS_STANDARDS_SKIP=program-position` restores the full walk. §3 `AI_OS_INSTALL_BROWSERS=1` restores the download in install. §4 process + helper only. §5 `AI_OS_POLICY_HOT_RELOAD=0`.
 
 ---
+
+---
+
+## [[D-062]] — Program Position Closes on Resolution (Ratified); Host-Relative Performance Budgets; No-Stash Bookkeeping + Conflict-Marker Gate
+
+**Date**: 2026-09-09
+**Task**: E-239, E-238 (Engineer handoff 2026-09-09 20:10 UTC; E-234..E-237 complete, master `56348c4`, CI green)
+**Decision**: (§1) Ratify the E-234 resolution: program position closes only when an operand actually resolves the program. (§2) Performance budgets are host-relative: an absolute wall-clock budget is enforced only on the reference machine (CI); everywhere else the same test asserts a ratio to a measured baseline on that host. (§3) Bookkeeping never moves between branches by `git stash`; the pre-commit gate rejects conflict markers in any staged file and rejects a `.ai/state.json` that does not parse.
+
+### §1 — Program position: RATIFIED as resolved
+D-061 §2's two acceptance cases did pull against each other under a literal reading. The Engineer's resolution is the correct generalisation: program position stays OPEN while the operand does not say what runs — an unreadable variable (`node "$HELPER" …`) or an allowlisted entrypoint (`bash tests/run.sh …`) — and CLOSES on the first operand that resolves the program. That is why `--dlq-show .ai/memory/dlq.json` is an argument (the program resolved at `memory-worker-pool.mjs`) while `bash tests/run.sh src/bin/ai` is still caught. Ratified; the parity blueprint row is amended to this wording.
+
+### §2 — Performance budgets: HOST-RELATIVE (E-239, Tier 2)
+Two suites assert absolute budgets ("under 200ms", "hook warm-path under 250ms") that fail on a machine where `node -e 'process.exit(0)'` alone costs ~197ms, and pass on CI. Verified against clean master in a worktree, so it is a policy gap, not sprint fallout: it is the E-236 category one step further — not what the machine has but how fast it is — and neither E-236 remedy fits (nothing to supply; skipping hides a real regression). Ruling:
+- Every performance assertion names its **baseline** — a trivial operation of the same kind measured on the same host in the same run (a bare `node` spawn for spawn-bound paths; a no-op hook for hook paths).
+- On the **reference machine** (`CI=true`, ubuntu-latest) the absolute budget is enforced as today.
+- Elsewhere the test asserts `elapsed ≤ k × baseline + slack` with `k` and `slack` declared next to the budget (defaults `k=2`, `slack=50ms`), so a genuine regression still fails locally while a slow host does not.
+- The harness prints both numbers on every run (baseline, elapsed), so a budget failure carries its own evidence (the instrumentation lesson from this sprint).
+- An absolute budget with no baseline is a `critic_tests` finding.
+
+### §3 — No-stash bookkeeping + conflict-marker gate (E-238, Tier 2, `git-hooks.md`)
+A conflicted `git stash pop` left conflict markers in `.ai/state.json`; they were staged and committed to master without the file being opened, and master carried invalid JSON until the next fix. The two real CI failures that exposed it were nearly dismissed as environmental. Ruling:
+- **Rule**: `.ai/` bookkeeping moves between branches by commit + cherry-pick (or a bookkeeping-only commit on the target branch), never by stash. `ENGINEER.md` Core Rules and the `commit-crafter` skill state it.
+- **Gate**: `hooks/pre-commit.sh` rejects any staged file containing a conflict marker at line start (`<<<<<<< `, `=======` between them, `>>>>>>> `) and rejects a staged `.ai/state.json` (or any `.ai/*.json`) that does not parse. Both are cheap, deterministic, and would have blocked `44243bc`.
+- **Triage rule** (from the near-miss): after a run of environmental failures, a new CI failure is presumed REAL until its log is read — the E-236 question is asked of the failure, never assumed.
+
+### Alternatives considered
+1. **§2: skip performance tests off-CI** — rejected; a regression would then only surface after merge. **§2: raise the absolute budgets** — rejected; they would be wrong on the next slower or faster host.
+2. **§3: a `git stash` wrapper that warns** — rejected; the gate on the committed content is the checkpoint that matters, and stash is not the only way to stage a conflicted file.
+
+### Constraints driving this decision
+- Tests must state what they require of the machine (D-061 §4); speed is a requirement like any other.
+- Machine state files (`state.json`) are validated at the boundary where they enter history, not trusted from a tool's exit message.
+- Evidence printed beats reasoning remembered (the sprint's own lesson).
+
+### Impact
+- Unlocks: E-239 (T2), E-238 (T2). Order: E-238 → E-239.
+- Risk if wrong: §2's ratio could pass a slow-but-regressed path on a very fast host — the CI absolute budget catches that case.
+
+### Rollback
+§2 `AI_OS_PERF_ABSOLUTE=1` enforces absolute budgets everywhere. §3 `AI_OS_SKIP_CONFLICT_GATE=1`.
+
+---

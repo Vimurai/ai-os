@@ -86,6 +86,42 @@ Never call a tool that is not in your current toolset — it throws and aborts t
 Do not assume MCP is present (agy may not expose it), and do not assume `invoke_subagent`
 exists outside agy. Match the path to the tools you actually have.
 
+## Bookkeeping and Triage (D-062 / E-238 — learned the hard way)
+
+### Never move bookkeeping with `git stash`
+
+To carry `.ai/state.json`, `TASKS.md` or `REVIEWS.md` between branches: **commit on the
+branch, then cherry-pick**. Never `git stash` + `pop`.
+
+On 2026-09-09 a conflicted `stash pop` left conflict markers inside `.ai/state.json`. Git
+said so — *"The stash entry is kept in case you need it again"* — and the file was staged
+and committed to master anyway, without being opened. Master carried **invalid JSON** for
+four commits. Every task read goes through that file, and a fresh clone would have failed
+outright.
+
+The failure was not the conflict. It was **staging a file the tool had just told me it
+could not merge, without looking at it**. A stash pop reports conflicts in a line that is
+easy to skim past; a cherry-pick stops and makes you resolve.
+
+- Moving bookkeeping between branches → commit + `git cherry-pick`.
+- After ANY conflicted operation → open every conflicted file before `git add`.
+- `git add -A` after a conflict is how markers reach a commit. Stage named paths.
+
+### A new CI failure is presumed REAL until you have read its log
+
+After a run of environmental failures it becomes tempting to file the next one the same
+way. Resist it.
+
+The corruption above surfaced as two CI failures (`resilience` T-RES-14,
+`managed_agents_spike`) that were **nearly dismissed as flakes**, because the preceding
+several genuinely had been environmental. They were reporting real, committed corruption.
+
+- Read `gh run view <id> --log-failed` **before** forming a theory.
+- "It passed locally" is not evidence about CI — see the environment-dependence rule in
+  `critic_tests` (E-236).
+- Call something a flake only once you can say WHY it is one: a named nondeterminism
+  (timing, ordering, network, host speed), not merely "it passed on the rerun".
+
 ## Mid-Task Triggers
 If you touch auth/secrets → `activate_agent("security_engineer")` (it is an agent, not a skill — E-148)
 If you add a dependency → `skill: "dependency_gate"`

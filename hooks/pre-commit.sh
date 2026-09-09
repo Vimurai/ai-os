@@ -69,6 +69,98 @@ has_recent_critic_stamp() {
   return 1
 }
 
+# ── E-238 (D-062): conflict-marker + .ai/*.json parse gate ───────────────────
+#
+# On 2026-09-09 a conflicted `git stash pop` left conflict markers inside
+# .ai/state.json. Git reported the conflict; the file was staged and committed to master
+# unread (44243bc). Master carried INVALID JSON for four commits, and every task read goes
+# through that file. Two cheap, deterministic checks would have stopped it.
+#
+# MATCHING IS ANCHORED AT LINE START, and that is the whole difficulty. This repository's
+# own prose QUOTES these markers — .ai/DECISIONS.md documents the gate using them inside
+# backticks — so a substring search would make the gate reject the document describing it.
+# That is the same trap E-224 hit when a P0 blocked the Architect's text for quoting the
+# example it was defining.
+#
+# `=======` is deliberately NOT sufficient on its own: exactly seven '=' at line start is
+# also a valid Markdown setext H2 underline. It counts only in a file that ALSO carries an
+# unambiguous `<<<<<<< ` or `>>>>>>> ` marker. Rejecting on it alone would fail any
+# document that happens to underline a heading.
+_conflict_marker_gate() {
+  local staged f bad=0
+  staged="$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)"
+  [[ -z "$staged" ]] && return 0
+
+  while IFS= read -r f; do
+    [[ -z "$f" || ! -f "$f" ]] && continue
+    # Binary files have no lines to inspect and grep would be noise.
+    if ! git diff --cached --numstat -- "$f" 2>/dev/null | grep -qv '^-'; then
+      continue
+    fi
+    # The unambiguous halves: 7 markers followed by a space+label, or alone on the line.
+    if grep -nE '^(<<<<<<<|>>>>>>>)( .*)?$' -- "$f" >/dev/null 2>&1; then
+      echo "  ✗ ${f}: contains a git conflict marker at line start" >&2
+      grep -nE '^(<<<<<<<|>>>>>>>)( .*)?$' -- "$f" 2>/dev/null | head -3 | sed 's/^/      /' >&2
+      bad=1
+    fi
+  done <<< "$staged"
+
+  if [[ "$bad" -eq 1 ]]; then
+    echo "" >&2
+    echo "  A conflicted merge/rebase/stash was staged without being resolved." >&2
+    echo "  Open each file above, resolve it, and stage the NAMED paths (not 'git add -A')." >&2
+    echo "  D-062: move bookkeeping between branches by commit + cherry-pick, never stash." >&2
+    echo "  Rollback (only if you are certain): AI_OS_SKIP_CONFLICT_GATE=1" >&2
+    return 1
+  fi
+  return 0
+}
+
+# A staged .ai/*.json that does not parse is the specific damage D-062 was ruled over:
+# state.json is the store every task read goes through, and a fresh clone fails outright.
+_ai_json_parse_gate() {
+  command -v python3 >/dev/null 2>&1 || return 0
+  local staged f bad=0
+  staged="$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | grep -E '^\.ai/.*\.json$' || true)"
+  [[ -z "$staged" ]] && return 0
+
+  while IFS= read -r f; do
+    [[ -z "$f" ]] && continue
+    # Read the STAGED blob, not the worktree file: what is being committed is what matters,
+    # and the two differ whenever only part of a file is staged.
+    if ! git show ":${f}" 2>/dev/null | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
+      echo "  ✗ ${f}: staged content is not valid JSON" >&2
+      git show ":${f}" 2>/dev/null | python3 -c 'import json,sys
+try:
+    json.load(sys.stdin)
+except Exception as e:
+    print("      " + str(e))' 2>/dev/null >&2
+      bad=1
+    fi
+  done <<< "$staged"
+
+  if [[ "$bad" -eq 1 ]]; then
+    echo "" >&2
+    echo "  .ai/*.json is machine state — an unparseable file breaks every task read and" >&2
+    echo "  fails a fresh clone outright (D-062; master carried invalid JSON for 4 commits)." >&2
+    echo "  Rollback (only if you are certain): AI_OS_SKIP_CONFLICT_GATE=1" >&2
+    return 1
+  fi
+  return 0
+}
+
+if [[ "${AI_OS_SKIP_CONFLICT_GATE:-0}" != "1" ]]; then
+  echo "Conflict-marker + .ai JSON gate (E-238)..."
+  _cm_ok=0
+  _conflict_marker_gate || _cm_ok=1
+  _ai_json_parse_gate   || _cm_ok=1
+  if [[ "$_cm_ok" -ne 0 ]]; then
+    echo "[COMMIT_BLOCKED] E-238 gate" >&2
+    exit 1
+  fi
+  echo "  ✓ no conflict markers; staged .ai/*.json parses"
+fi
+
 # ── E-96: Markdown-as-Read-Only sync check (BLOCKING) ────────────────────────
 check_markdown_sync() {
   local SQLITE_FILE="${AI_DIR}/state.sqlite"
