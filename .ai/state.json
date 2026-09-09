@@ -3104,6 +3104,13 @@
       "task_id": "E-229",
       "timestamp": "2026-09-09T14:55:20.391Z",
       "summary": "E-229 + E-233 Tier-2: full suite 4198/0. Two P0s adjudicated — PATH_TRAVERSAL is a STALE-PROCESS artifact (the on-disk traversal-policy.mjs, byte-identical in src and the ~/.ai-os mirror, grades `source \"${SCRIPT_DIR}/../lib/assert.sh\"` P1/anchor=self_dir; the long-running orchestrator-mcp holds an older module in memory), and SOVEREIGNTY_VIOLATION is the Architect's own .ai/blueprints edit that D-060 directed the Engineer to proxy-commit. E-229: `_self_mtime` used whole-second `stat -f %m` and was INERT for same-second rewrites (the real `ai sync` case) — replaced with sub-second `_self_stamp`; E-123.TC07 was asserting a false model (two watchers cannot share a PID) and was reprobed with a foreign live holder. E-233: two self-inflicted defects caught by mutation testing — a dead trailing-newline guard, and an assertion that wrote to the repo under test."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-232",
+      "timestamp": "2026-09-09T16:46:46.282Z",
+      "summary": "E-232 Tier-2: full suite 4251/0. Consent gap closed — three AUTO-EXECUTED `!`-lines (ai-debug, bug-reproducer, ai-upgrade) converted to numbered Step 0; capability preserved and asserted, so deletion cannot pass as a fix. New skill_consent_no_project_exec rule reuses the E-224 classifier's bangLines; denylist of EXECUTION shapes (npm run/make/npx/./x/tests/scripts, incl. after a pipe or &&) not an allowlist of safe commands, so npm outdated/audit stay allowed as pure queries. 27-case both-directions matrix + 187-file corpus scan with 0 violations and a non-vacuity guard that files were actually read. Corrected THREAT_MODEL: ai-upgrade:17 was recorded as agent-initiated but is `!`-prefixed, so the auto-exec set was three not two. The single P0 (PATH_TRAVERSAL) is again the STALE-PROCESS artifact — the on-disk traversal-policy.mjs grades the flagged `source \"${SCRIPT_DIR}/../lib/assert.sh\"` P1/anchor=self_dir."
     }
   ],
   "deltas": [

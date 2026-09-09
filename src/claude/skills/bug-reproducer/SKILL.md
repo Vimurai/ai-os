@@ -12,7 +12,19 @@ agent: default
 
 ## Dynamic Context Injection
 Current branch: !git rev-parse --abbrev-ref HEAD 2>/dev/null
-Recent failures: !bash tests/run.sh 2>&1 | grep "✗" | head -5 || echo "(no recent failures)"
+
+> **Consent rule (D-060 §3, E-232).** This block must never auto-run a program the
+> visited project supplies. A `!`-line executes the moment the skill LOADS — before the
+> agent has decided anything and before the operator has been asked — so a project's own
+> `tests/run.sh` or `package.json` script would execute merely because someone opened a
+> skill. Read-only inspection stays here; anything that runs project code is a numbered
+> step the agent performs deliberately, below.
+
+## Step 0 — Collect recent failures (do this FIRST, after loading)
+
+1. Run the project's test command (`bash tests/run.sh` here) and keep the `✗` lines:
+   `bash tests/run.sh 2>&1 | grep "✗" | head -5`.
+2. If there are none, ask which behaviour to reproduce rather than guessing.
 
 ## Role
 

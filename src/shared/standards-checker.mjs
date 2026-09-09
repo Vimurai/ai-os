@@ -326,6 +326,119 @@ export const RULE_REGISTRY = {
     return out.length ? out : null;
   },
 
+  /**
+   * D-060 §3 / E-232 — SKILL CONSENT. A `!`-prefixed line in a skill or agent file is run
+   * by the harness the moment the file LOADS: before the agent has decided anything and
+   * before the operator has been asked. Such a line may therefore inspect, but must never
+   * EXECUTE a program the visited project supplies.
+   *
+   * `ai-debug` opened with `!bash tests/run.sh`, so merely loading the debugging skill ran
+   * the visited project's test script. `ai-upgrade` did the same with `!npm run test`,
+   * which the threat model had recorded as "agent-initiated" — it is not; it is a `!`-line.
+   *
+   * The test is EXECUTION, not mention. `npm outdated` and `npm audit` stay allowed: they
+   * query the manifest and the registry and run none of the project's code. `npm run`
+   * does, because package.json decides what it runs. This is the distinction the rule
+   * encodes, and it is why the check is a denylist of execution shapes rather than an
+   * allowlist of safe commands — an allowlist would reject every ordinary `git`/`grep`
+   * inspection line the moment someone wrote a new one.
+   */
+  skill_consent_no_project_exec(ctx) {
+    if (process.env.AI_OS_STANDARDS_SKIP === "skill-consent") return null;
+    let bangLines;
+    try {
+      ({ bangLines } = classifyMarkdown(ctx.content, ctx.relPath));
+    } catch {
+      return null; // classifier unavailable — never invent a violation
+    }
+    if (!bangLines || bangLines.length === 0) return null;
+    if (!/(^|\/)(SKILL\.md|.*\/agents\/[^/]+\.md)$/.test(ctx.relPath)) return null;
+
+    const INTERPRETERS = new Set([
+      "node", "bash", "sh", "zsh", "ksh", "dash",
+      "python", "python3", "perl", "ruby", "source", ".",
+      "tsx", "ts-node", "deno", "bun",
+    ]);
+    // Operands of these are CODE the skill itself supplies, not a project path.
+    const INLINE_CODE_FLAG = /^-{1,2}(e|c|p|eval|print|exec|X)$/;
+    // Package managers execute whatever the project's manifest defines.
+    const PM = new Set(["npm", "pnpm", "yarn", "bun"]);
+    const PM_EXEC = new Set(["run", "run-script", "test", "start", "build", "exec"]);
+    // A path shape the visited project controls.
+    const PROJECT_PATH = /^(\.\/|\.\.\/|tests\/|scripts\/|bin\/|src\/|tools\/)/;
+
+    const src = String(ctx.content ?? "").split("\n");
+    const findings = [];
+
+    for (const num of bangLines) {
+      const raw = src[num - 1] ?? "";
+      const cmd = raw.replace(/^[^!]*!/, "");           // everything after the leading `!`
+      // Each pipeline/list segment is its own invocation; `grep x | bash tests/run.sh`
+      // hides the execution in the second one.
+      for (const seg of cmd.split(/\|\||&&|[|;]/)) {
+        const toks = seg.trim().split(/\s+/).filter(Boolean);
+        if (toks.length === 0) continue;
+        let head = toks[0].replace(/^["']|["']$/g, "");
+        if (head === "!") { toks.shift(); head = (toks[0] || "").replace(/^["']|["']$/g, ""); }
+        if (!head) continue;
+
+        // 1. the command IS a project path: `./run.sh`, `tests/run.sh`
+        if (PROJECT_PATH.test(head)) {
+          findings.push(`${ctx.relPath}:${num} auto-executed \`!\` line runs a project program (${head})`);
+          break;
+        }
+        // 2. make runs the project's Makefile
+        if (head === "make" || head === "gmake") {
+          findings.push(`${ctx.relPath}:${num} auto-executed \`!\` line runs make (project-supplied targets)`);
+          break;
+        }
+        // 3. npx runs an arbitrary package
+        if (head === "npx" || head === "pnpx") {
+          findings.push(`${ctx.relPath}:${num} auto-executed \`!\` line runs npx (arbitrary package execution)`);
+          break;
+        }
+        // 4. a package manager running a manifest-defined script
+        if (PM.has(head)) {
+          const sub = (toks[1] || "").replace(/^-+/, "");
+          if (PM_EXEC.has(toks[1])) {
+            findings.push(`${ctx.relPath}:${num} auto-executed \`!\` line runs \`${head} ${toks[1]}\` (package.json decides what executes)`);
+            break;
+          }
+          void sub;
+          continue; // `npm outdated` / `npm audit` — read-only queries
+        }
+        // 5. an interpreter handed a project path
+        if (INTERPRETERS.has(head)) {
+          let skipNext = false;
+          let hit = null;
+          for (const t0 of toks.slice(1)) {
+            const t = t0.replace(/^["']|["']$/g, "");
+            if (skipNext) { skipNext = false; continue; }
+            if (INLINE_CODE_FLAG.test(t)) { skipNext = true; continue; }
+            if (t.startsWith("-")) continue;
+            if (PROJECT_PATH.test(t)) { hit = t; break; }
+            break; // first non-flag operand is the program; stop either way
+          }
+          if (hit) {
+            findings.push(`${ctx.relPath}:${num} auto-executed \`!\` line runs a project program via ${head} (${hit})`);
+            break;
+          }
+        }
+      }
+    }
+
+    if (findings.length === 0) return null;
+    return {
+      id: "SKILL_CONSENT",
+      severity: "P0",
+      detail:
+        findings.slice(0, 4).join("; ") +
+        " — a `!` line runs on LOAD, without the agent or the operator choosing it. " +
+        "Move project-program execution into a numbered step the agent performs (D-060 §3).",
+    };
+  },
+
+
   file_size_limit_lines(ctx) {
     const n = ctx.lines.length;
     const warn = ctx.rule.warn_threshold ?? 500;

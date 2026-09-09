@@ -11,8 +11,25 @@ agent: default
 # AI-Debug — Empirical Debugging Protocol (E-43 Task Budget)
 
 ## Dynamic Context Injection
-Failing tests: !bash tests/run.sh 2>&1 | grep "✗" | head -10 || echo "(no failures)"
 Recent git changes: !git diff --name-only | head -10 || echo "(none)"
+
+> **Consent rule (D-060 §3, E-232).** This block must never auto-run a program the
+> visited project supplies. A `!`-line executes the moment the skill LOADS — before the
+> agent has decided anything and before the operator has been asked — so a project's own
+> `tests/run.sh` or `package.json` script would execute merely because someone opened a
+> skill. Read-only inspection stays here; anything that runs project code is a numbered
+> step the agent performs deliberately, below.
+
+## Step 0 — Collect the failing set (do this FIRST, after loading)
+
+The suite is the project's own program, so YOU run it, deliberately, as your first action:
+
+1. Run the project's test command (`bash tests/run.sh` in this repo; use whatever the
+   project actually uses if it differs).
+2. Keep the failing assertions: `... 2>&1 | grep "✗" | head -10`.
+3. If nothing fails, say so and STOP — this skill has no work to do.
+
+Report the failing set before forming any hypothesis.
 
 ## Role
 
