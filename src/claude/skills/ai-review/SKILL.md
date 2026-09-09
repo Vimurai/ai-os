@@ -131,6 +131,31 @@ This is the third variety of environment dependence, alongside "what the machine
 (E-236) and "how fast it is" (E-239).
 
 
+### State that must outlive a subshell (review question #4 — E-241, D-064 §2) — **P1**
+
+> **Is this helper ever called inside a command substitution, a pipeline, or a
+> `while read` loop — and does it set state that must outlive that call?**
+
+`$(helper …)`, `helper | …` and `… | while read` all run in a SUBSHELL. Anything the helper
+assigns to a variable, appends to an array, or installs as a trap **dies when that subshell
+exits**, which is immediately. The call still returns the right string, so it looks correct.
+
+This has bitten three times in two sprints, each time silently:
+
+| Helper | What evaporated |
+|---|---|
+| `perf_baseline_node` (E-239) | the cache variable — every call re-measured with 5 node spawns |
+| `register_cleanup` (E-240) | the handler array AND its trap — nothing was ever cleaned |
+| `_self_stamp` (E-229) | captured output, via a different subshell mechanism |
+
+Each was caught by an assertion written for another reason. That is the system working, but
+the recurrence is the point.
+
+**The rule (D-064 §2):** a helper returns DATA on stdout **or** sets STATE in the caller's
+shell — never both. If it must do both, persist the state somewhere that survives the
+subshell (a file) and say so in a comment, or split it into two functions.
+
+
 ## Tier 3 — Full Parallel Critics (Distributed Stamping)
 
 Spawn all critics in parallel using the `Agent` tool. Each critic is a **materialized agent file** — load its instructions via `activate_agent` and follow them exactly.

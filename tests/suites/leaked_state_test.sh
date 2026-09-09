@@ -138,6 +138,85 @@ assert_status 0 "E-240.07d: the generated plugin artifact was rebuilt (E-236 les
   grep -q 'leave behind when an assertion fails' \
     "${REPO_ROOT}/src/agents/plugin/agents/critic_tests/agent.json"
 
+
+# ── E-241 (D-064 §1): trap chaining — the limitation E-240 could not close ──
+# A bare `trap 'cmd' EXIT` REPLACES the handler, so 42 suites silently discarded the
+# cleanup registry and only the runner's sweep noticed. `trap` is now shadowed for the EXIT
+# form so it CHAINS. This is the acceptance case: a suite that installs its own trap AFTER
+# sourcing assert.sh must still self-clean.
+# Run the probe as its OWN PROCESS, not `( … )`. Inside a subshell the guard correctly
+# passes `trap` through to the builtin (native semantics), so a subshell fixture would test
+# the opposite of the real case — a suite is a process, launched as `bash suite.sh`.
+_chain_probe="$(mktemp)"; _chain_own="$(mktemp)"; _chain_sh="$(mktemp)"
+cat > "$_chain_sh" <<CHAINEOF
+source "$LIB"
+d="\$(test_tmpdir chain)"; printf '%s' "\$d" > "$_chain_probe"
+own="\$(mktemp -d)";       printf '%s' "\$own" > "$_chain_own"
+trap "rm -rf '\$own'" EXIT  # standards:allow-raw-trap - fixture data, not an installation
+exit 1
+CHAINEOF
+bash "$_chain_sh" >/dev/null 2>&1
+rm -f "$_chain_sh"
+_cl="$(cat "$_chain_probe")"; _co="$(cat "$_chain_own")"; rm -f "$_chain_probe" "$_chain_own"
+assert_status 0 "E-241.01a: both fixtures created something (non-vacuity)" \
+  bash -c "[[ -n '$_cl' && -n '$_co' ]]"
+assert_status 1 "E-241.01b: the LIBRARY cleanup still ran despite the suite's own trap" \
+  test -d "$_cl"
+assert_status 1 "E-241.01c: and the suite's OWN trap ran too (chained, not replaced)" \
+  test -d "$_co"
+
+# A `trap … EXIT` inside a SUBSHELL must keep NATIVE semantics — it fires when THAT
+# subshell exits, not at the parent's. Redirecting it into the shared registry would defer
+# it and change its meaning. The guard uses BASH_SUBSHELL because BASHPID does not exist in
+# bash 3.2, so a BASHPID test would behave differently on macOS and on CI — the exact
+# environment dependence E-236 exists to remove.
+_sub_out="$( ( source "$LIB"; ( trap 'echo SUBSHELL_FIRED' EXIT; true ); echo PARENT_LINE ) 2>&1 )"
+assert_contains "E-241.02a: a subshell trap fires at the SUBSHELL's exit" "SUBSHELL_FIRED" "$_sub_out"
+assert_status 0 "E-241.02b: and it fires BEFORE the parent continues (native order)" \
+  bash -c "[[ \"\$(printf '%s' '$_sub_out' | grep -n SUBSHELL_FIRED | cut -d: -f1)\" -lt \"\$(printf '%s' '$_sub_out' | grep -n PARENT_LINE | cut -d: -f1)\" ]]"
+assert_status 0 "E-241.02c: the guard uses BASH_SUBSHELL (bash 3.2 safe)" \
+  grep -q 'BASH_SUBSHELL:-0' "$LIB"
+
+assert_status 0 "E-241.03a: on_exit is the documented spelling" grep -q '^on_exit() {' "$LIB"
+assert_status 0 "E-241.03b: CLEANUP n handlers is printed" grep -q "CLEANUP %d handlers" "$LIB"
+assert_status 0 "E-241.03c: handlers run in their own subshell (one cannot skip the next)" \
+  bash -c "sed -n '/^_run_cleanups() {/,/^}/p' '$LIB' | grep -q '( eval'"
+assert_status 0 "E-241.03d: AI_OS_TEST_NO_TRAP_CHAIN=1 restores the builtin" \
+  grep -q 'AI_OS_TEST_NO_TRAP_CHAIN' "$LIB"
+# The library's own installation MUST use `builtin`, or the shadow swallows it and no
+# handler is installed at all — which is exactly what happened on the first attempt.
+assert_status 0 "E-241.03e: the library installs its handler with builtin trap" \
+  grep -q "^builtin trap '_run_cleanups' EXIT" "$LIB"
+
+# Counted with the RULE ITSELF rather than a hand-rolled grep, so the assertion and the
+# gate cannot disagree about what counts — the E-232 lesson (one definition, reused).
+export REPO_ROOT
+export CHECKER_URL="file://${REPO_ROOT}/src/shared/standards-checker.mjs"
+_raw_traps="$(node --input-type=module -e '
+  const { RULE_REGISTRY } = await import(process.env.CHECKER_URL);
+  const { readFileSync } = await import("fs");
+  const { execSync } = await import("child_process");
+  const r = RULE_REGISTRY.no_raw_exit_trap_in_tests;
+  const files = execSync("find tests -name \"*.sh\"", {encoding:"utf8", cwd: process.env.REPO_ROOT}).trim().split("\n").filter(Boolean);
+  let n = 0;
+  for (const f of files) {
+    const c = readFileSync(process.env.REPO_ROOT + "/" + f, "utf8");
+    const res = r({ relPath: f, content: c, lines: c.split("\n"), rule: { rule_id: "x" } });
+    if (res) n += res.length;
+  }
+  console.log(n);
+' 2>/dev/null)"
+assert_contains "E-241.04a: no raw 'trap … EXIT' remains anywhere in tests/ (found=${_raw_traps})" \
+  "0" "${_raw_traps:-unknown}"
+assert_status 0 "E-241.04b: the standards rule exists" \
+  grep -q 'no_raw_exit_trap_in_tests' "${REPO_ROOT}/src/shared/standards-checker.mjs"
+assert_status 0 "E-241.04c: and is registered" \
+  grep -q 'no_raw_exit_trap_in_tests' "${REPO_ROOT}/src/shared/standards.json"
+assert_status 0 "E-241.05a: review question #4 is in critic_tests" \
+  grep -q 'called inside a command substitution' "${REPO_ROOT}/src/claude/agents/critic_tests.md"
+assert_status 0 "E-241.05b: and in ai-debug" \
+  grep -q 'called inside a command substitution' "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md"
+
 echo ""
 assert_summary
 if [[ "${FAIL_COUNT:-0}" -eq 0 ]]; then

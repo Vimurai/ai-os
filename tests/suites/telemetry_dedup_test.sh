@@ -14,7 +14,7 @@ TELEMETRY="${REPO_ROOT}/src/shared/telemetry.mjs"
 echo "===== telemetry_dedup_test.sh (E-106) ====="
 
 unset AI_TELEMETRY_DISABLE AI_OS_TELEMETRY_NO_DEDUP 2>/dev/null || true
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 
 # names() — record 3 tool calls into a fresh DB (sync), return the persisted
 # tool_name list as JSON. $1 = db path, $2 = "dedup"|"nodedup".

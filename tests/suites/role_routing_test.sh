@@ -57,7 +57,7 @@ assert_status 1 "E-137.04c: dual-Claude roles route to DIFFERENT panes" \
   bash -c "[ '$eng_pane' = '$arch_pane' ]"
 
 # ── E-137.05: _load_roles_mapping parses .ai/roles.json ──────────────────────
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 mkdir -p "${TMP}/.ai"; cp "${REPO_ROOT}/src/templates/roles.json" "${TMP}/.ai/roles.json"
 assert_contains "E-137.05a: parses template → engineer:claude:0" "engineer:claude:0" "$(_load_map "$TMP")"
 assert_contains "E-137.05b: parses template → architect:agy:1 (D-050/E-183)" "architect:agy:1" "$(_load_map "$TMP")"

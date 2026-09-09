@@ -69,7 +69,7 @@ assert_contains "T-02.04: nextId handles empty task list" "ok" "$next_id_empty"
 # Simulates N parallel writers appending tasks to the same state.json.
 # After all writers complete, state.json must be valid JSON with all tasks present.
 STRESS_DIR=$(mktemp -d)
-trap 'rm -rf "$STRESS_DIR"' EXIT
+on_exit 'rm -rf "$STRESS_DIR"'
 
 # Initialize state.json from template
 cp "$TEMPLATE" "${STRESS_DIR}/state.json"

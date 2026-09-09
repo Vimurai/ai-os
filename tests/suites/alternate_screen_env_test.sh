@@ -68,7 +68,7 @@ echo "  [T-ALT-S04] ensure_env_line idempotency + override preservation"
 # Sandbox: extract just the helper from install-ai-os.sh, source it, drive it
 # against a temp rc file, and assert behaviour matches the spec.
 SANDBOX="$(mktemp -d -t alt-screen-XXXXXX)"
-trap 'rm -rf "$SANDBOX"' EXIT
+on_exit 'rm -rf "$SANDBOX"'
 cat > "${SANDBOX}/helper.sh" <<'HELPER'
 ensure_env_line() {
   local rc="$1" var="$2" value="$3"

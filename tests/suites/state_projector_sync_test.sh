@@ -87,7 +87,7 @@ echo ""
 echo "  [T-STP-S03] DONE rows are filtered out of the projection"
 
 SBOX="$(mktemp -d)"
-trap 'rm -rf "$SBOX" "$REAL_DB_TMPDIR"' EXIT
+on_exit 'rm -rf "$SBOX" "$REAL_DB_TMPDIR"'
 SBOX_DB="${SBOX}/state.sqlite"
 
 node --input-type=module -e "

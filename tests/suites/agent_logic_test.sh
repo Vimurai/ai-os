@@ -19,7 +19,7 @@ fi
 
 TMP_AI=".ai_test_tmp_$(date +%s)"
 mkdir -p "$TMP_AI"
-trap 'rm -rf "$TMP_AI"' EXIT
+on_exit 'rm -rf "$TMP_AI"'
 
 # Helper: run intent_gate() with UPDATE.md set to provided content
 # Returns exit code of intent_gate

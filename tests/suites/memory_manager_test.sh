@@ -19,7 +19,7 @@ assert_status 0 "T-04.01: memory-manager-mcp syntax OK" \
 
 # ── Isolated store in tmpdir (avoids touching real ~/.ai-os) ─────────────────
 FAKE_HOME=$(mktemp -d)
-trap 'rm -rf "$FAKE_HOME"' EXIT
+on_exit 'rm -rf "$FAKE_HOME"'
 STORE_FILE="${FAKE_HOME}/.ai-os/memory/signatures.json"
 
 # Helper: export a signature to the isolated store (inlines memory-manager-mcp logic)

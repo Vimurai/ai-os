@@ -17,7 +17,7 @@ SERVER="${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
 echo "── Suite: token_optimization_test (E-107/E-108) ────────────────────"
 
 unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE AI_OS_SUMMARY_CAP AI_OS_SOVEREIGNTY_LOCK 2>/dev/null || true
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 cat > "${PROJECT}/.ai/state.json" <<'JSON'
 { "version": "1.0", "project": {}, "tasks": [], "stamps": [], "deltas": [] }

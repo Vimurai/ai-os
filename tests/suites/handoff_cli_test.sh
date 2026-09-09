@@ -17,7 +17,7 @@ HELPER="${REPO_ROOT}/src/shared/signal-handoff.mjs"
 
 echo "── Suite: handoff_cli_test (E-158) ─────────────────────────────────"
 
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai" "${PROJECT}/src/deep"
 SIGNAL="${PROJECT}/.ai/signal.json"
 

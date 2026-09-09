@@ -14,7 +14,7 @@ SERVER="${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
 echo "── Suite: nextid_drift_test (E-109) ────────────────────────────────"
 
 unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE 2>/dev/null || true
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 cat > "${PROJECT}/.ai/state.json" <<'JSON'
 { "version": "1.0", "project": {}, "tasks": [], "stamps": [], "deltas": [] }

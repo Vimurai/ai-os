@@ -151,7 +151,7 @@ echo ""
 echo "  [T-MAC-S07] End-to-end: enabled+key → Bearer auth + steps payload"
 
 SBOX="$(mktemp -d)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 LOG="${SBOX}/stub.log"
 
 # Spawn a localhost HTTPS stub via Node — we use plain HTTP for the stub

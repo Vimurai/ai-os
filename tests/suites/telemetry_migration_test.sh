@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo "── Suite: telemetry_migration_test (E-154) ─────────────────────────"
 
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 OLD_SCHEMA="id TEXT PRIMARY KEY, project_hash TEXT NOT NULL, session_id TEXT NOT NULL, tool_name TEXT NOT NULL, execution_time_ms INTEGER NOT NULL CHECK(execution_time_ms >= 0), status TEXT NOT NULL CHECK(status IN ('SUCCESS','ERROR')), timestamp TEXT NOT NULL"
 # E-180: the 3-value CHECK that shipped with E-154 (TIMEOUT but no REJECTED) — the intermediate
 # schema a real DB carries between the two migrations. Must migrate forward to accept REJECTED.

@@ -45,7 +45,7 @@ echo "  [T-MGR-S03] Required report fields"
 
 REPORT_FILE="$(mktemp -t spike-XXXXXX.json)"
 printf '%s' "$SPIKE_OUT" > "$REPORT_FILE"
-trap 'rm -f "$REPORT_FILE"' EXIT
+on_exit 'rm -f "$REPORT_FILE"'
 
 for field in spike_version api_version generated_at contract state projection redactions structural_issues webhook_plan verdict rationale; do
   assert_status 0 "report.$field present" \
@@ -116,7 +116,7 @@ echo "  [T-MGR-S08] Sanitiser unit check"
 # Build a synthetic state file with a sensitive field, run the spike against
 # it in a sandbox, and confirm the field is reported as redacted.
 SANDBOX="$(mktemp -d -t mgrspike-XXXXXX)"
-trap 'rm -rf "$SANDBOX"; rm -f "$REPORT_FILE"' EXIT
+on_exit 'rm -rf "$SANDBOX"; rm -f "$REPORT_FILE"'
 mkdir -p "${SANDBOX}/.ai"
 cat > "${SANDBOX}/.ai/state.json" <<'JSON'
 {

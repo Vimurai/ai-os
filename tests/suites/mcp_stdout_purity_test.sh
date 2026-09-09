@@ -32,7 +32,7 @@ assert_status 0 "checker is executable"     test -x "$CHECKER"
 
 # ── Sandbox setup — fresh git repo per test run ─────────────────────────────
 SANDBOX="$(mktemp -d -t mcp-purity-XXXXXX)"
-trap 'rm -rf "$SANDBOX"' EXIT
+on_exit 'rm -rf "$SANDBOX"'
 git -C "$SANDBOX" init -q
 git -C "$SANDBOX" config user.email "test@example.com"
 git -C "$SANDBOX" config user.name "Test"

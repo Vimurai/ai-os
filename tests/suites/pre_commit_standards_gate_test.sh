@@ -107,7 +107,7 @@ sys.exit(0 if i_banner >= 0 and i_exit > i_banner else 1)
 
 # ── Behavioural tests: drive the hook in a sandbox git repo ─────────────────
 SBOX="$(mktemp -d -t e82-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 PROJ="${SBOX}/proj"
 mkdir -p "${PROJ}/.ai" "${PROJ}/src/mcp/foo" "${PROJ}/scripts"
 git -C "$PROJ" init -q

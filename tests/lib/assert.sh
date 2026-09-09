@@ -260,22 +260,80 @@ register_cleanup() {
 _run_cleanups() {
   local _rc=$?
   [[ -s "$_CLEANUP_FILE" ]] || { rm -f "$_CLEANUP_FILE" 2>/dev/null; return "$_rc"; }
-  local _line
-  # tail -r / tac: LIFO, so a resource created inside another is torn down first.
+  local _line _n=0
+  # LIFO, and EACH HANDLER IN ITS OWN SUBSHELL. One cleanup that calls `exit`, or that
+  # trips `set -e`, must not skip the handlers after it — that is how a partial teardown
+  # leaks the remainder, which is the failure E-240 was ruled over.
   while IFS= read -r _line; do
     [[ -z "$_line" ]] && continue
-    # A cleanup must never change the suite's verdict, and one failing cleanup must not
-    # skip the rest — that is how a partial teardown leaks the remainder.
-    eval "$_line" >/dev/null 2>&1 || true
+    _n=$(( _n + 1 ))
+    ( eval "$_line" ) >/dev/null 2>&1 || true
   done < <(tail -r "$_CLEANUP_FILE" 2>/dev/null || tac "$_CLEANUP_FILE" 2>/dev/null)
+  # Visible, so a suite that registers nothing is distinguishable from one whose handlers
+  # never ran. "It cleaned up" and "there was nothing to clean" look identical otherwise.
+  [[ "$_n" -gt 0 ]] && printf 'CLEANUP %d handlers\n' "$_n"
   rm -f "$_CLEANUP_FILE" 2>/dev/null || true
   return "$_rc"
 }
 
-# Installed HERE, in the sourcing shell, not lazily inside a helper that may run in a
-# subshell. NOTE: a suite that installs its own `trap … EXIT` after sourcing will REPLACE
-# this one; the runner's leak sweep is the backstop for that case.
-trap '_run_cleanups' EXIT
+_clear_cleanups() {
+  : > "$_CLEANUP_FILE" 2>/dev/null || true
+}
+
+# on_exit <command> — THE DOCUMENTED SPELLING (D-064). Registers a teardown that runs when
+# the suite exits, however it exits. Prefer it to `trap … EXIT`: a bare trap REPLACES the
+# previous handler, which is precisely how 46 suites silently disabled the cleanup
+# registry.
+on_exit() {
+  register_cleanup "$1"
+}
+
+# ── The `trap` shadow (D-064 §1) ────────────────────────────────────────────
+#
+# `trap 'cmd' EXIT` REPLACES any existing EXIT handler. A suite that installed its own
+# after sourcing this library therefore threw away the cleanup registry, and only the
+# runner's sweep noticed. Shadowing `trap` makes the safe thing automatic instead of
+# depending on every author remembering.
+#
+# ONLY the EXIT form is intercepted, and ONLY in the main shell. A `trap … EXIT` inside a
+# SUBSHELL is meant to fire when THAT subshell exits; redirecting it into the shared
+# registry would defer it to the parent's exit and change its meaning. So subshells fall
+# through to the builtin and keep native semantics.
+trap() {
+  if [[ "${AI_OS_TEST_NO_TRAP_CHAIN:-0}" == "1" ]]; then
+    builtin trap "$@"
+    return $?
+  fi
+  # BASH_SUBSHELL counts how deep we are in subshells, and it exists in bash 3.2 — BASHPID
+  # does NOT (added in 4.0), so a BASHPID comparison silently degrades to "always the main
+  # shell" on macOS while working on CI's bash 5.2. That is an environment-dependent guard,
+  # the very class E-236 exists to remove, and it was caught by the subshell fixture below.
+  if [[ "${BASH_SUBSHELL:-0}" -gt 0 || "${BASHPID:-$$}" != "$$" ]]; then
+    builtin trap "$@"
+    return $?
+  fi
+  if [[ $# -eq 2 ]]; then
+    local _sig="$2"
+    case "$_sig" in
+      EXIT|exit|0)
+        if [[ "$1" == "-" ]]; then
+          # An explicit clear means the author wants the slate empty; honour it rather
+          # than quietly keeping handlers they asked to drop.
+          _clear_cleanups
+          return 0
+        fi
+        register_cleanup "$1"
+        return 0 ;;
+    esac
+  fi
+  builtin trap "$@"
+}
+
+# `builtin` is REQUIRED here: the shadow function above intercepts `trap … EXIT`, so this
+# line would otherwise REGISTER _run_cleanups as a cleanup command and install no handler
+# at all — leaving nothing to run it. Caught by the acceptance fixture, which cleaned up
+# nothing whatsoever.
+builtin trap '_run_cleanups' EXIT
 
 # The prefixes the runner's leak sweep matches. A suite that uses these gets swept; one
 # that invents its own name does not, which is why the helpers below exist.

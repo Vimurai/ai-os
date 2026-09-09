@@ -17,7 +17,7 @@ SERVER="${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
 echo "── Suite: handoff_control_test (E-114 + E-118) ─────────────────────"
 
 unset AIOS_WORKSPACE AIOS_WORKSPACE_DISABLE 2>/dev/null || true
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"; on_exit 'rm -rf "$TMP"'
 PROJECT="${TMP}/proj"; mkdir -p "${PROJECT}/.ai"
 echo '{"version":"1.0","project":{},"tasks":[],"stamps":[],"deltas":[]}' > "${PROJECT}/.ai/state.json"
 cd "${PROJECT}"

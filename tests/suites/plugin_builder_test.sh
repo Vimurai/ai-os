@@ -20,7 +20,7 @@ assert_status 0 "T-1: plugin-builder.mjs valid JS" node --check "$BUILDER"
 
 # ── Seed an isolated fake repo with persona + skill fixtures ─────────────────
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+on_exit 'rm -rf "$TMP"'
 mkdir -p "$TMP/src/claude/agents" "$TMP/src/gemini/agents"
 
 # persona (claude side)

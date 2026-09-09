@@ -73,7 +73,7 @@ done
 
 # ── Set up a sandboxed git repo for behavioural tests ───────────────────────
 SBOX="$(mktemp -d -t e80-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 PROJ="${SBOX}/proj"
 mkdir -p "${PROJ}/src/mcp/foo" "${PROJ}/src/shared" "${PROJ}/scripts"
 git -C "$PROJ" init -q

@@ -47,7 +47,7 @@ echo ""
 echo "  [T-NODE-S02] Missing node → fail-closed exit 1, no files copied"
 
 SBOX="$(mktemp -d)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 # Minimal PATH that retains coreutils (bash, grep, rsync) but excludes
 # /opt/homebrew/bin and ~/.nvm/* where node typically lives. Verified
 # empirically: `PATH=/usr/bin:/bin command -v node` returns non-zero on

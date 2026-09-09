@@ -31,7 +31,7 @@ assert_contains "all custom servers reference index.js" "ok" "$out"
 
 # generate_mcp_json produces valid JSON with mcpServers key in a temp dir
 TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
+on_exit 'rm -rf "$TMP_DIR"'
 
 # Simulate generate_mcp_json by sourcing the relevant logic inline
 python3 - "$REGISTRY" "${TMP_DIR}/.mcp.json" "$HOME" "${HOME}/.ai-os" <<'PY'

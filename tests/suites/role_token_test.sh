@@ -13,7 +13,7 @@ SSH_HOOK="${REPO_ROOT}/hooks/session-start.sh"
 PTU="${REPO_ROOT}/hooks/pre-tool-use.sh"
 AI_BIN="${REPO_ROOT}/src/bin/ai"
 HSB="$(mktemp -d)"                      # hermetic HOME — never touch the real ~/.ai-os
-trap 'rm -rf "$HSB"' EXIT
+on_exit 'rm -rf "$HSB"'
 
 echo "===== role_token_test.sh (E-129) ====="
 

@@ -104,7 +104,7 @@ assert_status 0 "every SEO_ALL_INTENTS slug exists in seo_manager.md" \
 
 # ── Set up an isolated sandbox + drive the MCP via stdio JSON-RPC ───────────
 SBOX="$(mktemp -d -t e88-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 mkdir -p "${SBOX}/proj/.ai"
 
 # Seed the schema by opening the DB once via state-db.js (CREATE IF NOT EXISTS).

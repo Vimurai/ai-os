@@ -111,7 +111,7 @@ assert_contains "patch-mcp: metadata md5 field"         "md5: newMd5" "$PATCH"
 
 # ── patch-mcp: functional tests ──────────────────────────────────────────────
 TMPDIR_TEST=$(mktemp -d)
-trap 'rm -rf "$TMPDIR_TEST"' EXIT
+on_exit 'rm -rf "$TMPDIR_TEST"'
 
 # Test 1: get_file_md5 returns correct MD5 for known content
 TEST_FILE="${TMPDIR_TEST}/test.txt"

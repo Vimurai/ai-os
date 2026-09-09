@@ -47,7 +47,7 @@ echo ""
 echo "  [T-MBS-S02] Build sandbox project with eligible + ineligible files"
 
 SBOX="$(mktemp -d -t e75-XXXXXX)"
-trap 'rm -rf "$SBOX"' EXIT
+on_exit 'rm -rf "$SBOX"'
 PROJ="${SBOX}/proj"
 mkdir -p "$PROJ"
 

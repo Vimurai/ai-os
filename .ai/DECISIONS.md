@@ -1016,3 +1016,42 @@ The `ai start` suites leaked 50 tmux servers on one machine: the socket name use
 §1 none (test-policy wording). §2 `AI_OS_TEST_NO_SWEEP=1` disables the runner sweep; traps remain.
 
 ---
+
+---
+
+## [[D-064]] — EXIT-Trap Chaining in the Harness; Subshell-State Is Review Question #4
+
+**Date**: 2026-09-10
+**Task**: E-241 (Engineer handoff 2026-09-09 21:40+ UTC; E-240 complete, master `2a926c8`, CI 4498/0, full run 4501/0 with zero leaks)
+**Decision**: (§1) Close the trap-replacement limitation at the cause: the harness chains `EXIT` handlers so a suite's own `trap … EXIT` can no longer replace the cleanup trap, raw `trap … EXIT` in a suite becomes a standards finding, and the 46 existing sites are converted mechanically to `on_exit`. (§2) Institutionalise the subshell-state pattern as standing review question #4 and as an engineering-standards rule: a helper that sets state for its caller is never invoked inside a command substitution.
+
+### §1 — Trap chaining (E-241, Tier 2)
+A suite that installs `trap … EXIT` after sourcing `assert.sh` replaces the `register_cleanup` trap; the runner sweep is the backstop, so nothing leaks past the run, but 46 suites are not fixed at the cause. Ruling, both halves:
+- **Harness chains.** `assert.sh` shadows the `trap` builtin for the `EXIT` signal only: `trap <cmd> EXIT` appends `<cmd>` to the cleanup registry instead of replacing the handler; every other signal and every other argument shape passes straight to `builtin trap`. Zero suite changes are required for correctness on day one. The registry runs handlers LIFO, each in its own `( … )` so one failing cleanup cannot skip the next, and the harness prints `CLEANUP n handlers` on exit so the evidence is visible.
+- **Suites converge.** `on_exit <cmd>` is the documented spelling; a new E-80 standards rule (`tests/**` scope) flags a raw `trap … EXIT` as a P1 finding, and the 46 existing sites are converted in the same task with a mechanical rewrite — the shadow makes the conversion a no-op behaviourally, so the risk is confined to the rewrite's syntax.
+- The sweep stays as the backstop; `LEAKED` must remain zero after the conversion (that is the acceptance evidence).
+
+### §2 — Subshell state: review question #4 + standards rule
+Three times in two sprints a helper was called as `$(helper …)` and the state it set evaporated (E-239's baseline cache, the E-240 cleanup registry, `_self_stamp`'s output capture). Each was caught by an assertion written for another reason — the system working — and the recurrence is the signal. Ruling:
+- **Standing review question #4** (`critic_tests`, `ai-review`, `ai-debug`): "Is this helper ever called inside a command substitution, a pipeline, or a `while read` loop, and does it set state that must outlive that call?"
+- **Engineering-standards rule**: a shell helper returns DATA on stdout and sets STATE only in the caller's shell — never both. A helper that must set state is invoked as a plain command and returns data via `printf -v` / a nameref, or the state is recomputed by the caller from the data. The reason is written at each site, as the Engineer already does.
+- No lint is funded now: the shape is too idiomatic to grade mechanically without an over-block (D-056 R3); the question plus the rule is the proportionate response. Revisit if a fourth incident occurs.
+
+### Alternatives considered
+1. **§1: convert the 46 suites only, no shadow** — rejected; the next suite to write a raw trap reintroduces the hole, and the sweep would again be the only defence.
+2. **§1: shadow only, no conversion** — rejected; two spellings for one concept is the kind of drift the standards checker exists to prevent.
+3. **§2: a shellcheck-style lint for `$(…)` around state-setting helpers** — rejected for now (over-block risk); question + rule first.
+
+### Constraints driving this decision
+- Fix at the cause, keep the backstop (D-063 §2).
+- A gate that blocks the codebase's own idiom is a defect (D-056 R3) — hence question-not-lint for §2.
+- Evidence printed: `CLEANUP n handlers` and `LEAKED 0` are the proof, not the reasoning.
+
+### Impact
+- Unlocks: E-241 (T2).
+- Risk if wrong: shadowing `trap` surprises a suite that relies on REPLACING a handler — mitigated: only `EXIT` is chained, `builtin trap - EXIT` still clears, and the shadow is documented in `assert.sh`'s header.
+
+### Rollback
+§1 `AI_OS_TEST_NO_TRAP_CHAIN=1` restores the plain builtin (suites already converted to `on_exit` keep working). §2 process only.
+
+---
