@@ -1499,12 +1499,12 @@
     {
       "id": "E-231",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Close the T-LOCATOR-001 known-uncaught operand class per D-060 §2: extend the E-225 standards rule (and the E-224 classifier's executable-line analysis) to re-tokenise, recursively, the operand of bash -c / sh -c / zsh -c / eval / xargs / heredoc-fed interpreters and pipe-fed 'sh', so 'bash -c \"node src/bin/ai\"' is caught like a bare 'node src/bin/ai'. Over-block guard is mandatory (D-056 R3 lineage): add fixture cases in BOTH directions before widening, including prose that quotes bash -c, and treat any new over-block as a regression. Acceptance: standards + classifier suites cover each wrapper form positive and negative; the full skill corpus still passes the rule; THREAT_MODEL T-LOCATOR-001 'known uncaught' section marked fixed; mirrors synced.",
       "created_at": "2026-09-09T13:30:38.765Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-09T17:32:34.458Z",
+      "summary": "Operand re-tokenisation: inline-code operands re-scanned recursively (depth 1), eval's operand treated as code, pipe/xargs-fed interpreters scan left of the pipe. Fixtures written fi …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
