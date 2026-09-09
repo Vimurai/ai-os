@@ -265,3 +265,61 @@ restores the prior (red) state exactly.
 Per this gate, the change is NOT pushed to master directly. It goes to
 `engineer/e230-ci-green` and is opened as a PR; `on: pull_request: branches: [master]`
 runs the full workflow there. Master is only updated once that run is green.
+
+---
+
+## DEVOPS-006 — Playwright browsers out of the default install (E-235, D-061 §3)
+
+**Date**: 2026-09-09
+**Task**: E-235
+**Status**: IN PROGRESS (validated on branch `engineer/e235-browsers-out-of-install` via PR)
+
+### What is changing and why
+
+`ai mcp-setup` ran `npx playwright install chromium` unconditionally, inside the path that
+`install-ai-os.sh` — and therefore every user install and every CI run — depends on. It is
+an unbounded ~150MB network fetch. On 2026-09-09 it ran for **over an hour** on a developer
+machine without finishing.
+
+The `|| true` that wrapped it gave no protection at all: the failure mode is **hanging**,
+not erroring, and you cannot `|| true` your way out of a process that never returns. That
+is the specific reason this needed a real change rather than better error handling.
+
+Three parts:
+
+1. The download leaves the default path. Opt in with `ai mcp-setup --browsers`, or
+   `AI_OS_INSTALL_BROWSERS=1` to restore the old behaviour exactly.
+2. When it does run, it is **bounded and visible** — a watchdog enforces
+   `AI_OS_BROWSER_TIMEOUT` (default 600s) and progress is no longer swallowed by
+   `tail -2`. `timeout(1)` is not present on macOS by default, so the limit is enforced
+   with a watchdog rather than assumed: a timeout that silently is not applied is worse
+   than none, because it is believed.
+3. Missing browsers now fail FAST at first use with `[BROWSER_MISSING]` and the one command
+   that fixes it, instead of Playwright's installation essay or a hang.
+
+### CI
+
+The workflow installs browsers in an **explicit, cached** step so the vibe suites still
+run. Cached on the Playwright version from the lockfile, so it is a download once per
+version rather than once per run. The step is `continue-on-error: false` — if browsers are
+meant to be there, a failure to install them should be visible rather than surface later as
+a puzzling suite failure.
+
+### Security implications
+
+None new. No new secrets, no new permissions. The change REDUCES what the default install
+fetches from the network: the Playwright CDN is no longer contacted during `ai install`,
+which is a strict reduction in install-time network surface and makes an air-gapped or
+proxied install viable where it previously stalled.
+
+### Rollback plan
+
+`AI_OS_INSTALL_BROWSERS=1` restores the old install-time download. `ai mcp-setup
+--browsers` performs it on demand. `AI_OS_SKIP_BROWSER_CHECK=1` bypasses the first-use
+probe for an operator whose browser lives somewhere unusual. Reverting the workflow hunk
+restores the previous CI behaviour independently of the CLI change.
+
+### Branch-first validation
+
+Per this gate, not pushed to master directly: the change goes up as a PR so
+`on: pull_request` exercises the new cached browser step before master moves.

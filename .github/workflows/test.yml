@@ -33,6 +33,22 @@ jobs:
             fi
           done
 
+      # E-235 (D-061 §3): browsers are installed EXPLICITLY here, because `ai install` no
+      # longer downloads them. Cached on the Playwright version so this is a download once
+      # per version rather than once per run — the unbounded fetch is exactly what made the
+      # installer unusable on a developer machine.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('src/mcp/vibe-check-mcp/package.json') }}
+
+      - name: Install Playwright Chromium (explicit, not part of ai install)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        working-directory: src/mcp/vibe-check-mcp
+        run: npx playwright install --with-deps chromium
+
       # Populate ~/.ai-os/ so mirror byte-identity tests (diff against
       # ${HOME}/.ai-os/...) and install-dependent suites have the framework
       # environment they assume. Without this, the suite is not CI-portable.
