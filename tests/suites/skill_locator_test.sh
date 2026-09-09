@@ -32,18 +32,34 @@ assert_status 1 "E-225.01a: no skill executed the decoy's helpers" \
   bash -c "[[ -n '$_out' ]]"
 if [[ -n "$_out" ]]; then echo "    executed: $(printf '%s' "$_out" | tr '\n' ' ')" >&2; fi
 
-# Non-vacuity: the SAME driver against the pre-fix skills must fire. A canary that never
+# Non-vacuity: the SAME driver against a PRE-FIX skill must fire. A canary that never
 # fires proves the harness is broken, not that the code is safe.
-_old="$(mktemp -d)"
-for s in ai-preflight ai-insights ai-review-proposed-skills; do
-  mkdir -p "$_old/$s"
-  git -C "$REPO_ROOT" show "HEAD:src/shared/skills/$s/SKILL.md" > "$_old/$s/SKILL.md" 2>/dev/null || true
+#
+# The fixture is written inline, NOT fetched with `git show HEAD:`. The first version did
+# that, which quietly made the control depend on version-control state: it passed only
+# while the fix was uncommitted, and the moment the branch merged, `HEAD` became the FIXED
+# file, the control found nothing executing, and it failed — on correct code, forever.
+# A test that asserts "the old code was broken" has to carry the old code.
+_old="$(mktemp -d)"; mkdir -p "$_old/prefix"
+cat > "$_old/prefix/SKILL.md" <<'PREFIX'
+# Pre-fix ai-preflight (verbatim shape of the E-225 defect)
+
+Incident status: !for c in src/shared/incident-aggregate.mjs "${HOME}/.ai-os/shared/incident-aggregate.mjs"; do [ -f "$c" ] && node "$c" 2>/dev/null && break; done 2>/dev/null || echo "(aggregator unavailable)"
+
+```bash
+for c in src/shared/insights-staleness.mjs "${HOME}/.ai-os/shared/insights-staleness.mjs"; do
+  if [ -f "$c" ]; then PROBE="$c"; break; fi
 done
-_pre="$(bash "$DRIVER" "$_old"/*/SKILL.md 2>/dev/null)"
-assert_contains "E-225.01b: the pre-fix skills DID execute the decoy (non-vacuity)" \
+node "${PROBE}" 2>/dev/null || echo '{"status":"UNAVAILABLE"}'
+```
+PREFIX
+_pre="$(bash "$DRIVER" "$_old/prefix/SKILL.md" 2>/dev/null)"
+assert_contains "E-225.01b: the pre-fix shape DOES execute the decoy (non-vacuity)" \
   "EXECUTED" "$_pre"
-assert_contains "E-225.01c: including ai-preflight's session-start line" \
+assert_contains "E-225.01c: including the session-start !-line's helper" \
   "incident-aggregate" "$_pre"
+assert_contains "E-225.01d: and the fenced locator chain's helper" \
+  "insights-staleness" "$_pre"
 rm -rf "$_old"
 
 # ── E-225.1b: the DEGRADED-INSTALL branch (audit F1) ───────────────────────
@@ -56,9 +72,9 @@ _d="$(mktemp -d)"; mkdir -p "$_d/src/shared"
 printf 'console.log(%s);\n' "'{\"status\":\"PWNED\"}'" > "$_d/src/shared/incident-aggregate.mjs"
 _got="$( cd "$_d" && env "BASH_FUNC_ai_os_locate%%=() { printf '%s' \"\$PWD/src/shared/incident-aggregate.mjs\"; }" \
           HOME=/nonexistent bash -c "$_line" 2>/dev/null )"
-assert_not_contains "E-225.01d: a forged resolver cannot run the decoy (degraded install)" \
+assert_not_contains "E-225.01f: a forged resolver cannot run the decoy (degraded install)" \
   "PWNED" "$_got"
-assert_contains "E-225.01e: it fails CLOSED with the unavailable message" \
+assert_contains "E-225.01g: it fails CLOSED with the unavailable message" \
   "unavailable" "$_got"
 rm -rf "$_d"
 
