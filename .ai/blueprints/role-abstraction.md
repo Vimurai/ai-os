@@ -5,7 +5,7 @@
 **Architecture**: Introduce a global/local Role Mapping Configuration (`.ai/roles.json`), a **Provider Adapter Registry** (`.ai/providers.json`), and dynamic TMUX pane routing. Update `handoff_control` and `ai-watch` to route semantic roles (`architect`, `engineer`) dynamically.
 
 ## Core Concept
-Historically, the OS hardcoded Gemini = Architect, Claude = Engineer. To support dynamic assignment (e.g., Claude playing both roles via TMUX pane isolation: `claude:1` and `claude:0`), or to drop in a brand new, unknown CLI released next year, we need a **Provider Adapter System**. The Architect now defaults to `agy`. 
+Historically, the OS hardcoded Gemini = Architect, Claude = Engineer. To support dynamic assignment (e.g., Claude playing both roles via TMUX pane isolation: `claude:1` and `claude:0`), or to drop in a brand new, unknown CLI released next year, we need a **Provider Adapter System**. The Architect defaulted to `agy` under D-050; since **D-066 (2026-09-10)** the default topology is all-Claude — see §Default Topology below. 
 1. **Roles** (What is done) map to **Pane Identifiers** (Where it is done).
 2. **Providers** (Who does it) declare their unique config requirements (e.g., where they read MCP settings).
 
@@ -206,3 +206,6 @@ Per D-054 §Rollback. The Role Resolution clause is inert without a stamp and ma
   + `child_env_unset`.
 - **E-211** (Tier 1, after E-209): deprecate legacy `claude`/`gemini` targets — stderr warning +
   same-provider ambiguity fail-closed.
+
+## Default Topology (D-066, 2026-09-10)
+The framework default is the **all-Claude Triad**: `architect = claude:1` on model `fable`, `engineer = claude:0` on model `opus` (`src/templates/roles.json`, `_write_roles_json`). `agy` and `gemini` remain supported providers — their `src/` adapters stay (D-052) and either is selected per project with `ai install --architect agy:1` or by editing `roles.json`. Consequences: (1) every banner and owner/footer label derives from `roles.json` provider AND model (`Architect (claude · fable)`), never from a vendor literal; (2) the overlay path in the `claude` launch adapter is ABSOLUTE (rooted at the `.ai/` parent) and `ai pane` self-heals a missing overlay — the cwd-relative form produced "Settings file not found" from `ai start`; (3) workspace directories (`.claude/`, `.agents/`, `.gemini/`) are provisioned only for mapped providers, unmapped ones are reported by `ai doctor` and removed only by the explicit `ai sync --prune-providers`. → E-242, E-243, E-244.

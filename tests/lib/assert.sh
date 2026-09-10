@@ -361,6 +361,11 @@ test_tmpdir() {
   local label="${1:-d}"
   local d
   d="$(mktemp -d "${TMPDIR:-/tmp}/${AIOS_TEST_TMP_PREFIX}${label}-XXXXXX")"
+  # NORMALISE. macOS sets TMPDIR with a trailing slash, so the raw path contains `//` —
+  # harmless to the filesystem, but any assertion comparing it against a path that has been
+  # through realpath/resolve() fails on a difference that is not real. Caught by E-242's own
+  # fixture, whose expected argv had the double slash and the actual did not.
+  d="$(cd "$d" && pwd -P)"
   register_cleanup "rm -rf '${d}'"
   printf '%s' "$d"
 }

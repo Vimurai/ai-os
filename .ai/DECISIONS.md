@@ -1091,3 +1091,50 @@ Four defects in E-241 were each caught by a fixture and none by reasoning: the s
 Policy only; nothing to roll back.
 
 ---
+
+---
+
+## [[D-066]] — All-Claude Triad Becomes the Default Topology (Architect on Fable, Engineer on Opus); Overlay Path Fix; Project Cleanup Sprint
+
+**Date**: 2026-09-10
+**Task**: E-242, E-243, E-244, E-245, E-246 (user request 2026-09-10)
+**Decision**: (§1) The framework DEFAULT topology is the all-Claude Triad — `architect = claude:1` on model `fable`, `engineer = claude:0` on model `opus` — superseding D-050's `agy` default. `agy` and `gemini` remain fully supported providers (D-052 adapters stay), selected by `roles.json` or the `--architect/--engineer` install flags. (§2) The `ai start` failure "Settings file not found: .claude/settings.architect.json" is a path-resolution defect: the overlay is referenced cwd-relative; it becomes absolute and `ai pane` self-heals a missing overlay. (§3) `ai init`/`ai install`/`ai sync` banners and every owner/footer label derive from `roles.json` (provider AND model), never from a vendor literal. (§4) Workspace directories are generated only for providers that serve a role; unmapped provider workspaces are reported by `ai doctor` and removed only by an explicit `ai sync --prune-providers`. (§5) Repo hygiene and a v3.1.0 release close the D-054→D-066 series.
+
+### Why needed
+This project already runs both roles on Claude (D-054). The user hit `Error: Settings file not found: .claude/settings.architect.json` from `ai start`, `ai init` still announces an `agy` Architect, `roles.json` carried no model so both panes ran the same model, and the repo accumulated agy/gemini workspace residue (`.gemini/`, `.agents/`), a stray tracked file named `bash` containing a shell error, an untracked `.DS_Store`, a Gemini-era plan, and 124 task rows in `TASKS.md`.
+
+### §1 — Default topology
+- `src/templates/roles.json` and `_write_roles_json` defaults: `architect: {provider: claude, pane_identifier: "1", model: "fable"}`, `engineer: {provider: claude, pane_identifier: "0", model: "opus"}`. Model values are the CLI's aliases (`fable`, `opus`, `sonnet`) or a full model id; `ai pane` forwards `--model` (already wired, E-208).
+- Rulefile headers: `ARCHITECT.md` "defaults to the `agy` provider" → "defaults to the `claude` provider (model `fable`)"; `ENGINEER.md` §35 redirect text names the Architect by role, not by `agy`. `GEMINI.md`/`CLAUDE.md` shims stay (D-051).
+- This project's `.ai/roles.json` now carries the models (Architect edit, this decision).
+
+### §2 — Overlay path defect (E-242)
+`provider-adapter.mjs` emits `--settings .claude/settings.{role}.json` relative to the process cwd; any pane whose shell does not start in the project root (rc-file `cd`, a pre-existing session, a subdirectory launch) fails at the CLI. Ruling: the resolver substitutes an ABSOLUTE path rooted at the `.ai/` parent; `ai pane` generates a missing overlay from `roles.json` before exec (same code path as `ai sync`, idempotent), and `ai start` verifies each role's overlay before sending keys. Regression tests launch from a subdirectory and from a cwd outside the project.
+
+### §3 — Banners and labels derive from roles.json (E-243)
+`ai init`/`ai install`/`ai sync` print `Architect (claude · fable)` / `Engineer (claude · opus)` from the mapping; the legacy `'Architect (Agy)'` owner-regex (`src/bin/ai` ~1657), the `Agy (Architect)` footer (~1927), and any remaining vendor literal in user-facing text are replaced by role-derived labels. README and CONTRIBUTING describe the all-Claude default with `agy`/`gemini` as alternative providers.
+
+### §4 — Provider workspace hygiene (E-244)
+`ai sync` provisions `.claude/`, `.agents/`, `.gemini/` only for providers mapped in `roles.json` (plus `.claude/` whenever the hooks need it). `ai doctor` reports an unmapped provider's workspace as `stale provider workspace`; `ai sync --prune-providers` removes it, manifest-aware (E-220), never silently. `src/agents`, `src/gemini` adapters stay (D-052). In this repo `.gemini/` and `.agents/` are removed by that flag once it exists.
+
+### §5 — Hygiene + release (E-245, E-246)
+Remove the tracked stray `bash` file; gitignore `.DS_Store` and `testsprite_tests/tmp/`; archive DONE tasks out of `TASKS.md` (`archive_done_tasks`, state stays intact); `plans/agentic_upgrades_phase2.md` (Gemini-era, `better-sqlite3`) moved to `plans/archive/` by the Architect. Then `release-manager` cuts **v3.1.0** with a CHANGELOG aggregating D-054→D-066 / E-208→E-246.
+
+### Alternatives considered
+1. **Keep `agy` as the default and document the override** — rejected; the default should be the topology the maintainer runs and the one the gates were hardened for.
+2. **Fix the overlay error by documenting "run ai sync first"** — rejected; the path is wrong for any cwd, and doctor already knew the file was missing — the launcher must not hand the failure to the CLI.
+3. **Delete `src/gemini`/`src/agents`** — rejected (D-052); only unmapped workspace copies go, and only explicitly.
+
+### Constraints driving this decision
+- Provider-agnostic by configuration (D-050/D-052): defaults change, adapters stay.
+- No vendor literal in user-facing text; labels derive from `roles.json` (D-054 lineage, E-213).
+- Nothing is deleted silently (E-220 manifest discipline).
+
+### Impact
+- Unlocks: E-242 (T2), E-243 (T2), E-244 (T2), E-245 (T1), E-246 (T1 release, last). Order: E-242 → E-243 → E-244 → E-245 → E-246.
+- Risk if wrong: a downstream project still mapped to `agy` sees no change (its `roles.json` wins); a fresh install gets the all-Claude default and needs only `claude` on PATH.
+
+### Rollback
+`ai install --architect agy:1 --engineer claude:0` restores the D-050 mapping per project; the template default can be reverted in one commit. §2 is a pure fix.
+
+---

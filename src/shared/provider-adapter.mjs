@@ -20,7 +20,7 @@
 //   collapses to nothing rather than emitting a dangling `--model`.
 
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { resolve as resolvePath, join } from "node:path";
 
 // D-050 defaults — used when .ai/roles.json is absent or malformed. Kept in sync
 // with src/templates/roles.json (architect=agy:1, engineer=claude:0).
@@ -114,6 +114,50 @@ export function buildArgv(template, subs = {}) {
  * then applied on top as defence-in-depth: Claude Code refuses to nest while it sees
  * an inherited CLAUDECODE=1, and the strip keeps that true if the allowlist ever grows.
  */
+/**
+ * Flags whose OPERAND is a path the provider CLI must open. E-242 (D-066).
+ *
+ * Everything here is emitted PROJECT-RELATIVE by the adapter templates, which is correct
+ * only when the CLI's cwd is the project root. It frequently is not: an rc-file `cd`, a
+ * pre-existing tmux session or window, a pane opened in a subdirectory. The CLI then
+ * reports "Settings file not found: .claude/settings.architect.json" for a file that
+ * exists — the path is wrong, not the file.
+ *
+ * The rulefile is the more serious half and was failing the same way silently: without
+ * ARCHITECT.md actually loading, a claude Architect pane boots the ENGINEER persona from
+ * CLAUDE.md. That is gap G1, the very thing the same-provider Triad depends on, and a
+ * missing file produces a wrong PERSONA rather than an error.
+ */
+export const PATH_OPERAND_FLAGS = new Set([
+  "--settings",
+  "--append-system-prompt-file",
+]);
+
+/**
+ * Resolve project-relative path operands against the project root.
+ *
+ * Only the operand of a known path flag is touched, and only when it is relative — so a
+ * prompt, a model name or a flag that merely looks path-like is never rewritten. Absolute
+ * and `~`-anchored operands are left exactly as the author wrote them.
+ *
+ * @param {string[]} argv
+ * @param {string} projectRoot absolute path to the project
+ * @returns {string[]}
+ */
+export function absolutisePathOperands(argv, projectRoot) {
+  if (!Array.isArray(argv) || !projectRoot) return Array.isArray(argv) ? argv : [];
+  const out = [...argv];
+  for (let i = 0; i < out.length - 1; i++) {
+    if (!PATH_OPERAND_FLAGS.has(out[i])) continue;
+    const operand = out[i + 1];
+    if (typeof operand !== "string" || operand === "") continue;
+    if (operand.startsWith("/") || operand.startsWith("~")) continue; // already anchored
+    if (operand.startsWith("-")) continue;                            // a flag, not a path
+    out[i + 1] = resolvePath(projectRoot, operand);
+  }
+  return out;
+}
+
 export function childEnv(base, adapter) {
   const env = { ...base };
   for (const k of adapter?.child_env_unset ?? []) delete env[k];

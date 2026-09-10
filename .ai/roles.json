@@ -2,11 +2,13 @@
   "roles": {
     "architect": {
       "provider": "claude",
-      "pane_identifier": "1"
+      "pane_identifier": "1",
+      "model": "fable"
     },
     "engineer": {
       "provider": "claude",
-      "pane_identifier": "0"
+      "pane_identifier": "0",
+      "model": "opus"
     }
   }
 }

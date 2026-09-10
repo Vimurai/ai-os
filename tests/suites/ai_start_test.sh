@@ -54,7 +54,12 @@ rm -rf "$_p"
 
 # ── E-227.2: composition only — never a provider, never a project script ───
 _p="$(_proj 0 1)"; _out="$(_dry "$_p")"
-assert_not_contains "E-227.02a: no provider binary is launched directly" "claude" "$_out"
+# Tightened by E-242: the intent is "ai start COMPOSES `ai pane`, it never execs a provider
+# itself". Testing that by the bare substring `claude` also matches the DIRECTORY `.claude/`,
+# which the overlay pre-check legitimately names — so the assertion failed on a path, not on
+# a launch. Match an invocation instead: the provider in command position.
+assert_status 1 "E-227.02a: no provider binary is launched directly" \
+  bash -c "printf '%s' \"\$_out\" | grep -qE '(^|[;&|]|send-keys .)[[:space:]]*(claude|agy|gemini)[[:space:]]'"
 # The dry run prints commands through `printf %q`, so the sent string appears as
 # `ai\ pane\ engineer`. An assertion written against a literal space silently matched
 # nothing and passed for the wrong reason.
