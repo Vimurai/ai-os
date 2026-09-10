@@ -14,6 +14,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { instrument } from "../../shared/mcp-telemetry.mjs";
+// E-249 (D-067 §3): announce running servers whose booted build no longer matches disk.
+import { staleServerReport } from "../../shared/build-stamp.mjs";
 // E-237 (D-061 §5): the traversal POLICY is loaded per request, not once at spawn.
 // This server lives for the whole session and ESM caches a module by URL forever, so a
 // policy refreshed by `ai sync` never reached the running process. Throughout the
@@ -232,6 +234,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             );
           }
         } catch (e) { logger.warn("run_preflight", "SQLite read failed", { error: e.message }); }
+      }
+
+      // E-249 (D-067 §3): a running server serving code that is no longer on disk gets
+      // announced at the TOP of preflight, because preflight is where a session decides
+      // what it can trust — and E-227 spent a review cycle on a P0 that the shipped
+      // checker no longer emitted, reported by an orchestrator-mcp booted before the fix.
+      const _staleLines = staleServerReport();
+      if (_staleLines.length > 0) {
+        sections.unshift(
+          `## ⚠ STALE MCP SERVERS (E-249 / D-067 §3)\n` +
+          _staleLines.join("\n") + "\n\n" +
+          `These servers are still serving the code they imported at startup. Any answer they\n` +
+          `give — including a gate verdict — describes the build named above, not the one on\n` +
+          `disk. Restart the MCP servers before trusting them.\n\n` +
+          `_Rollback: AI_OS_BUILD_STAMP=0 suppresses this check._`
+        );
       }
 
       // Stamp SESSION.md

@@ -25,7 +25,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
+import { resolve, dirname } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, addTask as _addTask, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
@@ -40,6 +40,8 @@ import { instrument, rejection } from "../../shared/mcp-telemetry.mjs";
 // E-155 (telemetry-hardening.md §Components 3): record task_velocity at the
 // canonical DONE transition so completion metrics are captured reliably.
 import { recordTaskVelocityForTask } from "../../shared/telemetry.mjs";
+// E-249 (D-067 §3): announce running servers whose booted build no longer matches disk.
+import { staleServerReport, checkCompletionBuildGate } from "../../shared/build-stamp.mjs";
 import { createLogger } from "../shared/logger.js";
 // E-74: Managed Agents cloud sync hook. The import is unconditional (cheap —
 // no side effects at module load), but every call site goes through
@@ -406,6 +408,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // E-249 (D-067 §3): the completion gate. Server and CLI code only reaches a running
+      // session through the install mirror, and an MCP server serves whatever it imported
+      // at startup — so a task that changed src/mcp/** or src/bin/** is not finished when
+      // the edit lands, it is finished when the mirror carries it and the servers have
+      // been restarted. The gate refuses DONE until both are true, and reports which of
+      // the two is missing. It runs BEFORE the dependency-revision write so a refusal
+      // leaves no partial mutation behind. Rollback: AI_OS_BUILD_STAMP=0.
+      if (args.status === "DONE") {
+        const gate = checkCompletionBuildGate({ repoRoot: dirname(aiDir) });
+        if (!gate.ok) return rejection(gate.message);
+      }
+
       // E-91: optional dependency revision — validate the new edge set
       // (existence/self-reference/cycle/depth) before persisting it.
       if (args.depends_on !== undefined) {
@@ -688,9 +702,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         lines[0] = "[SYNC_PASS] TASKS.md and REVIEWS.md are in sync with state.";
       }
 
+      // E-249 (D-067 §3): a running server serving code that is no longer on disk is
+      // reported HERE because this is the tool every session calls before trusting
+      // TASKS.md — and the pre-E-245 projector that stripped the archive pointer on every
+      // write was served by THIS server. Staleness does NOT change the SYNC verdict: the
+      // markdown either agrees with state or it does not, and folding an operational
+      // notice into that verdict would make [SYNC_FAIL] mean two different things.
+      const staleLines = staleServerReport();
+      if (staleLines.length > 0) {
+        lines.push("");
+        staleLines.forEach(l => lines.push(l));
+      }
+
       // Structured tail for programmatic consumers (skills, CI, hooks).
       lines.push("");
-      lines.push(`__SYNC_RESULT__ ${JSON.stringify({ status, anomalies, auto_fixes: autoFixes })}`);
+      lines.push(`__SYNC_RESULT__ ${JSON.stringify({ status, anomalies, auto_fixes: autoFixes, stale_servers: staleLines })}`);
 
       return { content: [{ type: "text", text: lines.join("\n") }] };
     }
