@@ -18,7 +18,12 @@ ctx() { grep -E '^context:' "$1" 2>/dev/null | head -1 | awk '{print $2}'; }
 for s in ai-digest trigger-audit ai-sync-state; do
   assert_contains "T-100: $s source is default" "default" "$(ctx "${REPO_ROOT}/src/shared/skills/$s/SKILL.md")"
   assert_contains "T-100: $s .claude exec copy is default" "default" "$(ctx "${REPO_ROOT}/.claude/skills/$s/SKILL.md")"
-  assert_contains "T-100: $s .gemini copy is default" "default" "$(ctx "${REPO_ROOT}/.agents/skills/$s/SKILL.md")"
+  # E-244: .agents/ is provisioned only for a project with a role bound to agy.
+  if [[ -f "${REPO_ROOT}/.agents/skills/$s/SKILL.md" ]]; then
+    assert_contains "T-100: $s .agents copy is default" "default" "$(ctx "${REPO_ROOT}/.agents/skills/$s/SKILL.md")"
+  else
+    _skip "T-100: $s .agents copy (workspace not provisioned — no role bound to agy)"
+  fi
 done
 assert_contains "T-100: ai-compact source is default"   "default" "$(ctx "${REPO_ROOT}/src/claude/skills/ai-compact/SKILL.md")"
 assert_contains "T-100: ai-compact .claude copy default" "default" "$(ctx "${REPO_ROOT}/.claude/skills/ai-compact/SKILL.md")"
@@ -31,7 +36,10 @@ assert_contains "T-100: architectural-aligner stays fork" "fork" "$(ctx "${REPO_
 assert_contains "T-100: critic_clean_code agent stays fork" "fork" "$(ctx "${REPO_ROOT}/src/claude/agents/critic_clean_code.md")"
 
 # ── `context: local` (invalid Claude Code value) must appear NOWHERE ─────────
-local_hits=$(grep -rlE "^context:[[:space:]]*local" "${REPO_ROOT}/src/shared/skills" "${REPO_ROOT}/src/claude/skills" "${REPO_ROOT}/src/agents/skills" "${REPO_ROOT}/.claude/skills" "${REPO_ROOT}/.agents/skills" 2>/dev/null | wc -l | tr -d ' ')
+# grep -rl on a missing directory errors; name it only when it is there.
+AGENTS_SKILLS_ROOT=""
+[[ -d "${REPO_ROOT}/.agents/skills" ]] && AGENTS_SKILLS_ROOT="${REPO_ROOT}/.agents/skills"
+local_hits=$(grep -rlE "^context:[[:space:]]*local" "${REPO_ROOT}/src/shared/skills" "${REPO_ROOT}/src/claude/skills" "${REPO_ROOT}/src/agents/skills" "${REPO_ROOT}/.claude/skills" ${AGENTS_SKILLS_ROOT:-} 2>/dev/null | wc -l | tr -d ' ')
 assert_contains "T-100: no invalid 'context: local' anywhere" "0" "$local_hits"
 
 # ── No operational skill still forks ─────────────────────────────────────────

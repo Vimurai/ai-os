@@ -14,11 +14,18 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo "===== ai_debug_skill_test.sh ====="
 
+# E-244 (D-066 §4): the canonical source plus every workspace copy that EXISTS. `ai sync`
+# provisions .agents/ only when a role is bound to agy, so under the all-Claude default
+# there is no third copy — and asserting on one tests the presence of a directory rather
+# than the content of a skill. Bind the Architect to agy and the third copy returns to
+# this list automatically.
 SKILL_FILES=(
   "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md"
   "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md"
-  "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"
 )
+[[ -f "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md" ]] \
+  && SKILL_FILES+=("${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md") \
+  || _skip "ai-debug .agents/ copy (workspace not provisioned — no role bound to agy)"
 
 echo ""
 echo "  [T-DEBUG-S01] All three copies exist"
@@ -71,10 +78,11 @@ echo ""
 echo "  [T-DEBUG-S07] Source-of-truth and mirrors are byte-identical"
 SRC_HASH="$(md5sum "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" | awk '{print $1}')"
 CLAUDE_HASH="$(md5sum "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md" | awk '{print $1}')"
-GEMINI_HASH="$(md5sum "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"  | awk '{print $1}')"
+
 assert_status 0 ".claude mirror matches src" \
   bash -c "[[ '$SRC_HASH' == '$CLAUDE_HASH' ]]"
-assert_status 0 ".gemini mirror matches src" \
-  bash -c "[[ '$SRC_HASH' == '$GEMINI_HASH' ]]"
+assert_mirror_if_present ".agents mirror matches src" \
+  "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" \
+  "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"
 
 assert_summary

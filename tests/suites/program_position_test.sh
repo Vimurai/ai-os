@@ -145,8 +145,17 @@ _corpus() {
     const rule = RULE_REGISTRY.skill_locator_install_first;
     // node_modules pruned: CI installs deps under src/mcp/*/ and an unpruned walk scans
     // thousands of vendored READMEs, making the count depend on the host (E-231).
+    // E-244: name only the directories that EXIST. `ai sync` provisions a provider
+    // workspace only when a role is bound to it (D-066 §4), so .agents/ and .gemini/ are
+    // absent under the all-Claude default — and `find` on a missing path exits non-zero,
+    // which made execSync throw and the whole corpus come back EMPTY. A scan of zero
+    // files reports zero findings, so the assertion below would have gone on "passing"
+    // for a scan that never happened; that is exactly what 06a pins.
+    const { existsSync } = await import("fs");
+    const roots = ["src", ".claude", ".agents", ".gemini"]
+      .filter((d) => existsSync(process.env.REPO_ROOT + "/" + d));
     const out = execSync(
-      "find src .claude .agents .gemini -name node_modules -prune -o -name \"*.md\" -print",
+      "find " + roots.join(" ") + " -name node_modules -prune -o -name \"*.md\" -print",
       { encoding: "utf8", maxBuffer: 1e8, cwd: process.env.REPO_ROOT });
     const files = out.trim().split("\n").filter(Boolean);
     let n = 0;

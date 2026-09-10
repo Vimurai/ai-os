@@ -88,6 +88,11 @@ Commands:
   ai sync        Re-sync agents, skills, bootloaders (ENGINEER.md, ARCHITECT.md +
                  CLAUDE.md/GEMINI.md shims, .mcp.json) and hooks into the project
   ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28)
+  ai sync --prune-providers
+                 Remove the workspace directories (.gemini/, .agents/, ...) of
+                 providers no role in .ai/roles.json is bound to. Manifest-aware:
+                 only files sync wrote and nobody edited are deleted; anything else
+                 is reported and kept. Never runs implicitly (E-244).
   ai provider install-plugin agy
                  Install AI-OS personas as a native Antigravity plugin (E-144).
                  agy shows custom subagents only via installed plugins; run once
@@ -778,6 +783,190 @@ _prune_workspace_dir() {
 }
 
 
+# ── E-244 (D-066 §4): mapped-only provider workspaces ────────────────────────
+# `ai sync` provisioned .claude/, .gemini/ AND .agents/ on every project unconditionally.
+# Under the all-Claude default that leaves two fully-populated workspaces for CLIs no
+# role is bound to — and in THIS repository they are tracked, so the noise is in git too.
+# Provisioning now follows the binding; the directories stay vendor-named and the
+# src/agents + src/gemini adapters are untouched (D-052).
+_locate_provider_workspace() {
+  ai_os_locate "shared/provider-workspace.mjs" && return 0
+  local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+  local _sib="${_sd%/*}/shared/provider-workspace.mjs"
+  [[ -f "$_sib" ]] && { printf '%s' "$_sib"; return 0; }
+  return 1
+}
+
+# _provider_workspace_rows <list|stale> → TSV from the classifier, or nothing.
+# FAIL-OPEN: no node, no helper, or a helper error prints nothing. Every caller treats
+# "nothing" as "provision everything / prune nothing", so a missing helper can never
+# cause a workspace to be skipped or deleted.
+# Memoised per process: `ai sync` asks twice per provider and `ai doctor` once more,
+# and a node spawn is the single most expensive thing either command does. The cache is
+# per-invocation, so it can never go stale relative to a roles.json edit between runs.
+_PW_ROWS_LIST=""
+_PW_ROWS_STALE=""
+_PW_ROWS_CACHED=0
+_provider_workspace_rows() {
+  local mode="${1:-list}"
+  if [[ "$_PW_ROWS_CACHED" -eq 0 ]]; then
+    _PW_ROWS_CACHED=1
+    command -v node >/dev/null 2>&1 || return 0
+    local pw; pw="$(_locate_provider_workspace || true)"
+    [[ -n "$pw" ]] || return 0
+    _PW_ROWS_LIST="$(node --no-warnings "$pw" list ".ai" "." 2>/dev/null || true)"
+    _PW_ROWS_STALE="$(node --no-warnings "$pw" stale ".ai" "." 2>/dev/null || true)"
+  fi
+  case "$mode" in
+    stale) printf '%s' "$_PW_ROWS_STALE" ;;
+    *)     printf '%s' "$_PW_ROWS_LIST" ;;
+  esac
+  return 0
+}
+
+# _provider_is_provisionable <provider> → 0 when this project should have that
+# provider's workspace. Fail-open: an unclassifiable project provisions as before.
+_provider_is_provisionable() {
+  local want="$1" rows p d status
+  rows="$(_provider_workspace_rows list)"
+  [[ -z "$rows" ]] && return 0
+  while IFS=$'\t' read -r p d status _rest; do
+    [[ "$p" == "$want" ]] || continue
+    case "$status" in
+      mapped|always) return 0 ;;
+      *)             return 1 ;;
+    esac
+  done <<< "$rows"
+  # A provider the classifier does not know about is not one we can judge — provision it.
+  return 0
+}
+
+# _report_stale_provider_workspaces — read-only. Used by `ai doctor`, and by `ai sync`
+# to say once that something is there to clean up. Never deletes: naming the directory
+# and the command is the whole job.
+_report_stale_provider_workspaces() {
+  local rows; rows="$(_provider_workspace_rows stale)"
+  [[ -z "$rows" ]] && return 0
+  local p d _c n=0
+  while IFS=$'\t' read -r p d _c; do
+    [[ -n "$p" ]] || continue
+    echo "  ! stale provider workspace: ${d}/ — no role is bound to '${p}' (.ai/roles.json)"
+    n=$((n + 1))
+  done <<< "$rows"
+  [[ "$n" -gt 0 ]] && echo "    Remove with: ai sync --prune-providers   (manifest-aware; your own files are kept)"
+  return 0
+}
+
+# _prune_provider_workspaces — remove the workspaces of providers no role is bound to.
+#
+# EXPLICIT ONLY. This never runs as part of a plain `ai sync`. A housekeeping feature
+# that deletes directories on a command people run reflexively is how a "cleanup" becomes
+# an incident; the flag is the consent.
+#
+# The evidence rules are E-220's, unchanged, applied with an EMPTY source set — for an
+# unmapped provider nothing is upstream any more, so every entry sync wrote and nobody
+# edited is prunable, and everything else is reported as `orphan (kept)`. That is why
+# this reuses _prune_workspace_dir instead of reaching for `rm -rf`: a user's own skill
+# sitting in .agents/skills/ is protected here by exactly the same rule that protects it
+# during an ordinary sync.
+#
+# The directory itself is removed ONLY when it ends up empty. Anything left is named,
+# with the reason, so the operator finishes the job deliberately or not at all.
+_prune_provider_workspaces() {
+  local rows; rows="$(_provider_workspace_rows stale)"
+  if [[ -z "$rows" ]]; then
+    echo "  No stale provider workspaces — every provider with a workspace serves a role."
+    return 0
+  fi
+  local provider dir mcp sub
+  while IFS=$'\t' read -r provider dir mcp; do
+    [[ -n "$provider" && -n "$dir" && -d "$dir" ]] || continue
+    echo "  Pruning ${dir}/ — no role is bound to '${provider}'."
+    # Managed entries first: skills/ and agents/ hold the skill dirs and flat .md files
+    # sync-manifest knows how to judge. No source dirs are passed, so the source set is
+    # empty by construction.
+    # Byte-identity with a CURRENT canonical skill is evidence in its own right (E-220's
+    # --prune-known): a leftover that matches the framework's own copy exactly carries
+    # nothing a user could lose. It matters here more than it does during an ordinary
+    # sync, because the leftovers a stale workspace holds are mostly recorded-then-
+    # -source-changed copies that the hash check alone reports as "modified since sync
+    # wrote it" — true of the manifest, but not of the file, which is identical to what
+    # ships today. The NAME set stays empty (nothing is upstream for an unmapped
+    # provider); only the identity evidence is added.
+    local -a _canon=()
+    for sub in shared/skills agents/skills claude/skills shared/agents claude/agents gemini/agents; do
+      [[ -d "${AIOS}/${sub}" ]] && _canon+=("${AIOS}/${sub}")
+    done
+    for sub in skills agents; do
+      [[ -d "${dir}/${sub}" ]] && AI_OS_PRUNE_KNOWN=1 \
+        _prune_stale_workspace_dir "${dir}/${sub}" ${_canon[@]+"${_canon[@]}"}
+    done
+    # Sync's own bookkeeping. These are not user content by definition — sync writes them
+    # and only sync reads them — so they go with the entries they describe.
+    rm -f "${dir}/skills/_SKILLS_INDEX.md" "${dir}/agents/_SKILLS_INDEX.md" \
+          "${dir}/skills/_SYNC_MANIFEST.json" "${dir}/agents/_SYNC_MANIFEST.json" 2>/dev/null || true
+    # The provider's generated MCP config, when .ai/providers.json declares this path as
+    # that provider's — the registry naming the file IS the provenance. Only inside the
+    # workspace being pruned: `claude` maps to a root-level .claude.json, and a stale
+    # provider must never be able to point the pruner at a file outside its own dir.
+    if [[ -n "$mcp" && "$mcp" == "${dir}/"* && -f "$mcp" ]]; then
+      rm -f "$mcp" && echo "    - removed ${mcp} (generated MCP config for '${provider}')"
+    fi
+    # Scaffolding this project's installed framework still ships: removable only when it
+    # is BYTE-IDENTICAL to the source, i.e. provably not something anyone has edited.
+    local scaffold src
+    for scaffold in AGENTS.md GEMINI.md; do
+      src="${AIOS}/templates/${scaffold}"
+      if [[ -f "${dir}/${scaffold}" && -f "$src" ]] && cmp -s "${dir}/${scaffold}" "$src"; then
+        rm -f "${dir}/${scaffold}" && echo "    - removed ${dir}/${scaffold} (unmodified copy of the template)"
+      fi
+    done
+    # Empty directories are the only ones removed outright.
+    find "$dir" -type d -empty -delete 2>/dev/null || true
+    if [[ -d "$dir" ]]; then
+      echo "    ! ${dir}/ kept — it still holds files this command cannot prove are disposable:" >&2
+      find "$dir" -type f 2>/dev/null | sed 's/^/      /' >&2
+      echo "      Review them and remove ${dir}/ by hand if they are not yours." >&2
+    else
+      echo "    ✓ ${dir}/ removed."
+    fi
+  done <<< "$rows"
+  return 0
+}
+
+# _prune_stale_workspace_dir <dst> <canonical_source_dir...>
+# Like _prune_workspace_dir, but the SOURCE-NAME set is empty by construction: for a
+# provider no role is bound to, nothing upstream provides anything. The directories are
+# passed only as the identity corpus for --prune-known.
+_prune_stale_workspace_dir() {
+  local dst="$1"; shift
+  [[ -d "$dst" ]] || return 0
+  [[ "${AI_OS_NO_PRUNE:-0}" == "1" ]] && return 0
+  command -v node >/dev/null 2>&1 || return 0
+  local sm; sm="$(_locate_sync_manifest || true)"
+  [[ -n "$sm" ]] || return 0
+
+  local names_json canon_json d
+  names_json="$(mktemp)"; canon_json="$(mktemp)"
+  printf '[]' > "$names_json"
+  { printf '['; local f=1; for d in "$@"; do [[ -d "$d" ]] || continue; [[ "$f" -eq 1 ]] || printf ','; printf '"%s"' "$d"; f=0; done; printf ']'; } > "$canon_json"
+
+  local extra=()
+  [[ "${AI_OS_PRUNE_KNOWN:-0}" == "1" ]] && extra+=("--prune-known")
+  local out
+  out="$(node --no-warnings "$sm" apply "$dst" "$names_json" "${extra[@]:-}" --canon "$canon_json" 2>/dev/null || true)"
+  rm -f "$names_json" "$canon_json"
+  [[ -z "$out" ]] && return 0
+  local line
+  while IFS= read -r line; do
+    case "$line" in
+      PRUNE*) echo "    - pruned ${line#PRUNE }" ;;
+      KEEP*)  echo "    ! kept ${line#KEEP }" >&2 ;;
+    esac
+  done <<< "$out"
+  return 0
+}
+
 _sync_workspace_dirs() {
   local mode="${1:-sync}"
   # E-217: counts unresolved multi-role skill-name collisions across every workspace.
@@ -797,6 +986,12 @@ _sync_workspace_dirs() {
 
   # E-132 (antigravity-migration): workspace skills migrated to .agents/skills/;
   # Gemini agents + GEMINI.md remain in .gemini/ per blueprint §API/Interface Contracts.
+  # E-244: only when a role is actually bound to gemini. Skipping is announced rather
+  # than silent — a reader who expects .gemini/ to appear needs to know WHY it did not,
+  # or the next debugging session starts by suspecting sync is broken.
+  if ! _provider_is_provisionable gemini; then
+    [[ "$mode" == "init" ]] || echo "  .gemini/ skipped (no role bound to 'gemini' — see .ai/roles.json)"
+  else
   mkdir -p ".gemini/agents"
   # E-212: gemini receives the agent dirs of whatever role it serves; when it serves
   # none the legacy set still lands, so a gemini-Architect project is unchanged.
@@ -814,8 +1009,13 @@ _sync_workspace_dirs() {
   else
     echo "  .gemini/ synced (agents + settings.json)"
   fi
+  fi
 
   # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
+  # E-244: only when a role is actually bound to agy.
+  if ! _provider_is_provisionable agy; then
+    [[ "$mode" == "init" ]] || echo "  .agents/ skipped (no role bound to 'agy' — see .ai/roles.json)"
+  else
   mkdir -p ".agents/skills"
   # E-212: skills only — agy subagents ship as an installed plugin (E-144), never as
   # loose .agents/agents/ files, so agent_dirs are deliberately NOT provisioned here.
@@ -828,6 +1028,7 @@ _sync_workspace_dirs() {
     echo "Created .agents/ (Antigravity workspace skills + AGENTS.md → ARCHITECT.md)"
   else
     echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md + AGENTS.md)"
+  fi
   fi
 }
 
@@ -1422,8 +1623,15 @@ STUB
 }
 
 install_git_hooks() {
-  local GIT_HOOKS_DIR
-  GIT_HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
+  # E-244: `git rev-parse` exits 128 outside a repository, and under `set -e` a PLAIN
+  # assignment carries the substitution's status — so this line ABORTED the whole script
+  # in a non-git directory instead of reaching the "not a git repo" branch three lines
+  # below it. That is the long-standing `ai init` exit-128 in a fresh directory; it was
+  # invisible from `ai sync` only because the call sat in unreachable code. `|| true`
+  # keeps the status, and the empty-string guard then does what it always meant to.
+  local _git_dir GIT_HOOKS_DIR
+  _git_dir="$(git rev-parse --git-dir 2>/dev/null || true)"
+  GIT_HOOKS_DIR="${_git_dir:+${_git_dir}/hooks}"
   if [[ -z "$GIT_HOOKS_DIR" || ! -d "$GIT_HOOKS_DIR" ]]; then
     echo "  ⚠  Not a git repo — skipping git hook install"
     return
@@ -2074,7 +2282,14 @@ PY
   [[ -z "$stale" ]] && return 0
   echo ""
   echo "Note: these MCP servers started before the policy modules were last written:"
-  printf '  %s\n' $stale
+  # E-244: this was `printf '  %s\n' $stale` — unquoted, so bash word-split each
+  # "advisor-mcp (pid 123)" into three lines and the note rendered as a column of
+  # fragments. It shipped in E-237 and nobody ever saw it, because its only call site
+  # sat in the unreachable tail of do_sync. Restoring the tail is what put it on screen.
+  local _stale_line
+  while IFS= read -r _stale_line; do
+    [[ -n "$_stale_line" ]] && echo "  ${_stale_line}"
+  done <<< "$stale"
   echo "  They hot-reload policy per request (E-237), so no action is needed unless one was"
   echo "  started before E-237 shipped — in that case restart it, or the session, to clear"
   echo "  stale verdicts (AI_OS_POLICY_HOT_RELOAD=0 disables hot reload entirely)."
@@ -2087,6 +2302,13 @@ do_sync() {
       do_sync_github "$@"
       return
     fi
+  done
+
+  # E-244 (D-066 §4): pruning is opt-in per invocation and never implied by anything
+  # else. `ai sync` is run reflexively; a flag that deletes directories has to be typed.
+  local PRUNE_PROVIDERS=0
+  for arg in "$@"; do
+    [[ "$arg" == "--prune-providers" ]] && PRUNE_PROVIDERS=1
   done
 
   # E-165 (agy-subagent-robustness.md): OAuth token pre-flight, so a lapsed Antigravity
@@ -2125,9 +2347,31 @@ do_sync() {
       echo "  skill (D-055 R2 precedent: arch-task, arch-oracle, arch-review)." >&2
       return 1
     fi
+    # E-244: explicit provider-workspace pruning, after provisioning so a workspace that
+    # was just (re)synced for a live binding is never a candidate. Reporting is the
+    # default; deleting requires the flag.
+    if [[ "$PRUNE_PROVIDERS" -eq 1 ]]; then
+      echo ""
+      echo "Pruning provider workspaces no role is bound to (--prune-providers) ..."
+      _prune_provider_workspaces
+    else
+      _report_stale_provider_workspaces
+    fi
+
     # Explicit success: without it do_sync returns the status of whatever ran last,
     # which picked up a stray 128 from a `git rev-parse` in a non-git directory and
     # made a clean sync look like a failure.
+    #
+    # ⚠ E-244 FOUND, DELIBERATELY NOT FIXED HERE: everything after the `fi` below is
+    # UNREACHABLE and has been since E-217 added this return. Hooks, the mcp.md and
+    # blueprint-index regeneration, the WAL checkpoint, REPO_MAP, the Memory Palace
+    # index, the generated-artefact .gitignore and the E-237 policy-staleness report do
+    # not run on `ai sync`, and the command never prints "Done." Restoring the tail is
+    # NOT a formatting change: it re-enables ~60 lines that have not executed in weeks,
+    # and a trial restore made `ai sync` exit 1 under `set -e` in a fixture whose output
+    # was captured with 2>&1 — a live failure, not a theoretical one. That is its own
+    # task with its own blast radius, not a side effect of workspace hygiene. Reported
+    # to the Architect; do not "tidy" this without one.
     return 0
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
@@ -2185,6 +2429,10 @@ do_sync() {
   if [[ -d ".ai" ]] && command -v tmux >/dev/null 2>&1; then
     echo "Tip: 'ai start' opens the Triad layout for this project (--status / --kill)."
   fi
+
+  # ⚠ E-244: everything from "Propagate hook edits" down to here is DEAD CODE — both
+  # branches of the `if [[ -d ".ai" ]]` above return or exit before reaching it. See the
+  # note at that return for why it was found and why restoring it is a separate task.
 }
 
 # ── E-215 (architect-provider-parity.md §Components 6): per-role provisioning ──
@@ -2338,6 +2586,17 @@ doctor() {
     echo ""
 
     _report_role_provisioning
+
+    # E-244 (D-066 §4): a workspace for a provider no role is bound to is dead weight,
+    # not a fault — reported, never repaired implicitly, and it does not fail the run.
+    echo "Provider workspaces:"
+    _stale_ws_report="$(_report_stale_provider_workspaces)"
+    if [[ -n "$_stale_ws_report" ]]; then
+      printf '%s\n' "$_stale_ws_report"
+    else
+      echo "  ✓ every provider workspace present serves a bound role"
+    fi
+    echo ""
 
     echo "Project-Scoped (.claude/ / .gemini/ / .agents/):"
     for agent_dir in ".claude" ".gemini"; do
