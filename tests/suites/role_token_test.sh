@@ -90,12 +90,19 @@ assert_contains "S09: ROLE_TOKEN=0 + env=architect → legacy env wins → exit 
 
 # ── S10: hook integration — SessionStart mints; PreToolUse forwards --session ──
 # session-start.sh <role> reads session_id from its stdin payload and mints.
-printf '%s' '{"session_id":"HK1","source":"startup"}' | HOME="$HSB" bash "$SSH_HOOK" architect >/dev/null 2>&1
+# E-236 (environment dependence): AI_OS_PANE_ROLE is stripped here. session-start.sh
+# ranks it ABOVE its positional argument, so a suite run from inside an Engineer pane
+# inherited AI_OS_PANE_ROLE=engineer and minted an ENGINEER token for HK1 — while the
+# very next assertion ("a token was minted") still passed, because a token WAS written,
+# just not the one under test. The verdict depended on where the suite was run from.
+printf '%s' '{"session_id":"HK1","source":"startup"}' \
+  | HOME="$HSB" env -u AI_OS_PANE_ROLE bash "$SSH_HOOK" architect >/dev/null 2>&1
 assert_status 0 "S10: SessionStart hook minted a token for HK1" test -f "$HSB/.ai-os/run/role-HK1.lock"
 # pre-tool-use.sh extracts session_id and forwards --session, so the architect
 # token blocks git push even though the env claims engineer.
 _ptu_ev='{"tool_name":"Bash","tool_input":{"command":"git push origin main"},"session_id":"HK1"}'
-_ptu_rc="$(printf '%s' "$_ptu_ev" | HOME="$HSB" env AI_OS_CALLER_ROLE=engineer bash "$PTU" >/dev/null 2>&1; echo $?)"
+_ptu_rc="$(printf '%s' "$_ptu_ev" \
+  | HOME="$HSB" env -u AI_OS_PANE_ROLE AI_OS_CALLER_ROLE=engineer bash "$PTU" >/dev/null 2>&1; echo $?)"
 assert_contains "S10: hook uses the HK1 architect token over env=engineer → BLOCK (exit 2)" "2" "$_ptu_rc"
 
 # ── S11: installer wiring (src/bin/ai) ────────────────────────────────────────
