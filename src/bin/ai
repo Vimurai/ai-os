@@ -2,7 +2,7 @@
 set -euo pipefail
 
 AIOS="${HOME}/.ai-os"
-VERSION="3.0.0"
+VERSION="3.1.0"
 
 # ── E-223 (D-057 §3): the environment here is UNTRUSTED ──────────────────────
 # `ai` is routinely invoked through Bash from inside the project being worked on, and
