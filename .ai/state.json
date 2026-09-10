@@ -1642,12 +1642,12 @@
     {
       "id": "E-242",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Fix the 'ai start' failure 'Settings file not found: .claude/settings.architect.json' per D-066 §2: provider-adapter.mjs / resolve-launch.mjs substitute an ABSOLUTE overlay path rooted at the .ai/ parent instead of the cwd-relative '.claude/settings.{role}.json'; 'ai pane <role>' generates a missing overlay from roles.json before exec (reuse _write_role_settings_overlays, idempotent) and 'ai start' verifies each role's overlay before send-keys, printing which file it healed; forward roles.json 'model' as today. Acceptance: launching 'ai pane architect' from a project subdirectory and from a cwd outside the project both resolve the overlay; a project with no overlay gets one generated and launches; role_config/pane/start suites green; mirrors synced.",
       "created_at": "2026-09-10T12:22:42.676Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-10T12:57:33.945Z",
+      "summary": "Launch path operands anchored at the resolve-launch seam (fixes projects with a pre-existing providers.json too, which were the failing ones). The rulefile was relative as well — a S …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -1708,7 +1708,6 @@
       ],
       "ready": false,
       "blocked_by": [
-        "E-242",
         "E-243",
         "E-244",
         "E-245"
