@@ -183,12 +183,12 @@
     {
       "id": "E-248",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Apply strip_gemini_agent_fields only at the Gemini provider boundary per D-067 §2: the install mirror (~/.ai-os) and src/ stay canonical with allowed-tools, user-invocable and disable-model-invocation intact; the strip runs only on the copy written into a .gemini/ workspace when gemini serves a role; AI_OS_STRIP_MIRROR=1 restores the old behaviour. Re-run bash install-ai-os.sh and ai sync here. Acceptance: after ai sync under the default all-Claude mapping every .claude/agents/*.md keeps the three keys (assert on the 20 agents); a temp project mapped to gemini gets stripped copies only under .gemini/; provisioning suites green; servers restarted.",
       "created_at": "2026-09-10T17:27:42.622Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-10T19:30:33.031Z",
+      "summary": "D-067 §2: the Gemini frontmatter strip runs only at the .gemini/ boundary; the install mirror and src/ stay canonical (AI_OS_STRIP_MIRROR=1 restores the old behaviour). All 20 .claud …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -331,6 +331,20 @@
       "task_id": "E-247",
       "timestamp": "2026-09-10T17:59:12.798Z",
       "summary": "[TIER_2] E-247 sync reachability. Aligner WARN-only. run_review reported TWO P0s, both analysed and neither a defect in this change: (1) SOVEREIGNTY_VIOLATION on .ai/blueprints/test-harness-isolation.md is the Architect's own +3-line edit, proxy-committed on the user's explicit D-067 instruction; (2) PATH_TRAVERSAL matches \"imports: ../mcp/shared/state-db.js\" inside .ai/REPO_MAP.md — a GENERATED AST documentation artefact listing each module's import specifiers, not code. That P0 is NEW because E-247 made the REPO_MAP regeneration step reachable again, so it will now fire on every commit following a sync; it is the E-224 shape (prose graded as code) recurring in a new file, and the fix is in a security POLICY module, so it is flagged for a ruling rather than changed here. NO_LOG_UPDATE is structural — .ai/LOG.md is gitignored in this repo and the entry was written. Reproducer 15 failures before / 22 pass after; full suite 4540 passed, 0 failed, 33 skipped, zero leaks."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-248",
+      "timestamp": "2026-09-10T19:19:40.156Z",
+      "summary": "[TIER_2] Blueprint aligned — WARN only: NO_LOG_UPDATE is structural (.ai/LOG.md is gitignored, so a LOG entry can never appear in a staged diff; two entries were appended), ORPHANED_WORK lists test suites, which architect.md does not enumerate by design."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "claude",
+      "task_id": "E-248",
+      "timestamp": "2026-09-10T19:19:44.843Z",
+      "summary": "[TIER_2] E-248 (D-067 §2): gemini frontmatter strip moved to the .gemini/ boundary, install mirror canonical, AI_OS_STRIP_MIRROR=1 rollback retained. New gemini_strip_boundary_test.sh pins both directions; three suites carrying the inverted mirror invariant updated; two pre-existing AI_OS_PANE_ROLE-inherited environment dependences fixed in git_lane_test and role_token_test. Full suite 4555 passed / 0 failed / 33 skipped."
     }
   ],
   "deltas": [
