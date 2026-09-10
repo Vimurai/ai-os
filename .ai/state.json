@@ -152,12 +152,12 @@
     {
       "id": "E-246",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Cut release v3.1.0 per D-066 §5 with skill release-manager: bump package.json, aggregate CHANGELOG.md for D-054..D-066 / E-208..E-246 (same-provider Triad, per-pane role binding, three-channel sovereignty gates, install-first locators, honest CI, ai start, harness hygiene, all-Claude default with fable/opus), create the signed tag, refresh DIGEST. Acceptance: tag v3.1.0 on master, CHANGELOG entry present, CI green, DIGEST version line updated.",
       "created_at": "2026-09-10T12:22:43.055Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-10T17:06:57.140Z",
+      "summary": "Released v3.1.0: version bumped everywhere, CHANGELOG aggregated for E-208..E-245 (with the never-changelogged 3.0.0 gap recorded, not reconstructed), DIGEST refreshed — 3 shipped ri …[full in LOG.md]",
       "depends_on": [
         "E-242",
         "E-243",
@@ -245,6 +245,13 @@
       "task_id": "E-245",
       "timestamp": "2026-09-10T16:24:13.946Z",
       "summary": "[TIER_1] E-245 repo hygiene: run_review tier 1 → SKIP as specified. The one code change (archivePointerLines in state-db.js, imported by state-writer.js) is covered by the new archive_pointer_test.sh, 17 assertions including both projector call sites. Full suite 4518 passed / 0 failed / 33 skipped; ~/.ai-os mirror re-synced via install-ai-os.sh after the suite caught it stale."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "orchestrator-mcp",
+      "task_id": "E-246",
+      "timestamp": "2026-09-10T17:06:47.180Z",
+      "summary": "[TIER_1] E-246 release v3.1.0: version bumped in package.json, src/bin/ai, install-ai-os.sh and the README; CHANGELOG aggregated for E-208..E-245 with the missing-3.0.0 gap recorded rather than reconstructed; DIGEST refreshed (three shipped risks closed, four open ones added). No src/ behaviour changed. Full suite 4518 passed / 0 failed / 33 skipped."
     }
   ],
   "deltas": [

@@ -3,7 +3,7 @@
   <p><b>A self-regulating operating system for AI software engineering agents</b></p>
   <p><i>Stop copy-pasting prompts. Start commanding a structured engineering team.</i></p>
 
-  [![Version](https://img.shields.io/badge/version-v3.0.0-blue.svg)](#)
+  [![Version](https://img.shields.io/badge/version-v3.1.0-blue.svg)](#)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
   [![Tests](https://github.com/Vimurai/ai-os/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/Vimurai/ai-os/actions/workflows/test.yml)
 </div>
@@ -489,4 +489,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, skill/MCP authorin
 
 ---
 
-<p align="center"><i>AI-OS — Stop typing. Start directing intelligence.</i><br/><b>v3.0.0 — The Autonomous Triad</b></p>
+<p align="center"><i>AI-OS — Stop typing. Start directing intelligence.</i><br/><b>v3.1.0 — The Same-Provider Triad</b></p>
