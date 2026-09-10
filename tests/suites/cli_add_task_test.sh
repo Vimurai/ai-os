@@ -61,7 +61,8 @@ assert_status 0 "helper routes through the shared addTask" \
 echo ""; echo "  [T-04] Create + caller_role → owner"
 id_arch="$(run_add architect --tier 2 "Architect created task")"
 assert_contains "T-04.01: returns an E-id on stdout" "E-" "$id_arch"
-assert_contains "T-04.02: architect role → owner 'Architect (Agy)'" "Architect (Agy)" "$(task_field "$id_arch" owner)"
+# D-066: the owner label is derived from roles.json, whose default is now all-Claude.
+assert_contains "T-04.02: architect role → owner 'Architect (Claude)'" "Architect (Claude)" "$(task_field "$id_arch" owner)"
 assert_contains "T-04.03: status OPEN (no deps)" "OPEN" "$(task_field "$id_arch" status)"
 assert_contains "T-04.04: tier persisted" "2" "$(task_field "$id_arch" tier)"
 

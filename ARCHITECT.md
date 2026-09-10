@@ -1,9 +1,12 @@
 # ARCHITECT.md — Project Bootloader (Principal Architect)
 
 > Canonical Architect rulefile (D-050 / E-183). The role is decoupled from the CLI
-> vendor; the Architect defaults to the `agy` provider but any provider may assume it.
+> vendor; the Architect defaults to the `claude` provider on model `fable` (D-066), and
+> any provider may assume the role — `agy` and `gemini` remain selectable via
+> `ai install --architect <provider>:<pane>`.
 > `GEMINI.md` is a thin shim that `@import`s this file so vendor auto-load still works.
-> The Model Mandate below applies only when the Architect runs on the (deprecated) Gemini CLI.
+> The Model Mandate below applies ONLY when the Architect runs on the (deprecated) Gemini
+> CLI. It does not apply to the D-066 default (`claude` · `fable`).
 
 ## Role Resolution (D-054 / E-208 — READ FIRST)
 This session's role is stamped into the injected context by the SessionStart hook as
