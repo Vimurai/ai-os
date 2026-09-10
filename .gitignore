@@ -68,3 +68,12 @@ testsprite_tests/
 # the directory, and it should stay out of git either way.
 .gemini/
 .agents/
+
+# E-245 (D-066 §5): macOS Finder metadata. One had reached the repo root; nothing here
+# should ever be committed, at any depth.
+.DS_Store
+**/.DS_Store
+
+# testsprite_tests/ is already ignored wholesale above; naming the scratch directory
+# explicitly documents the one part that is guaranteed to be regenerated.
+testsprite_tests/tmp/

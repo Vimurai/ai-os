@@ -11,7 +11,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { roleFromOwner } from "./state-db.js"; // E-136: provider-agnostic TASKS.md headers
+import { roleFromOwner, archivePointerLines } from "./state-db.js"; // E-136 headers; E-245 archive pointer
 
 /**
  * Read state.json — returns null if missing, corrupt, or wrong schema version.
@@ -71,6 +71,8 @@ export function regenerateMarkdown(aiDir, state) {
       }
       lines.push("");
     }
+
+    lines.push(...archivePointerLines(aiDir));
 
     writeFileSync(tasksPath, lines.join("\n"), "utf8");
   }
