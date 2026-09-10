@@ -86,11 +86,24 @@ cat > "$_e212_ws/.ai/roles.json" <<'JSON'
 { "roles": { "architect": { "provider": "agy", "pane_identifier": "1" },
              "engineer":  { "provider": "claude", "pane_identifier": "0" } } }
 JSON
-_e212_out="$(cd "$_e212_ws" && /bin/bash "${HOME}/.ai-os/bin/ai" sync 2>&1)"
+# E-244: run the WORKING TREE's ai, not ${HOME}/.ai-os/bin/ai. These are assertions about
+# how the code BEHAVES, and the installed mirror is whatever version was last installed —
+# so on a developer machine they silently tested the previous release. That is not
+# hypothetical: with the mirror one release behind, 06f below passed locally and failed on
+# CI, where `ai install` runs from HEAD. An environment-dependent assertion (E-236) in the
+# suite that exists to prove provisioning works.
+_e212_out="$(cd "$_e212_ws" && /bin/bash "$AI_BIN" sync 2>&1)"
 assert_not_contains "E-212.06e: sync completes with no unbound-variable abort (bash 3.2)" \
   "unbound variable" "$_e212_out"
-assert_status 0 "E-212.06f: the unserved gemini workspace is still provisioned" \
+# E-244 (D-066 §4) REVERSED THIS ONE DELIBERATELY. E-212 kept an unserved provider's
+# workspace so that rebinding a role would not quietly empty it; D-066 rules that a
+# workspace no role is bound to should not be created at all. The property E-212 actually
+# needed — an unserved provider must not ABORT the sync (06e) and a SERVED one must still
+# get its role's skills (06g) — is unchanged and asserted either side of this line.
+assert_status 1 "E-212.06f: an unserved gemini gets NO workspace (E-244 reverses E-212 here)" \
   test -d "$_e212_ws/.gemini/agents"
+assert_contains "E-212.06f2: and the skip is announced, not silent" \
+  ".gemini/ skipped (no role bound to 'gemini'" "$_e212_out"
 assert_status 0 "E-212.06g: the agy workspace still gets the Architect skills" \
   test -f "$_e212_ws/.agents/skills/blueprint-writer/SKILL.md"
 assert_status 1 "E-212.06h: architect skills do NOT leak into .claude/ on a split Triad" \
