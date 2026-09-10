@@ -351,7 +351,15 @@ test_tmux_socket() {
   # `tmux kill-server` stops the server but LEAVES THE SOCKET FILE. A leftover file is
   # still state a later run can trip over — and it is what the sweep counts — so remove it
   # too, or every run would report a leak it had actually cleaned up.
-  register_cleanup "tmux -L '${name}' kill-server 2>/dev/null || true; rm -f \"\${TMUX_TMPDIR:-/tmp}/tmux-\$(id -u)/${name}\" 2>/dev/null || true"
+  # E-247: kill the server, then WAIT for the pane children to actually be gone.
+  # `tmux kill-server` returns as soon as the server is signalled; the processes it was
+  # running exit asynchronously. The runner snapshots processes the instant a suite's EXIT
+  # trap finishes, so a pane still winding down is counted as LEAKED — a real race, not a
+  # phantom: it surfaced once in a full run and did not reproduce when the suite was run
+  # alone, which is the signature. Bounded at ~2s so a genuinely stuck child is still
+  # reported rather than hung on. E-242 is why it became visible at all: pane argv is now
+  # ABSOLUTE, so it contains the sandbox path the leak grep matches.
+  register_cleanup "tmux -L '${name}' kill-server 2>/dev/null || true; _w=0; while [ \$_w -lt 40 ] && ps -axo command= 2>/dev/null | grep -q -- '${name}'; do sleep 0.05; _w=\$((_w+1)); done; rm -f \"\${TMUX_TMPDIR:-/tmp}/tmux-\$(id -u)/${name}\" 2>/dev/null || true"
   tmux -L "$name" kill-server 2>/dev/null || true
   printf '%s' "$name"
 }

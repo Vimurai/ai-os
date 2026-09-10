@@ -1138,3 +1138,53 @@ Remove the tracked stray `bash` file; gitignore `.DS_Store` and `testsprite_test
 `ai install --architect agy:1 --engineer claude:0` restores the D-050 mapping per project; the template default can be reverted in one commit. §2 is a pure fix.
 
 ---
+
+---
+
+## [[D-067]] — Restore `ai sync`'s Dead Half; Strip Only for Gemini; Booted-Build Staleness Is Announced, Not Hot-Reloaded; Suppression Counts; Empty-Corpus Guard
+
+**Date**: 2026-09-10
+**Task**: E-247, E-248, E-249, E-250, E-251 (Engineer handoff 2026-09-10; D-066 sprint complete, v3.1.0 tagged, master `dded03d`)
+**Decision**: Four deliberately-unfixed defects are ruled and funded, plus the fifth harness variety. (§1) `do_sync`'s unreachable second half is restored step-by-step under fail-open guards with a reachability test. (§2) `strip_gemini_agent_fields` is a Gemini-provider adapter step and runs only when producing a `.gemini/` workspace — never on the install mirror. (§3) A running MCP server announces the build it booted with; `ai sync`/install report stale running servers; task completion requires install + restart evidence when server or CLI code changed; the state projector is NOT hot-reloaded. (§4) D-065's suppression-count summary ships as its own task. (§5) A rule-scanning suite fails when its corpus is empty. Also ratified: the E-244 reversal of E-212's keep-unserved-workspace behaviour, and recording 3.0.0 as missing rather than reconstructing it.
+
+### §1 — `do_sync` second half (E-247, Tier 2, `bug-reproducer` first)
+Since E-217's early `return 0`, hook install, doc regeneration, the WAL checkpoint, REPO_MAP, the Memory Palace index, the E-233 gitignore and the E-237 policy report have not run on `ai sync`; the command never prints "Done." and a trial restore exits 1 under `set -e`. Ruling: restore the block one step at a time, each step wrapped so a failure prints `sync: <step> skipped — <reason>` and continues (fail-open, as every step was designed); `ai sync` ends with a step summary and the literal `Done.`; a reachability test asserts every named step's marker appears in the output of a full sync in a temp project, and a second test asserts the summary line is present on the happy path. The early return is replaced by the collision-guard's own error branch only.
+
+### §2 — Frontmatter strip (E-248, Tier 2)
+The strip exists because the Gemini CLI rejects Claude-only frontmatter keys. Running it on the install mirror means E-212 provisioning copies stripped files into `.claude/agents/`, so a Claude Architect loses `allowed-tools`, `user-invocable`, `disable-model-invocation` — degrading the D-066 default. Ruling: the mirror is canonical and untouched; the strip is applied only to the copy written into a `.gemini/` workspace when `gemini` serves a role. Re-install after the fix; a test asserts the three keys survive in `.claude/agents/*.md` after `ai sync` under the default mapping, and are absent only in a `.gemini/` copy.
+
+### §3 — Booted-build staleness (E-249, Tier 2)
+ESM caches modules for the process lifetime; the task synchroniser served the pre-E-245 projector and stripped the archive pointer on every write. E-237 hot-reloads the four POLICY modules, and its staleness notice lives inside the dead code of §1. Ruling, three parts and one refusal:
+- Every MCP server records its **booted build** (source mtime + short hash of its entry file and `src/mcp/shared/*`) at startup and returns it in `_meta.booted_build` on every tool result; `verify_markdown_sync`, `run_preflight` and `ai doctor` compare it with the mirror and emit `[STALE_SERVER] <name> booted <ts>, mirror changed <ts> — restart required`.
+- `ai sync` and `install-ai-os.sh` print the same list at the end (the E-237 notice, reachable again via §1).
+- **Task completion gate**: `ai-task` refuses to mark DONE a task whose diff touched `src/mcp/**` or `src/bin/**` unless the handoff/LOG records `bash install-ai-os.sh` + a server restart (the three CI-only failures this sprint were all a laptop mirror a release behind).
+- **Refusal**: `state-db` / the projectors are NOT hot-reloaded. The write path's correctness must not depend on a mid-process module swap; a stale server is announced and restarted, not patched live (the D-056 restraint applied to state).
+
+### §4 — Suppression-count summary (E-250, Tier 1)
+D-065's carried instruction ships on its own: the standards checker prints active `# standards:allow-<rule>` suppressions per rule in every summary, and lists the by-name exemptions from `standards.json`.
+
+### §5 — The scan that never ran (E-251, Tier 1)
+Three rule-scanning suites built their corpus with `find` over roots that E-244 stopped provisioning; `find` failed, the corpus was empty, and the suites would have reported "no violations" forever. Ruling: a harness helper `corpus_or_fail <min> <root>…` builds the corpus, fails the suite when a root is missing or the count is below the minimum, and prints the count; the three suites use it; standing review question #5 for `critic_tests`/`ai-review`: "can this scan return an empty set and still pass?".
+
+### Ratifications
+- **E-244 reverses E-212's keep-unserved-workspace rule** — ratified; the properties E-212 needed (an unserved provider never aborts the sync; a served one gets its role's skills) hold on both sides and are asserted.
+- **CHANGELOG records 3.0.0 as untagged and unchangelogged** rather than reconstructing it — ratified; a reconstructed section would be fiction.
+
+### Alternatives considered
+1. **§1: delete the dead half** — rejected; every step in it is a ruled feature that was silently lost.
+2. **§3: hot-reload `state-db` like the policy modules** — rejected (write-path integrity); **§3: have servers exit on source change** — rejected (the harness does not restart them; an announced stale server is recoverable, a dead one is not).
+3. **§2: keep the strip and re-add keys for Claude** — rejected; two transformations of one file drift.
+
+### Constraints driving this decision
+- Fail-open steps must still be REACHABLE and must SAY when they skip (§1).
+- The mirror is canonical; provider-specific transformations happen at the provider boundary (D-052).
+- State writes never depend on live module swaps; staleness is announced with evidence (D-062 lineage).
+
+### Impact
+- Unlocks: E-247 (T2), E-248 (T2), E-249 (T2), E-250 (T1), E-251 (T1). Order: E-247 → E-248 → E-249 → E-251 → E-250 (restore reachability first, since §3's notice depends on it).
+- Risk if wrong: §1 could resurface an old failing step — mitigated by per-step fail-open wrappers and the reachability test.
+
+### Rollback
+§1 `AI_OS_SYNC_MINIMAL=1` stops after provisioning (the current behaviour, made explicit). §2 `AI_OS_STRIP_MIRROR=1`. §3 `AI_OS_BUILD_STAMP=0` suppresses the meta and the gate. §4/§5 helpers only.
+
+---

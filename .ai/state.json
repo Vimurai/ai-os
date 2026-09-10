@@ -166,6 +166,71 @@
       ],
       "ready": true,
       "blocked_by": []
+    },
+    {
+      "id": "E-247",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Restore do_sync's unreachable second half per D-067 §1 (run skill bug-reproducer first: prove 'ai sync' never prints Done.): remove the E-217 early return 0 (keep only the collision guard's error branch), restore hook install, doc regeneration, WAL checkpoint, REPO_MAP, Memory Palace index, E-233 gitignore and E-237 policy staleness report ONE STEP AT A TIME, each wrapped so a failure prints 'sync: <step> skipped — <reason>' and continues under set -e; end with a step summary and the literal 'Done.'; AI_OS_SYNC_MINIMAL=1 stops after provisioning (today's behaviour, explicit). Acceptance: a reachability test runs a full ai sync in a temp project and asserts every step marker and 'Done.'; a step forced to fail is reported and does not abort; full suite + CI green; install mirror refreshed and servers restarted.",
+      "created_at": "2026-09-10T17:27:42.541Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-248",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Apply strip_gemini_agent_fields only at the Gemini provider boundary per D-067 §2: the install mirror (~/.ai-os) and src/ stay canonical with allowed-tools, user-invocable and disable-model-invocation intact; the strip runs only on the copy written into a .gemini/ workspace when gemini serves a role; AI_OS_STRIP_MIRROR=1 restores the old behaviour. Re-run bash install-ai-os.sh and ai sync here. Acceptance: after ai sync under the default all-Claude mapping every .claude/agents/*.md keeps the three keys (assert on the 20 agents); a temp project mapped to gemini gets stripped copies only under .gemini/; provisioning suites green; servers restarted.",
+      "created_at": "2026-09-10T17:27:42.622Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-249",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 2,
+      "description": "Announce booted-build staleness per D-067 §3 and .ai/blueprints/mcp.md §Booted-Build Staleness: every MCP server records at startup a booted_build (entry-file + src/mcp/shared mtime and short hash) and returns it in _meta.booted_build on every tool result (via the shared instrument() interceptor); verify_markdown_sync, run_preflight and ai doctor compare it with the mirror and emit '[STALE_SERVER] <name> booted <ts>, mirror changed <ts> — restart required'; ai sync and install-ai-os.sh print the same list at the end; ai-task refuses to mark DONE a task whose diff touched src/mcp/** or src/bin/** unless LOG records 'bash install-ai-os.sh' + a server restart for it; DO NOT hot-reload state-db or the projectors. AI_OS_BUILD_STAMP=0 disables the meta and the gate. Acceptance: a test rewrites a shared module while a server runs and the next tool result + verify_markdown_sync report STALE_SERVER; ai-task gate covered both ways; mirrors synced; servers restarted.",
+      "created_at": "2026-09-10T17:27:42.706Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-250",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Ship D-065's carried instruction per D-067 §4: the E-80 standards checker summary prints active '# standards:allow-<rule_id>' suppressions per rule (count + file:line list) and the by-name exemptions from standards.json with their reasons, on every run; a new suppression that lacks a rule id it can match is a P1 finding. Acceptance: standards suite covers counted suppressions, exemption listing, and the unknown-rule finding; mirrors synced.",
+      "created_at": "2026-09-10T17:27:42.797Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "E-251",
+      "owner": "Engineer (Claude)",
+      "status": "OPEN",
+      "tier": 1,
+      "description": "Guard against the scan that never ran per D-067 §5 and .ai/blueprints/test-harness-isolation.md §The Scan That Never Ran: add corpus_or_fail <min> <root>... to tests/lib/assert.sh (fails the suite when a root is missing or the corpus count is below the minimum, prints the count); convert the three rule-scanning suites that used 'find src .claude .agents .gemini' to it; add standing review question #5 'can this scan return an empty set and still pass?' to critic_tests and ai-review. Acceptance: a fixture with a missing root fails loudly; the three suites print their corpus counts; full suite + CI green; mirrors synced.",
+      "created_at": "2026-09-10T17:27:42.878Z",
+      "completed_at": null,
+      "summary": null,
+      "depends_on": [],
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -252,6 +317,20 @@
       "task_id": "E-246",
       "timestamp": "2026-09-10T17:06:47.180Z",
       "summary": "[TIER_1] E-246 release v3.1.0: version bumped in package.json, src/bin/ai, install-ai-os.sh and the README; CHANGELOG aggregated for E-208..E-245 with the missing-3.0.0 gap recorded rather than reconstructed; DIGEST refreshed (three shipped risks closed, four open ones added). No src/ behaviour changed. Full suite 4518 passed / 0 failed / 33 skipped."
+    },
+    {
+      "type": "BUG_REPRO",
+      "agent": "claude",
+      "task_id": "E-247",
+      "timestamp": "2026-09-10T17:31:03.487Z",
+      "summary": "E-247 confirmed on unmodified code: tests/suites/sync_reachability_test.sh fails 15 of 20 assertions. `ai sync` never prints \"Done.\", and no marker from install_git_hooks, _regenerate_mcp_docs, _regenerate_blueprints_index, _generate_repo_map or _generate_memory_palace appears in a real sync's output. Exit status is 0 throughout — the outage was silent by construction. Also caught a would-be false positive in my own reproducer: \"_INDEX.md\" matches \"_SKILLS_INDEX.md\" from the provisioning half, so the loose assertion passed during the outage; tightened to \".ai/blueprints/_INDEX.md\" before any source change."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "blueprint-aligner-mcp",
+      "task_id": "E-247",
+      "timestamp": "2026-09-10T17:59:12.798Z",
+      "summary": "[TIER_2] E-247 sync reachability. Aligner WARN-only. run_review reported TWO P0s, both analysed and neither a defect in this change: (1) SOVEREIGNTY_VIOLATION on .ai/blueprints/test-harness-isolation.md is the Architect's own +3-line edit, proxy-committed on the user's explicit D-067 instruction; (2) PATH_TRAVERSAL matches \"imports: ../mcp/shared/state-db.js\" inside .ai/REPO_MAP.md — a GENERATED AST documentation artefact listing each module's import specifiers, not code. That P0 is NEW because E-247 made the REPO_MAP regeneration step reachable again, so it will now fire on every commit following a sync; it is the E-224 shape (prose graded as code) recurring in a new file, and the fix is in a security POLICY module, so it is flagged for a ruling rather than changed here. NO_LOG_UPDATE is structural — .ai/LOG.md is gitignored in this repo and the entry was written. Reproducer 15 failures before / 22 pass after; full suite 4540 passed, 0 failed, 33 skipped, zero leaks."
     }
   ],
   "deltas": [
