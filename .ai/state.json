@@ -170,12 +170,12 @@
     {
       "id": "E-247",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Restore do_sync's unreachable second half per D-067 §1 (run skill bug-reproducer first: prove 'ai sync' never prints Done.): remove the E-217 early return 0 (keep only the collision guard's error branch), restore hook install, doc regeneration, WAL checkpoint, REPO_MAP, Memory Palace index, E-233 gitignore and E-237 policy staleness report ONE STEP AT A TIME, each wrapped so a failure prints 'sync: <step> skipped — <reason>' and continues under set -e; end with a step summary and the literal 'Done.'; AI_OS_SYNC_MINIMAL=1 stops after provisioning (today's behaviour, explicit). Acceptance: a reachability test runs a full ai sync in a temp project and asserts every step marker and 'Done.'; a step forced to fail is reported and does not abort; full suite + CI green; install mirror refreshed and servers restarted.",
       "created_at": "2026-09-10T17:27:42.541Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-10T18:11:19.067Z",
+      "summary": "Restored do_sync's 9 unreachable steps under a structural fail-open wrapper; `Done. (steps: 8 ok)` confirmed here. Reproducer-first caught its own false positive before any source ch …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
