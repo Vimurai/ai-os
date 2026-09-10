@@ -1055,3 +1055,39 @@ Three times in two sprints a helper was called as `$(helper …)` and the state 
 §1 `AI_OS_TEST_NO_TRAP_CHAIN=1` restores the plain builtin (suites already converted to `on_exit` keep working). §2 process only.
 
 ---
+
+---
+
+## [[D-065]] — Suppressions Are Explicit Markers, Exemptions Are By Name; §35 Self-Report Closed; Fixture-First for Gate Code
+
+**Date**: 2026-09-10
+**Task**: none (Engineer handoff 2026-09-10; E-241 complete, master `9362e2b`, CI 4514/0, `LEAKED 0`, 43 `CLEANUP` lines local and CI agreeing)
+**Decision**: (§1) Ratify the E-241 choice and make it policy for every standards rule: a false positive is silenced by an explicit, greppable in-file marker (`# standards:allow-<rule>`), never by loosening the pattern; a file that legitimately falls outside a rule is exempted BY NAME in the rule's config, never by narrowing the rule's scope. (§2) The self-reported §35 violation (a duplicate section appended to an Architect-owned blueprint, caught and reverted before it shipped) is closed with no remediation task; the standing rule "read before write on any Architect-owned file, especially one the handoff says was just updated" is recorded. (§3) Code that enforces a rule — standards rules, hooks, harness primitives — is written fixture-first: the failing fixture exists before the implementation, and the fixture runs on both bash 3.2 and CI's bash before the rule is considered green.
+
+### §1 — Suppression and exemption policy
+A heredoc that WRITES a `trap … EXIT` line is data, not an installation, and no pattern distinguishes the two. Loosening the regex would quietly reduce what the rule catches everywhere; a marker keeps every suppression visible to `grep` and to review. Likewise `tests/run.sh` (traps `EXIT INT TERM` without sourcing the registry) is exempted by name, so `tests/lib` stays in scope. Ratified and generalised: every E-80 rule supports `# standards:allow-<rule_id>` on the flagged line or the line above, the checker reports the count of active suppressions per rule in its summary (so a growing count is itself visible), and per-file exemptions live in `standards.json` next to the rule they exempt, with a one-line reason.
+
+### §2 — §35 self-report
+The Engineer appended a duplicate subshell-state section to `engineering-standards.md` while syncing mirrors, caught it during the sync, and reverted it; the file's committed diff is the Architect's alone (verified: one `## Subshell State` heading). The failure was writing before reading a file the handoff had said was already updated. Closed: the self-report is the system working, no task. Rule recorded in `ENGINEER.md` Core Rules via the next Engineer edit of that file: before touching any `.ai/` file named in the current handoff, read it first; the handoff is the notice, not the permission.
+
+### §3 — Fixture-first for gate code
+Four defects in E-241 were each caught by a fixture and none by reasoning: the shadow swallowed the library's own trap; a `BASHPID` guard absent in bash 3.2 would have behaved differently on macOS than on CI (the environment-dependence class inside the code enforcing it); an acceptance fixture ran in a subshell and tested the opposite case; the rule flagged its own heredoc. Across D-062–D-064 the ratio has not shifted. Ruling: for gate code the failing fixture is written before the implementation, the fixture asserts the property on both the local shell and CI's shell before the rule is called green, and a review of gate code asks first "which fixture would have caught this?" rather than "is the logic right?". This is the D-058 §5 property rule applied to the tools that enforce properties.
+
+### Alternatives considered
+1. **§1: loosen the regex for the heredoc case** — rejected (silent reduction in coverage). **§1: narrow the rule's scope to exclude `tests/run.sh`'s directory** — rejected (loses `tests/lib`).
+2. **§2: a remediation E-## for the reverted edit** — rejected; nothing shipped, and the report itself is the desired behaviour.
+3. **§3: a mechanical bash-3.2 compatibility lint** — deferred; the fixture-on-both-shells rule covers it without an over-block risk.
+
+### Constraints driving this decision
+- Coverage reductions must be visible (greppable markers, counted suppressions).
+- Architect-owned files are read before written (E-201, this incident).
+- Evidence before theory (D-062/D-063): gate code is only as good as the fixture that fails without it.
+
+### Impact
+- No E-## registered; the Engineer queue is empty and no work is pending. The §1 marker-count summary and the §2 ENGINEER.md line ride along with the next task that touches the standards checker or the rulefile.
+- Risk if wrong: markers could accumulate unnoticed — mitigated by the per-rule suppression count in every checker run.
+
+### Rollback
+Policy only; nothing to roll back.
+
+---

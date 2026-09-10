@@ -1,4 +1,4 @@
-# DIGEST — AI-OS v2 (Updated: 2026-09-09)
+# DIGEST — AI-OS v2 (Updated: 2026-09-10)
 
 ## Product
 - Autonomous OS for AI coding agents — a provider-agnostic **Triad**: Principal Architect (default `agy`) + Lead Engineer (default `claude`/Claude Opus 4.8) + Tester (TestSprite), coordinated via ACID SQLite state, 25 MCP servers, JIT context cache, RBAC-gated skills, NDJSON observability, drop-in installer, Managed Agents cloud reconciliation, Multimodal RAG, cross-project meta-cognition telemetry, SEO Topic Cluster Engine, Sovereignty Hardening, and the tmux Interactive Bridge (`ai watch` ping-pong loop). Runtime v3.0.0; agent plugin `ai-os` v2.0.0.
@@ -6,39 +6,58 @@
 - **D-054 (2026-09-04): the same-provider Triad is a SUPPORTED topology.** Both roles may run on one provider in separate tmux panes; role identity binds PER PANE at launch via `ai pane <role>`, never per project.
 
 ## Stack
-- Node.js 22.5+ (MCP servers, node:sqlite DatabaseSync, ESM, fetch; CI = `.github/workflows/test.yml` on ubuntu-latest/Node 22, two jobs (`test` + `unit` node:test with coverage), GNU patch 2.7.6, Playwright browsers installed in an explicit CACHED step — **GREEN on master since 2026-09-09, E-230**), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
+- Node.js 22.5+ (MCP servers, node:sqlite DatabaseSync, ESM, fetch; CI = `.github/workflows/test.yml` on ubuntu-latest/Node 22, two jobs (`test` + `unit` node:test with coverage), GNU patch 2.7.6, Playwright browsers installed in an explicit CACHED step — **GREEN on master since 2026-09-09, E-230**; a run that LEAKS external state also fails CI (E-240)), Python 3.10+ fallbacks, SQLite3 + WAL, Bash, Docker (sandbox), npm workspaces, Gemini Embedding 2, Managed Agents 2026-04-01.
 
 ## Triad Health
-- Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. Ruled D-054..D-062 (2026-09-04 → 2026-09-09) → E-208..E-239; everything through E-237 shipped, E-238/E-239 open.
-- Engineer (Claude): shipped **D-059 (E-227, E-228)**, **D-060 (E-229..E-233)** and **D-061 (E-234..E-237)** — 11 tasks, PRs #36-#44, all merged. Queue EXHAUSTED (0 open).
-- Tester: bash suite now **132 files, 4416 assertions, 0 failing** (CI, PR #44). SKIP is a distinct outcome since E-236 — an unmet OPTIONAL requirement is counted separately and never as a pass.
+- Architect: currently bound to **claude** (`.ai/roles.json`), pane 1. Ruled D-054..D-064 (2026-09-04 → 2026-09-10) → E-208..E-241. **All shipped.**
+- Engineer (Claude): shipped **D-059** (E-227, E-228), **D-060** (E-229..E-233), **D-061** (E-234..E-237), **D-062** (E-238, E-239), **D-063** (E-240) and **D-064** (E-241) — 15 tasks, PRs #36-#48, all merged. Queue EXHAUSTED (0 open).
+- Tester: bash suite now **135 files, 4514 assertions, 0 failing** (CI, PR #48). Three outcomes, not two: PASS / FAIL / **SKIP**, an unmet OPTIONAL requirement counted separately and never as a pass (E-236). A run also reports `LEAKED n <kind>` per suite and `CLEANUP n handlers` on exit — the last run was **LEAKED 0 with 43 CLEANUP**, and a leak FAILS the run on CI (E-240/E-241).
 
 ## Current Focus
-- **Queue exhausted.** D-061 (E-234 → E-237 → E-236 → E-235) shipped 2026-09-09; DIGEST refreshed as its final step.
-- **Master is green and CI is now believable.** It had been RED and unnoticed 2026-09-07 → 2026-09-09 while three
-  sprints were told to "verify on CI". Root cause of the blindness: nobody looked, and the README carried a
-  HARDCODED `tests-passing` badge. Both fixed — live workflow badge, and `ai-task` injects master's CI conclusion
-  and refuses to call work verified on a local run alone.
-- **The recurring defect of this sprint was ENVIRONMENT-DEPENDENT TESTS** — five found, three of them written by
-  the Engineer during the sprint itself. Each passed on a developer Mac and failed on CI: a `~/.ai-os` mirror in a
-  pre-strip state, BSD-vs-GNU `ls` exit codes, an unpruned `node_modules` corpus scan, an ambient tmux server, an
-  inherited `AI_OS_CALLER_ROLE`. E-236 turned this into a standing review question in `critic_tests` and
-  `ai-review`, with BOTH remedies recorded (supply the dependency when accidental; skip only when genuinely
-  optional).
+- **Queue exhausted.** D-064 (E-241) shipped 2026-09-10. Master `9362e2b`, CI green, `verify_markdown_sync` [SYNC_PASS].
+- **The whole of D-060..D-064 was one theme: make the harness tell the truth.** CI had been
+  RED and unnoticed for two days while three sprints were told to "verify on CI", because
+  nobody looked and the README carried a HARDCODED `tests-passing` badge. What that
+  exposed, and what the five sprints since have systematically removed, is a family of
+  tests and gates that REPORTED something other than what they measured.
+
+### The four varieties of "the test measured something else", each now closed
+| Variety | Example that shipped green and was wrong | Closed by |
+|---|---|---|
+| what the machine HAS | a `~/.ai-os` mirror only a pre-strip laptop had; BSD-vs-GNU `ls` exit codes; an inherited `AI_OS_CALLER_ROLE` | E-236 — review question + `skip_unless_*`, SKIP counted separately |
+| how fast it IS | `incident_aggregator` "under 200ms" measured 381ms on a laptop, passed on CI | E-239 — absolute on CI, ratio-to-baseline elsewhere, BOTH numbers printed |
+| what a previous run LEFT | 50 leaked tmux servers; `$$` socket names recycling onto them | E-240 — `register_cleanup` before create, per-suite leak diff, `--sweep` |
+| a cleanup that never RAN | 42 suites whose own `trap … EXIT` silently replaced the registry | E-241 — `trap` shadowed to CHAIN; `CLEANUP n` proves handlers fired |
+
+- **Gates that cannot cry wolf.** `run_review` no longer reports a phantom P0 (E-237
+  hot-reloads policy modules; a server spawned before a policy change was serving a stale
+  verdict all sprint). Conflict markers and unparseable `.ai/*.json` cannot reach a commit
+  (E-238) — verified by replaying the real corrupted blob from `44243bc`, which master
+  carried as invalid JSON for four commits.
+- **A method, not a habit.** Across D-062..D-064 not one defect was found by reasoning.
+  Every one surfaced because a probe printed evidence that contradicted a plausible theory:
+  the phantom P0, the `stat -f`/`-c` output leak (twice), a `| tee` that reported 17
+  failures as a green job, the committed conflict markers, the leaked sockets, a caching
+  helper that cached nothing, and a `BASHPID` guard that does not exist in bash 3.2.
+  Instrumentation first, theory second.
 
 ### Open for the Architect
-- **Performance budgets are host-SPEED dependent** and have no ruling. `incident_aggregator` ("under 200ms",
-  measured 381ms) and `telemetry` ("hook warm-path under 250ms") fail on the Engineer's machine — where
-  `node -e 'process.exit(0)'` alone costs ~197ms — while passing on CI (20/20, 95/95). Verified against clean
-  master in a separate worktree, so this is not sprint fallout. It is the E-236 category one step further:
-  not "what the machine has" but "how fast it is".
-- **`git stash` cost an incident.** A conflicted `stash pop` left conflict markers in `.ai/state.json`, which the
-  Engineer staged and committed to master (`44243bc`) without opening the file — git had said the stash was kept.
-  Master carried invalid JSON until `4a4b301`. The two CI failures that exposed it (`resilience` T-RES-14,
-  `managed_agents_spike`) were REAL and were nearly dismissed as flakes. Worth a rule: bookkeeping moves between
-  branches via commit + cherry-pick, never stash.
+- **Nothing outstanding.** The two items last recorded here — host-speed performance budgets
+  and the `git stash` incident — were ruled (D-062) and shipped (E-239, E-238).
+- **D-065 ratified both** and generalised them: a false positive is silenced by an
+  explicit, greppable `# standards:allow-<rule_id>` marker — never by loosening a pattern,
+  which reduces coverage everywhere; a file outside a rule is exempted BY NAME next to the
+  rule — never by narrowing scope, which drops files that should stay covered. It adds
+  **fixture-first for gate code**: standards rules, hooks and harness primitives get the
+  failing fixture before the implementation, run on both bash 3.2 and CI's shell. That last
+  clause is aimed squarely at E-241, where a `BASHPID` guard would have behaved differently
+  on the two shells.
 
 ## Key Decisions
+- D-065: Suppressions are explicit and greppable, exemptions are by name; fixture-first for gate code, verified on both bash 3.2 and CI's shell.
+- D-064: EXIT-trap chaining (a raw `trap … EXIT` in a suite replaced the cleanup registry); subshell-state institutionalised as review question #4 — a helper returns DATA or sets STATE, never both. No lint funded (over-block risk).
+- D-063: The telemetry baseline strengthening ratified and generalised — a perf baseline includes the assertion's OWN instrument; leaked external state is the third environment dependence.
+- D-062: Program-position resolution ratified; no-stash bookkeeping + conflict-marker/JSON pre-commit gate + presume-real triage; host-relative performance budgets.
 - D-061: Program-position rule (arguments are not programs); E-232 denylist + E-231 depth-1 cap RATIFIED; Playwright out of the default install; environment-dependence review question + SKIP helpers; hot-reloaded policy modules in long-running MCP servers.
 - D-060: CI EXISTS and was red — make master green + node:test job + `ai-task` shows CI before DONE; operand re-tokenisation; skill consent (`!`-lines never run project programs); gitignore the sync manifests.
 - D-059: `ai start` one-command Triad launcher (E-227) + its `--status`/`--kill`/doctor surface (E-228).
