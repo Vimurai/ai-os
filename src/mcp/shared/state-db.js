@@ -263,6 +263,45 @@ export function roleFromOwner(owner) {
  * Regenerate the three backwards-compat views: TASKS.md, REVIEWS.md, state.json.
  * Must be called after every SQLite mutation so file-based consumers stay in sync.
  */
+/**
+ * E-245 (D-066 §5): the archive pointer for the generated TASKS.md view.
+ *
+ * `archive_done_tasks` rotates old DONE rows into .ai/archive/state-done-YYYY-MM.json and
+ * keeps the last ten. That is the right trade — this repo's TASKS.md went from 261 lines
+ * to 25 — but it left NO TRAIL: a reader saw ten completed tasks with no way to know that
+ * 117 more existed, or where they went. History nobody can find has been lost as far as
+ * the next person is concerned.
+ *
+ * Lives here, and is used by BOTH projectors (this file and state-writer.js), because
+ * they already duplicate the TASKS.md layout line for line — and a pointer that only one
+ * of them emits would vanish the next time the other regenerated the view.
+ *
+ * Emits nothing when no archive file exists, so a project that has never rotated gets no
+ * phantom section. An unreadable directory is silent: this is a generated VIEW, and a
+ * filesystem hiccup must not stop it being written.
+ */
+export function archivePointerLines(aiDir) {
+  try {
+    const files = readdirSync(resolve(aiDir, "archive"))
+      .filter((f) => /^state-done-\d{4}-\d{2}\.json$/.test(f))
+      .sort();
+    if (files.length === 0) return [];
+    return [
+      "## Archived",
+      "",
+      "Completed tasks beyond the most recent ten are rotated out of this view.",
+      "The full record — description, summary and completion date — is in:",
+      "",
+      ...files.map((f) => `- \`.ai/archive/${f}\``),
+      "",
+      "`.ai/LOG.md` carries the narrative for every one of them.",
+      "",
+    ];
+  } catch {
+    return [];
+  }
+}
+
 export function regenerateViews(aiDir, db) {
   const state = readState(db);
 
@@ -288,6 +327,7 @@ export function regenerateViews(aiDir, db) {
       }
       lines.push("");
     }
+    lines.push(...archivePointerLines(aiDir));
     writeFileSync(tasksPath, lines.join("\n"), "utf8");
   }
 
