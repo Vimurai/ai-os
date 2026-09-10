@@ -90,10 +90,18 @@ assert_status 1 "E-245.04c: and no .DS_Store is tracked" \
   bash -c "cd '$REPO_ROOT' && git ls-files | grep -q 'DS_Store'"
 assert_status 0 "E-245.04d: the testsprite scratch dir is ignored" \
   bash -c "grep -q 'testsprite_tests/tmp/' '${REPO_ROOT}/.gitignore'"
-# The live view must carry the pointer — this repo HAS rotated, so an absent section here
-# means the projector ran without it.
-assert_status 0 "E-245.04e: this repo's own TASKS.md carries the pointer" \
-  grep -q '^## Archived' "${REPO_ROOT}/.ai/TASKS.md"
+# The live view carries the pointer WHEN THIS CHECKOUT HAS AN ARCHIVE. It usually does not:
+# .ai/archive/ is untracked, so a CI checkout has no archive files at all — and the
+# projector is then CORRECT to emit no section. Asserting unconditionally made this test
+# depend on whether a directory survived the clone; it passed locally and failed on CI, the
+# exact environment dependence E-236 exists to remove, written into the suite that adds the
+# feature. Gated on the evidence the pointer is derived from.
+if compgen -G "${REPO_ROOT}/.ai/archive/state-done-*.json" >/dev/null 2>&1; then
+  assert_status 0 "E-245.04e: this repo's own TASKS.md carries the pointer" \
+    grep -q '^## Archived' "${REPO_ROOT}/.ai/TASKS.md"
+else
+  _skip "E-245.04e: this checkout has no .ai/archive/ — nothing for the view to point at"
+fi
 
 echo ""
 assert_summary

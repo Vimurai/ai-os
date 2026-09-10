@@ -23,3 +23,14 @@
   Status: DONE 2026-09-10 — Provider workspaces follow the role binding: mapped-only provisioning, doctor stale report, explicit manifest-aware `ai sync --prune-providers`. .gemini/ and .agents/ removed from th …[full in LOG.md]
 - [ ] E-245: Repo hygiene per D-066 §5: git rm the tracked stray root file 'bash' (contains a shell error line, not a script); add .DS_Store and testsprite_tests/tmp/ to .gitignore and remove any tracked/untracked instances; run archive_done_tasks to move DONE rows out of TASKS.md (state.sqlite intact, verify_markdown_sync SYNC_PASS afterwards); confirm git status is clean after 'ai sync'. Acceptance: no stray files at repo root; TASKS.md lists only OPEN/BLOCKED tasks plus the archive pointer; SYNC_PASS; CI green. | Tier: 1
 - [ ] E-246: Cut release v3.1.0 per D-066 §5 with skill release-manager: bump package.json, aggregate CHANGELOG.md for D-054..D-066 / E-208..E-246 (same-provider Triad, per-pane role binding, three-channel sovereignty gates, install-first locators, honest CI, ai start, harness hygiene, all-Claude default with fable/opus), create the signed tag, refresh DIGEST. Acceptance: tag v3.1.0 on master, CHANGELOG entry present, CI green, DIGEST version line updated. | Tier: 1
+
+## Archived
+
+Completed tasks beyond the most recent ten are rotated out of this view.
+The full record — description, summary and completion date — is in:
+
+- `.ai/archive/state-done-2026-05.json`
+- `.ai/archive/state-done-2026-06.json`
+- `.ai/archive/state-done-2026-09.json`
+
+`.ai/LOG.md` carries the narrative for every one of them.
