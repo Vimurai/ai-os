@@ -261,8 +261,9 @@ assert_status 0 "T-A2A-12.13c: PATH still allowlisted" \
 assert_status 0 "T-A2A-12.13d: HOME still allowlisted" \
   grep -qE 'HOME: process\.env\.HOME' "$SERVER"
 
-# Fallback to the D-050 default when roles.json is absent.
-assert_contains "T-A2A-12.14: unconfigured architect role falls back to agy (D-050)" "agy" \
+# Fallback to the D-066 default when roles.json is absent — the all-Claude Triad is the
+# DEFAULT topology; agy remains selectable and an EXPLICIT agy binding is asserted above.
+assert_contains "T-A2A-12.14: unconfigured architect role falls back to claude (D-066)" "claude" \
   "$(node --input-type=module -e "
 import { roleProvider } from './src/shared/provider-adapter.mjs';
 console.log(roleProvider('/nonexistent-dir', 'architect'));

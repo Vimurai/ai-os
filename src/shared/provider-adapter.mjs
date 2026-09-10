@@ -22,9 +22,13 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve as resolvePath, join } from "node:path";
 
-// D-050 defaults — used when .ai/roles.json is absent or malformed. Kept in sync
-// with src/templates/roles.json (architect=agy:1, engineer=claude:0).
-export const DEFAULT_ROLE_PROVIDERS = { architect: "agy", engineer: "claude" };
+// D-066 defaults — used when .ai/roles.json is absent or malformed. Kept in sync with
+// src/templates/roles.json (architect=claude:1 · fable, engineer=claude:0 · opus).
+// The all-Claude Triad is the DEFAULT topology; agy and gemini remain selectable providers.
+export const DEFAULT_ROLE_PROVIDERS = { architect: "claude", engineer: "claude" };
+// Per-role model fallbacks, applied only when the role's provider is claude — another
+// provider has no use for a claude model name.
+export const DEFAULT_ROLE_MODELS = { architect: "fable", engineer: "opus" };
 
 // Built-in adapter fallbacks, so a project whose .ai/providers.json predates E-210
 // (no launch/print_mode keys) still resolves a working argv instead of throwing.

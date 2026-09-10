@@ -441,25 +441,40 @@ _parse_role_flags() {
 # Write .ai/roles.json from the parsed flags (legacy defaults for any role left
 # unspecified). No-op outside a project (.ai/ absent). Values are pre-validated by
 # _parse_role_flags, so direct interpolation is injection-safe.
+# D-066: the all-Claude Triad is the DEFAULT — architect on `fable`, engineer on `opus`.
+# agy and gemini remain fully selectable providers via --architect/--engineer; what changed
+# is which topology a project gets when nobody says otherwise.
+#
+# The MODEL is written per role because the two roles want different ones, and `ai pane`
+# already forwards `--model`. A model is emitted only when known: an unrecognised provider
+# gets no `model` key rather than a claude model name, which would be meaningless to it.
 _write_roles_json() {
   [[ -d ".ai" ]] || return 0
-  local arch="${ROLE_ARCHITECT:-agy:1}" eng="${ROLE_ENGINEER:-claude:0}"
+  local arch="${ROLE_ARCHITECT:-claude:1}" eng="${ROLE_ENGINEER:-claude:0}"
   local apr="${arch%%:*}" apn="${arch##*:}" epr="${eng%%:*}" epn="${eng##*:}"
+  local amod="${ROLE_ARCHITECT_MODEL:-}" emod="${ROLE_ENGINEER_MODEL:-}"
+  [[ -z "$amod" && "$apr" == "claude" ]] && amod="fable"
+  [[ -z "$emod" && "$epr" == "claude" ]] && emod="opus"
+  local aline="" eline=""
+  [[ -n "$amod" ]] && aline=",
+      \"model\": \"${amod}\""
+  [[ -n "$emod" ]] && eline=",
+      \"model\": \"${emod}\""
   cat > ".ai/roles.json" <<EOF
 {
   "roles": {
     "architect": {
       "provider": "${apr}",
-      "pane_identifier": "${apn}"
+      "pane_identifier": "${apn}"${aline}
     },
     "engineer": {
       "provider": "${epr}",
-      "pane_identifier": "${epn}"
+      "pane_identifier": "${epn}"${eline}
     }
   }
 }
 EOF
-  echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}, engineer=${epr}:${epn})"
+  echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}${amod:+ · $amod}, engineer=${epr}:${epn}${emod:+ · $emod})"
 }
 
 # E-182/E-184 follow-up: cosmetic Triad-banner labels for do_init. Prints
@@ -469,18 +484,27 @@ EOF
 # when the file is missing/malformed or python3 is unavailable. Cosmetic only —
 # this NEVER affects handoff routing (ai-watch owns that). Safe under set -euo
 # pipefail: the python heredoc is guarded by `|| printf ''`.
+# D-066/E-243: labels are DERIVED, never literal. Every vendor name a user sees now comes
+# from roles.json, so re-binding a role with `ai install --architect agy:1` changes the
+# banners, the task owner and the footer together — the drift that left "Architect (Agy)"
+# hard-coded in three places while the project ran all-Claude.
+#
+# Emits "<arch_provider>·<arch_model>|<eng_provider>·<eng_model>"; the model half is empty
+# when a role declares none.
 _roles_banner_labels() {
-  local roles_file=".ai/roles.json" arch="agy" eng="claude" parsed=""
+  local roles_file=".ai/roles.json" arch="claude" eng="claude" parsed=""
   if [[ -f "$roles_file" ]] && command -v python3 &>/dev/null; then
     parsed="$(python3 - "$roles_file" 2>/dev/null <<'PY' || printf ''
 import json, sys
 try:
     roles = (json.load(open(sys.argv[1])) or {}).get("roles", {})
-    def prov(role, default):
-        r = roles.get(role)
-        p = r.get("provider") if isinstance(r, dict) else None
-        return p if p else default
-    sys.stdout.write("%s|%s" % (prov("architect", "agy"), prov("engineer", "claude")))
+    def label(role, dprov, dmodel):
+        r = roles.get(role) if isinstance(roles.get(role), dict) else {}
+        p = r.get("provider") or dprov
+        m = r.get("model") or (dmodel if p == dprov else "")
+        return "%s\u00b7%s" % (p, m) if m else p
+    sys.stdout.write("%s|%s" % (label("architect", "claude", "fable"),
+                                label("engineer", "claude", "opus")))
 except Exception:
     sys.stdout.write("")
 PY
@@ -1559,7 +1583,7 @@ do_init() {
   echo "2) Fill in .ai/DIGEST.md — Include Triad Health (Planning/Execution/Testing)"
   echo "3) Define the initial vision in .ai/architect.md (Template provided)"
   echo "4) Fill in .github/copilot-instructions.md (project-specific context)"
-  echo "5) Open Claude Code or Gemini CLI in this repo — the bootloader auto-runs ai-preflight"
+  echo "5) Open a provider CLI in this repo — the bootloader auto-runs ai-preflight"
   echo ""
   # E-228 (D-059): name the one command that does step 5 for you. Without this the
   # launcher exists but is only discoverable by reading the README.
@@ -1571,9 +1595,11 @@ do_init() {
   _triad_labels="$(_roles_banner_labels)"
   _arch_label="${_triad_labels%%|*}"; _eng_label="${_triad_labels##*|}"
   echo "Triad Workflow (commands now run as agent prompts/skills):"
-  printf '  Architect %-12s → Writes to architect.md / blueprints\n' "(${_arch_label})"
-  printf '  Engineer  %-12s → Implements code based on blueprints\n' "(${_eng_label})"
-  printf '  Tester    %-12s → Quality gate via skill: ai-test\n' "(TestSprite)"
+  # %-18s, not %-12s: labels now carry a model ("claude · fable") and the old width
+  # silently truncated nothing but misaligned the arrows.
+  printf '  Architect %-18s → Writes to architect.md / blueprints\n' "(${_arch_label})"
+  printf '  Engineer  %-18s → Implements code based on blueprints\n' "(${_eng_label})"
+  printf '  Tester    %-18s → Quality gate via skill: ai-test\n' "(TestSprite)"
   echo ""
   echo "MCP servers enabled in .mcp.json (filesystem + memory)."
 }
@@ -1641,11 +1667,17 @@ except:
   PARSED_TMPDIR=$(mktemp -d)
   PARSED_TMPFILE="${PARSED_TMPDIR}/parsed.json"
 
+  local _al; _al="$(_roles_banner_labels)"; _al="${_al%%|*}"
+  AIOS_ARCH_OWNER="Architect (${_al})" \
   python3 - "$TASKS_FILE" "$PARSED_TMPFILE" <<'PY'
 import json, re, sys
 
 tasks_file = sys.argv[1]
 out_file   = sys.argv[2]
+# Derived label (E-243). Falls back to a bare role name rather than a vendor: if roles.json
+# cannot be read, "Architect" is still true, whereas "Architect (Agy)" may not be.
+import os as _os
+ARCH_OWNER = _os.environ.get("AIOS_ARCH_OWNER") or "Architect"
 
 tasks = []
 
@@ -1654,7 +1686,10 @@ TASK_RE    = re.compile(r'^- \[([ x])\] (E|P|T)-(\d+):?\s+(.+?)(?:\s*\|\s*Tier:\
 STATUS_RE  = re.compile(r'^\s{2}Status:\s+DONE\s+(\d{4}-\d{2}-\d{2})\s+[—–-]\s+(.+)$')
 
 OWNER_PATTERNS = [
-    (re.compile(r'\bArchitect\b|\(Gemini\)',     re.IGNORECASE), 'Architect (Agy)'),
+    # D-066/E-243: the owner label is DERIVED from roles.json, passed in as ARCH_OWNER.
+    # It was hard-coded as 'Architect (Agy)', so an all-Claude project stamped every
+    # Architect-owned task with a vendor that no role was bound to.
+    (re.compile(r'\bArchitect\b|\(Gemini\)',     re.IGNORECASE), ARCH_OWNER),
     (re.compile(r'\bEngineer\b|\(Claude\)',      re.IGNORECASE), 'Engineer (Claude)'),
     (re.compile(r'\bTester\b|\(TestSprite\)',    re.IGNORECASE), 'Tester (TestSprite)'),
 ]
@@ -1924,7 +1959,10 @@ for issue in issues:
         (issue.get("body") or "(no description)")[:800],
     ]))
     parts.append(block)
-footer = "\n## Action Required\nAgy (Architect): Review the issues above and create P-## blueprint tasks via:\n  mcp__task-synchronizer-mcp__add_task({ prefix: 'P', owner: 'Architect (Agy)', description: '...', tier: N })\nThis writes to state.sqlite and regenerates TASKS.md automatically.\n"
+# E-243: role-derived, not vendor-literal — an all-Claude project was told to hand work to
+# "Agy", a provider no role was bound to.
+_arch_owner = os.environ.get("AIOS_ARCH_OWNER") or "Architect"
+footer = "\n## Action Required\n%s: Review the issues above and create P-## blueprint tasks via:\n  mcp__task-synchronizer-mcp__add_task({ prefix: 'P', owner: '%s', description: '...', tier: N })\nThis writes to state.sqlite and regenerates TASKS.md automatically.\n" % (_arch_owner, _arch_owner)
 print(header + "\n\n---\n\n".join(parts) + "\n" + footer)
 PY
 

@@ -43,9 +43,11 @@ assert_contains "E-213.01b: dual-claude engineer label unchanged" \
   "Engineer (Claude)" "$(_owner engineer "$_DUAL")"
 assert_contains "E-213.01c: a split Triad still attributes the Architect to Agy" \
   "Architect (Agy)" "$(_owner architect "$_SPLIT")"
-# Fail-soft: an attribution label must never break task creation.
-assert_contains "E-213.01d: a missing roles.json falls back to the D-050 default" \
-  "Architect (Agy)" "$(_owner architect "/nonexistent-dir")"
+# Fail-soft: an attribution label must never break task creation. D-066 changed the
+# fallback from agy to claude — the DEFAULT topology is all-Claude. 01c above still pins
+# that an EXPLICIT agy binding is honoured, so this change relaxes nothing.
+assert_contains "E-213.01d: a missing roles.json falls back to the D-066 default (claude)" \
+  "Architect (Claude)" "$(_owner architect "/nonexistent-dir")"
 
 # roleFromOwner splits on " (", so the generated TASKS.md headers must NOT churn
 # when the provider half changes — that is what makes this change safe.

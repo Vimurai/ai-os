@@ -18,13 +18,13 @@ It is a thin layer on top of the CLIs — no proxy, no cloud — so it works whe
 
 | Entity | Rulefile | Default provider | Owns | Hard boundary |
 | :--- | :--- | :--- | :--- | :--- |
-| **Principal Architect** | `ARCHITECT.md` | Antigravity (`agy`) | `.ai/architect.md`, `.ai/blueprints/`, `P-##` tasks | Cannot write source code |
+| **Principal Architect** | `ARCHITECT.md` | Claude Code (`claude` · `fable`) | `.ai/architect.md`, `.ai/blueprints/`, `P-##` tasks | Cannot write source code |
 | **Principal Engineer** | `ENGINEER.md` | Claude Code (`claude`) | `src/`, `tests/`, `E-##` tasks | Cannot rewrite blueprints |
 | **Quality Tester** | — | TestSprite + chaos/vibe critics | `REVIEWS.md`, `LOG.md` quality stamps | Cannot bypass `[SEC_CLEARED]` |
 
 `ARCHITECT.md`/`ENGINEER.md` are the canonical rulefiles; `GEMINI.md`/`CLAUDE.md` remain as thin `@import` shims so a vendor that auto-loads them still bootstraps the right persona. The default provider for each role is set in `.ai/roles.json` and overridable via `ai install --architect/--engineer`.
 
-> **Provider directories are adapters, not roles (D-052).** The `src/claude/` and `src/gemini/` directories hold **provider-specific** artifacts — each vendor CLI's configuration, command formats (e.g. Gemini's `.toml` commands), agent/skill templates, and the `@import` rulefile shims — **not** role logic. The roles themselves live in `ENGINEER.md`/`ARCHITECT.md` and bind to a provider through `.ai/roles.json`. These directories stay **vendor-named on purpose**: their contents are tailored to a specific CLI, so renaming them to role names (`src/engineer/`, `src/architect/`) would misrepresent provider config as a role definition — and a role that defaults to `agy` has no business owning a directory full of Gemini config. Think of them as the Triad's *provider adapter* layer.
+> **Provider directories are adapters, not roles (D-052).** The `src/claude/` and `src/gemini/` directories hold **provider-specific** artifacts — each vendor CLI's configuration, command formats (e.g. Gemini's `.toml` commands), agent/skill templates, and the `@import` rulefile shims — **not** role logic. The roles themselves live in `ENGINEER.md`/`ARCHITECT.md` and bind to a provider through `.ai/roles.json`. These directories stay **vendor-named on purpose**: their contents are tailored to a specific CLI, so renaming them to role names (`src/engineer/`, `src/architect/`) would misrepresent provider config as a role definition — and a role that binds to a provider per project has no business owning a directory full of one vendor's config. Think of them as the Triad's *provider adapter* layer.
 
 State lives in `.ai/state.sqlite` (WAL mode), so two agents in two terminals never corrupt the task list.
 
@@ -51,17 +51,17 @@ State lives in `.ai/state.sqlite` (WAL mode), so two agents in two terminals nev
 | **Node.js 22.5+** | Custom MCP servers use `node:sqlite` (DatabaseSync), which is stable from Node 22.5. Node 20 will boot some servers but not the SQLite-backed ones. |
 | **Python 3.10+** | Generates `.mcp.json` from the registry; bash/jq fallback exists. |
 | **sqlite3 CLI** | Used by hooks to read `.ai/state.sqlite`. |
-| An agent CLI — Claude Code (`claude`) and/or Antigravity (`agy`) | At least one is required to drive the Triad. |
+| **Claude Code** (`claude`) | The default Triad runs BOTH roles on Claude (D-066). Antigravity (`agy`) and Gemini remain selectable providers. |
 
 Optional: `gh` for GitHub issue ingestion, `xdotool` + `Xvfb` on Linux for `computer-use-mcp`.
 
-**Strongly recommended: `tmux`** — see [Recommended Workflow](#recommended-workflow--tmux-split-panes) below. The Triad is designed to run with the Architect (`agy`) and Engineer (`claude`) side-by-side; tmux makes that ergonomic without juggling terminal tabs.
+**Strongly recommended: `tmux`** — see [Recommended Workflow](#recommended-workflow--tmux-split-panes) below. The Triad runs the Architect and the Engineer side by side; by default both are Claude Code (Architect on `fable`, Engineer on `opus`), bound per pane. tmux makes that ergonomic without juggling terminal tabs.
 
 ---
 
 ## Recommended Workflow — tmux Split Panes
 
-The `ai` shell CLI is a thin bootloader (install / init / sync / doctor / uninstall). Everything else — planning, review, testing, archive, digest — runs as a prompt or skill *inside* the agent CLIs (Claude Code, Antigravity). The intended UX is to keep both agents open in adjacent panes so you can hand work back and forth without context-switching tabs.
+The `ai` shell CLI is a thin bootloader (install / init / sync / doctor / uninstall). Everything else — planning, review, testing, archive, digest — runs as a prompt or skill *inside* the agent CLI. The intended UX is to keep both agents open in adjacent panes so you can hand work back and forth without context-switching tabs.
 
 ### Prerequisite
 
@@ -73,13 +73,13 @@ brew install tmux
 sudo apt install tmux
 ```
 
-A subscription / install for **Claude Code** (`claude`) and/or **Antigravity** (`agy`) is also required — at least one of them is what drives the Triad.
+A subscription / install for **Claude Code** (`claude`) is also required — it is what drives the default Triad. Antigravity (`agy`) and Gemini stay selectable per role via `ai install --architect <provider>:<pane>`.
 
 ### Layout
 
 ```
 ┌─────────────────────────┬─────────────────────────┐
-│  Architect (agy)        │  Engineer (Claude Code) │
+│  Architect (claude)     │  Engineer (claude)      │
 │                         │                         │
 │  - blueprints           │  - implements E-## tasks│
 │  - P-## tasks           │  - runs skills          │
@@ -95,7 +95,7 @@ Drop this into `~/.tmux.conf` (or merge with your existing config) to get a one-
 
 ```tmux
 # AI-OS Triad layout — bound to prefix + T
-# Produces:  pane 0 top-left (Architect/agy), pane 2 top-right (Engineer/claude), pane 1 bottom (bash)
+# Produces:  pane 0 top-left (Architect/claude·fable), pane 2 top-right (Engineer/claude·opus), pane 1 bottom (bash)
 bind-key T split-window -v -p 30 \; \
            select-pane -t 0 \; \
            split-window -h \; \
@@ -266,7 +266,7 @@ If `ai sync` reports schema migrations or new mandatory fields, run `ai migrate-
 ## Daily Workflow — Professional Project Development
 
 ```
-  Architect (agy)           Engineer (Claude Code)    Tester (TestSprite/Critics)
+  Architect (claude)        Engineer (claude)         Tester (TestSprite/Critics)
         │                         │                          │
    prompt: plan X            ai-preflight (auto)        skill: ai-test
    skill: blueprint-writer   read DIGEST + TASKS        skill: ai-test --vibe
@@ -284,7 +284,7 @@ If `ai sync` reports schema migrations or new mandatory fields, run `ai migrate-
 
 | Phase | Owner | How | What happens |
 | :--- | :--- | :--- | :--- |
-| **1. Plan** | Architect (`agy`) | Prompt the Architect with the intent, e.g. *"Plan a /metrics endpoint with auth"*. Architect uses `blueprint-writer` + `task-planner` skills. | Refreshes DIGEST, reads TASKS, writes blueprint + `P-##` tasks. |
+| **1. Plan** | Architect pane | Prompt the Architect with the intent, e.g. *"Plan a /metrics endpoint with auth"*. Architect uses `blueprint-writer` + `task-planner` skills. | Refreshes DIGEST, reads TASKS, writes blueprint + `P-##` tasks. |
 | **2. Implement** | Engineer (`claude`) | Open Claude Code; the `ENGINEER.md` bootloader auto-runs `skill: ai-preflight`. | Engineer reads `E-##` tasks, edits code under `src/` and `tests/`. |
 | **3. Validate** | Tester | Inside Claude Code: `skill: ai-test` (or with --vibe for UX + chaos). | TestSprite runs E2E; vibe/chaos critics audit UI; results stamp `REVIEWS.md`. |
 | **4. Review** | Engineer | Inside Claude Code: `skill: ai-review` (auto-detects tier). | Dispatches `critic_arch`, `critic_security`, `critic_tests` in parallel for Tier 3. |
@@ -363,7 +363,7 @@ Operational commands moved into the agent CLIs in the cli-collapse (E-34) — ty
 | New repo, want the Triad | `ai init`, then prompt the Architect to plan the first feature |
 | Existing repo, want the Triad | `ai init`, then prompt the Architect to reverse-engineer the codebase |
 | Pulled a newer AI-OS version | `bash install-ai-os.sh && ai sync` (in each project) |
-| Starting a feature | Prompt the Architect (`agy`) in its pane |
+| Starting a feature | Prompt the Architect in its pane (`ai pane architect`) |
 | Need to know what to work on | `skill: ai-preflight` (auto-fires on session start) |
 | About to commit | `skill: ai-test` then `skill: ai-review` in Claude |
 | Context feels heavy / DIGEST stale | `skill: ai-digest` |
