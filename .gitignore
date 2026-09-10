@@ -61,3 +61,10 @@ testsprite_tests/
 # (palace-index.json, refreshed each `ai sync`), the embeddings, and the multimodal-RAG
 # dead-letter queue. All regenerated; never tracked.
 .ai/memory/
+
+# E-244 (D-066 §4): provider workspaces are GENERATED, and `ai sync` provisions them
+# only for a provider some role in .ai/roles.json is bound to. Under the all-Claude
+# default neither of these exists here; binding a role back to gemini or agy recreates
+# the directory, and it should stay out of git either way.
+.gemini/
+.agents/

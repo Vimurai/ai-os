@@ -30,18 +30,31 @@ assert_contains "T-2: scaffolds .agents/AGENTS.md from the installed template" \
 assert_contains "T-2b: scaffold lives in the shared _sync_workspace_dirs helper" \
   "_sync_workspace_dirs()" "$BIN_CONTENT"
 
-# ── T-3: tracked workspace copy exists, imports ARCHITECT.md, matches template ─
-assert_exists "$WS_FILE"
-assert_status 0 "T-3: .agents/AGENTS.md @imports ARCHITECT.md" \
+# ── T-3: the workspace copy, WHEN THE WORKSPACE EXISTS ────────────────────────
+# E-244 (D-066 §4): this repository no longer carries a tracked .agents/ — `ai sync`
+# provisions it only for a project with a role bound to agy. The property T-3 cared about
+# (the scaffolded file imports ARCHITECT.md and matches the template) is still proved
+# END-TO-END by T-4 below, which provisions its own project and reads the file sync
+# actually wrote. That is the stronger test: it exercises the scaffolder rather than
+# checking that someone remembered to commit its output.
+assert_file_if_present "T-3: .agents/AGENTS.md @imports ARCHITECT.md" "$WS_FILE" \
   grep -qx '@ARCHITECT.md' "$WS_FILE"
-assert_status 0 "T-3b: .agents/AGENTS.md byte-identical to src/templates/AGENTS.md" \
-  diff -q "$TEMPLATE" "$WS_FILE"
+assert_mirror_if_present "T-3b: .agents/AGENTS.md byte-identical to src/templates/AGENTS.md" \
+  "$TEMPLATE" "$WS_FILE"
 
 # ── T-4 (E2E): a real _sync_workspace_dirs run scaffolds .agents/AGENTS.md ────
 # Source the CLI (guarded: sourcing returns before dispatch) and invoke the
 # scaffolder in an isolated temp project. Requires the installed template mirror.
 if [[ -f "${AIOS}/templates/AGENTS.md" ]]; then
   PROJ="$(mktemp -d)"
+  # E-244: the scaffolder only touches .agents/ for a project some role binds to agy.
+  # Without this the E2E case would assert on a workspace sync correctly declined to
+  # create, and "the scaffold is gone" would look identical to "the scaffold is broken".
+  mkdir -p "$PROJ/.ai"
+  cat > "$PROJ/.ai/roles.json" <<'JSON'
+{ "roles": { "architect": {"provider":"agy","pane_identifier":"1"},
+             "engineer":  {"provider":"claude","pane_identifier":"0"} } }
+JSON
   (
     cd "$PROJ" || exit 1
     # shellcheck disable=SC1090

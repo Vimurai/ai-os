@@ -204,8 +204,9 @@ assert_contains "telemetry --stats emits status key" "\"status\":" "$STATS"
 echo ""
 echo "  [T-META-S10] mirrors byte-identical"
 
-assert_status 0 "meta_analyst → .gemini mirror (modulo stripped Claude keys, E-212)" \
-  _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
+# E-244 (D-066 §4): .gemini/ exists only for a project with a role bound to gemini.
+assert_file_if_present "meta_analyst → .gemini mirror (modulo stripped Claude keys, E-212)" \
+  "$AGENT_GEM" _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
 # The ~/.ai-os GEMINI workspace is a TRANSFORMED copy, not a mirror. `ai install`
 # runs strip_gemini_agent_fields over it because disable-model-invocation,
 # user-invocable and allowed-tools are unsupported by Gemini CLI v0.37+. Asserting
@@ -228,7 +229,7 @@ else
   _skip "meta_analyst → ~/.ai-os strip check (framework not installed)"
 fi
 assert_status 0 "ai-insights  → .claude mirror"     diff -q "$SKILL_SRC" "$SKILL_CLAUDE"
-assert_status 0 "ai-insights  → .gemini mirror"     diff -q "$SKILL_SRC" "$SKILL_GEMINI"
+assert_mirror_if_present "ai-insights  → .agents mirror" "$SKILL_SRC" "$SKILL_GEMINI"
 # E-236: same reasoning as the agent mirror above — an uninstalled clone has nothing to
 # compare, and asserting anyway makes the verdict a property of the machine.
 if [[ -f "$SKILL_MIRROR" ]]; then

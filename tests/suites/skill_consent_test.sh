@@ -86,7 +86,13 @@ _corpus_violations() {
     const { readFileSync } = await import("fs");
     const { execSync } = await import("child_process");
     const rule = RULE_REGISTRY.skill_consent_no_project_exec;
-    const out = execSync("find src .claude .agents .gemini -name \"SKILL.md\" -o -path \"*/agents/*.md\" 2>/dev/null",
+    // E-244: only the roots that EXIST — `find` on a missing path exits non-zero, which
+    // made the whole corpus come back empty and the "no findings" assertion pass for a
+    // scan that never ran. 03a pins the file count for exactly that reason.
+    const { existsSync } = await import("fs");
+    const _roots = ["src", ".claude", ".agents", ".gemini"]
+      .filter((d) => existsSync(process.env.REPO_ROOT + "/" + d)).join(" ");
+    const out = execSync("find " + _roots + " -name \"SKILL.md\" -o -path \"*/agents/*.md\" 2>/dev/null",
       { encoding: "utf8", maxBuffer: 1e8, cwd: process.env.REPO_ROOT });
     const files = out.trim().split("\n").filter(Boolean);
     let hits = 0;
@@ -122,8 +128,7 @@ assert_status 0 "E-232.04c: ai-upgrade still names npm run test" \
 # ── E-232.5: mirrors are byte-identical ────────────────────────────────────
 assert_status 0 "E-232.05a: ai-debug .claude mirror matches src" \
   diff -q "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md"
-assert_status 0 "E-232.05b: ai-debug .agents mirror matches src" \
-  diff -q "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"
+assert_mirror_if_present "E-232.05b: ai-debug .agents mirror matches src" "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"
 assert_status 0 "E-232.05c: ai-upgrade .claude mirror matches src" \
   diff -q "${REPO_ROOT}/src/shared/skills/ai-upgrade/SKILL.md" "${REPO_ROOT}/.claude/skills/ai-upgrade/SKILL.md"
 assert_status 0 "E-232.05d: bug-reproducer .claude mirror matches src" \

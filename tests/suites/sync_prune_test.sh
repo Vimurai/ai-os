@@ -139,7 +139,15 @@ assert_status 0 "E-220.09c: the workspace was still provisioned" test -d "$T8/.c
 # `git rev-parse --show-toplevel` (the USER's repo, not the AI-OS install) and never ran
 # at all. These assertions pin the observable effect, not the exit code.
 TA="$(mktemp -d)"; mkdir -p "$TA/.ai"
-cp "${REPO_ROOT}/.ai/roles.json" "$TA/.ai/roles.json" 2>/dev/null || true
+# E-244: bind the Architect to agy EXPLICITLY rather than copying this repo's roles.json.
+# Under the D-066 all-Claude default no role is bound to agy, so .agents/ is never
+# provisioned — and 11b, which exists to prove the manifest covers MORE than .claude,
+# would fail for the one reason it is not testing. A fixture that asserts "every
+# provisioned workspace" must be the one that decides which are provisioned.
+cat > "$TA/.ai/roles.json" <<'JSON'
+{ "roles": { "architect": {"provider":"agy","pane_identifier":"1"},
+             "engineer":  {"provider":"claude","pane_identifier":"0","model":"opus"} } }
+JSON
 (cd "$TA" && bash "$AI_BIN" sync >/dev/null 2>&1)
 assert_status 0 "E-220.11a: the first real sync records a manifest" \
   test -f "$TA/.claude/skills/_SYNC_MANIFEST.json"

@@ -33,14 +33,15 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo "===== multimodal_memory_test.sh ====="
 
-CURATOR_FILES=(
-  "${REPO_ROOT}/src/gemini/agents/memory_curator.md"
-  "${REPO_ROOT}/.gemini/agents/memory_curator.md"
-)
-ARCHITECT_FILES=(
-  "${REPO_ROOT}/src/gemini/agents/knowledge_architect.md"
-  "${REPO_ROOT}/.gemini/agents/knowledge_architect.md"
-)
+# E-244 (D-066 §4): a provider workspace exists only when a role is bound to it.
+CURATOR_FILES=("${REPO_ROOT}/src/gemini/agents/memory_curator.md")
+[[ -f "${REPO_ROOT}/.gemini/agents/memory_curator.md" ]] \
+  && CURATOR_FILES+=("${REPO_ROOT}/.gemini/agents/memory_curator.md") \
+  || _skip "memory_curator .gemini/ copy (workspace not provisioned — no role bound to gemini)"
+ARCHITECT_FILES=("${REPO_ROOT}/src/gemini/agents/knowledge_architect.md")
+[[ -f "${REPO_ROOT}/.gemini/agents/knowledge_architect.md" ]] \
+  && ARCHITECT_FILES+=("${REPO_ROOT}/.gemini/agents/knowledge_architect.md") \
+  || _skip "knowledge_architect .gemini/ copy (workspace not provisioned — no role bound to gemini)"
 
 # ── T-MM-S01: Files exist and frontmatter parses ──────────────────────────────
 echo ""
@@ -162,19 +163,29 @@ done
 echo ""
 echo "  [T-MM-S08] Source-of-truth ⇄ project mirror byte-identical"
 
-assert_status 0 "memory_curator mirror = src (modulo stripped Claude keys, E-212)" \
+# E-244 (D-066 §4): .gemini/ is provisioned only for a project with a role bound to
+# gemini. Each check runs against the workspace copy when it is there and is recorded as
+# a SKIP when it is not — a pass for a comparison that never happened would be worse than
+# either.
+assert_file_if_present "memory_curator mirror = src (modulo stripped Claude keys, E-212)" \
+  "${REPO_ROOT}/.gemini/agents/memory_curator.md" \
   _diff_ignoring_claude_keys "${REPO_ROOT}/src/gemini/agents/memory_curator.md" \
                              "${REPO_ROOT}/.gemini/agents/memory_curator.md"
 
-assert_status 0 "knowledge_architect mirror = src (modulo stripped Claude keys, E-212)" \
+assert_file_if_present "knowledge_architect mirror = src (modulo stripped Claude keys, E-212)" \
+  "${REPO_ROOT}/.gemini/agents/knowledge_architect.md" \
   _diff_ignoring_claude_keys "${REPO_ROOT}/src/gemini/agents/knowledge_architect.md" \
                              "${REPO_ROOT}/.gemini/agents/knowledge_architect.md"
 
 # The stripped keys must ACTUALLY be absent from the Gemini workspace — otherwise the
 # comparison above would pass by ignoring keys that were never removed.
-assert_status 1 "memory_curator .gemini copy carries no Claude-only keys" \
-  grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' \
-    "${REPO_ROOT}/.gemini/agents/memory_curator.md"
+if [[ -f "${REPO_ROOT}/.gemini/agents/memory_curator.md" ]]; then
+  assert_status 1 "memory_curator .gemini copy carries no Claude-only keys" \
+    grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' \
+      "${REPO_ROOT}/.gemini/agents/memory_curator.md"
+else
+  _skip "memory_curator .gemini copy carries no Claude-only keys (workspace not provisioned)"
+fi
 assert_status 0 "memory_curator src DOES carry the Claude contract (E-212)" \
   grep -qE '^allowed-tools:' "${REPO_ROOT}/src/gemini/agents/memory_curator.md"
 

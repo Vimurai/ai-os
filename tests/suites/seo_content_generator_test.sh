@@ -43,7 +43,8 @@ echo ""
 echo "  [T-SCG-S01] Agent file exists with parseable frontmatter"
 
 assert_status 0 "src/ agent file exists"             test -f "$AGENT_SRC"
-assert_status 0 ".gemini/ mirror exists"             test -f "$AGENT_GEM"
+# E-244 (D-066 §4): .gemini/ exists only for a project with a role bound to gemini.
+assert_file_if_present ".gemini/ mirror exists" "$AGENT_GEM" test -f "$AGENT_GEM"
 assert_status 0 "frontmatter opens on line 1"        bash -c "head -1 '$AGENT_SRC' | grep -q '^---$'"
 assert_status 0 "name: seo_content_generator"        grep -q '^name: seo_content_generator$' "$AGENT_SRC"
 assert_status 0 "description present"                grep -q '^description: ' "$AGENT_SRC"
@@ -182,10 +183,14 @@ assert_status 0 "Rollback references git restore for staged content" \
 echo ""
 echo "  [T-SCG-S10] .gemini/ + ~/.ai-os/gemini/ mirrors match src/"
 
-assert_status 0 ".gemini/ mirror matches src/ (modulo stripped Claude keys, E-212)" \
-  _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
-assert_status 1 ".gemini/ copy carries no Claude-only keys (strip actually ran)" \
-  grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_GEM"
+assert_file_if_present ".gemini/ mirror matches src/ (modulo stripped Claude keys, E-212)" \
+  "$AGENT_GEM" _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
+if [[ -f "$AGENT_GEM" ]]; then
+  assert_status 1 ".gemini/ copy carries no Claude-only keys (strip actually ran)" \
+    grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_GEM"
+else
+  _skip ".gemini/ copy carries no Claude-only keys (workspace not provisioned)"
+fi
 if [[ -f "$AGENT_MIRROR" ]]; then
   # The ~/.ai-os GEMINI workspace is a TRANSFORMED copy, not a mirror. `ai install`
   # runs strip_gemini_agent_fields over it because disable-model-invocation,

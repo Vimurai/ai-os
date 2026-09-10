@@ -38,7 +38,9 @@ for entry in "${SKILLS[@]}"; do
 
   # (b) runtime mirrors exist and are byte-identical to source
   assert_status 0 "T-178: ${name} → .claude mirror identical" diff -q "${src_file}" "${CLAUDE}/${name}/SKILL.md"
-  assert_status 0 "T-178: ${name} → .agents mirror identical" diff -q "${src_file}" "${AGENTS}/${name}/SKILL.md"
+  # E-244 (D-066 §4): .agents/ exists only for a project with a role bound to agy.
+  assert_mirror_if_present "T-178: ${name} → .agents mirror identical" \
+    "${src_file}" "${AGENTS}/${name}/SKILL.md"
 
   # (c) compliant operational frontmatter
   front="$(fm "${src_file}")"

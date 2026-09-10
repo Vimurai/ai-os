@@ -430,3 +430,37 @@ assert_match() {
     _fail "$label (expected to match regex: '$regex')"
   fi
 }
+
+# ── E-244 (D-066 §4): mirror parity only where the workspace EXISTS ──────────
+#
+# Many suites assert "the .agents/ (or .gemini/) copy of skill X is byte-identical to
+# src/". That check exists to catch an edit to src/ that was never synced — a real and
+# recurring failure. But `ai sync` now provisions a provider's workspace only when a role
+# in .ai/roles.json is bound to it, and under the all-Claude default neither .agents/ nor
+# .gemini/ exists at all. An unconditional assertion on an absent mirror stops testing
+# sync and starts testing whether a directory happens to be there.
+#
+# Present → assert parity, exactly as before. Absent → SKIP, counted as a skip (E-236) so
+# the run says plainly that the check did not happen, instead of reporting a pass for a
+# comparison it never made. Bind a role to agy or gemini and the assertions come back.
+#
+# assert_mirror_if_present <label> <canonical_src> <workspace_mirror>
+assert_mirror_if_present() {
+  local label="$1" src="$2" mirror="$3"
+  if [[ -e "$mirror" ]]; then
+    assert_status 0 "$label" diff -q "$src" "$mirror"
+  else
+    _skip "${label} (workspace not provisioned — no role bound to this provider)"
+  fi
+}
+
+# assert_file_if_present <label> <path> <command...> — run an assertion against a
+# workspace file only when that workspace was provisioned. Same rationale as above.
+assert_file_if_present() {
+  local label="$1" path="$2"; shift 2
+  if [[ -e "$path" ]]; then
+    assert_status 0 "$label" "$@"
+  else
+    _skip "${label} (workspace not provisioned — no role bound to this provider)"
+  fi
+}

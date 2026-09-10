@@ -196,7 +196,7 @@ Two paths, depending on what you have:
 **A. New repo (greenfield)**
 ```bash
 cd my-new-project
-ai init                       # scaffolds .ai/, .claude/, .gemini/, .mcp.json
+ai init                       # scaffolds .ai/, .claude/, .mcp.json
 # Then fill in:
 #   .ai/BRIEF.md       — product goals & non-goals
 #   .ai/DIGEST.md      — one-paragraph snapshot
@@ -247,7 +247,7 @@ ai install
 
 # 3. In every project that uses AI-OS, sync the project-scoped artifacts
 cd /path/to/your-project
-ai sync                       # regenerates .mcp.json, .claude/, .gemini/, hooks
+ai sync                       # regenerates .mcp.json, the mapped provider workspaces, hooks
 ai init                       # safe re-run — only adds missing .ai/ files
 ai doctor                     # confirms MCP, hooks, pre-commit are wired
 ```
@@ -255,7 +255,8 @@ ai doctor                     # confirms MCP, hooks, pre-commit are wired
 What `ai sync` does (and does not do):
 - ✅ Updates the `ENGINEER.md`/`ARCHITECT.md` bootloaders (and their `CLAUDE.md`/`GEMINI.md` `@import` shims) to the current version.
 - ✅ Regenerates `.mcp.json` from `~/.ai-os/config/registry.json` (preserves your `TestSprite` API key).
-- ✅ Refreshes `.claude/agents/`, `.claude/skills/`, `.gemini/agents/`, `.agents/skills/` and the `_SKILLS_INDEX.md` files.
+- ✅ Refreshes the workspace of every provider a role in `.ai/roles.json` is bound to — `.claude/agents/`, `.claude/skills/` and, when a role is bound to them, `.gemini/agents/` and `.agents/skills/` — plus the `_SKILLS_INDEX.md` files.
+- ✅ Reports a workspace whose provider no role is bound to as a **stale provider workspace**, and leaves it alone. `ai sync --prune-providers` removes it: only files sync wrote and nobody edited are deleted, anything else is listed and kept.
 - ✅ Re-installs git hooks under `~/.ai-os/hooks/`.
 - ❌ Does **not** touch `.ai/architect.md`, `.ai/BRIEF.md`, `.ai/TASKS.md`, `.ai/DIGEST.md`, or anything you authored. Your project memory is yours.
 
@@ -326,6 +327,10 @@ ai init        Create or upgrade .ai/ in current repo (idempotent — never over
 ai sync        Re-sync agents, skills, bootloaders, .mcp.json, and hooks
                from ~/.ai-os into the current project.
 ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28).
+ai sync --prune-providers
+               Remove the workspace directories of providers no role is bound to
+               (E-244). Manifest-aware and never implicit — `.claude/` is never
+               pruned, because the hooks and settings live there.
 ai provider install-plugin agy
                Install the AI-OS personas as a native Antigravity plugin (E-144).
 ai doctor [--repair] [--compliance] [--env]

@@ -69,11 +69,16 @@ chk_mirror() { # chk_mirror <canonical> <mirror>
   fi
 }
 chk_mirror "$HANDOFF" "${REPO_ROOT}/.claude/skills/ai-handoff/SKILL.md"
-chk_mirror "$HANDOFF" "${REPO_ROOT}/.agents/skills/ai-handoff/SKILL.md"
+# E-244: an unprovisioned workspace is a SKIP, not a missing mirror. `ai sync` writes
+# .agents/ only when a role is bound to agy (D-066 §4); a _fail here would report the
+# all-Claude default as a deployment gap.
+assert_mirror_if_present "E-119.S05: mirror identical → .agents/skills/ai-handoff" \
+  "$HANDOFF" "${REPO_ROOT}/.agents/skills/ai-handoff/SKILL.md"
 chk_mirror "$HANDOFF" "${HOME}/.ai-os/shared/skills/ai-handoff/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${REPO_ROOT}/.claude/skills/ai-task/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${HOME}/.ai-os/shared/skills/ai-task/SKILL.md"
-chk_mirror "$TASK_GEMINI" "${REPO_ROOT}/.agents/skills/arch-task/SKILL.md"
+assert_mirror_if_present "E-119.S05: mirror identical → .agents/skills/arch-task" \
+  "$TASK_GEMINI" "${REPO_ROOT}/.agents/skills/arch-task/SKILL.md"
 chk_mirror "$TASK_GEMINI" "${HOME}/.ai-os/agents/skills/arch-task/SKILL.md"
 
 assert_summary
