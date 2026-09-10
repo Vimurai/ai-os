@@ -1,116 +1,124 @@
 # REPO_MAP.md — AST Repository Map (auto-generated)
-<!-- ast-parser-mcp generate_map (E-97): 34/60 files, budget 2048 tokens. `⋮` = elided function body. -->
+<!-- ast-parser-mcp generate_map (E-97): 35/72 files, budget 2048 tokens. `⋮` = elided function body. -->
 
-## src/shared/telemetry.mjs  (centrality 1)
-exports: TELEMETRY_SERVICE, TELEMETRY_DB_PATH, USAGE_DB_PATH, STATUS_ORDER, STATUS_VALUES, STATUS_SQL_IN, STATUS_MIGRATION_SENTINEL, recordToolExecution, recordTaskVelocity, recordTaskVelocityForTask, getTelemetryStats, resetTelemetryCache
-imports: node:sqlite, node:crypto, node:fs, node:path, node:os, node:url
-
-## src/mcp/shared/is-main.mjs  (centrality 0.9632)
+## src/mcp/shared/is-main.mjs  (centrality 1)
 exports: isMainModule
 imports: node:url
 
-## src/shared/mcp-telemetry.mjs  (centrality 0.9632)
+## src/shared/telemetry.mjs  (centrality 0.9241)
+exports: TELEMETRY_SERVICE, TELEMETRY_DB_PATH, USAGE_DB_PATH, STATUS_ORDER, STATUS_VALUES, STATUS_SQL_IN, STATUS_MIGRATION_SENTINEL, recordToolExecution, recordTaskVelocity, recordTaskVelocityForTask, getTelemetryStats, resetTelemetryCache
+imports: node:sqlite, node:crypto, node:fs, node:path, node:os, node:url
+
+## src/shared/mcp-telemetry.mjs  (centrality 0.8817)
 exports: TELEMETRY_STATUS, toolNameFor, EXPECTED_REJECTION_META, statusForResult, rejection, markRejection, withTelemetry, instrument
 imports: ./telemetry.mjs
 
-## src/mcp/shared/logger.js  (centrality 0.9386)
+## src/mcp/shared/logger.js  (centrality 0.858)
 exports: createLogger
 
-## src/mcp/shared/state-db.js  (centrality 0.7341)
-exports: getDb, parseDeps, readState, roleFromOwner, regenerateViews, MAX_DAG_DEPTH, readDependencyGraph, validateDag, withTransaction, nextId, recordIdHighWater, addTask, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD, STAMP_KEEP_RECENT, archiveDoneTasks, archiveStamps, nextTopicSeedId, nextClusterPageId
+## src/mcp/shared/state-db.js  (centrality 0.6866)
+exports: getDb, parseDeps, readState, roleFromOwner, archivePointerLines, regenerateViews, MAX_DAG_DEPTH, readDependencyGraph, validateDag, withTransaction, nextId, recordIdHighWater, addTask, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD, STAMP_KEEP_RECENT, archiveDoneTasks, archiveStamps, nextTopicSeedId, nextClusterPageId
 imports: fs, path, node:sqlite
 
-## src/shared/provider-adapter.mjs  (centrality 0.3389)
-exports: DEFAULT_ROLE_PROVIDERS, DEFAULT_ADAPTERS, roleEntry, roleProvider, roleModel, providerAdapter, buildArgv, childEnv
+## src/shared/markdown-exec.mjs  (centrality 0.4764)
+exports: EXECUTABLE_FENCE_TAGS, isSkillOrAgentFile, isProseOnlyFile, isGeneratedRecord, classifyMarkdown, addedLines
+
+## src/mcp/safe-exec-mcp/architect-writes.mjs  (centrality 0.3346)
+exports: isSafeArchitectPath, boundedRel, hardlinkAlias, projectPathVerdict, architectPathVerdict, findProjectRootFrom, analyzeArchitectWrites
+imports: shell-quote, node:fs, node:path
+
+## src/shared/provider-adapter.mjs  (centrality 0.3265)
+exports: DEFAULT_ROLE_PROVIDERS, DEFAULT_ROLE_MODELS, DEFAULT_ADAPTERS, roleEntry, roleProvider, roleModel, providerAdapter, buildArgv, PATH_OPERAND_FLAGS, absolutisePathOperands, childEnv
 imports: node:fs, node:path
 
-## src/shared/instinct-stager.mjs  (centrality 0.2673)
+## src/shared/instinct-stager.mjs  (centrality 0.2575)
 exports: MIN_CONFIDENCE, isSafeSlug, scanDangerousContent, slugify, validateInstinct, renderProposedSkill, stageInstincts
 imports: node:fs, node:path
 
-## src/shared/signal-handoff.mjs  (centrality 0.1977)
+## src/shared/standards-checker.mjs  (centrality 0.2575)
+exports: DEFAULT_STANDARDS_PATH, SEVERITY_ORDER, loadStandards, RULE_REGISTRY, validateFile, validateStaged, validateFiles, reportDrift, validateStandards
+imports: node:fs, node:path, node:child_process, ./markdown-exec.mjs
+
+## src/mcp/shared/load-policy.mjs  (centrality 0.2013)
+exports: POLICY_PATHS, loadPolicy, policyLoadCounts, policyStaleness
+imports: node:fs, node:path, node:url
+
+## src/shared/signal-handoff.mjs  (centrality 0.1905)
 exports: VALID_TARGETS, emitHandoff, hasPendingHandoff, settleTasks, findAiDir, defaultMessage
 imports: node:fs, node:path, ../mcp/shared/state-db.js
 
-## src/mcp/safe-exec-mcp/architect-writes.mjs  (centrality 0.1752)
-exports: isSafeArchitectPath, architectPathVerdict, findProjectRootFrom, analyzeArchitectWrites
-imports: shell-quote, node:fs, node:path
+## src/mcp/shared/caller-role.mjs  (centrality 0.1777)
+exports: resolveCallerRole, _resetCallerRoleCache, effectiveRequestRole, inArchitectScope, architectScopeGuard
+imports: node:child_process, node:fs, node:path, ../safe-exec-mcp/architect-writes.mjs, node:url
 
-## src/mcp/ast-parser-mcp/extractor.mjs  (centrality 0.169)
+## src/mcp/vibe-check-mcp/browser-check.mjs  (centrality 0.1688)
+exports: BROWSER_MISSING, browserStatus, browserMissingMessage, assertBrowserAvailable
+imports: node:fs
+
+## src/mcp/ast-parser-mcp/extractor.mjs  (centrality 0.1629)
 exports: PARSE_TIMEOUT_MICROS, languageForFile, initParsers, extractSymbols, extractFromSource
 imports: web-tree-sitter, node:url, node:path
 
-## src/mcp/ast-parser-mcp/repo-mapper.mjs  (centrality 0.169)
+## src/mcp/ast-parser-mcp/repo-mapper.mjs  (centrality 0.1629)
 exports: normalizePath, resolveImport, buildDependencyGraph, pageRank, rankSymbols
 
-## src/mcp/ast-parser-mcp/serializer.mjs  (centrality 0.169)
+## src/mcp/ast-parser-mcp/serializer.mjs  (centrality 0.1629)
 exports: DEFAULT_MAX_TOKENS, estimateTokens, renderFileBlock, serializeRepoMap
 
-## src/mcp/shared/mcp-domains.mjs  (centrality 0.169)
+## src/mcp/shared/mcp-domains.mjs  (centrality 0.1629)
 exports: DOMAINS, domainForServer
 
-## src/mcp/task-synchronizer-mcp/tool-schemas.mjs  (centrality 0.1568)
+## src/mcp/propose-patch-mcp/diff-targets.mjs  (centrality 0.154)
+exports: diffFileSections, headerName, isUnifiedDiff, validateDiffContent
+imports: node:path
+
+## src/mcp/task-synchronizer-mcp/tool-schemas.mjs  (centrality 0.151)
 exports: buildToolSchemas
 
-## src/shared/managed-agents-client.mjs  (centrality 0.1568)
+## src/shared/managed-agents-client.mjs  (centrality 0.151)
 exports: isEnabled, projectState, syncToCloud, cancelPendingSync, migrateLegacyToSteps, sendSteps, diagnostics
 imports: node:sqlite, node:crypto, node:fs, node:path
 
-## src/shared/schema-validator.js  (centrality 0.1568)
+## src/shared/schema-validator.js  (centrality 0.151)
 exports: validate, loadSchemas, validateNamed
 imports: node:fs, node:path, node:url
 
-## src/shared/seo-cluster-intents.mjs  (centrality 0.1568)
+## src/shared/seo-cluster-intents.mjs  (centrality 0.151)
 exports: SEO_PILLAR_INTENT, SEO_CLUSTER_INTENTS, SEO_ALL_INTENTS, SEO_CLUSTER_INTENTS_SET, SEO_ALL_INTENTS_SET, MAX_CLUSTER_PAGES_PER_SEED, isValidIntentType, isClusterIntent
 
-## scripts/generate_blueprints_index.mjs  (centrality 0.1445)
+## scripts/generate_blueprints_index.mjs  (centrality 0.1392)
 imports: node:fs, node:path
 
-## scripts/generate_mcp_docs.mjs  (centrality 0.1445)
+## scripts/generate_mcp_docs.mjs  (centrality 0.1392)
 imports: node:fs, node:path, node:url, node:os
 
-## scripts/standards.mjs  (centrality 0.1445)
+## scripts/standards.mjs  (centrality 0.1392)
 imports: node:path, node:fs, node:url, node:os
 
-## src/mcp/advisor-mcp/index.js  (centrality 0.1445)
+## src/mcp/advisor-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, child_process, fs, path, ../shared/logger.js, ../../shared/provider-adapter.mjs
 
-## src/mcp/approval-mcp/index.js  (centrality 0.1445)
+## src/mcp/approval-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, node:sqlite, node:readline, node:fs, node:path, node:os, ../shared/logger.js
 
-## src/mcp/archive-manager-mcp/index.js  (centrality 0.1445)
+## src/mcp/archive-manager-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, fs, readline, path, ../shared/logger.js, ../shared/state-db.js
 
-## src/mcp/ast-parser-mcp/index.js  (centrality 0.1445)
+## src/mcp/ast-parser-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, node:fs, node:path, ./extractor.mjs, ./repo-mapper.mjs, ./serializer.mjs, ../../shared/mcp-telemetry.mjs
 
-## src/mcp/blueprint-aligner-mcp/index.js  (centrality 0.1445)
+## src/mcp/blueprint-aligner-mcp/index.js  (centrality 0.1392)
 exports: parseDiffByFile, isMarkdownFile, isPackageJsonFile, isJsonFile, traversalOutsideBackticks, isTestHelperFile, isInternalPathBuilder
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, child_process, fs, path, ../shared/logger.js
 
-## src/mcp/cache-manager-mcp/index.js  (centrality 0.1445)
+## src/mcp/cache-manager-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, node:sqlite, node:fs, node:path, node:os, ../shared/logger.js
 
-## src/mcp/code-execution-mcp/index.js  (centrality 0.1445)
+## src/mcp/code-execution-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, node:child_process, ../shared/logger.js
 
-## src/mcp/computer-use-mcp/index.js  (centrality 0.1445)
+## src/mcp/computer-use-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, child_process, fs, os, path, ../shared/logger.js
 
-## src/mcp/context-guardian-mcp/index.js  (centrality 0.1445)
+## src/mcp/context-guardian-mcp/index.js  (centrality 0.1392)
 imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, fs, path, child_process, ../shared/state-db.js, ../shared/logger.js
-
-## src/mcp/context-invoker-mcp/index.js  (centrality 0.1445)
-imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, fs, path, os, ../shared/logger.js
-
-## src/mcp/github-bridge-mcp/index.js  (centrality 0.1445)
-imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, child_process, ../shared/logger.js
-
-## src/mcp/lsp-mcp/index.js  (centrality 0.1445)
-imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, fs, path, module, child_process, ../shared/logger.js, typescript
-
-## src/mcp/mcp-router/index.js  (centrality 0.1445)
-imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, node:child_process, node:fs, node:path, node:os, ../shared/logger.js, ../shared/mcp-domains.mjs, ../../shared/telemetry.mjs
-
-## src/mcp/memory-manager-mcp/index.js  (centrality 0.1445)
-imports: ../shared/is-main.mjs, @modelcontextprotocol/sdk/server/index.js, @modelcontextprotocol/sdk/server/stdio.js, @modelcontextprotocol/sdk/types.js, ../../shared/mcp-telemetry.mjs, fs, path, ../shared/logger.js

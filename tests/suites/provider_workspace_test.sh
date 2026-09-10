@@ -218,19 +218,20 @@ assert_status 0 "E-244.08b: and it scaffolded .ai/ rather than dying first" \
 assert_status 0 "E-244.08c: the guard is the empty-string one, not a swallowed 128" \
   bash -c "sed -n '/^install_git_hooks() {/,/^}/p' '$AI' | grep -q 'git rev-parse --git-dir 2>/dev/null || true'"
 
-# ── E-244.9: two defects this task FOUND and did not fix ────────────────────
-# Recorded as assertions so they cannot be quietly "tidied" without a decision.
+# ── E-244.9: what became of the two defects this task found ─────────────────
+# These began as pins: assertions holding a defect in place so it could not be quietly
+# tidied away without a decision. D-067 ruled on both, so they now assert the RULING
+# rather than the defect — a pin that outlives its subject starts protecting the wrong
+# thing, and a stale one would have failed the moment E-247 landed. It did.
 #
-# (1) The second half of do_sync is unreachable — both branches of its `if` return or
-#     exit first. Hooks, doc regeneration, the WAL checkpoint, REPO_MAP, the Memory
-#     Palace index and the E-237 policy report have not run on `ai sync` since E-217.
-#     A trial restore made `ai sync` exit 1 under `set -e`, so it is its own task.
-assert_status 0 "E-244.09a: the dead-code finding is recorded at the return that causes it" \
+# (1) do_sync's unreachable second half → E-247 restored it under fail-open guards.
+#     Reachability itself is asserted by sync_reachability_test.sh, which reads the
+#     OUTPUT of a real sync; a source-text assertion could not tell the difference
+#     between "the call is present" and "the call runs" — that was the whole outage.
+assert_status 1 "E-244.09a: the dead-code note is GONE — E-247 removed its subject" \
   bash -c "grep -q 'DELIBERATELY NOT FIXED HERE' '$AI'"
-assert_status 0 "E-244.09b: and again at the dead tail itself" \
-  bash -c "grep -q 'is DEAD CODE' '$AI'"
-# (2) E-237's staleness note word-split its own output. Fixed here because it is one
-#     line and carries no behaviour, unlike the tail above.
+assert_status 0 "E-244.09b: and the steps run inside the .ai branch, before the return" \
+  bash -c "sed -n '/^do_sync() {/,/^}/p' '$AI' | grep -q '_sync_step policy_report'"
 assert_status 1 "E-244.09c: the policy note no longer word-splits (unquoted \$stale is gone)" \
   bash -c "grep -q \"printf '  %s..n' .stale\" '$AI'"
 

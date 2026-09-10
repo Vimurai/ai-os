@@ -2295,6 +2295,70 @@ PY
   echo "  stale verdicts (AI_OS_POLICY_HOT_RELOAD=0 disables hot reload entirely)."
 }
 
+# ── E-247 (D-067 §1): fail-open step wrapper for the second half of `ai sync` ──
+#
+# Every step in sync's tail was designed to be fail-open — each one already guards its own
+# work and returns 0 on trouble. That was not enough twice over. First, the steps became
+# UNREACHABLE (E-217's early return) and their internal fail-open behaviour proved nothing,
+# because they never ran. Second, a trial restore (E-244, reverted) still made `ai sync`
+# exit 1 under `set -e`: one step's internal guard was not as complete as its comment
+# claimed, and under `set -euo pipefail` that killed the whole command.
+#
+# So the guarantee is moved OUT of the individual steps and made structural. `"$@"` runs as
+# an `if` condition, where `set -e` is suspended by definition, so no step — however it is
+# edited later — can abort the sync. A failure is reported and counted; it is never silent
+# and never fatal.
+#
+# The counters are plain globals on purpose: _sync_step is called directly from do_sync, not
+# through a command substitution, so they survive. (A `$( )` here would put them in a
+# subshell and every count would come back zero — the subshell-state mistake this codebase
+# has now made four times, recorded as review question #4.)
+_SYNC_STEPS_OK=0
+_SYNC_STEPS_SKIPPED=0
+
+# _sync_step <name> <command...> — run one sync step, never fatally.
+_sync_step() {
+  local name="$1"; shift
+  # Test hook for the fail-open property itself. Asserting "a broken step does not abort
+  # the sync" needs a step that actually breaks, and breaking a real one from a test means
+  # corrupting the environment it reads. Named after the task so it cannot be mistaken for
+  # a feature.
+  if [[ "${AI_OS_E247_FORCE_FAIL:-}" == "$name" ]]; then
+    echo "  ! sync: ${name} skipped — forced failure (AI_OS_E247_FORCE_FAIL=${name})" >&2
+    _SYNC_STEPS_SKIPPED=$(( _SYNC_STEPS_SKIPPED + 1 ))
+    return 0
+  fi
+  local _rc=0
+  "$@" || _rc=$?
+  if [[ "$_rc" -eq 0 ]]; then
+    _SYNC_STEPS_OK=$(( _SYNC_STEPS_OK + 1 ))
+  else
+    echo "  ! sync: ${name} skipped — exited ${_rc}" >&2
+    _SYNC_STEPS_SKIPPED=$(( _SYNC_STEPS_SKIPPED + 1 ))
+  fi
+  return 0
+}
+
+# _sync_install_hooks — hook propagation + install + legacy upgrade, as one step.
+#
+# Propagate hook edits from the framework clone into the runtime mirror when a distinct
+# workspace is configured (the original code copied ${AIOS}/hooks onto itself — AIOS ==
+# ~/.ai-os == destination — a silent no-op), then (re)install this project's git-hook stubs
+# so commits run the canonical AI-OS hooks, and upgrade any legacy copied .git/hooks/* to
+# the stub model (E-41) so there is no copy-by-value drift.
+_sync_install_hooks() {
+  local _hook_ws; _hook_ws="$(_resolve_aios_workspace || true)"
+  if [[ -n "$_hook_ws" && -d "${_hook_ws}/hooks" && "$_hook_ws" != "$AIOS" ]]; then
+    cp -f "${_hook_ws}/hooks/"*.sh "${AIOS}/hooks/" 2>/dev/null || true
+    chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
+    echo "  Hooks propagated from framework workspace → ${AIOS}/hooks"
+  fi
+  install_git_hooks
+  _upgrade_legacy_git_hooks
+  return 0
+}
+
+
 do_sync() {
   # §28: handle --github flag before normal sync
   for arg in "$@"; do
@@ -2358,20 +2422,59 @@ do_sync() {
       _report_stale_provider_workspaces
     fi
 
-    # Explicit success: without it do_sync returns the status of whatever ran last,
-    # which picked up a stray 128 from a `git rev-parse` in a non-git directory and
-    # made a clean sync look like a failure.
+    # ── E-247 (D-067 §1): the second half of sync, restored under fail-open guards ──
     #
-    # ⚠ E-244 FOUND, DELIBERATELY NOT FIXED HERE: everything after the `fi` below is
-    # UNREACHABLE and has been since E-217 added this return. Hooks, the mcp.md and
-    # blueprint-index regeneration, the WAL checkpoint, REPO_MAP, the Memory Palace
-    # index, the generated-artefact .gitignore and the E-237 policy-staleness report do
-    # not run on `ai sync`, and the command never prints "Done." Restoring the tail is
-    # NOT a formatting change: it re-enables ~60 lines that have not executed in weeks,
-    # and a trial restore made `ai sync` exit 1 under `set -e` in a fixture whose output
-    # was captured with 2>&1 — a live failure, not a theoretical one. That is its own
-    # task with its own blast radius, not a side effect of workspace hygiene. Reported
-    # to the Architect; do not "tidy" this without one.
+    # Everything below this line was UNREACHABLE from E-217 until now. E-217 added a
+    # `return 0` here to fix the exit status — do_sync used to return whatever ran last,
+    # and a stray 128 from `git rev-parse` in a non-git directory made a clean sync look
+    # like a failure — but placing it before these steps silently retired nine ruled
+    # features in a command people run after every pull. Nothing failed; `ai sync` simply
+    # stopped printing "Done." and no one was watching for a missing line.
+    #
+    # EVERY STEP IS WRAPPED. Each was written to be fail-open, and a first restore attempt
+    # (E-244, reverted) still managed to make `ai sync` exit 1 under `set -e`. The wrapper
+    # makes that impossible to reach the caller: a step that fails prints
+    # `sync: <name> skipped — <reason>` and the rest continue. The exit status is settled
+    # once, at the end, so the property E-217 wanted survives.
+    if [[ "${AI_OS_SYNC_MINIMAL:-0}" == "1" ]]; then
+      echo ""
+      echo "  Stopping after provisioning (AI_OS_SYNC_MINIMAL=1) — hooks, doc regeneration,"
+      echo "  the WAL checkpoint, REPO_MAP, the Memory Palace index and the policy report"
+      echo "  were NOT run. Unset it to complete a full sync."
+      return 0
+    fi
+
+    echo ""
+    _SYNC_STEPS_OK=0
+    _SYNC_STEPS_SKIPPED=0
+
+    _sync_step hooks           _sync_install_hooks
+    _sync_step mcp_docs        _regenerate_mcp_docs
+    _sync_step blueprint_index _regenerate_blueprints_index
+    _sync_step wal             _wal_checkpoint_state_db
+    _sync_step repo_map        _generate_repo_map
+    _sync_step memory_palace   _generate_memory_palace
+    _sync_step gitignore       _ensure_generated_gitignore "."
+    _sync_step policy_report   _report_policy_staleness
+
+    # The summary is what makes a silent loss loud. "Done." on its own returned in E-217's
+    # shape too — a function reaching its end says nothing about how much of it ran, which
+    # is precisely how nine steps went missing without a symptom.
+    if [[ "$_SYNC_STEPS_SKIPPED" -gt 0 ]]; then
+      echo "Done. (steps: ${_SYNC_STEPS_OK} ok, ${_SYNC_STEPS_SKIPPED} skipped — see the ! lines above)"
+    else
+      echo "Done. (steps: ${_SYNC_STEPS_OK} ok)"
+    fi
+    # E-228 (D-059): only when the project can actually use it — printing a tmux hint on a
+    # host without tmux is noise that teaches the reader to ignore the line.
+    if command -v tmux >/dev/null 2>&1; then
+      echo "Tip: 'ai start' opens the Triad layout for this project (--status / --kill)."
+    fi
+
+    # Explicit success: without it do_sync returns the status of whatever ran last, which
+    # picked up a stray 128 from a `git rev-parse` in a non-git directory and made a clean
+    # sync look like a failure. It now sits AFTER the steps rather than before them, which
+    # is the whole of E-247.
     return 0
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
@@ -2379,60 +2482,6 @@ do_sync() {
     exit 0
   fi
 
-  # Propagate hook edits from the framework clone into the runtime mirror when a
-  # distinct workspace is configured (the previous code copied ${AIOS}/hooks onto
-  # itself — AIOS == ~/.ai-os == destination — a silent no-op), then (re)install
-  # this project's git-hook stubs so commits run the canonical AI-OS hooks.
-  _hook_ws="$(_resolve_aios_workspace)"
-  if [[ -n "$_hook_ws" && -d "${_hook_ws}/hooks" && "$_hook_ws" != "$AIOS" ]]; then
-    cp -f "${_hook_ws}/hooks/"*.sh "${AIOS}/hooks/" 2>/dev/null || true
-    chmod +x "${AIOS}/hooks/"*.sh 2>/dev/null || true
-    echo "  Hooks propagated from framework workspace → ${AIOS}/hooks"
-  fi
-  install_git_hooks
-
-  # E-41: upgrade any legacy copied .git/hooks/* to the stub model so the
-  # canonical AI-OS hooks always run (no copy-by-value drift).
-  _upgrade_legacy_git_hooks
-
-  # E-52: regenerate .ai/blueprints/mcp.md from registry.json so the doc
-  # cannot drift from the registered MCP server set.
-  _regenerate_mcp_docs
-
-  # E-110: regenerate .ai/blueprints/_INDEX.md so the blueprint nav index
-  # always lists every domain blueprint (no manual-omission drift).
-  _regenerate_blueprints_index
-
-  # E-53: flush state.sqlite WAL to prevent unbounded growth.
-  _wal_checkpoint_state_db
-
-  # E-98: regenerate the AST repository map (.ai/REPO_MAP.md) for preflight.
-  _generate_repo_map
-
-  # E-145 (self-learning-arc, W5-T1): refresh the Memory Palace candidate index.
-  # `|| true` is belt-and-suspenders — the function is internally fail-open, and this
-  # guarantees a future unguarded edit still can't abort sync under `set -e`.
-  _generate_memory_palace || true
-
-  # E-233: the artefacts regenerated above must not show up as project diffs.
-  _ensure_generated_gitignore "."
-
-  # E-237 (D-061 §5): a server spawned before this sync is still serving the OLD policy.
-  # Hot-reload picks it up on the next request, but a server started before E-237 shipped
-  # will not — and that is exactly the session that produced a day of phantom P0s. Say so
-  # rather than letting the operator discover it through a verdict they have to argue with.
-  _report_policy_staleness
-
-  echo "Done."
-  # E-228 (D-059): only when the project can actually use it — printing a tmux hint on a
-  # host without tmux is noise that teaches the reader to ignore the line.
-  if [[ -d ".ai" ]] && command -v tmux >/dev/null 2>&1; then
-    echo "Tip: 'ai start' opens the Triad layout for this project (--status / --kill)."
-  fi
-
-  # ⚠ E-244: everything from "Propagate hook edits" down to here is DEAD CODE — both
-  # branches of the `if [[ -d ".ai" ]]` above return or exit before reaching it. See the
-  # note at that return for why it was found and why restoring it is a separate task.
 }
 
 # ── E-215 (architect-provider-parity.md §Components 6): per-role provisioning ──
