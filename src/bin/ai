@@ -999,9 +999,10 @@ _sync_workspace_dirs() {
   # and nothing reads .gemini/skills, so provisioning it would create dead dirs.
   _provision_workspace "gemini" ".gemini" "no" "yes"
   cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
-  # Claude-only frontmatter keys are stripped for the Gemini CLI. This runs AFTER the
-  # copy, so the E-212 normalization (which targets the Claude contract) is undone here
-  # for gemini's own workspace only — the src/ files keep the full contract.
+  # Claude-only frontmatter keys are stripped for the Gemini CLI. This runs AFTER the copy
+  # and is now the ONLY place the strip happens (E-248 / D-067 §2): the transformation
+  # belongs at this provider's boundary, applied to the copy being written here, never to
+  # the mirror or src/ that every other provider reads from.
   strip_gemini_agent_fields ".gemini/agents"
   _configure_project_gemini_settings ".gemini"
   if [[ "$mode" == "init" ]]; then
@@ -1516,10 +1517,21 @@ install_global() {
     echo "  ⚠  Node.js not found — MCP setup skipped. Install Node.js then run: ai mcp-setup"
   fi
 
-  # Strip unsupported Gemini CLI frontmatter fields from global agent sources
-  if [[ -d "${AIOS}/gemini/agents" ]]; then
+  # E-248 (D-067 §2): the mirror is CANONICAL and is no longer stripped here.
+  #
+  # The three keys (disable-model-invocation, user-invocable, allowed-tools) are Claude
+  # frontmatter the Gemini CLI rejects, so install used to remove them from
+  # ${AIOS}/gemini/agents. That was harmless while src/gemini/agents served only Gemini.
+  # E-212 made provisioning ROLE-aware: `gemini/agents` is the ARCHITECT's agent directory
+  # whatever provider holds the role, so under the D-066 all-Claude default those seven
+  # agents are copied into .claude/agents/ — from the stripped mirror. A Claude Architect
+  # lost the very keys that tell Claude Code what its agents may do.
+  #
+  # The transformation now happens at the provider BOUNDARY (D-052): on the copy written
+  # into a .gemini/ workspace, never on the source every other provider reads.
+  if [[ "${AI_OS_STRIP_MIRROR:-0}" == "1" && -d "${AIOS}/gemini/agents" ]]; then
     strip_gemini_agent_fields "${AIOS}/gemini/agents"
-    echo "✓ Gemini agent frontmatter sanitized (stripped unsupported fields)"
+    echo "✓ Gemini agent frontmatter sanitized in the MIRROR (AI_OS_STRIP_MIRROR=1 — pre-E-248 behaviour)"
   fi
 
   # E-135: persist explicit role overrides to .ai/roles.json when run inside a project.

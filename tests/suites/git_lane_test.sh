@@ -37,12 +37,19 @@ _mkrepo() {
 # NOTE: `_out="$(_run ...)"` would run _run in a SUBSHELL, so an _RC set inside would
 # never reach the parent and every exit-code assertion would silently read a stale
 # value. Call this directly and read _OUT/_RC.
+# E-236 (environment dependence): AI_OS_PANE_ROLE is stripped from every hook invocation
+# below. `ai pane <role>` EXPORTS it, so a suite run from inside an Engineer pane inherited
+# AI_OS_PANE_ROLE=engineer — and the hook's resolver ranks the pane role ABOVE
+# AI_OS_CALLER_ROLE, so the role this suite sets was silently overridden and the whole
+# Architect lane never activated. It passed on CI (no pane) and failed on a real Triad
+# machine: the verdict depended on where the suite was run from, not on the hook.
 # CLAUDE_CODE_SESSION_ID is emptied so the env fallback is what is under test here;
 # the HMAC-record path is covered separately in E-214.7.
 _OUT=""
 _run() {  # <repo> <role> → sets _OUT and _RC
   local d="$1" role="$2"
-  _OUT="$( cd "$d" && AI_OS_CALLER_ROLE="$role" AI_OS_SKIP_STANDARDS=1 CLAUDE_CODE_SESSION_ID= \
+  _OUT="$( cd "$d" && env -u AI_OS_PANE_ROLE AI_OS_CALLER_ROLE="$role" \
+           AI_OS_SKIP_STANDARDS=1 CLAUDE_CODE_SESSION_ID= \
            bash "$HOOK" 2>&1 )"
   _RC=$?
 }
@@ -130,7 +137,7 @@ SID_L="e214-$RANDOM$RANDOM"
 _mintl architect "$SID_L"
 R10="$(_mkrepo)"
 ( cd "$R10" && echo z > src/impl.js && git add src/impl.js )
-_OUT="$( cd "$R10" && AI_OS_CALLER_ROLE=engineer AI_OS_SKIP_STANDARDS=1 \
+_OUT="$( cd "$R10" && env -u AI_OS_PANE_ROLE AI_OS_CALLER_ROLE=engineer AI_OS_SKIP_STANDARDS=1 \
          CLAUDE_CODE_SESSION_ID="$SID_L" bash "$HOOK" 2>&1 )"; _RC=$?
 assert_contains "E-214.07a: the HMAC record beats a forged AI_OS_CALLER_ROLE=engineer" \
   "SOVEREIGNTY_BLOCK" "$_OUT"
@@ -143,7 +150,8 @@ rm -f "${HOME}/.ai-os/run/role-${SID_L}.lock"
 # ── E-214.8: rollback escape hatch ──────────────────────────────────────────
 R11="$(_mkrepo)"
 ( cd "$R11" && echo z > src/impl.js && git add src/impl.js )
-_OUT="$( cd "$R11" && AI_OS_CALLER_ROLE=architect AI_OS_SKIP_GIT_LANE=1 AI_OS_SKIP_STANDARDS=1 \
+_OUT="$( cd "$R11" && env -u AI_OS_PANE_ROLE AI_OS_CALLER_ROLE=architect AI_OS_SKIP_GIT_LANE=1 \
+         AI_OS_SKIP_STANDARDS=1 \
          CLAUDE_CODE_SESSION_ID= bash "$HOOK" 2>&1 )"; _RC=$?
 assert_contains "E-214.08a: AI_OS_SKIP_GIT_LANE=1 bypasses the lane" "0" "$_RC"
 assert_not_contains "E-214.08b: bypass produces no sovereignty block" "SOVEREIGNTY_BLOCK" "$_OUT"
@@ -178,7 +186,8 @@ exec /usr/bin/git "$@"
 EOS
 chmod +x "$R12/stub/git"
 ( cd "$R12" && echo evil > src/evil.js && /usr/bin/git add src/evil.js )
-_OUT="$( cd "$R12" && PATH="$R12/stub:$PATH" AI_OS_CALLER_ROLE=architect AI_OS_SKIP_STANDARDS=1 \
+_OUT="$( cd "$R12" && env -u AI_OS_PANE_ROLE PATH="$R12/stub:$PATH" AI_OS_CALLER_ROLE=architect \
+         AI_OS_SKIP_STANDARDS=1 \
          CLAUDE_CODE_SESSION_ID= bash "$HOOK" 2>&1 )"; _RC=$?
 assert_contains "E-214.10a: a FAILED git diff blocks (fail-closed), never waives" "1" "$_RC"
 assert_not_contains "E-214.10b: a failed diff never grants the stamp waiver" "ARCHITECT_LANE" "$_OUT"
@@ -235,7 +244,8 @@ if [[ "${1:-}" == "diff" ]]; then printf 'R100\t.ai/a\t.ai/b\tsrc/c\n'; exit 0; 
 exec /usr/bin/git "$@"
 EOS
 chmod +x "$R16/stub/git"
-_OUT="$( cd "$R16" && PATH="$R16/stub:$PATH" AI_OS_CALLER_ROLE=architect AI_OS_SKIP_STANDARDS=1 \
+_OUT="$( cd "$R16" && env -u AI_OS_PANE_ROLE PATH="$R16/stub:$PATH" AI_OS_CALLER_ROLE=architect \
+         AI_OS_SKIP_STANDARDS=1 \
          CLAUDE_CODE_SESSION_ID= bash "$HOOK" 2>&1 )"; _RC=$?
 assert_contains "E-214.10k: a 4-field diff record blocks (fail-closed)" "1" "$_RC"
 assert_contains "E-214.10l: and it says the shape was unexpected" "Unexpected diff record shape" "$_OUT"
@@ -259,7 +269,8 @@ echo "  [E-218] waiver requires a verified session record"
 _e218_verdict() {  # <repo> <env...> → rc + label
   local d="$1"; shift
   local out rc
-  out="$( cd "$d" && env "$@" AI_OS_SKIP_STANDARDS=1 bash "$HOOK" 2>&1 )"; rc=$?
+  out="$( cd "$d" && env -u AI_OS_PANE_ROLE -u AI_OS_CALLER_ROLE "$@" \
+          AI_OS_SKIP_STANDARDS=1 bash "$HOOK" 2>&1 )"; rc=$?
   local l=pass
   printf '%s' "$out" | grep -q SOVEREIGNTY_BLOCK && l=BLOCK
   printf '%s' "$out" | grep -q 'stamp waived' && l=WAIVED

@@ -220,9 +220,9 @@ assert_file_if_present "meta_analyst → .gemini mirror (modulo stripped Claude 
 # whether this machine happened to be installed, which is the pattern this sprint kept
 # removing. Absent install → SKIP, counted separately; never a fabricated pass.
 if [[ -f "$AGENT_MIRROR" ]]; then
-  assert_status 0 "meta_analyst → ~/.ai-os copy (modulo stripped Claude keys)" \
-    _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_MIRROR"
-  assert_status 1 "meta_analyst → ~/.ai-os copy carries no Claude-only keys (strip ran)" \
+  assert_status 0 "meta_analyst → ~/.ai-os copy is byte-identical to src/" \
+    diff -q "$AGENT_SRC" "$AGENT_MIRROR"
+  assert_status 0 "meta_analyst → ~/.ai-os copy KEEPS the Claude-only keys (E-248)" \
     grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
 else
   _skip "meta_analyst → ~/.ai-os copy comparison (framework not installed)"

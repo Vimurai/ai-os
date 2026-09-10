@@ -192,17 +192,19 @@ else
   _skip ".gemini/ copy carries no Claude-only keys (workspace not provisioned)"
 fi
 if [[ -f "$AGENT_MIRROR" ]]; then
-  # The ~/.ai-os GEMINI workspace is a TRANSFORMED copy, not a mirror. `ai install`
-  # runs strip_gemini_agent_fields over it because disable-model-invocation,
-  # user-invocable and allowed-tools are unsupported by Gemini CLI v0.37+. Asserting
-  # byte-identity here passed only on a developer machine whose ~/.ai-os predated the
-  # strip; on a fresh install (CI) it failed, and it had been failing on master since
-  # 2026-09-07. The correct invariant is "identical apart from the stripped keys",
-  # plus a check that the strip actually ran — otherwise this assertion would pass on
-  # an untransformed copy too.
-  assert_status 0 "~/.ai-os copy matches src/ (modulo stripped Claude keys)" \
-    _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_MIRROR"
-  assert_status 1 "~/.ai-os copy carries no Claude-only keys (strip ran)" \
+  # E-248 (D-067 §2) INVERTED this pair. The mirror used to be a TRANSFORMED copy —
+  # `ai install` ran strip_gemini_agent_fields over ~/.ai-os/gemini/agents — so the
+  # invariant was "identical apart from the stripped keys, and the strip ran". E-212 then
+  # made provisioning role-aware: `gemini/agents` is the ARCHITECT's agent directory
+  # whatever provider holds the role, so under the D-066 all-Claude default these agents
+  # are copied into `.claude/agents/` FROM THIS MIRROR — arriving without the three keys
+  # that tell Claude Code what they may do. The mirror is now CANONICAL and the strip
+  # happens only on the copy written into `.gemini/` (asserted just above). So: byte
+  # identity, and the keys PRESENT. The strip's own non-vacuity lives in the .gemini/
+  # assertion above and in gemini_strip_boundary_test.sh.
+  assert_status 0 "~/.ai-os copy is byte-identical to src/ (the mirror is canonical)" \
+    diff -q "$AGENT_SRC" "$AGENT_MIRROR"
+  assert_status 0 "~/.ai-os copy KEEPS the Claude-only keys (E-248)" \
     grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
 else
   # E-236: an absent install is a SKIP, counted separately from PASS — a pass here would
