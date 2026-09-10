@@ -9,8 +9,8 @@
 - **Aesthetic**: A CLI-native, developer-first framework focused on robustness, strict access control, and zero-friction workflows.
 
 ## 2. Information Architecture & The Triad
-- **Principal Architect**: Owns `.ai/blueprints/` and `TASKS.md`. Responsible for architectural design, strategy, and producing P-## and E-## tasks. Blocked from writing source code via the ANTI-DRIFT Protocol. (Default: `agy` CLI, governed by `ARCHITECT.md`).
-- **Lead Engineer**: Owns `src/` and `tests/`. Responsible for execution, fuzzy patching, and resolving E-## tasks. Blocked from altering sovereign blueprints. (Default: `claude` CLI, governed by `ENGINEER.md`).
+- **Principal Architect**: Owns `.ai/blueprints/` and `TASKS.md`. Responsible for architectural design, strategy, and producing P-## and E-## tasks. Blocked from writing source code via the ANTI-DRIFT Protocol. (Default: `claude` CLI on model `fable` — D-066; `agy`/`gemini` selectable via `roles.json`. Governed by `ARCHITECT.md`).
+- **Lead Engineer**: Owns `src/` and `tests/`. Responsible for execution, fuzzy patching, and resolving E-## tasks. Blocked from altering sovereign blueprints. (Default: `claude` CLI on model `opus` — D-066. Governed by `ENGINEER.md`).
 - **Same-provider topology (D-054)**: both roles MAY run on the same provider in separate tmux panes; role identity is bound per pane at launch via `ai pane <role>` (see `.ai/blueprints/role-abstraction.md §Same-Provider Triad`).
 - **Quality/QA (TestSprite)**: Owns `REVIEWS.md` and `LOG.md`. Responsible for vibe checks, chaos testing, and structural validation.
 - **Specialist Extensions (20 Native Agents)**: The ecosystem includes 20 native plugin agents. Key specialists include the `performance_engineer`, `db_architect`, `dependency_manager`, and `sre_responder` (read-only incident triage).

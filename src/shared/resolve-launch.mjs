@@ -15,7 +15,8 @@
 // One element per line (not JSON) so the bash caller can read it with a plain
 // `while read` loop and keep argv elements intact even when they contain spaces.
 
-import { roleProvider, roleModel, providerAdapter, buildArgv } from "./provider-adapter.mjs";
+import { roleProvider, roleModel, providerAdapter, buildArgv, absolutisePathOperands } from "./provider-adapter.mjs";
+import { dirname, resolve } from "node:path";
 
 const [, , role, aiDir] = process.argv;
 if (!role || !aiDir) {
@@ -36,4 +37,14 @@ const argv = buildArgv(adapter.launch, {
   model: roleModel(aiDir, role),
 });
 
-process.stdout.write([provider, ...argv].join("\n"));
+// E-242 (D-066): the adapter templates emit PROJECT-RELATIVE paths, which only resolve
+// when the CLI's cwd is the project root. A pane opened in a subdirectory, or one whose
+// rc-file `cd`s, made the CLI report "Settings file not found" for a file that exists.
+//
+// Anchoring here rather than in the templates fixes every project at once, including one
+// whose .ai/providers.json predates this change and still carries the relative form —
+// editing the default template alone would leave those broken.
+const projectRoot = resolve(dirname(resolve(aiDir)));
+const anchored = absolutisePathOperands(argv, projectRoot);
+
+process.stdout.write([provider, ...anchored].join("\n"));

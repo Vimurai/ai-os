@@ -3502,6 +3502,37 @@ do_start() {
   local -a roles=()
   local r
   while IFS= read -r r; do [[ -n "$r" ]] && roles+=("$r"); done < <(_start_roles "$ai_dir")
+
+  # E-242 (D-066): pre-check every role's overlay HERE, before any pane is created.
+  #
+  # `ai pane` self-heals too, but by then the failure is inside a tmux pane whose output
+  # scrolls past and whose exit leaves an empty shell — the operator sees a dead pane, not
+  # a message. Checking up front reports all roles at once, in the terminal they are
+  # actually looking at.
+  local _pj _missing=0
+  _pj="$(cd "$(dirname "$ai_dir")" && pwd)"
+  for r in "${roles[@]}"; do
+    [[ -f "${_pj}/.claude/settings.${r}.json" ]] || _missing=1
+  done
+  if [[ "$_missing" -eq 1 ]]; then
+    # --dry-run DESCRIBES; it must not write. Regenerating overlays here would make a
+    # "show me what you would do" invocation modify the project, which is the one thing a
+    # dry run promises not to do.
+    if [[ "$dry" -eq 1 ]]; then
+      echo "ai start: (dry run) per-role settings overlays are missing; a real run regenerates them."
+      _missing=0
+    else
+    echo "ai start: regenerating missing per-role settings overlays..."
+    ( cd "$_pj" && _write_role_settings_overlays ".claude" ".ai" ) 2>/dev/null || true
+    for r in "${roles[@]}"; do
+      if [[ -f "${_pj}/.claude/settings.${r}.json" ]]; then
+        echo "  ✓ .claude/settings.${r}.json"
+      else
+        echo "  ✗ .claude/settings.${r}.json still missing — run 'ai init' in ${_pj}" >&2
+      fi
+    done
+    fi
+  fi
   if [[ "${#roles[@]}" -eq 0 ]]; then
     echo "ai start: no roles in .ai/roles.json — run 'ai init' or add engineer/architect." >&2
     return 2
@@ -3859,6 +3890,27 @@ do_pane() {
   if [[ ! -d "$ai_dir" ]]; then
     echo "ai pane: not inside an AI-OS project (.ai/ not found). Run 'ai init' first." >&2
     return 2
+  fi
+
+  # E-242 (D-066): SELF-HEAL a missing per-role overlay before launching.
+  #
+  # The reported failure — "Settings file not found: .claude/settings.architect.json" —
+  # was a PATH bug (fixed in resolve-launch.mjs), but the same message appears for a
+  # genuinely absent overlay: a project cloned before E-208, or one whose `.claude/` was
+  # cleaned. Regenerating it costs nothing and turns a dead-end error into a working pane.
+  #
+  # It writes only the ROLE OVERLAY, never `.claude/settings.json` — that file carries the
+  # hooks and the env block, and rewriting it here would be a much larger side effect than
+  # "start a pane" implies.
+  local _proj; _proj="$(cd "$(dirname "$ai_dir")" && pwd)"
+  if [[ ! -f "${_proj}/.claude/settings.${role}.json" ]]; then
+    echo "ai pane: .claude/settings.${role}.json missing — regenerating it." >&2
+    ( cd "$_proj" && _write_role_settings_overlays ".claude" ".ai" ) 2>/dev/null || true
+    if [[ -f "${_proj}/.claude/settings.${role}.json" ]]; then
+      echo "ai pane: overlay restored." >&2
+    else
+      echo "ai pane: could not regenerate the overlay — run 'ai init' in ${_proj}." >&2
+    fi
   fi
 
   # `|| true`: the script runs under `set -e`, so an unguarded non-zero from the
