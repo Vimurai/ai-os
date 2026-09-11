@@ -137,27 +137,32 @@ assert_contains "E-234.06a: src memory_curator.md passes unchanged" "0" \
 assert_contains "E-234.06b: the .claude mirror passes too" "0" \
   "$(_mc .claude/agents/memory_curator.md)"
 
+_CORPUS_FILE="$(test_tmpdir e234-corpus)/corpus.txt"
+_corpus_list="$(cd "$REPO_ROOT" && corpus_or_fail 100 src .claude \
+                 -- -name node_modules -prune -o -name "*.md" -print)"
+_corpus_rc=$?
+printf '%s\n' "$_corpus_list" > "$_CORPUS_FILE"
+
+# THE CORPUS STEP IS ITSELF AN ASSERTION (E-251, D-067 §5). Everything below reports on
+# this list; if it is empty or short, "no findings" is a statement about nothing. The roots
+# are NAMED and REQUIRED rather than filtered for existence — filtering is how the corpus
+# silently shrank to zero in the first place.
+assert_status 0 "E-234.06c: the corpus was BUILT — roots present, count above the floor" \
+  bash -c "[[ '${_corpus_rc}' -eq 0 ]]"
+
 _corpus() {
-  node --input-type=module -e '
+  CORPUS_FILE="$_CORPUS_FILE" node --input-type=module -e '
     const { RULE_REGISTRY } = await import(process.env.CHECKER_URL);
     const { readFileSync } = await import("fs");
-    const { execSync } = await import("child_process");
     const rule = RULE_REGISTRY.skill_locator_install_first;
-    // node_modules pruned: CI installs deps under src/mcp/*/ and an unpruned walk scans
-    // thousands of vendored READMEs, making the count depend on the host (E-231).
-    // E-244: name only the directories that EXIST. `ai sync` provisions a provider
-    // workspace only when a role is bound to it (D-066 §4), so .agents/ and .gemini/ are
-    // absent under the all-Claude default — and `find` on a missing path exits non-zero,
-    // which made execSync throw and the whole corpus come back EMPTY. A scan of zero
-    // files reports zero findings, so the assertion below would have gone on "passing"
-    // for a scan that never happened; that is exactly what 06a pins.
-    const { existsSync } = await import("fs");
-    const roots = ["src", ".claude", ".agents", ".gemini"]
-      .filter((d) => existsSync(process.env.REPO_ROOT + "/" + d));
-    const out = execSync(
-      "find " + roots.join(" ") + " -name node_modules -prune -o -name \"*.md\" -print",
-      { encoding: "utf8", maxBuffer: 1e8, cwd: process.env.REPO_ROOT });
-    const files = out.trim().split("\n").filter(Boolean);
+    // E-251 (D-067 §5): the corpus arrives as a FILE built by corpus_or_fail in the shell.
+    // It used to be built here, by shelling out to `find` over roots that may not exist —
+    // and when two of them stopped being provisioned, `find` exited non-zero, execSync
+    // threw, and the corpus came back EMPTY. Zero files report zero findings, so this scan
+    // would have gone on announcing "clean" forever. The corpus step now fails loudly
+    // instead, and this code reads a list it did not have to guess at.
+    const files = readFileSync(process.env.CORPUS_FILE, "utf8")
+      .split("\n").map(s => s.trim()).filter(Boolean);
     let n = 0;
     for (const f of files) {
       let c; try { c = readFileSync(process.env.REPO_ROOT + "/" + f, "utf8"); } catch { continue; }
@@ -169,10 +174,14 @@ _corpus() {
   ' 2>/dev/null
 }
 _scan="$(_corpus)"; _files="${_scan%% *}"; _found="${_scan##* }"
-assert_status 0 "E-234.06c: the corpus scan actually read files (files=${_files})" \
-  bash -c "[[ '${_files:-0}' -gt 100 ]]"
-assert_status 0 "E-234.06d: the whole corpus is now clean (found=${_found})" \
+assert_status 0 "E-234.06d: the whole corpus is now clean (files=${_files}, found=${_found})" \
   bash -c "[[ '${_found:-99}' -eq 0 ]]"
+# The corpus gate proves the LIST is long enough; this proves the SCANNER read that same
+# list. Without it, a scanner that silently read an empty CORPUS_FILE would still report
+# "clean" — the very shape E-251 exists to close, one layer further in.
+_corpus_n="$(printf '%s\n' "$_corpus_list" | grep -c . || true)"
+assert_contains "E-234.06e: the scanner read the whole corpus (${_corpus_n} files)" \
+  "${_corpus_n}" "${_files}"
 
 echo ""
 assert_summary

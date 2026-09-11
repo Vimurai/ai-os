@@ -80,21 +80,30 @@ framework helper via resolver|Agg: !node "${HOME}/.ai-os/shared/incident-aggrega
 CASES
 
 # ── E-232.3: the shipped corpus is clean, and the scan is not vacuous ───────
+_CORPUS_FILE="$(test_tmpdir e232-corpus)/corpus.txt"
+_corpus_list="$(cd "$REPO_ROOT" && corpus_or_fail 100 src .claude \
+                 -- -name "SKILL.md" -o -path "*/agents/*.md")"
+_corpus_rc=$?
+printf '%s\n' "$_corpus_list" > "$_CORPUS_FILE"
+
+# THE CORPUS STEP IS ITSELF AN ASSERTION (E-251). Everything below reports on this list;
+# if it is empty or short, "no violations" is a statement about nothing.
+assert_status 0 "E-232.03a: the corpus was BUILT — roots present, count above the floor" \
+  bash -c "[[ '${_corpus_rc}' -eq 0 ]]"
+
 _corpus_violations() {
-  node --input-type=module -e '
+  CORPUS_FILE="$_CORPUS_FILE" node --input-type=module -e '
     const { RULE_REGISTRY } = await import(process.env.CHECKER_URL);
     const { readFileSync } = await import("fs");
-    const { execSync } = await import("child_process");
     const rule = RULE_REGISTRY.skill_consent_no_project_exec;
-    // E-244: only the roots that EXIST — `find` on a missing path exits non-zero, which
-    // made the whole corpus come back empty and the "no findings" assertion pass for a
-    // scan that never ran. 03a pins the file count for exactly that reason.
-    const { existsSync } = await import("fs");
-    const _roots = ["src", ".claude", ".agents", ".gemini"]
-      .filter((d) => existsSync(process.env.REPO_ROOT + "/" + d)).join(" ");
-    const out = execSync("find " + _roots + " -name \"SKILL.md\" -o -path \"*/agents/*.md\" 2>/dev/null",
-      { encoding: "utf8", maxBuffer: 1e8, cwd: process.env.REPO_ROOT });
-    const files = out.trim().split("\n").filter(Boolean);
+    // E-251 (D-067 §5): the corpus arrives as a FILE built by corpus_or_fail in the shell.
+    // It used to be built here, by shelling out to `find` over roots that may not exist —
+    // and when two of them stopped being provisioned, `find` exited non-zero, execSync
+    // threw, and the corpus came back EMPTY. Zero files report zero findings, so this scan
+    // would have gone on announcing "clean" forever. The corpus step now fails loudly
+    // instead, and this code reads a list it did not have to guess at.
+    const files = readFileSync(process.env.CORPUS_FILE, "utf8")
+      .split("\n").map(s => s.trim()).filter(Boolean);
     let hits = 0;
     for (const f of files) {
       let c; try { c = readFileSync(process.env.REPO_ROOT + "/" + f, "utf8"); } catch { continue; }
@@ -106,11 +115,14 @@ _corpus_violations() {
 export REPO_ROOT
 _scan="$(_corpus_violations)"
 _files="${_scan%% *}"; _hits="${_scan##* }"
-# NON-VACUITY: a scan that found no files would report zero violations just as loudly.
-assert_status 0 "E-232.03a: the corpus scan actually read files (files=${_files})" \
-  bash -c "[[ '${_files:-0}' -gt 100 ]]"
-assert_status 0 "E-232.03b: no shipped skill or agent auto-executes a project program" \
+assert_status 0 "E-232.03b: no shipped skill or agent auto-executes a project program (files=${_files})" \
   bash -c "[[ '${_hits:-1}' -eq 0 ]]"
+# The corpus gate proves the LIST is long enough; this proves the SCANNER read that same
+# list. Without it, a scanner that silently read an empty CORPUS_FILE would still report
+# "clean" — the very shape E-251 exists to close, one layer further in.
+_corpus_n="$(printf '%s\n' "$_corpus_list" | grep -c . || true)"
+assert_contains "E-232.03c: the scanner read the whole corpus (${_corpus_n} files)" \
+  "${_corpus_n}" "${_files}"
 
 # ── E-232.4: the three converted skills kept their capability, as STEPS ────
 # Removing the `!` line must not remove the ability — otherwise this "fix" is a deletion.

@@ -364,6 +364,79 @@ test_tmux_socket() {
   printf '%s' "$name"
 }
 
+# ── E-251 (D-067 §5): the scan that never ran — variety #5 ───────────────────
+#
+# Three rule-scanning suites built their corpus with `find src .claude .agents .gemini`.
+# E-244 stopped provisioning two of those roots; `find` then exited non-zero, `execSync`
+# threw, and the corpus came back EMPTY. A scan of zero files reports zero violations, so
+# all three would have gone on printing "no findings" for a scan that never happened —
+# indefinitely, and with every appearance of health. Only the file-count assertion each
+# suite happened to carry caught it.
+#
+# The lesson generalises past `find`: any suite that forms a corpus and then asserts
+# something about its contents is asserting nothing when the corpus is empty. So the corpus
+# step is the thing that has to fail, loudly, rather than the assertion that reads it.
+#
+# DATA OR STATE, NEVER BOTH (review question #4, D-064 §2). This helper is called as
+# `list="$(corpus_or_fail …)"`, which runs it in a SUBSHELL — so it must not touch
+# PASS_COUNT/FAIL_COUNT or register anything. It returns the file list on stdout and its
+# verdict as an EXIT STATUS, which a command substitution preserves in `$?`. The caller
+# turns that into one assertion. The count goes to stderr so it is printed on every run
+# without polluting the data stream.
+#
+# corpus_or_fail <min> <root>... [-- <find-predicate>...]
+#   stdout : one path per line, relative to the current directory
+#   stderr : "CORPUS n file(s) from <roots>" — every run, pass or fail
+#   status : 0 ok | 1 a root is missing, `find` failed, or n < min
+#
+# The predicate defaults to `-type f`. It is wrapped in `\( … \)` so an `-o` alternation
+# binds inside it rather than swallowing the roots.
+corpus_or_fail() {
+  local min="$1"; shift
+  local roots=() pred=()
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--" ]]; then shift; pred=("$@"); break; fi
+    roots+=("$1"); shift
+  done
+  [[ ${#pred[@]} -eq 0 ]] && pred=(-type f)
+
+  if [[ ${#roots[@]} -eq 0 ]]; then
+    echo "  [CORPUS_FAIL] no roots given — a scan over nothing finds nothing" >&2
+    return 1
+  fi
+
+  # A MISSING ROOT IS THE DEFECT ITSELF, not a condition to route around. E-244's suites
+  # filtered missing roots out and kept going, which is how the corpus silently shrank to
+  # zero; naming the missing root is what turns that into a fixable report.
+  local r missing=()
+  for r in "${roots[@]}"; do
+    [[ -e "$r" ]] || missing+=("$r")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "  [CORPUS_FAIL] root(s) not found: ${missing[*]} — the scan would have been empty" >&2
+    echo "                (roots requested: ${roots[*]})" >&2
+    return 1
+  fi
+
+  local out rc=0
+  out="$(find "${roots[@]}" \( "${pred[@]}" \) 2>/dev/null)" || rc=$?
+  if [[ "$rc" -ne 0 ]]; then
+    echo "  [CORPUS_FAIL] find exited ${rc} over: ${roots[*]} — corpus not built" >&2
+    return 1
+  fi
+
+  local n=0
+  [[ -n "$out" ]] && n="$(printf '%s\n' "$out" | grep -c .)"
+  echo "  CORPUS ${n} file(s) from ${roots[*]}" >&2
+
+  if [[ "$n" -lt "$min" ]]; then
+    echo "  [CORPUS_FAIL] ${n} file(s) is below the minimum of ${min} — refusing to report on it" >&2
+    return 1
+  fi
+  printf '%s\n' "$out"
+  return 0
+}
+
 # test_tmpdir [label] → a temp dir that the sweep can recognise, removed on EXIT.
 test_tmpdir() {
   local label="${1:-d}"
