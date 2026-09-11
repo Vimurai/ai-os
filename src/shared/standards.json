@@ -111,6 +111,16 @@
       "auto_fix_available": false,
       "applies_to": [
         "tests/**/*.sh"
+      ],
+      "suppression_aliases": [
+        "raw-trap",
+        "raw-exit-trap"
+      ],
+      "exempt_files": [
+        {
+          "path": "tests/run.sh",
+          "reason": "The RUNNER is the parent process that spawns suites, not one that sources the cleanup registry; it legitimately traps EXIT INT TERM so a Ctrl-C mid-run still tears down the sandbox. Named here rather than narrowing the rule's scope, which would also stop covering tests/lib/*.sh where the same mistake would be worse (D-065 §1)."
+        }
       ]
     }
   ]

@@ -40,8 +40,23 @@ set -uo pipefail
 
 SIGNAL_REL=".ai/signal.json"
 POLL_INTERVAL="${AI_WATCH_INTERVAL:-1}"
-PROJECT_DIR="$(pwd)"
+# E-253 (D-068): `pwd -P` — the PHYSICAL path. tmux reports a pane's RESOLVED cwd, so a
+# project entered through a symlink (`cd ~/dev/current` → `/Volumes/work/proj-7`) produced a
+# logical PROJECT_DIR that matched ZERO panes. The watcher then ran, polled, found no
+# candidates and dropped every signal — silently, because "no pane matched" is also what a
+# correctly-idle project looks like. SIGNAL keeps the physical path too, so the lock, the
+# queue and the pane filter all name the same directory.
+PROJECT_DIR="$(pwd -P)"
 SIGNAL="${PROJECT_DIR}/${SIGNAL_REL}"
+
+# E-253 (D-068): the watcher's own tmux session, or "" when it is not running inside tmux.
+# Resolved ONCE at startup rather than per poll — a watcher does not move between sessions,
+# and re-asking every second would put a tmux round-trip on the poll loop for an answer
+# that cannot change.
+WATCH_SESSION=""
+if [[ -n "${TMUX:-}" ]]; then
+  WATCH_SESSION="$(tmux display-message -p '#{session_name}' 2>/dev/null || true)"
+fi
 
 # E-121/E-122: delay (seconds) between injecting the literal message and pressing
 # Enter, so the target REPL finishes buffering the text before it is submitted.
@@ -137,8 +152,29 @@ _is_agent_cmd() {
 
 # Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>\t<pane_current_command>"
 # for every pane, then keep only those rooted in PROJECT_DIR (isolation §Security).
+#
+# E-253 (D-068): the candidate set is ALSO restricted to the watcher's OWN session when it
+# runs inside tmux. Before D-068 every project lived in one shared `aios` session, so `-a`
+# (all sessions) and a path filter were the only available isolation — and every project's
+# watcher scanned every other project's panes, distinguished solely by a path prefix. Now
+# that each project has its own session, the session IS the boundary, and the path filter
+# stays as defence in depth rather than as the only defence.
+#
+# `-s -t <session>` is "all panes in this session"; `-a` is "all panes on the server".
+# AI_WATCH_ALL_SESSIONS=1 restores `-a` for a watcher deliberately started from a different
+# session. Outside tmux there is no own-session to scope to, so `-a` remains correct.
+_project_panes_scope() {
+  if [[ "${AI_WATCH_ALL_SESSIONS:-0}" == "1" || -z "${WATCH_SESSION:-}" ]]; then
+    printf '%s' "-a"
+  else
+    printf '%s' "-s"
+  fi
+}
 _project_panes() {
-  tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{?pane_title,#{pane_title},-}	#{?window_name,#{window_name},-}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null \
+  local scope; scope="$(_project_panes_scope)"
+  local -a sel=()
+  if [[ "$scope" == "-s" ]]; then sel=(-s -t "$WATCH_SESSION"); else sel=(-a); fi
+  tmux list-panes "${sel[@]}" -F '#{pane_id}	#{pane_index}	#{?pane_title,#{pane_title},-}	#{?window_name,#{window_name},-}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null \
     | while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
         case "$ppath" in
           "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" "$pcmd" ;;
@@ -810,7 +846,13 @@ main() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
-  echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR}) — Ctrl-C to stop."
+  # The banner names the SESSION as well as the directory: with one session per project
+  # (D-068) "which panes can this watcher see" has two answers, and an operator debugging a
+  # signal that never arrived needs both. A watcher outside tmux, or one opted back into
+  # the all-sessions scan, says so rather than naming a session it is not scoped to.
+  _scope_note="all sessions"
+  [[ "$(_project_panes_scope)" == "-s" ]] && _scope_note="session ${WATCH_SESSION}"
+  echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR} in ${_scope_note}) — Ctrl-C to stop."
 
   # E-137 (role-abstraction.md): load the semantic role→provider:pane map once at
   # startup. Empty ⇒ D-050 default fallback (architect=agy, engineer=claude). A roles.json

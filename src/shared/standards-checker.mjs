@@ -464,12 +464,10 @@ export const RULE_REGISTRY = {
   no_raw_exit_trap_in_tests(ctx) {
     if (process.env.AI_OS_STANDARDS_SKIP === "raw-exit-trap") return null;
     if (!/^tests\/.*\.sh$/.test(ctx.relPath)) return null;
-    // The RUNNER is exempt, and only the runner. It does not source the cleanup registry —
-    // it IS the parent process that spawns suites — and it legitimately traps EXIT INT TERM
-    // so a Ctrl-C mid-run still tears down the sandbox. A suite has no such need: it has
-    // on_exit. Named explicitly rather than narrowing the rule's scope, which would also
-    // stop covering tests/lib/*.sh where the same mistake would be worse.
-    if (/^tests\/run\.sh$/.test(ctx.relPath)) return null;
+    // E-250: the tests/run.sh exemption MOVED to standards.json `exempt_files`, where
+    // validateFile applies it and the summary can print it with its reason. It lived here
+    // as a hardcoded regex — a coverage reduction no report could ever enumerate, which is
+    // exactly what D-065 §1 says an exemption must not be.
 
     const out = [];
     const lines = ctx.lines ?? String(ctx.content ?? "").split("\n");
@@ -479,12 +477,13 @@ export const RULE_REGISTRY = {
       if (/^\s*#/.test(line)) continue;              // a comment is prose
       if (/\bassert_\w+/.test(line)) continue;       // an assertion ABOUT traps quotes one
       if (/\bbuiltin\s+trap\b/.test(line)) continue; // deliberate escape hatch
-      // A PER-LINE escape hatch, because a rule about traps cannot read a heredoc: a suite
-      // that BUILDS a fixture script containing `trap … EXIT` is writing data, not
-      // installing a handler. Requiring an explicit marker keeps that auditable — you can
-      // grep every suppression — rather than widening the pattern until it stops catching
-      // the real thing.
-      if (/#\s*standards:allow-raw-trap\b/.test(line)) continue;
+      // E-250: the per-line escape hatch is no longer handled here. A marker consumed
+      // inside the rule is invisible to the counter — the finding never exists, so nothing
+      // can report that it was suppressed. validateFile now applies the marker AFTER the
+      // rule produces its finding, which is what makes "3 active suppressions" a number
+      // the summary can print. (The hatch itself is unchanged and still necessary: a suite
+      // that BUILDS a fixture containing `trap … EXIT` is writing data, not installing a
+      // handler, and no pattern distinguishes the two.)
 
       // `trap` in COMMAND POSITION: line start, or after a separator. Not inside a quoted
       // string, and not as an argument to something else.
@@ -731,6 +730,100 @@ export const RULE_REGISTRY = {
  * If the file does not exist (e.g. staged then removed in the same diff),
  * returns a status:"MISSING" entry rather than throwing.
  */
+// ── E-250 (D-067 §4 / D-065 §1): suppressions are counted, exemptions are named ──
+//
+// D-065 ruled the policy: a false positive is silenced by an explicit, greppable in-file
+// marker — never by loosening the pattern — and a file that legitimately falls outside a
+// rule is exempted BY NAME in the rule's config, never by narrowing the rule's scope. Both
+// halves reduce coverage, so both have to be VISIBLE, which is what was still missing: the
+// markers existed but nothing counted them, and the one by-name exemption was a hardcoded
+// regex inside the rule where no summary could ever find it.
+//
+// A suppression that nobody counts is indistinguishable from a rule that stopped working.
+
+/** `# standards:allow-<token>` anywhere on a line. Global so every marker is seen. */
+const SUPPRESSION_RE = /#\s*standards:allow-([A-Za-z0-9_-]+)\b/g;
+
+/**
+ * Every token a rule answers to: its rule_id plus any `suppression_aliases`.
+ * Aliases exist because the in-tree markers predate the policy — `standards:allow-raw-trap`
+ * is already committed and load-bearing. Renaming it in the same change that starts
+ * COUNTING markers would have made the count wrong in its first run, which is the one run
+ * anybody checks.
+ */
+export function suppressionTokensFor(rule) {
+  const out = new Set([rule.rule_id]);
+  for (const a of rule.suppression_aliases || []) out.add(a);
+  return out;
+}
+
+/** Every token any loaded rule answers to — used to spot a marker that matches nothing. */
+export function knownSuppressionTokens(rules) {
+  const out = new Set();
+  for (const r of rules || []) for (const tok of suppressionTokensFor(r)) out.add(tok);
+  return out;
+}
+
+/**
+ * Is the finding at `line` (1-based) suppressed for `rule`?
+ * The marker may sit on the flagged line or the line ABOVE it (D-065 §1) — the second form
+ * is what makes a marker possible on a line whose own syntax has no room for a comment.
+ */
+export function isSuppressed(lines, line, rule) {
+  if (!Number.isInteger(line) || line < 1) return null;
+  const tokens = suppressionTokensFor(rule);
+  for (const idx of [line - 1, line - 2]) {
+    const text = lines[idx];
+    if (typeof text !== "string") continue;
+    SUPPRESSION_RE.lastIndex = 0;
+    let m;
+    while ((m = SUPPRESSION_RE.exec(text)) !== null) {
+      if (tokens.has(m[1])) return { token: m[1], line: idx + 1 };
+    }
+  }
+  return null;
+}
+
+/**
+ * Markers in a file that match NO loaded rule. E-250 books these as findings: the author
+ * believed they had silenced something, and a marker that silences nothing is worse than no
+ * marker at all — it reads, to the next person, as a reviewed and accepted exception.
+ * Severity is `warning`, carrying a [P1] prefix: it must be seen and acted on, but blocking
+ * a commit over a typo in a comment would be the over-block D-056 governs against.
+ */
+export function unknownSuppressionFindings(lines, rules) {
+  const known = knownSuppressionTokens(rules);
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    SUPPRESSION_RE.lastIndex = 0;
+    let m;
+    while ((m = SUPPRESSION_RE.exec(String(lines[i]))) !== null) {
+      if (known.has(m[1])) continue;
+      out.push({
+        rule_id: "standards_suppression_unknown",
+        severity: "warning",
+        line: i + 1,
+        message: `[P1] '# standards:allow-${m[1]}' matches no rule — it silences nothing. ` +
+                `Known: ${[...known].sort().join(", ")}`,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Is `relPath` exempt from `rule` by name? Exemptions live in standards.json beside the
+ * rule as `exempt_files: [{ path, reason }]` — next to the rule they exempt, with a reason,
+ * so `list-rules` and every check summary can print them. This replaces per-rule hardcoded
+ * path regexes, which were invisible to both.
+ */
+export function exemptionFor(relPath, rule) {
+  for (const e of rule.exempt_files || []) {
+    if (e && e.path === relPath) return e;
+  }
+  return null;
+}
+
 export function validateFile(filePath, rules, opts = {}) {
   const repoRoot = opts.repoRoot ? resolve(opts.repoRoot) : process.cwd();
   const abs = resolve(filePath);
@@ -757,6 +850,8 @@ export function validateFile(filePath, rules, opts = {}) {
   const lines = content.length > 0 ? content.split("\n") : [];
 
   const violations = [];
+  const suppressions = [];
+  const exemptions = [];
   for (const rule of rules) {
     const handler = RULE_REGISTRY[rule.rule_id];
     if (!handler) continue; // unknown rule_id — skip rather than error
@@ -769,19 +864,31 @@ export function validateFile(filePath, rules, opts = {}) {
     // fixtures document the very patterns it detects).
     if (Array.isArray(rule.applies_to_excludes)
         && _pathMatchesAny(relPath, rule.applies_to_excludes)) continue;
+    // E-250: by-name exemption, checked HERE rather than inside each handler, so every
+    // exemption is declared in one place that the summary can enumerate.
+    const exempt = exemptionFor(relPath, rule);
+    if (exempt) { exemptions.push({ rule_id: rule.rule_id, path: relPath, reason: exempt.reason || "" }); continue; }
     const result = handler({ filePath: abs, relPath, content, lines, rule, repoRoot });
     if (!result) continue;
-    if (Array.isArray(result)) {
-      violations.push(...result);
-    } else {
-      violations.push(result);
+    const produced = Array.isArray(result) ? result : [result];
+    // E-250: suppression is applied CENTRALLY, so every rule supports the marker rather
+    // than only the ones whose handler remembered to implement it (D-065 §1: "every E-80
+    // rule supports `# standards:allow-<rule_id>`"). A suppressed finding is not dropped —
+    // it is recorded, so the summary can show a growing count.
+    for (const v of produced) {
+      const s = isSuppressed(lines, v.line, rule);
+      if (s) suppressions.push({ rule_id: rule.rule_id, path: relPath, line: s.line, token: s.token });
+      else violations.push(v);
     }
   }
+
+  // A marker matching no rule is itself a finding — see unknownSuppressionFindings.
+  violations.push(...unknownSuppressionFindings(lines, rules));
 
   const hasError   = violations.some(v => v.severity === "error");
   const hasWarning = violations.some(v => v.severity === "warning");
   const status = hasError ? "FAIL" : hasWarning ? "WARN" : "PASS";
-  return { file_path: relPath, status, violated_rules: violations };
+  return { file_path: relPath, status, violated_rules: violations, suppressions, exemptions };
 }
 
 /**

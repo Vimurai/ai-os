@@ -599,4 +599,108 @@ assert_contains "E-123.CLR: --clear empties queue" "content=[]" "$_clr"
 assert_status 0 "E-123.CLR: --clear needs no tmux (a non-AI-OS dir errors cleanly)" \
   bash -c "cd \"\$(mktemp -d)\" && bash '$WATCH' --clear >/dev/null 2>&1; [ \$? -ne 0 ]"
 
+# ── E-253 (D-068): the watcher is scoped to its own tmux session ────────────
+#
+# Before D-068 every project lived in ONE shared `aios` session, so each project's watcher
+# scanned `list-panes -a` — every pane on the server — and told projects apart by a path
+# PREFIX alone. Two projects whose panes were both titled `architect` were separated by
+# nothing but that string comparison. Now each project owns a session, so the session IS
+# the boundary and the path filter becomes defence in depth.
+#
+# The second half is a bug the path filter itself carried: tmux reports a pane's RESOLVED
+# cwd, so a project entered through a symlink produced a logical PROJECT_DIR that matched
+# ZERO panes — and the watcher then ran, polled, and dropped every signal silently, because
+# "no pane matched" looks exactly like a correctly idle project.
+echo "── E-253: session scope + physical path ────────────────────────────"
+
+# The scope decision is a pure function of two variables, so it is driven directly.
+_scope() {  # <TMUX-session-or-empty> <AI_WATCH_ALL_SESSIONS> → -s | -a
+  ( source "$WATCH" 2>/dev/null
+    WATCH_SESSION="$1"; AI_WATCH_ALL_SESSIONS="$2"
+    _project_panes_scope )
+}
+assert_contains "E-253.01a: inside tmux, the watcher scopes to its own session" \
+  "-s" "$(_scope proj-a 0)"
+assert_contains "E-253.01b: outside tmux there is no own-session — all sessions" \
+  "-a" "$(_scope '' 0)"
+assert_contains "E-253.01c: AI_WATCH_ALL_SESSIONS=1 restores the -a scan" \
+  "-a" "$(_scope proj-a 1)"
+
+# THE DEFECT, end to end: two projects, each with a pane titled `architect`, in two
+# sessions. A handoff for project B must reach B's pane and NEVER A's.
+_two_project_drain() {  # <project-dir> <own-session> <all-sessions> → captured send-keys
+  ( source "$WATCH" 2>/dev/null
+    PROJECT_DIR="$1"; SIGNAL="$(mktemp)"; SUBMIT_DELAY=0; MAX_HOLD=0
+    WATCH_SESSION="$2"; AI_WATCH_ALL_SESSIONS="$3"
+    printf '%s' '[{"timestamp":"1","target":"architect","message":"go"}]' > "$SIGNAL"
+    # Two sessions' worth of panes. The mock honours `-s -t <session>` the way tmux does,
+    # because a mock that ignored the selector would make every assertion below vacuous —
+    # it would return the same rows whatever the watcher asked for.
+    _PANES_A='%10\t1\tarchitect\twinA\t/projA\tnode\n'
+    _PANES_B='%20\t1\tarchitect\twinB\t/projB\tnode\n'
+    _SENT=""
+    tmux() {
+      if [ "$1" = "list-panes" ]; then
+        local sel="" prev="" want=""
+        for a in "$@"; do
+          [ "$a" = "-s" ] && sel="-s"
+          [ "$a" = "-a" ] && sel="-a"
+          [ "$prev" = "-t" ] && want="$a"
+          prev="$a"
+        done
+        if [ "$sel" = "-s" ]; then
+          case "$want" in
+            sessA) printf '%b' "$_PANES_A" ;;
+            sessB) printf '%b' "$_PANES_B" ;;
+            *)     : ;;
+          esac
+        else
+          printf '%b' "${_PANES_A}${_PANES_B}"
+        fi
+        return 0
+      fi
+      if [ "$1" = "display-message" ]; then
+        local p="" prev2=""; for a in "$@"; do [ "$prev2" = "-t" ] && p="$a"; prev2="$a"; done
+        printf '%b' "${_PANES_A}${_PANES_B}" | awk -F'\t' -v id="$p" '$1==id{printf "%s",$6}'
+        return 0
+      fi
+      if [ "$1" = "send-keys" ]; then shift; _SENT="${_SENT}|$*"; fi
+      return 0
+    }
+    _drain_once 2>/dev/null
+    printf '%s' "$_SENT"
+    rm -f "$SIGNAL" )
+}
+
+_sentB="$(_two_project_drain /projB sessB 0)"
+assert_contains "E-253.02a: project B's handoff reaches B's architect pane" "%20" "$_sentB"
+assert_status 1 "E-253.02b: and NEVER project A's identically-titled pane" \
+  bash -c "printf '%s' \"\$_sentB\" | grep -q '%10'"
+# NON-VACUITY: the same fixture, scanning all sessions, still delivers — so 02a is not
+# passing because the mock happens to return nothing for B.
+_sentAll="$(_two_project_drain /projB '' 0)"
+assert_contains "E-253.02c: the all-sessions scan still finds B (the fixture is not empty)" \
+  "%20" "$_sentAll"
+_sentOptOut="$(_two_project_drain /projB sessB 1)"
+assert_contains "E-253.02d: AI_WATCH_ALL_SESSIONS=1 delivers through the -a path" \
+  "%20" "$_sentOptOut"
+
+# THE SYMLINK REGRESSION. `pwd` returns the logical path the operator typed; tmux reports
+# the physical one. The watcher must resolve its own directory the same way tmux does, or
+# it matches zero panes and drops every signal without saying anything.
+assert_status 0 "E-253.03a: PROJECT_DIR is resolved with pwd -P" \
+  grep -qE '^PROJECT_DIR="\$\(pwd -P\)"' "$WATCH"
+_symdir="$(test_tmpdir e253-real)"
+_symlink="$(test_tmpdir e253-link)/via-link"
+ln -sfn "$_symdir" "$_symlink"
+_resolved="$( cd "$_symlink" && bash -c 'cd "$1" && pwd -P' _ . )"
+assert_contains "E-253.03b: a symlinked project resolves to its physical path" \
+  "$(cd "$_symdir" && pwd -P)" "$_resolved"
+# The banner names both halves of the scope, because "which panes can this watcher see" now
+# has two answers and an operator debugging a lost signal needs both.
+assert_status 0 "E-253.04a: the banner names the session it is scoped to" \
+  grep -q 'in \${_scope_note}' "$WATCH"
+assert_status 0 "E-253.04b: and says 'all sessions' when it is not session-scoped" \
+  grep -q '_scope_note="all sessions"' "$WATCH"
+
 assert_summary

@@ -3804,7 +3804,11 @@ _START_SHELL_RE='^(-?(ba|z|k|a|da)?sh|fish|login)$'
 # an Architect-writable config is attacker-adjacent input, not a trusted source).
 _start_config() {
   local ai_dir="$1" cfg="${1}/start.json"
-  local session="aios" layout="triad" watch="true" main="50" top="60"
+  # E-252 (D-068): `session` is now an OVERRIDE, not a default. It defaults to EMPTY so the
+  # caller can tell "the operator pinned a name" from "derive one from the project" — with
+  # a literal "aios" default those two were indistinguishable, which is how every project
+  # ended up in one shared session.
+  local session="" layout="triad" watch="true" main="50" top="60"
   if [[ -f "$cfg" ]]; then
     local parsed
     parsed="$(python3 - "$cfg" <<'PY' 2>/dev/null
@@ -3821,8 +3825,8 @@ extra = set(d) - allowed
 if extra:
     print("ERR unknown key(s): " + ", ".join(sorted(extra))); raise SystemExit(0)
 
-session = d.get("session", "aios")
-if not isinstance(session, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", session):
+session = d.get("session", "")
+if not isinstance(session, str) or (session and not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", session)):
     print("ERR session must match ^[A-Za-z0-9_-]{1,32}$"); raise SystemExit(0)
 
 layout = d.get("layout", "triad")
@@ -3953,11 +3957,25 @@ do_start() {
     return 2
   fi
 
-  local project; project="$(cd "$(dirname "$ai_dir")" && pwd)"
+  # E-252 (D-068): `pwd -P` — the PHYSICAL path. tmux reports a pane's physical cwd, and
+  # the stamp is compared against it, so a project entered through a symlink must resolve
+  # the same way here or it would never match its own session.
+  local project; project="$(cd "$(dirname "$ai_dir")" && pwd -P)"
   local window; window="$(basename "$project")"
+  local explicit_session="$session"
+
+  # One lookup for all three entry points, so --status and --kill act on the session the
+  # operator is actually looking at rather than on a name recomputed per command.
+  local session_origin="new"
+  if command -v tmux >/dev/null 2>&1 && [[ "$dry" -eq 0 ]]; then
+    local _resolved; _resolved="$(_start_resolve_session "$project" "$window" "$explicit_session")"
+    session="${_resolved%%|*}"; session_origin="${_resolved##*|}"
+  else
+    session="$(_start_session_name "$project" "$explicit_session")"
+  fi
 
   if [[ "$want_status" -eq 1 ]]; then
-    _start_status "$session" "$window" "$project"
+    _start_status "$session" "$window" "$project" "$session_origin"
     return $?
   fi
   if [[ "$want_kill" -eq 1 ]]; then
@@ -3993,6 +4011,15 @@ do_start() {
   # symbolic `pane<N>` placeholders instead, because in that mode no panes exist; it shows
   # the COMPOSITION (which command reaches which pane, in order), and the live smoke is
   # what asserts real tmux behaviour.
+  # A pre-D-068 window inside the shared `aios` session is reused IN PLACE — an operator
+  # mid-sprint does not get their layout torn down by an upgrade — but they are told once
+  # how to move it, because until they do, this project still shares a current window with
+  # every other project in that session.
+  if [[ "$dry" -eq 0 && "$session_origin" == "legacy" ]]; then
+    echo "ai start: reusing legacy shared window aios:${window} — run 'ai start --kill' then"
+    echo "  'ai start' to move this project to its own session '$(_start_session_name "$project" "$explicit_session")'."
+  fi
+
   local target existing=0 win_id=""
   if [[ "$dry" -eq 0 ]] && tmux has-session -t "$session" 2>/dev/null; then
     win_id="$(tmux list-windows -t "$session" -F '#{window_id} #{window_name}' 2>/dev/null \
@@ -4011,10 +4038,26 @@ do_start() {
   }
 
   if [[ "$existing" -eq 0 ]]; then
+    local _created_session=0
     if [[ "$dry" -eq 1 ]] || ! tmux has-session -t "$session" 2>/dev/null; then
       _run new-session -d -s "$session" -n "$window" -c "$project"
+      _created_session=1
     else
       _run new-window -d -t "$session" -n "$window" -c "$project"
+    fi
+    # THE STAMP. Written immediately after creation, before anything can attach, so the
+    # session is discoverable by identity from its first moment. Fail-open (D-068
+    # §Execution Constraints): a tmux too old for set-environment still gets a working
+    # layout, and the operator is TOLD that ownership could not be recorded rather than
+    # silently getting name-only behaviour.
+    if [[ "$_created_session" -eq 1 ]]; then
+      _run set-environment -t "$session" AI_OS_PROJECT "$project"
+      if [[ "$dry" -eq 0 ]] && [[ "$(_start_session_stamp "$session")" != "$project" ]]; then
+        echo "ai start: could not stamp session '${session}' with AI_OS_PROJECT — this tmux" >&2
+        echo "  may predate set-environment. Falling back to name-only lookup; --status and" >&2
+        echo "  --kill will find this session by name only." >&2
+      fi
+      [[ "$dry" -eq 0 ]] && echo "ai start: created session '${session}' for ${project}"
     fi
     if [[ "$dry" -eq 0 ]]; then
       win_id="$(tmux list-windows -t "$session" -F '#{window_id} #{window_name}' 2>/dev/null \
@@ -4107,10 +4150,20 @@ do_start() {
     echo "ai start: ${session}:${window} ready (detached). Attach with: tmux attach -t ${session}"
     return 0
   fi
+  # ONLY THE INVOKING CLIENT MOVES (D-068 §Components 5). `switch-client` acts on the
+  # client that ran the command; `select-window` changes the session's current window for
+  # EVERY attached client, which is how `ai start` in project B used to flip the terminal
+  # showing project A. It is no longer composed anywhere in the launcher.
   if [[ -n "${TMUX:-}" ]]; then
     tmux switch-client -t "$win_id"
   else
-    tmux attach-session -t "$session" \; select-window -t "$win_id"
+    tmux attach-session -t "$session"
+    # An owned session has exactly one window, so attaching lands on it. A legacy shared
+    # session does not, and selecting the window would move the other clients — so the
+    # operator is told which window to pick instead of it being chosen for them.
+    if [[ "$session_origin" == "legacy" ]]; then
+      echo "ai start: attached to the shared session — select window '${window}' (${win_id})."
+    fi
   fi
 }
 
@@ -4152,6 +4205,123 @@ _start_watch_running() {
   return 0
 }
 
+# ── E-252 (D-068): one tmux session per project ───────────────────────────────
+#
+# `ai start` used to put every project into ONE shared session (`aios`), one window each.
+# A tmux session has a single CURRENT WINDOW shared by every attached client, so `ai start`
+# in project B flipped the terminal that was showing project A; the window was found by
+# NAME ONLY, so two checkouts with the same basename shared one window and a renamed window
+# was recreated beside the old one; and every project's watcher then competed over panes
+# sitting in one session.
+#
+# THE STAMP IS THE IDENTITY; THE NAME IS A LABEL. Each session `ai start` creates carries
+# `AI_OS_PROJECT=<pwd -P of the project>` in its session environment. Discovery reads the
+# stamp back, so reuse, `--status` and `--kill` find the project's session even when the
+# NAME had to be suffixed — and a foreign session that merely shares a name is never
+# adopted, which is the injection path this closes from the launcher side.
+#
+# Rollback: AI_OS_SHARED_SESSION=1 restores the single `aios` session.
+
+# _start_session_name <project> <explicit-or-empty> → the session name to use.
+#
+# Pure: no tmux, no filesystem. An explicit `.ai/start.json` `session` wins verbatim (it is
+# already validated against ^[A-Za-z0-9_-]{1,32}$). Otherwise the basename is rewritten
+# through a WHITELIST — tmux parses `session:window.pane`, so a `.` or `:` in a project
+# name would make every target ambiguous (the E-227 bug, in a new place), and a leading `-`
+# would parse as a flag.
+_start_session_name() {
+  local project="$1" explicit="${2:-}"
+  if [[ -n "$explicit" ]]; then printf '%s' "$explicit"; return 0; fi
+  if [[ "${AI_OS_SHARED_SESSION:-0}" == "1" ]]; then printf 'aios'; return 0; fi
+
+  local n
+  n="$(printf '%s' "$(basename "$project")" | LC_ALL=C sed 's/[^A-Za-z0-9_-]/-/g')"
+  # Leading `-` or `_` stripped one at a time: `${n##[-_]}` removes only one, and a name
+  # like `--weird` would keep a leading dash and be read by tmux as a flag.
+  while [[ "$n" == [-_]* ]]; do n="${n#?}"; done
+  n="${n:0:32}"
+  [[ -z "$n" ]] && n="aios"
+  printf '%s' "$n"
+}
+
+# _start_session_stamp <session> → the AI_OS_PROJECT value, or "".
+# `show-environment` prints `-NAME` for a variable that is explicitly unset, so the match is
+# anchored on `NAME=` and that form yields nothing rather than a bogus value.
+_start_session_stamp() {
+  tmux show-environment -t "$1" AI_OS_PROJECT 2>/dev/null | sed -n 's/^AI_OS_PROJECT=//p' | head -1
+}
+
+# _start_find_session <project> → the session whose stamp equals this project, or "".
+# Runs BEFORE any name derivation, so a project whose name had to be suffixed last time is
+# found again by identity rather than by guessing the same suffix twice.
+_start_find_session() {
+  local project="$1" s stamp
+  while IFS= read -r s; do
+    [[ -z "$s" ]] && continue
+    stamp="$(_start_session_stamp "$s")"
+    if [[ -n "$stamp" && "$stamp" == "$project" ]]; then printf '%s' "$s"; return 0; fi
+  done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null || true)
+  printf ''
+}
+
+# _start_session_free <name> <project> → 0 when the name is ours to use.
+# Free means: no such session, or a session stamped to THIS project. A live session that is
+# unstamped (a foreign session the operator owns) or stamped elsewhere is never adopted.
+_start_session_free() {
+  local name="$1" project="$2"
+  tmux has-session -t "$name" 2>/dev/null || return 0
+  [[ "$(_start_session_stamp "$name")" == "$project" ]]
+}
+
+# _start_session_suffix <name> <project> → <first 25>-<6 hex of sha1(path)>
+# Derived from the PATH, so the same project gets the same suffix every time — a random one
+# would strand the previous session on the next run.
+_start_session_suffix() {
+  local name="$1" project="$2" h
+  h="$(printf '%s' "$project" | { shasum -a 1 2>/dev/null || sha1sum; } | cut -c1-6)"
+  printf '%s-%s' "${name:0:25}" "$h"
+}
+
+# _start_legacy_window <basename> <project> → the @id of a live pre-D-068 window, or "".
+#
+# Idempotency for an operator mid-sprint: a window named after the project inside the old
+# shared `aios` session is adopted IN PLACE rather than abandoned. A matching name is not
+# enough — at least one pane must actually be rooted in this project, or `ai start` in a
+# same-named checkout would hijack the other one's window, which is the bug this task is
+# fixing rather than a shape of it to preserve.
+_start_legacy_window() {
+  local window="$1" project="$2"
+  tmux has-session -t aios 2>/dev/null || { printf ''; return 0; }
+  local wid
+  wid="$(tmux list-windows -t aios -F '#{window_id} #{window_name}' 2>/dev/null \
+         | awk -v n="$window" '$2 == n { print $1; exit }')"
+  [[ -n "$wid" ]] || { printf ''; return 0; }
+  local p
+  while IFS= read -r p; do
+    [[ -z "$p" ]] && continue
+    if [[ "$p" == "$project" || "$p" == "$project"/* ]]; then printf '%s' "$wid"; return 0; fi
+  done < <(tmux list-panes -t "$wid" -F '#{pane_current_path}' 2>/dev/null || true)
+  printf ''
+}
+
+# _start_resolve_session <project> <window> <explicit> → "<session>|<origin>"
+#
+# The single lookup every entry point uses — start, --status and --kill — so all three act
+# on the same session the operator is looking at. Origin is `owned` (stamp match), `legacy`
+# (a pre-D-068 window in the shared session) or `new` (nothing yet; the name is the one a
+# real run would create).
+_start_resolve_session() {
+  local project="$1" window="$2" explicit="${3:-}"
+  local found; found="$(_start_find_session "$project")"
+  if [[ -n "$found" ]]; then printf '%s|owned' "$found"; return 0; fi
+  if [[ -n "$(_start_legacy_window "$window" "$project")" ]]; then printf 'aios|legacy'; return 0; fi
+  local name; name="$(_start_session_name "$project" "$explicit")"
+  if ! _start_session_free "$name" "$project"; then
+    name="$(_start_session_suffix "$name" "$project")"
+  fi
+  printf '%s|new' "$name"
+}
+
 # _start_window_id — resolve the project's window by NAME within a session, returning its
 # window id. Resolving by id matters: the window is named after the project directory, and
 # a mktemp-style name contains a dot, which tmux would otherwise parse as window.pane.
@@ -4173,8 +4343,8 @@ _start_window_id() {  # <session> <window> → @id | ""
 # Exit 0 even when nothing is running. "Nothing is up" is a true answer to a status
 # question, not a failure — making it non-zero would turn `ai start --status` into
 # something a script cannot ask without `|| true`.
-_start_status() {  # <session> <window> <project>
-  local session="$1" window="$2" project="$3"
+_start_status() {  # <session> <window> <project> [origin]
+  local session="$1" window="$2" project="$3" origin="${4:-new}"
   if ! command -v tmux >/dev/null 2>&1; then
     echo "ai start --status: tmux is not installed — no panes to report."
     return 0
@@ -4183,7 +4353,10 @@ _start_status() {  # <session> <window> <project>
   if [[ -z "$wid" ]]; then
     echo "ai start --status: no window '${window}' in session '${session}' — not running."
   else
-    echo "ai start --status: ${session}:${window} (${wid})"
+    # The ORIGIN is printed because "which session is this project in" now has more than
+    # one answer, and an operator debugging a cross-project collision needs to know whether
+    # they are looking at an owned session or a leftover shared one.
+    echo "ai start --status: ${session}:${window} (${wid}) [${origin}]"
     local idx title cmd
     while IFS='|' read -r idx title cmd; do
       [[ -z "$idx" ]] && continue

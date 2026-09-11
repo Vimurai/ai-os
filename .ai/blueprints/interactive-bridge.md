@@ -43,7 +43,7 @@ Because interactive REPLs block on standard input, they cannot natively listen t
   each role via `ai pane <role>`, and runs `ai watch` in its own pane. Idempotent; composes only those two
   primitives.
 - **`ai watch` execution**:
-  - Scopes itself to `$(pwd)`.
+  - Scopes itself to `$(pwd -P)` and, inside tmux, to its own session (D-068, E-253).
   - Maps `target` to panes (supporting fuzzy matches and conventional indices). For semantic
     targets (`architect`/`engineer`) the precedence is fixed by §Pane Resolution Precedence (D-054).
   - Dequeues and injects ONLY when the target pane's current command is idle.
@@ -67,6 +67,7 @@ maps both roles to that provider.
 
 ## Security
 - **Isolation**: `ai watch` must strictly filter `tmux list-panes` by the current working directory to prevent injecting commands into other concurrent projects.
+  - **D-068 (2026-09-11, E-253)**: the candidate set is ALSO restricted to the watcher's own tmux session (`list-panes -s -t <session_name>`) when the watcher runs inside tmux; `AI_WATCH_ALL_SESSIONS=1` restores the `-a` scan. The path filter compares against the project's PHYSICAL path (`pwd -P`): tmux reports the process's resolved cwd, so a project entered through a symlink matched zero panes and silently dropped every signal. The launcher side (one tmux session per project, stamped `AI_OS_PROJECT`) is specified in `cli-collapse.md §Per-Project tmux Sessions`.
 - **Command Injection**: The `message` field must be safely escaped before being passed to `tmux send-keys` to prevent arbitrary shell execution if an agent hallucinates shell characters.
 
 ## Execution Constraints

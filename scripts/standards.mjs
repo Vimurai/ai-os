@@ -72,6 +72,11 @@ function _printUsage(stream = process.stderr) {
   );
 }
 
+// Set by main() once standards.json is loaded; _emit needs the rule list to enumerate
+// declared exemptions, and threading it through every call site of a two-argument helper
+// would be a wider change than this section is worth.
+let _RULES_FOR_SUMMARY = [];
+
 function _emit(reportEnvelope, asJson) {
   if (asJson) {
     process.stdout.write(JSON.stringify(reportEnvelope, null, 2) + "\n");
@@ -88,14 +93,76 @@ function _emit(reportEnvelope, asJson) {
     lines.push(`[${r.status}] ${r.file_path}`);
     for (const v of r.violated_rules) {
       const at = v.line != null ? `:${v.line}` : "";
-      lines.push(`  • [${v.severity}] ${v.rule_id}${at} — ${v.message}`);
+      // `message` is the field the header contract names (line 122 of the checker), but
+      // four of the newer rules emit `detail` instead — and this line rendered every one of
+      // them as the literal text "undefined". Found while adding the E-250 summary: a
+      // finding nobody can read is the reporting half of the same problem.
+      lines.push(`  • [${v.severity}] ${v.rule_id}${at} — ${v.message ?? v.detail ?? "(no message)"}`);
     }
     lines.push("");
   }
   if (summary.error_count === 0 && summary.warning_count === 0) {
     lines.push("✓ Standards PASS — no violations found.");
   }
+
+  // E-250 (D-067 §4 / D-065 §1): ON EVERY RUN, pass or fail. A suppression and a by-name
+  // exemption are both coverage REDUCTIONS, and D-065's whole argument is that a reduction
+  // nobody can see is indistinguishable from a rule that quietly stopped working. Printed
+  // even when the count is zero: "0 active suppressions" is information; a missing section
+  // is only the absence of it.
+  lines.push(...formatSuppressionSummary(reportEnvelope, _RULES_FOR_SUMMARY));
+
   process.stdout.write(lines.join("\n") + (lines.at(-1) === "" ? "" : "\n"));
+}
+
+/**
+ * The suppression + exemption section. Returns lines rather than printing them, so the
+ * caller decides where they go and the tests can read them without capturing stdout.
+ */
+export function formatSuppressionSummary(reportEnvelope, rules = []) {
+  const out = [""];
+  const byRule = new Map();
+  const exemptions = [];
+  for (const r of reportEnvelope.reports || []) {
+    for (const s of r.suppressions || []) {
+      if (!byRule.has(s.rule_id)) byRule.set(s.rule_id, []);
+      byRule.get(s.rule_id).push(`${s.path}:${s.line}` + (s.token && s.token !== s.rule_id ? ` (allow-${s.token})` : ""));
+    }
+    for (const e of r.exemptions || []) exemptions.push(e);
+  }
+
+  const total = [...byRule.values()].reduce((n, v) => n + v.length, 0);
+  out.push(`Active suppressions (# standards:allow-<rule>): ${total}`);
+  if (total === 0) {
+    out.push("  (none)");
+  } else {
+    for (const [ruleId, sites] of [...byRule.entries()].sort()) {
+      out.push(`  ${ruleId}: ${sites.length}`);
+      for (const s of sites.sort()) out.push(`    • ${s}`);
+    }
+  }
+
+  // Exemptions are listed from the CONFIG, not from what this run happened to touch: a
+  // staged-file run sees only the files in the diff, and an exemption that disappears from
+  // the report whenever its file is not staged would be reported as "none" on almost every
+  // run — the same invisibility the section exists to end.
+  const declared = [];
+  for (const rule of rules) {
+    for (const e of rule.exempt_files || []) {
+      declared.push({ rule_id: rule.rule_id, path: e.path, reason: e.reason || "(no reason recorded)" });
+    }
+  }
+  out.push(`By-name exemptions (standards.json): ${declared.length}`);
+  if (declared.length === 0) {
+    out.push("  (none)");
+  } else {
+    for (const e of declared.sort((a, b) => (a.rule_id + a.path < b.rule_id + b.path ? -1 : 1))) {
+      const hit = exemptions.some(x => x.rule_id === e.rule_id && x.path === e.path);
+      out.push(`  ${e.rule_id} → ${e.path}${hit ? "  [applied this run]" : ""}`);
+      out.push(`    reason: ${e.reason}`);
+    }
+  }
+  return out;
 }
 
 function _walkSources(root, exts = [".js", ".mjs", ".ts", ".tsx"]) {
@@ -146,6 +213,8 @@ async function main() {
       process.exit(1);
     }
   })();
+
+  _RULES_FOR_SUMMARY = standards.rules || [];
 
   if (sub === "list-rules") {
     if (asJson) {

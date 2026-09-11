@@ -148,7 +148,11 @@ If you don't use `ai start` (or don't have tmux), the layout is three panes and 
 commands. Open three terminals, or build it with the keybinding below:
 
 ```bash
-tmux new-session -s ai-os
+# One session PER PROJECT, named after the project (D-068). `ai start` derives this name
+# automatically; by hand, use the project's own basename rather than a shared "ai-os" —
+# a tmux session has one current window shared by every attached client, so two projects
+# in one session flip each other's terminal.
+tmux new-session -s "$(basename "$PWD")"
 # Inside tmux: press your prefix (default Ctrl-b) then T
 # Pane 0 (top-left)  → agy         (Architect)
 # Pane 2 (top-right) → Claude Code (Engineer)
@@ -158,7 +162,7 @@ tmux new-session -s ai-os
 Or start the layout manually:
 
 ```bash
-tmux new-session -s ai-os -n triad \; \
+tmux new-session -s "$(basename "$PWD")" -n triad \; \
   split-window -v -p 30 \; \
   select-pane -t 0 \; \
   split-window -h \; \

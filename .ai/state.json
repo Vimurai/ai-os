@@ -209,12 +209,12 @@
     {
       "id": "E-250",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Ship D-065's carried instruction per D-067 §4: the E-80 standards checker summary prints active '# standards:allow-<rule_id>' suppressions per rule (count + file:line list) and the by-name exemptions from standards.json with their reasons, on every run; a new suppression that lacks a rule id it can match is a P1 finding. Acceptance: standards suite covers counted suppressions, exemption listing, and the unknown-rule finding; mirrors synced.",
       "created_at": "2026-09-10T17:27:42.797Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-11T17:36:56.865Z",
+      "summary": "D-067 §4 / D-065 §1: suppression applied centrally in validateFile AFTER a rule produces its finding (so it can be counted), honouring rule_id + suppression_aliases and the line abov …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -222,12 +222,12 @@
     {
       "id": "E-251",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 1,
       "description": "Guard against the scan that never ran per D-067 §5 and .ai/blueprints/test-harness-isolation.md §The Scan That Never Ran: add corpus_or_fail <min> <root>... to tests/lib/assert.sh (fails the suite when a root is missing or the corpus count is below the minimum, prints the count); convert the three rule-scanning suites that used 'find src .claude .agents .gemini' to it; add standing review question #5 'can this scan return an empty set and still pass?' to critic_tests and ai-review. Acceptance: a fixture with a missing root fails loudly; the three suites print their corpus counts; full suite + CI green; mirrors synced.",
       "created_at": "2026-09-10T17:27:42.878Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-11T17:36:53.386Z",
+      "summary": "D-067 §5: corpus_or_fail in tests/lib/assert.sh — a missing root is named and fails rather than filtered out; count printed every run; data+status only, no counter mutation. Three ru …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -235,12 +235,12 @@
     {
       "id": "E-252",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Give every project its own tmux session per D-068 and .ai/blueprints/cli-collapse.md §Per-Project tmux Sessions: derive the default session name from the sanitised project basename (.ai/start.json 'session' still overrides), stamp the session with AI_OS_PROJECT=<pwd -P> via tmux set-environment at creation, discover the project's session by stamp (not name) for reuse/--status/--kill, suffix the name with a 6-hex path hash when the derived name is held by another project or by an unstamped foreign session, adopt a live legacy aios:<basename> window in place with a one-line migration notice, move only the invoking client (switch-client -t <session> inside tmux, attach-session outside; no select-window on a shared session), fail open with a printed notice when set-/show-environment is unavailable, AI_OS_SHARED_SESSION=1 restores today's single aios session; update README (tmux new-session -s ai-os recipe) and the cli-collapse reference layout. Acceptance: --dry-run prints new-session -s <derived> and the set-environment stamp; unit cases for my.app, -weird, über, 40-char names; live isolated-server tests (register_cleanup before create): two fixture projects -> two sessions, same basename -> suffix, foreign same-name session -> suffix, legacy window adopted without new panes, --status/--kill find the stamped session, a client attached to project A stays on A when ai start runs for B; full suite + CI green; bash install-ai-os.sh + mirrors synced.",
       "created_at": "2026-09-11T16:20:39.616Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-11T17:37:00.885Z",
+      "summary": "D-068 §1: one tmux session per project, stamped AI_OS_PROJECT=<pwd -P> and discovered by that stamp; derived name is a whitelist rewrite of the basename; reuse requires stamp equalit …[full in LOG.md]",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -248,19 +248,17 @@
     {
       "id": "E-253",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "DONE",
       "tier": 2,
       "description": "Scope ai watch to its own tmux session per D-068 and .ai/blueprints/interactive-bridge.md §Security (D-068 clause): when running inside tmux, _project_panes lists panes with 'tmux list-panes -s -t <session_name>' instead of -a (AI_WATCH_ALL_SESSIONS=1 restores -a; a watcher outside tmux keeps -a), compare pane_current_path against PROJECT_DIR resolved with pwd -P so a project entered through a symlink still matches its panes, and extend the startup banner to 'scoped to <dir> in session <s>'. Resolution precedence is unchanged; only the candidate set shrinks. Acceptance: mocked list-panes fixture with two projects that both have a pane titled architect in two sessions delivers a project-B handoff only to B's pane and never to A's; a symlinked project dir resolves its panes (regression for the zero-pane drop); AI_WATCH_ALL_SESSIONS=1 path covered; banner asserted; full suite + CI green; bash install-ai-os.sh + mirrors synced.",
       "created_at": "2026-09-11T16:20:39.698Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-11T17:37:04.676Z",
+      "summary": "D-068 §2: ai watch lists panes of its OWN tmux session (-s -t <session>, resolved once at startup), keeping the path filter as defence in depth; AI_WATCH_ALL_SESSIONS=1 restores -a; …[full in LOG.md]",
       "depends_on": [
         "E-252"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-252"
-      ]
+      "ready": true,
+      "blocked_by": []
     }
   ],
   "stamps": [
@@ -389,6 +387,20 @@
       "task_id": "E-249",
       "timestamp": "2026-09-10T22:50:54.446Z",
       "summary": "[TIER_2] E-249 (D-067 §3): booted-build stamp on every tool result via the shared instrument() interceptor (all 23 servers); [STALE_SERVER] from verify_markdown_sync, run_preflight, ai doctor, ai sync and install-ai-os.sh; completion gate in update_task_status taking its evidence from mirror state rather than LOG prose (deviation flagged for ratification); state-db/projectors explicitly NOT hot-reloaded, asserted. Rollback AI_OS_BUILD_STAMP=0. Tests: 28 unit + 33 suite incl. a live one-server-across-a-rewrite layer. Full suite 4616 passed / 0 failed / 33 skipped."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "claude",
+      "task_id": "E-251",
+      "timestamp": "2026-09-11T16:58:29.271Z",
+      "summary": "[TIER_1] E-251 (D-067 §5): corpus_or_fail in tests/lib/assert.sh — a missing root is NAMED and fails rather than being filtered out (E-244's filter turned a loud failure into a quiet shrink); count printed every run; data-on-stdout + status only, no counter mutation (review question #4). Three rule-scanning suites converted, each asserting both that the corpus was built AND that the scanner read that same list. Review question #5 added to critic_tests + ai-review. Full suite 4637 passed / 0 failed / 33 skipped."
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "claude",
+      "task_id": "E-252",
+      "timestamp": "2026-09-11T17:36:49.957Z",
+      "summary": "[TIER_2] E-250 + E-252 + E-253. E-250 (D-067 §4): suppressions counted centrally in validateFile, exemptions by name in standards.json with reasons, unknown marker = P1 warning, both sections printed every run. E-252 (D-068 §1): one stamped tmux session per project; reuse requires stamp equality, foreign same-name sessions suffixed around, legacy windows adopted in place, select-window removed from the launcher. E-253 (D-068 §2): watcher scoped to its own session + pwd -P (the symlink zero-pane signal drop). run_review Tier 2 clean. Full suite 4696 passed / 0 failed / 33 skipped; install + sync done."
     }
   ],
   "deltas": [

@@ -190,19 +190,45 @@ assert_status 0 "E-241.03e: the library installs its handler with builtin trap" 
 
 # Counted with the RULE ITSELF rather than a hand-rolled grep, so the assertion and the
 # gate cannot disagree about what counts — the E-232 lesson (one definition, reused).
+#
+# E-251: the corpus is built by corpus_or_fail, so a scan that reads NO files fails loudly
+# instead of reporting "0 raw traps" about nothing. This suite is the reason that matters:
+# its whole claim is a zero, and a zero from an empty corpus looks identical to a zero
+# earned.
+#
+# E-250: suppression now lives in validateFile, NOT inside the rule — so a caller that
+# invokes RULE_REGISTRY directly, as this one does, must apply `isSuppressed` itself or it
+# will count findings the shipped gate does not. That is exactly what happened when the
+# suppression moved: this assertion went red against a repo the real checker calls clean.
 export REPO_ROOT
 export CHECKER_URL="file://${REPO_ROOT}/src/shared/standards-checker.mjs"
-_raw_traps="$(node --input-type=module -e '
-  const { RULE_REGISTRY } = await import(process.env.CHECKER_URL);
+_trap_corpus="$(cd "$REPO_ROOT" && corpus_or_fail 100 tests -- -name "*.sh")"
+_trap_corpus_rc=$?
+_TRAP_CORPUS_FILE="$(test_tmpdir e241-corpus)/corpus.txt"
+printf '%s\n' "$_trap_corpus" > "$_TRAP_CORPUS_FILE"
+assert_status 0 "E-241.04a-pre: the trap corpus was BUILT (a zero over nothing is not a zero)" \
+  bash -c "[[ '${_trap_corpus_rc}' -eq 0 ]]"
+
+_raw_traps="$(CORPUS_FILE="$_TRAP_CORPUS_FILE" node --input-type=module -e '
+  // THROUGH validateFile, not the raw handler. E-250 moved suppression and by-name
+  // exemption OUT of the rule and into validateFile, which is the production path — so a
+  // caller that invokes RULE_REGISTRY directly sees findings the shipped gate does not,
+  // and a fabricated `{rule_id}` literal also loses the suppression_aliases that make
+  // `# standards:allow-raw-trap` (the committed spelling) match. Both bit this assertion
+  // the moment the refactor landed: it went red against a repo the real checker calls
+  // clean. Reusing the real entry point is the same "one definition" lesson this suite
+  // already applies to the rule itself, carried one level up.
+  const { loadStandards, validateFile } = await import(process.env.CHECKER_URL);
   const { readFileSync } = await import("fs");
-  const { execSync } = await import("child_process");
-  const r = RULE_REGISTRY.no_raw_exit_trap_in_tests;
-  const files = execSync("find tests -name \"*.sh\"", {encoding:"utf8", cwd: process.env.REPO_ROOT}).trim().split("\n").filter(Boolean);
+  const RULE = "no_raw_exit_trap_in_tests";
+  const rules = loadStandards().rules.filter(r => r.rule_id === RULE);
+  if (rules.length !== 1) { console.log("RULE_MISSING"); process.exit(0); }
+  const files = readFileSync(process.env.CORPUS_FILE, "utf8")
+    .split("\n").map(s => s.trim()).filter(Boolean);
   let n = 0;
   for (const f of files) {
-    const c = readFileSync(process.env.REPO_ROOT + "/" + f, "utf8");
-    const res = r({ relPath: f, content: c, lines: c.split("\n"), rule: { rule_id: "x" } });
-    if (res) n += res.length;
+    const rep = validateFile(process.env.REPO_ROOT + "/" + f, rules, { repoRoot: process.env.REPO_ROOT });
+    n += (rep.violated_rules || []).filter(v => v.rule_id === RULE).length;
   }
   console.log(n);
 ' 2>/dev/null)"

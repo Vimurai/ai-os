@@ -55,3 +55,112 @@ No new SQLite state tables are required. The state model remains driven by `TASK
 - E-## (Tmux Documentation): Update `README.md`, `CONTRIBUTING.md`, and `docs` to strongly recommend the tmux split-pane workflow, including a snippet for `~/.tmux.conf` or an automated setup script. → closed by **E-228** (docs point at `ai start`).
 - **E-227** (Tier 2, D-059): `ai start` launcher core — session/window reuse, layout derived from `roles.json`, shell-hosted panes + `send-keys ai pane <role>`, watcher pane, idempotency, `--no-watch`/`--detach`/`--dry-run`, constrained `.ai/start.json`, non-tmux exit 2 + recipe.
 - **E-228** (Tier 1, dep E-227): `--status`/`--kill`, `ai doctor` start-readiness line, README/CONTRIBUTING docs, `ai install`/`ai init` hint.
+
+## Per-Project tmux Sessions (D-068 Amendment, 2026-09-11)
+
+### Goal & Architecture
+`ai start` puts every project into ONE shared tmux session (`aios`), one window per project.
+Live use with several projects showed why that is wrong: a tmux session has a single
+*current window* shared by every attached client, so `ai start` in project B (which runs
+`select-window`/`switch-client` to B's window) flips the terminal that was showing project A
+too; and the project window is located by NAME ONLY (`_start_window_id session basename`), so
+two checkouts with the same basename share one window, and a window whose name drifted is
+recreated beside the old one. Per-project watchers then compete over panes that all sit in
+one session. Ruling: **one tmux session per project, named after the project, owned via a
+session-level stamp; the watcher scopes to its own session as well as to the project path.**
+Operators launch and attach to projects independently; nothing one project does moves
+another project's client or panes.
+
+### Core Concept
+**The stamp is the identity; the name is a label.** Each session `ai start` creates carries
+the tmux session environment variable `AI_OS_PROJECT=<physical absolute project path>`
+(`tmux set-environment -t <session> AI_OS_PROJECT <path>`). Discovery reads the stamp back
+(`tmux show-environment -t <session> AI_OS_PROJECT`) across `tmux list-sessions`, so reuse,
+`--status` and `--kill` find the project's session even when the *name* had to be suffixed.
+
+### Components
+1. **`_start_session_name <project> <start.json session|"">`** (in `src/bin/ai`) — derives
+   the default: explicit `.ai/start.json` `session` wins verbatim (it is already validated
+   against `^[A-Za-z0-9_-]{1,32}$`); otherwise `basename(project)` with every character
+   outside `[A-Za-z0-9_-]` replaced by `-`, leading `-`/`_` dropped (a leading `-` would
+   parse as a tmux flag; tmux itself rewrites `.`/`:`), truncated to 32, and `aios` only if
+   the result is empty. Pure function, unit-tested on `my.app`, `-weird`, `über`, a
+   40-character name.
+2. **`_start_find_session <project>`** — the discovery pass. Returns the name of the session
+   whose `AI_OS_PROJECT` stamp equals the project's physical path, else empty. Runs before
+   any name derivation so a project whose name was suffixed last time is found again.
+3. **Collision policy** — when no stamped session exists and the derived name is already a
+   live session (stamped to a *different* path, or unstamped = a foreign session the
+   operator owns), the name becomes `<first 25 chars>-<6 hex of sha1(path)>`. Never reuse a
+   session this project does not own. The chosen name is printed once at creation.
+4. **Legacy adoption** — when no stamped session exists but the shared `aios` session has a
+   window named `basename` with at least one pane whose `pane_current_path` is inside the
+   project, `ai start` reuses that window in place (idempotency for an operator mid-sprint)
+   and prints one line: `ai start: reusing legacy shared window aios:<w> — run 'ai start
+   --kill' then 'ai start' to move this project to its own session '<name>'`. `--status` and
+   `--kill` follow the same lookup order (stamp → legacy window) so they act on what the
+   operator sees.
+5. **Client movement** — from outside tmux: `attach-session -t <session>`; from inside tmux:
+   `switch-client -t <session>` — which moves ONLY the invoking client. `select-window`
+   against a shared session is no longer composed anywhere in the launcher.
+6. **Watcher session scope** (`src/bin/ai-watch`, see `interactive-bridge.md §Security`) —
+   `_project_panes` lists panes of the watcher's OWN session (`tmux list-panes -s -t
+   <session_name>`) when the watcher runs inside tmux, and keeps the `pane_current_path`
+   filter; the path is compared against `pwd -P` (tmux reports the process's physical cwd, so
+   a project entered through a symlink previously matched zero panes and dropped every
+   signal). `AI_WATCH_ALL_SESSIONS=1` restores the `-a` scan (for a watcher started from a
+   different session on purpose). The startup banner names the session it is scoped to.
+
+### Data Model
+No SQLite change. New tmux-side state, per session:
+```
+AI_OS_PROJECT = /Users/me/dev/<project>      # physical path, set at new-session time
+window        = basename(project)            # unchanged
+```
+`.ai/start.json` is unchanged in shape; the `session` key's meaning changes from "the shared
+session name" to "override the derived per-project name". Its default is no longer a literal.
+
+### API / Interface Contracts
+- `ai start` — creates `<derived>` (or reuses the stamped/legacy match) and moves only the
+  invoking client. Exit codes unchanged (0 ok, 2 config/tmux-missing).
+- `ai start --dry-run` — prints `tmux new-session -d -s <derived> -n <basename> -c <path>` and
+  `tmux set-environment -t <derived> AI_OS_PROJECT <path>`; never inspects or writes tmux.
+- `ai start --status` — first line names the session and how it was found:
+  `ai start --status: <session>:<window> (@id) [owned|legacy]`.
+- `ai start --kill` — `kill-window`, watcher first, unchanged; when the window was the
+  session's last, tmux destroys the session and the command says so.
+- `ai watch` — banner `ai-watch: watching <signal> (poll Ns, scoped to <dir> in session <s>)`.
+  Resolution order (`§Pane Resolution Precedence`) is unchanged; only the candidate set shrinks.
+
+### Security
+- The session name and the stamp value are tmux arguments (E-208 audit lesson): the name is
+  derived by a whitelist rewrite, never passed through from the environment; the stamp is the
+  `pwd -P` of the project, quoted, and only ever *compared*, never executed.
+- Reuse requires stamp equality; a foreign session with a matching name is never adopted
+  (collision policy suffixes instead). This closes the "wrong project's panes" injection path
+  from the launcher side; the watcher's session scope closes it from the bridge side.
+- Legacy adoption additionally requires a pane rooted in the project — a name alone is not
+  enough.
+
+### Execution Constraints
+- Discovery is O(sessions): one `list-sessions` plus one `show-environment` per session; on an
+  operator's machine that is single-digit. Budget < 200 ms host-relative (D-062 rule: print
+  both numbers).
+- Fail-open: if `set-environment`/`show-environment` are unavailable (very old tmux) the
+  launcher proceeds by name and prints that ownership could not be stamped.
+- Tests: composition via `--dry-run` for the derived name, the stamp command and the
+  suffixing; live behaviour on an isolated tmux server (`-L`, `register_cleanup` BEFORE
+  create, E-240) for: two fixture projects → two sessions, same basename → suffix, foreign
+  same-name session → suffix, legacy window adopted, `--status`/`--kill` find the stamped
+  session, a client attached to session A stays on A when `ai start` runs for B.
+
+### Rollback Plan
+`AI_OS_SHARED_SESSION=1` restores the single `aios` session (today's behaviour, made
+explicit); an operator can also pin `.ai/start.json` `{"session":"aios"}` per project.
+`AI_WATCH_ALL_SESSIONS=1` restores the watcher's all-sessions scan. Neither touches state.
+
+### E-## Task Breakdown (D-068)
+- **E-252** (Tier 2): per-project session derivation, stamp, discovery, collision suffix,
+  legacy adoption, client movement, `--status`/`--kill` lookup, docs (README recipe still
+  says `tmux new-session -s ai-os`; the reference layout above says `aios:1`).
+- **E-253** (Tier 2): watcher session scope + physical-path comparison + banner + opt-out.
