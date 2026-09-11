@@ -44,7 +44,7 @@ exports: MIN_CONFIDENCE, isSafeSlug, scanDangerousContent, slugify, validateInst
 imports: node:fs, node:path
 
 ## src/shared/standards-checker.mjs  (centrality 0.1779)
-exports: DEFAULT_STANDARDS_PATH, SEVERITY_ORDER, loadStandards, RULE_REGISTRY, validateFile, validateStaged, validateFiles, reportDrift, validateStandards
+exports: DEFAULT_STANDARDS_PATH, SEVERITY_ORDER, loadStandards, RULE_REGISTRY, suppressionTokensFor, knownSuppressionTokens, isSuppressed, unknownSuppressionFindings, exemptionFor, validateFile, validateStaged, validateFiles, reportDrift, validateStandards
 imports: node:fs, node:path, node:child_process, ./markdown-exec.mjs
 
 ## src/mcp/shared/load-policy.mjs  (centrality 0.1363)
@@ -101,6 +101,7 @@ imports: node:fs, node:path
 imports: node:fs, node:path, node:url, node:os
 
 ## scripts/standards.mjs  (centrality 0.0962)
+exports: formatSuppressionSummary
 imports: node:path, node:fs, node:url, node:os
 
 ## src/mcp/advisor-mcp/index.js  (centrality 0.0962)
