@@ -127,6 +127,37 @@ the recurrence is the point.
 shell — never both. If it must do both, persist the state somewhere that survives the
 subshell (a file) and say so in a comment, or split it into two functions.
 
+### The scan that never ran (review question #5 — E-251, D-067 §5) — **P1**
+
+> **Can this scan return an EMPTY set and still pass?**
+
+A suite that forms a corpus and then asserts something about its contents is asserting
+nothing when the corpus is empty — and "no violations found" is exactly what an empty
+corpus reports. The failure is silent, permanent, and looks like health.
+
+Three rule-scanning suites built their corpus with `find src .claude .agents .gemini`.
+E-244 made provisioning role-aware, so `.agents/` and `.gemini/` stopped existing under the
+all-Claude default; `find` exited non-zero, `execSync` threw, and the corpus came back
+EMPTY. All three would have gone on printing "no findings" indefinitely. The only thing
+that caught it was a file-count assertion each suite happened to carry, added when this
+shape bit before.
+
+Note the attempted fix that made it worse: filtering the root list for existence. That
+turns a loud failure into a quiet shrink — the scan still runs, over less and less.
+
+**The rule (D-067 §5):** build the corpus with `corpus_or_fail <min> <root>… [-- <find
+predicate>…]`. It fails when a root is MISSING (named, not filtered out) or when the count
+is below the floor, and it prints the count on every run, pass or fail. Then assert that
+the scanner read that same corpus — the size of the list and the number of files the
+scanner reports must agree, or an empty read is still reporting "clean" one layer in.
+
+Look for: any `find`, `glob`, `readdir`, `git ls-files` or `execSync("find …")` whose result
+feeds a "nothing found" assertion, with no assertion on how much was scanned.
+
+This is the fifth variety of the harness measuring something else, alongside what the
+machine HAS (E-236), how fast it IS (E-239), what a previous run LEFT (E-240) and a cleanup
+that never RAN (E-241).
+
 ### 4. Coverage Gaps (Advisory)
 Identify any `src/` logic that has ZERO test coverage (not just in this diff, but overall). List as P2 advisory items — not blocking.
 
