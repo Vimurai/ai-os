@@ -251,7 +251,7 @@ EMB_FILE="${SBOX}/embeddings.json"
 cat > "$EMB_FILE" <<JSON
 {
   "version": 2,
-  "model": "gemini-embedding-002",
+  "model": "test-embedding-model",
   "entries": [
     { "id": "${h1}", "department": "Architecture", "vector": [0,0,0], "indexed_at": "2026-01-01T00:00:00Z" },
     { "id": "deadbeef", "department": "UX", "vector": [0,0,0], "indexed_at": "2026-01-02T00:00:00Z" }

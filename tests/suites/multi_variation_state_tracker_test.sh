@@ -18,7 +18,7 @@
 #     schema (approach_type → intent_type) preserving rows
 #   - No regression of existing tables (tasks/stamps/deltas/patches)
 #   - SEO_ALL_INTENTS single-source-of-truth cross-references
-#     src/gemini/agents/seo_manager.md exactly (E-87 contract)
+#     src/claude/agents/seo_manager.md exactly (E-87 contract)
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,7 +29,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SYNC_MCP="${REPO_ROOT}/src/mcp/task-synchronizer-mcp/index.js"
 STATE_DB="${REPO_ROOT}/src/mcp/shared/state-db.js"
 INTENT_MOD="${REPO_ROOT}/src/shared/seo-cluster-intents.mjs"
-MANAGER="${REPO_ROOT}/src/gemini/agents/seo_manager.md"
+MANAGER="${REPO_ROOT}/src/claude/agents/seo_manager.md"
 
 echo "===== multi_variation_state_tracker_test.sh ====="
 

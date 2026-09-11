@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ai_debug_skill_test.sh — Tests for E-43 ai-debug skill TASK_BUDGET upgrade.
 #
-# Verifies the skill body in src/shared/skills (source of truth) and the two
-# tracked mirrors (.claude/skills, .agents/skills) carry the contract bits
+# Verifies the skill body in src/shared/skills (source of truth) and the tracked
+# .claude/skills mirror carry the contract bits
 # the workflow-optimizations.md blueprint mandates: 3-cycle budget,
 # BUDGET_EXHAUSTED state, advisor-mcp escalation, hypothesis distinctness.
 
@@ -14,21 +14,14 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo "===== ai_debug_skill_test.sh ====="
 
-# E-244 (D-066 §4): the canonical source plus every workspace copy that EXISTS. `ai sync`
-# provisions .agents/ only when a role is bound to agy, so under the all-Claude default
-# there is no third copy — and asserting on one tests the presence of a directory rather
-# than the content of a skill. Bind the Architect to agy and the third copy returns to
-# this list automatically.
+# The canonical source plus the Claude workspace copy — the only workspace in v4 (E-254).
 SKILL_FILES=(
   "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md"
   "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md"
 )
-[[ -f "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md" ]] \
-  && SKILL_FILES+=("${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md") \
-  || _skip "ai-debug .agents/ copy (workspace not provisioned — no role bound to agy)"
 
 echo ""
-echo "  [T-DEBUG-S01] All three copies exist"
+echo "  [T-DEBUG-S01] Source and workspace copy exist"
 for f in "${SKILL_FILES[@]}"; do
   assert_status 0 "exists: ${f#${REPO_ROOT}/}" test -f "$f"
 done
@@ -81,8 +74,5 @@ CLAUDE_HASH="$(md5sum "${REPO_ROOT}/.claude/skills/ai-debug/SKILL.md" | awk '{pr
 
 assert_status 0 ".claude mirror matches src" \
   bash -c "[[ '$SRC_HASH' == '$CLAUDE_HASH' ]]"
-assert_mirror_if_present ".agents mirror matches src" \
-  "${REPO_ROOT}/src/shared/skills/ai-debug/SKILL.md" \
-  "${REPO_ROOT}/.agents/skills/ai-debug/SKILL.md"
 
 assert_summary

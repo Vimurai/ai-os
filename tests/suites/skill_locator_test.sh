@@ -325,12 +325,12 @@ rm -rf "$_rs"
 # ── E-225.7: the rule covers the MIRRORS too (audit F3) ────────────────────
 # E-201 is a recorded incident of an edit landing in the mirror instead of canonical
 # src/. A reintroduced chain there would otherwise commit clean.
-assert_status 0 "E-225.07a: applies_to covers .claude/ and .agents/ mirrors" \
+assert_status 0 "E-225.07a: applies_to covers the .claude/ mirror" \
   bash -c "python3 - <<'PYX'
 import json, sys
 d = json.load(open('$STD_JSON'))
 r = next(x for x in d['rules'] if x['rule_id'] == 'skill_locator_install_first')
-need = {'.claude/skills/**/SKILL.md', '.agents/skills/**/SKILL.md'}
+need = {'.claude/skills/**/SKILL.md'}
 sys.exit(0 if need <= set(r['applies_to']) else 1)
 PYX"
 _mm="$(mktemp -d)"; mkdir -p "$_mm/.claude/skills/x"

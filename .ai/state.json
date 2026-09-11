@@ -597,6 +597,13 @@
       "task_id": "E-85",
       "timestamp": "2026-09-11T19:24:25.642Z",
       "summary": "INSIGHTS.md regenerated — 51,382 rows analysed, 2 recommendations (ai-domain wrapper; execute_code 100% REJECTED); prior patch_file deprecation flag WITHDRAWN as test-suite contamination (92% of window is test traffic)"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-254",
+      "timestamp": "2026-09-14T12:35:19.994Z",
+      "summary": "[TIER_2] E-254 (D-069 §Components 1-2): agy/gemini providers removed — src/gemini, src/agents, plugin builder, GEMINI.md/AGENTS.md shims, ai provider (exit 2), OAuth preflight, doctor/sync/watch/advisor vendor branches deleted; 7 agents + 15 skills live in src/claude; ai sync prunes manifest-owned legacy workspaces only (settings.json kept — src bug caught by fixture); installer drops legacy ~/.ai-os mirrors. Harness: tmux test servers load no config (tmux-continuum restored operator sessions into ai_start_test). Acceptance grep clean except sanctioned legacy-prune/grant-strip literals. run_review Tier 2: P0 on generated .ai/blueprints/mcp.md overridden by operator (generator output only, D-071 §2); align_diff WARN (mirrors). Full suite 4643 passed / 0 failed / 2 skipped; install + sync done."
     }
   ],
   "deltas": [

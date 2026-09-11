@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # provider_workspace_test.sh — E-244 (D-066 §4): workspaces follow the role binding.
 #
-# `ai sync` provisioned .claude/, .gemini/ AND .agents/ on every project, unconditionally,
-# regardless of what .ai/roles.json said. Under the all-Claude default that leaves two
-# fully-populated workspaces — ~40 skill directories — for CLIs nothing will ever launch.
+# `ai sync` used to provision every vendor workspace on every project, unconditionally,
+# regardless of what .ai/roles.json said. v4 (D-069) ships one built-in provider, `claude`;
+# a provider declared in .ai/providers.json with a `workspace_dir` is still classified, and
+# its workspace is stale when no role is bound to it. The fixtures below use a neutral
+# declared provider, `acme` (workspace .acme/), for that half.
 #
 # THE DANGEROUS HALF IS THE PRUNE, and it is weighted accordingly below. "Delete the
 # directory of a provider nobody uses" is one careless `rm -rf` away from deleting a
@@ -36,7 +38,13 @@ _proj() {  # <arch> <eng> [dirs-to-create...]
 { "roles": { "architect": {"provider":"${arch}","pane_identifier":"1"},
              "engineer":  {"provider":"${eng}","pane_identifier":"0"} } }
 JSON
-  cp "${REPO_ROOT}/src/templates/providers.json" "$d/.ai/providers.json"
+  # The shipped template (claude only) plus one declared non-claude provider.
+  python3 - "${REPO_ROOT}/src/templates/providers.json" "$d/.ai/providers.json" <<'PYJ'
+import json, sys
+p = json.load(open(sys.argv[1]))
+p["providers"]["acme"] = {"workspace_dir": ".acme"}
+json.dump(p, open(sys.argv[2], "w"), indent=2)
+PYJ
   local x; for x in "$@"; do mkdir -p "$d/$x"; done
   printf '%s' "$d"
 }
@@ -45,22 +53,20 @@ _classify() { ( cd "$1" && node "$PW" list .ai . 2>/dev/null ); }
 _stale()    { ( cd "$1" && node "$PW" stale .ai . 2>/dev/null ); }
 
 # ── E-244.1: classification follows .ai/roles.json ────────────────────────────
-_all_claude="$(_proj claude claude .claude .gemini .agents)"
+_all_claude="$(_proj claude claude .claude .acme)"
 _c="$(_classify "$_all_claude")"
 assert_contains "E-244.01a: claude is 'always' (hooks + settings live there)" \
   $'claude\t.claude\talways' "$_c"
-assert_contains "E-244.01b: an unbound gemini workspace is STALE" \
-  $'gemini\t.gemini\tstale' "$_c"
-assert_contains "E-244.01c: an unbound agy workspace is STALE" \
-  $'agy\t.agents\tstale' "$_c"
+assert_contains "E-244.01b: an unbound declared provider's workspace is STALE" \
+  $'acme\t.acme\tstale' "$_c"
 
-# A SPLIT Triad must classify exactly the other way, or the rule is just "delete .gemini".
-_split="$(_proj agy claude .claude .gemini .agents)"
+# Bound, it must classify exactly the other way, or the rule is just "delete .acme".
+_split="$(_proj acme claude .claude .acme)"
 _s="$(_classify "$_split")"
-assert_contains "E-244.01d: with the Architect on agy, .agents/ is MAPPED, not stale" \
-  $'agy\t.agents\tmapped' "$_s"
-assert_status 1 "E-244.01e: and agy does not appear in the stale list" \
-  bash -c "_o=\$(cd '$_split' && node '$PW' stale .ai . 2>/dev/null); printf '%s' \"\$_o\" | grep -q '^agy'"
+assert_contains "E-244.01d: with the Architect on acme, .acme/ is MAPPED, not stale" \
+  $'acme\t.acme\tmapped' "$_s"
+assert_status 1 "E-244.01e: and acme does not appear in the stale list" \
+  bash -c "_o=\$(cd '$_split' && node '$PW' stale .ai . 2>/dev/null); printf '%s' \"\$_o\" | grep -q '^acme'"
 
 # A directory that does not exist is not stale — there is nothing to clean up.
 _none="$(_proj claude claude .claude)"
@@ -70,16 +76,16 @@ assert_status 1 "E-244.01f: an ABSENT workspace is never reported as stale" \
 # ── E-244.2: FAIL-SAFE — an unreadable roles.json prunes nothing ──────────────
 # Deleting a live workspace because a config failed to parse is the one outcome this
 # feature must never produce.
-_corrupt="$(_proj claude claude .claude .gemini .agents)"
+_corrupt="$(_proj claude claude .claude .acme)"
 printf '{ "roles": { ' > "${_corrupt}/.ai/roles.json"
 assert_status 1 "E-244.02a: a CORRUPT roles.json yields no stale workspaces" \
   bash -c "cd '$_corrupt' && node '$PW' stale .ai . >/dev/null 2>&1"
-_missing="$(_proj claude claude .claude .gemini .agents)"
+_missing="$(_proj claude claude .claude .acme)"
 rm -f "${_missing}/.ai/roles.json"
 assert_status 1 "E-244.02b: a MISSING roles.json yields no stale workspaces either" \
   bash -c "cd '$_missing' && node '$PW' stale .ai . >/dev/null 2>&1"
 # And claude survives even when roles.json names nobody at all.
-_empty="$(_proj claude claude .claude .gemini)"
+_empty="$(_proj claude claude .claude .acme)"
 printf '{ "roles": {} }' > "${_empty}/.ai/roles.json"
 assert_contains "E-244.02c: .claude/ is never stale, even with an EMPTY roles map" \
   $'claude\t.claude\talways' "$(_classify "$_empty")"
@@ -90,13 +96,13 @@ assert_status 1 "E-244.02d: and .claude is absent from the stale list" \
 # The whole feature turns on this block. A sync-written, unmodified skill goes; a
 # user-authored one beside it stays and is reported.
 _pp="$(_proj claude claude .claude)"
-mkdir -p "${_pp}/.agents/skills/synced-skill" "${_pp}/.agents/skills/my-own-skill"
-printf '# synced\n' > "${_pp}/.agents/skills/synced-skill/SKILL.md"
-printf '# mine\n'   > "${_pp}/.agents/skills/my-own-skill/SKILL.md"
+mkdir -p "${_pp}/.acme/skills/synced-skill" "${_pp}/.acme/skills/my-own-skill"
+printf '# synced\n' > "${_pp}/.acme/skills/synced-skill/SKILL.md"
+printf '# mine\n'   > "${_pp}/.acme/skills/my-own-skill/SKILL.md"
 # Record ONLY the synced one, the way a real sync would.
-( cd "$_pp" && node "${REPO_ROOT}/src/shared/sync-manifest.mjs" record .agents/skills >/dev/null 2>&1 )
+( cd "$_pp" && node "${REPO_ROOT}/src/shared/sync-manifest.mjs" record .acme/skills >/dev/null 2>&1 )
 # Then make the user's skill un-recorded by rewriting the manifest without it.
-python3 - "${_pp}/.agents/skills/_SYNC_MANIFEST.json" <<'PY'
+python3 - "${_pp}/.acme/skills/_SYNC_MANIFEST.json" <<'PY'
 import json, sys
 p = sys.argv[1]
 m = json.load(open(p))
@@ -106,100 +112,103 @@ PY
 _pout="$( cd "$_pp" && bash "$AI" sync --prune-providers 2>&1 )"
 
 assert_status 1 "E-244.03a: the sync-written skill is GONE" \
-  test -d "${_pp}/.agents/skills/synced-skill"
+  test -d "${_pp}/.acme/skills/synced-skill"
 # THE ASSERTION THIS FEATURE EXISTS TO SATISFY.
 assert_status 0 "E-244.03b: the USER'S skill survives the prune" \
-  test -f "${_pp}/.agents/skills/my-own-skill/SKILL.md"
+  test -f "${_pp}/.acme/skills/my-own-skill/SKILL.md"
 assert_contains "E-244.03c: and the surviving directory is REPORTED, not silently left" \
-  ".agents/ kept" "$_pout"
+  ".acme/ kept" "$_pout"
 assert_contains "E-244.03d: the prune names the provider and the reason" \
-  "no role is bound to 'agy'" "$_pout"
+  "no role is bound to 'acme'" "$_pout"
 
 # With nothing left un-prunable, the directory itself goes.
 _pq="$(_proj claude claude .claude)"
-mkdir -p "${_pq}/.agents/skills/only-synced"
-printf '# s\n' > "${_pq}/.agents/skills/only-synced/SKILL.md"
-( cd "$_pq" && node "${REPO_ROOT}/src/shared/sync-manifest.mjs" record .agents/skills >/dev/null 2>&1 )
+mkdir -p "${_pq}/.acme/skills/only-synced"
+printf '# s\n' > "${_pq}/.acme/skills/only-synced/SKILL.md"
+( cd "$_pq" && node "${REPO_ROOT}/src/shared/sync-manifest.mjs" record .acme/skills >/dev/null 2>&1 )
 _qout="$( cd "$_pq" && bash "$AI" sync --prune-providers 2>&1 )"
 assert_status 1 "E-244.03e: a fully-prunable workspace directory is removed" \
-  test -d "${_pq}/.agents"
-assert_contains "E-244.03f: and the removal is announced" ".agents/ removed" "$_qout"
+  test -d "${_pq}/.acme"
+assert_contains "E-244.03f: and the removal is announced" ".acme/ removed" "$_qout"
 
 # NO MANIFEST = NO EVIDENCE. A workspace sync has never recorded must survive whole.
 _pr="$(_proj claude claude .claude)"
-mkdir -p "${_pr}/.agents/skills/unrecorded"
-printf '# u\n' > "${_pr}/.agents/skills/unrecorded/SKILL.md"
+mkdir -p "${_pr}/.acme/skills/unrecorded"
+printf '# u\n' > "${_pr}/.acme/skills/unrecorded/SKILL.md"
 ( cd "$_pr" && bash "$AI" sync --prune-providers >/dev/null 2>&1 )
 assert_status 0 "E-244.03g: with NO manifest, nothing is pruned (first run has no evidence)" \
-  test -f "${_pr}/.agents/skills/unrecorded/SKILL.md"
+  test -f "${_pr}/.acme/skills/unrecorded/SKILL.md"
 
 # A MAPPED provider's workspace is never touched BY THIS COMMAND. The skill here is
 # deliberately USER-AUTHORED (never recorded), because a recorded skill that is no longer
 # in the source set is prunable by ORDINARY sync (E-220) whether or not the provider is
 # mapped — asserting on one would test E-220's rule, not this one, and would fail for a
 # reason that has nothing to do with provider workspaces.
-_pm="$(_proj agy claude .claude)"
-mkdir -p "${_pm}/.agents/skills/live-skill"
-printf '# live\n' > "${_pm}/.agents/skills/live-skill/SKILL.md"
+_pm="$(_proj acme claude .claude)"
+mkdir -p "${_pm}/.acme/skills/live-skill"
+printf '# live\n' > "${_pm}/.acme/skills/live-skill/SKILL.md"
 ( cd "$_pm" && bash "$AI" sync --prune-providers >/dev/null 2>&1 )
 assert_status 0 "E-244.03h: a MAPPED provider's workspace is untouched by the prune" \
-  test -f "${_pm}/.agents/skills/live-skill/SKILL.md"
-assert_status 1 "E-244.03i: and agy is not even listed as stale while it holds a role" \
-  bash -c "_o=\$(cd '$_pm' && node '$PW' stale .ai . 2>/dev/null); printf '%s' \"\$_o\" | grep -q '^agy'"
+  test -f "${_pm}/.acme/skills/live-skill/SKILL.md"
+assert_status 1 "E-244.03i: and acme is not even listed as stale while it holds a role" \
+  bash -c "_o=\$(cd '$_pm' && node '$PW' stale .ai . 2>/dev/null); printf '%s' \"\$_o\" | grep -q '^acme'"
 
 # ── E-244.4: the prune is EXPLICIT — a plain sync never deletes ───────────────
 # A cleanup that happens on a command people run reflexively is an incident waiting.
 _ps="$(_proj claude claude .claude)"
-mkdir -p "${_ps}/.agents/skills/only-synced"
-printf '# s\n' > "${_ps}/.agents/skills/only-synced/SKILL.md"
-( cd "$_ps" && node "${REPO_ROOT}/src/shared/sync-manifest.mjs" record .agents/skills >/dev/null 2>&1 )
+mkdir -p "${_ps}/.acme/skills/only-synced"
+printf '# s\n' > "${_ps}/.acme/skills/only-synced/SKILL.md"
+( cd "$_ps" && node "${REPO_ROOT}/src/shared/sync-manifest.mjs" record .acme/skills >/dev/null 2>&1 )
 _plain="$( cd "$_ps" && bash "$AI" sync 2>&1 )"
 assert_status 0 "E-244.04a: a PLAIN 'ai sync' deletes nothing" \
-  test -f "${_ps}/.agents/skills/only-synced/SKILL.md"
+  test -f "${_ps}/.acme/skills/only-synced/SKILL.md"
 assert_contains "E-244.04b: but it does SAY the workspace is stale" \
-  "stale provider workspace: .agents/" "$_plain"
+  "stale provider workspace: .acme/" "$_plain"
 assert_contains "E-244.04c: and names the command that would remove it" \
   "ai sync --prune-providers" "$_plain"
 
-# ── E-244.5: provisioning follows the binding ────────────────────────────────
-_pv="$(_proj claude claude .claude)"
-_vout="$( cd "$_pv" && bash "$AI" sync 2>&1 )"
-assert_status 1 "E-244.05a: an all-Claude project does not get a .gemini/" \
-  test -d "${_pv}/.gemini"
-assert_status 1 "E-244.05b: nor an .agents/" test -d "${_pv}/.agents"
-assert_status 0 "E-244.05c: .claude/ is still provisioned" test -d "${_pv}/.claude/skills"
-# Silence would be worse than the directory: a reader expecting .gemini/ must learn why.
-assert_contains "E-244.05d: the skip is ANNOUNCED, not silent" \
-  ".gemini/ skipped (no role bound to 'gemini'" "$_vout"
-assert_contains "E-244.05e: and so is the agy skip" \
-  ".agents/ skipped (no role bound to 'agy'" "$_vout"
-
-# NON-VACUITY: bind a role to gemini and the directory comes back. Without this, 05a-b
-# would pass on a build that had simply deleted the gemini provisioning code.
-_pg="$(_proj gemini claude .claude)"
+# ── E-244.5 / E-254: provisioning is .claude/ and nothing else ───────────────
+# v4 (D-069) has one adapter. A sync must provision .claude/ and must not invent a
+# workspace for anything else — not for a retired vendor, and not for a declared provider
+# that has no source adapter to fill it from.
+_hidden_dirs() { ( cd "$1" && find . -mindepth 1 -maxdepth 1 -type d -name '.*' | sed 's|^\./||' | sort | tr '\n' ' ' ); }
+_pv="$(_proj claude claude)"
+( cd "$_pv" && bash "$AI" sync >/dev/null 2>&1 )
+assert_status 0 "E-244.05c: .claude/ is provisioned (skills)" test -d "${_pv}/.claude/skills"
+assert_status 0 "E-244.05c2: .claude/ is provisioned (agents)" test -d "${_pv}/.claude/agents"
+_hd="$(_hidden_dirs "$_pv")"
+assert_status 0 "E-254.05a: an all-Claude sync creates no workspace besides .ai/ and .claude/ (got: ${_hd})" \
+  test "$_hd" = ".ai .claude "
+# A role bound to a declared provider still gets no invented workspace: there is no
+# source tree for it, and an empty directory would only look like a live workspace.
+_pg="$(_proj acme claude)"
 ( cd "$_pg" && bash "$AI" sync >/dev/null 2>&1 )
-assert_status 0 "E-244.05f: binding the Architect to gemini provisions .gemini/ again" \
-  test -d "${_pg}/.gemini/agents"
-_pa="$(_proj agy claude .claude)"
-( cd "$_pa" && bash "$AI" sync >/dev/null 2>&1 )
-assert_status 0 "E-244.05g: and binding it to agy provisions .agents/" \
-  test -d "${_pa}/.agents/skills"
+assert_status 1 "E-254.05b: binding the Architect to a declared provider invents no .acme/" \
+  test -d "${_pg}/.acme"
+assert_status 0 "E-254.05d: and .claude/ is still provisioned for the Engineer" \
+  test -d "${_pg}/.claude/skills"
 
-# ── E-244.6: the adapters stay (D-052) ───────────────────────────────────────
-# This task removes PROJECT workspaces, not provider support. Deleting the source
-# adapters would make the 05f/05g re-provisioning impossible and is out of scope.
-assert_status 0 "E-244.06a: src/agents/skills survives (D-052)" \
-  test -d "${REPO_ROOT}/src/agents/skills"
-assert_status 0 "E-244.06b: src/gemini/agents survives (D-052)" \
-  test -d "${REPO_ROOT}/src/gemini/agents"
+# ── E-244.6 / E-254: one source adapter (D-069) ─────────────────────────────
+# Both roles are served from src/claude/*; the registry's role manifest must name nothing
+# outside claude/ and shared/, or sync would look for a tree that no longer ships.
+assert_status 0 "E-254.06a: the Architect's skills ship under src/claude/skills" \
+  test -f "${REPO_ROOT}/src/claude/skills/arch-task/SKILL.md"
+assert_status 0 "E-254.06b: the Architect's agents ship under src/claude/agents" \
+  test -f "${REPO_ROOT}/src/claude/agents/docs-architect.md"
+assert_status 0 "E-254.06c: the role manifest names only claude/ and shared/ source dirs" \
+  python3 -c "
+import json,sys
+r=json.load(open('${REPO_ROOT}/src/config/registry.json'))['roles']
+dirs=[d for k,v in r.items() if isinstance(v,dict) for f in ('skill_dirs','agent_dirs') for d in v.get(f,[])]
+sys.exit(0 if dirs and all(d.split('/')[0] in ('claude','shared') for d in dirs) else 1)"
 
 # ── E-244.7: doctor reports it, and repairs nothing ──────────────────────────
-_pd="$(_proj claude claude .claude .agents)"
+_pd="$(_proj claude claude .claude .acme)"
 _dout="$( cd "$_pd" && bash "$AI" doctor 2>&1 )"
 assert_contains "E-244.07a: doctor reports the stale workspace" \
-  "stale provider workspace: .agents/" "$_dout"
+  "stale provider workspace: .acme/" "$_dout"
 assert_status 0 "E-244.07b: and doctor does NOT remove it (diagnose ≠ repair)" \
-  test -d "${_pd}/.agents"
+  test -d "${_pd}/.acme"
 _pdc="$(_proj claude claude .claude)"
 _dcout="$( cd "$_pdc" && bash "$AI" doctor 2>&1 )"
 assert_contains "E-244.07c: a clean project says so explicitly" \

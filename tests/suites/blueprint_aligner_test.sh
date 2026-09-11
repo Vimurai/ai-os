@@ -180,49 +180,34 @@ test_bypass_rule "fs.readFile with ../ still flagged (no quotes around ../)" \
   '+fs.readFileSync(`${root}/../secret`)' \
   'flag'
 
-# ── GEMINI_FILE_MODIFIED — E-42 UACS handoff stamp gate ──────────────────────
+# ── ARCHITECT_FILE_MODIFIED — E-42 UACS handoff stamp gate ───────────────────
 # When the diff modifies architect.md or BRIEF.md, the rule fires FAIL by
-# default. If state.json or LOG.md carries a recent GEMINI_AUTHORED /
-# ARCHITECT_HANDOFF stamp, severity downgrades to WARN.
+# default. If state.json or LOG.md carries a recent ARCHITECT_HANDOFF stamp,
+# severity downgrades to WARN.
+#
+# E-254: exercise the REAL detectArchitectHandoffStamp — its source is sliced out of
+# index.js (the function is not exported and the module starts a server) and evaluated
+# with the same fs/path bindings, so an inline copy can never drift from src.
+ALIGNER_SRC="${REPO_ROOT}/src/mcp/blueprint-aligner-mcp/index.js"
+
+assert_status 0 "ARCHITECT_FILE_MODIFIED rule id present in aligner" \
+  grep -q 'id: "ARCHITECT_FILE_MODIFIED"' "$ALIGNER_SRC"
+
 test_handoff_stamp() {
   local label="$1" sandbox="$2" expect="$3"
   local result
   result=$(node -e "
 const fs = require('node:fs');
-const path = require('node:path');
-const cwd = process.argv[1];
-const STAMP_TYPES = /^(GEMINI_AUTHORED|ARCHITECT_HANDOFF)\$/i;
-const LOG_MARKER  = /\[(GEMINI_AUTHORED|ARCHITECT_HANDOFF)\]/i;
-const WINDOW_MS   = 24 * 60 * 60 * 1000;
-function readSafe(p) { try { return fs.existsSync(p) ? fs.readFileSync(p,'utf8') : ''; } catch { return ''; } }
-function detect(cwd) {
-  try {
-    const sp = path.resolve(cwd, '.ai/state.json');
-    if (fs.existsSync(sp)) {
-      const state = JSON.parse(readSafe(sp));
-      const stamps = Array.isArray(state.stamps) ? state.stamps : [];
-      const now = Date.now();
-      for (let i = stamps.length - 1; i >= 0; i--) {
-        const s = stamps[i];
-        if (!s || !STAMP_TYPES.test(String(s.type||''))) continue;
-        const ts = Date.parse(s.timestamp||'');
-        if (Number.isFinite(ts) && now-ts <= WINDOW_MS) return 'state:'+s.type;
-      }
-    }
-  } catch {}
-  try {
-    const log = readSafe(path.resolve(cwd, '.ai/LOG.md'));
-    if (log) {
-      const tail = log.split('\\n').slice(-20).join('\\n');
-      const m = tail.match(LOG_MARKER);
-      if (m) return 'log:'+m[1];
-    }
-  } catch {}
-  return 'none';
-}
-process.stdout.write(detect(cwd));
-" "$sandbox" 2>/dev/null || echo "error")
-  if [[ "$result" == "$expect" ]]; then
+const { resolve } = require('node:path');
+const src = fs.readFileSync(process.argv[1], 'utf8');
+const m = src.match(/^function detectArchitectHandoffStamp\(cwd\) \{[\s\S]*?^\}$/m);
+if (!m) { process.stdout.write('nosource'); process.exit(0); }
+const existsSync = fs.existsSync;
+const readFileSafe = (p) => { try { return existsSync(p) ? fs.readFileSync(p, 'utf8') : ''; } catch { return ''; } };
+const detect = new Function('resolve', 'existsSync', 'readFileSafe', m[0] + '\nreturn detectArchitectHandoffStamp;')(resolve, existsSync, readFileSafe);
+process.stdout.write(detect(process.argv[2]) ?? 'none');
+" "$ALIGNER_SRC" "$sandbox" 2>/dev/null || echo "error")
+  if [[ "$expect" == "none" && "$result" == "none" ]] || [[ "$expect" != "none" && "$result" == *"$expect"* ]]; then
     _pass "$label"
   else
     _fail "$label (expected $expect, got $result)"
@@ -238,14 +223,20 @@ test_handoff_stamp "no stamp present" "$SBOX" "none"
 # Recent state.json stamp → detected.
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 cat > "${SBOX}/.ai/state.json" <<JSON
-{"tasks":[],"stamps":[{"type":"GEMINI_AUTHORED","timestamp":"${NOW_ISO}","summary":"P-17 architect.md edit"}]}
+{"tasks":[],"stamps":[{"type":"ARCHITECT_HANDOFF","timestamp":"${NOW_ISO}","summary":"P-17 architect.md edit"}]}
 JSON
-test_handoff_stamp "recent GEMINI_AUTHORED stamp detected" "$SBOX" "state:GEMINI_AUTHORED"
+test_handoff_stamp "recent ARCHITECT_HANDOFF stamp detected" "$SBOX" "state.json stamp [ARCHITECT_HANDOFF]"
+
+# A recent stamp of any OTHER type does not authorise the edit.
+cat > "${SBOX}/.ai/state.json" <<JSON
+{"tasks":[],"stamps":[{"type":"CRITIC_STAMP","timestamp":"${NOW_ISO}","summary":"unrelated"}]}
+JSON
+test_handoff_stamp "recent non-handoff stamp type not detected" "$SBOX" "none"
 
 # Stale stamp (>24h old) → not detected.
 OLD_ISO="$(date -u -v-2d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)"
 cat > "${SBOX}/.ai/state.json" <<JSON
-{"tasks":[],"stamps":[{"type":"GEMINI_AUTHORED","timestamp":"${OLD_ISO}","summary":"old"}]}
+{"tasks":[],"stamps":[{"type":"ARCHITECT_HANDOFF","timestamp":"${OLD_ISO}","summary":"old"}]}
 JSON
 test_handoff_stamp "stale (>24h) stamp not detected" "$SBOX" "none"
 
@@ -253,14 +244,14 @@ test_handoff_stamp "stale (>24h) stamp not detected" "$SBOX" "none"
 rm -f "${SBOX}/.ai/state.json"
 {
   for i in $(seq 1 10); do echo "filler line $i"; done
-  echo "[GEMINI_AUTHORED] 2026-05-06 P-17 architect.md edit"
+  echo "[ARCHITECT_HANDOFF] 2026-05-06 P-17 architect.md edit"
 } > "${SBOX}/.ai/LOG.md"
-test_handoff_stamp "LOG.md marker detected" "$SBOX" "log:GEMINI_AUTHORED"
+test_handoff_stamp "LOG.md marker detected" "$SBOX" "LOG.md marker [ARCHITECT_HANDOFF]"
 
 # LOG.md marker outside last-20-line window → not detected.
 {
   for i in $(seq 1 30); do echo "noise $i"; done
-  echo "[GEMINI_AUTHORED] way back"
+  echo "[ARCHITECT_HANDOFF] way back"
   for i in $(seq 1 30); do echo "filler $i"; done
 } > "${SBOX}/.ai/LOG.md"
 test_handoff_stamp "LOG.md marker outside last-20 ignored" "$SBOX" "none"

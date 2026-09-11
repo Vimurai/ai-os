@@ -17,31 +17,31 @@
 - Compliance (GDPR/affiliate):
 - Deployment:
 
-## UX Notes (Gemini via /gemini skill)
+## UX Notes (Architect-owned)
 - Target platforms:
 - Key flows:
 - Accessibility:
 - Performance budgets (frontend):
 
-## SEO/Content Notes (Gemini via /gemini skill)
+## SEO/Content Notes (Architect-owned)
 - Target queries:
 - Information architecture:
 - Content types:
 - Schema/structured data:
 
-## Frontend Notes (Gemini via /gemini skill)
+## Frontend Notes (Architect-owned)
 - Framework:
 - State approach:
 - Routing:
 - UI patterns:
 
-## Architecture Notes (Claude-owned)
+## Architecture Notes (Engineer-owned)
 - Modules/boundaries:
 - Data model:
 - Integration points:
 - API contracts (high level):
 
-## Security/DevOps Notes (Claude-owned)
+## Security/DevOps Notes (Engineer-owned)
 - Threat model:
 - Secrets:
 - CI/CD:

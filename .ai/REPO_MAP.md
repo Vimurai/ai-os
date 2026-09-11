@@ -1,5 +1,5 @@
 # REPO_MAP.md — AST Repository Map (auto-generated)
-<!-- ast-parser-mcp generate_map (E-97): 35/74 files, budget 2048 tokens. `⋮` = elided function body. -->
+<!-- ast-parser-mcp generate_map (E-97): 35/73 files, budget 2048 tokens. `⋮` = elided function body. -->
 
 ## src/mcp/shared/is-main.mjs  (centrality 1)
 exports: isMainModule

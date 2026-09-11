@@ -27,7 +27,7 @@ cp "$TEMPLATE" "${MIGRATE_DIR}/.ai/state.json"
 cat > "${MIGRATE_DIR}/.ai/TASKS.md" <<'TASKS'
 # TASKS (Ordered work)
 
-## Architect (Gemini)
+## Architect (Claude)
 - [x] P-01: Blueprint for isolation
   Status: DONE 2026-03-07 — Section 1 done
 - [ ] P-02: Blueprint for security

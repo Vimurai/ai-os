@@ -2,7 +2,7 @@
 # role_identity_test.sh — E-213 (architect-provider-parity.md §Components 3-4):
 # the Architect settings overlay and role-correct identity labels.
 #
-# "Architect (Agy)" was hardcoded, so an all-Claude Triad (D-054) attributed every
+# A vendor-specific Architect owner label was hardcoded, so an all-Claude Triad (D-054) attributed every
 # Architect-created task to a provider that is not even running, and the Stop hook
 # stamped a bare "Claude" — which stopped identifying anything once BOTH panes are
 # Claude. Both halves now resolve the provider from .ai/roles.json.
@@ -33,19 +33,20 @@ cat > "$_DUAL/roles.json" <<'JSON'
 JSON
 _SPLIT="$(mktemp -d)"
 cat > "$_SPLIT/roles.json" <<'JSON'
-{ "roles": { "architect": { "provider": "agy",    "pane_identifier": "1" },
+{ "roles": { "architect": { "provider": "acme",   "pane_identifier": "1" },
              "engineer":  { "provider": "claude", "pane_identifier": "0" } } }
 JSON
 
-assert_contains "E-213.01a: dual-claude architect is attributed to Claude, not Agy" \
+assert_contains "E-213.01a: dual-claude architect is attributed to Claude" \
   "Architect (Claude)" "$(_owner architect "$_DUAL")"
 assert_contains "E-213.01b: dual-claude engineer label unchanged" \
   "Engineer (Claude)" "$(_owner engineer "$_DUAL")"
-assert_contains "E-213.01c: a split Triad still attributes the Architect to Agy" \
-  "Architect (Agy)" "$(_owner architect "$_SPLIT")"
-# Fail-soft: an attribution label must never break task creation. D-066 changed the
-# fallback from agy to claude — the DEFAULT topology is all-Claude. 01c above still pins
-# that an EXPLICIT agy binding is honoured, so this change relaxes nothing.
+# `acme` is a neutral non-default provider: the label must follow the explicit binding.
+assert_contains "E-213.01c: an explicit non-default binding is attributed to that provider" \
+  "Architect (Acme)" "$(_owner architect "$_SPLIT")"
+# Fail-soft: an attribution label must never break task creation. The DEFAULT topology
+# is all-Claude (D-066, E-254). 01c above still pins that an EXPLICIT binding is honoured,
+# so the fallback cannot be hiding a hardcoded label.
 assert_contains "E-213.01d: a missing roles.json falls back to the D-066 default (claude)" \
   "Architect (Claude)" "$(_owner architect "/nonexistent-dir")"
 
@@ -53,7 +54,7 @@ assert_contains "E-213.01d: a missing roles.json falls back to the D-066 default
 # when the provider half changes — that is what makes this change safe.
 _ROLEOF="$(node --input-type=module -e '
 const m = await import("file://'"${REPO_ROOT}"'/src/mcp/shared/state-db.js");
-process.stdout.write([m.roleFromOwner("Architect (Claude)"), m.roleFromOwner("Architect (Agy)"), m.roleFromOwner("Engineer (Claude)")].join(","));
+process.stdout.write([m.roleFromOwner("Architect (Claude)"), m.roleFromOwner("Architect (Acme)"), m.roleFromOwner("Engineer (Claude)")].join(","));
 ' 2>/dev/null)"
 assert_contains "E-213.01e: section headers are provider-agnostic (no churn)" \
   "Architect,Architect,Engineer" "$_ROLEOF"
@@ -97,17 +98,27 @@ done
 # The Engineer must NOT inherit the deny list — these are its everyday tools.
 assert_not_contains "E-213.02j: the engineer overlay carries no deny list" '"deny"' "$_ENG_OV"
 
-# ── E-213.3: the legacy gemini grant is gone from the base settings ────────
-assert_status 1 "E-213.03a: the generator no longer ADDS Bash(gemini -p *)" \
-  bash -c "grep -q 'new_allow.append(\"Bash(gemini -p \\*)\")' '$AI_BIN'"
+# ── E-213.3: the retired vendor shell grant is gone from the base settings ──
+# The grant string is read from the generator's own strip list rather than restated
+# here, so this suite names no retired vendor. An empty extraction is a FAIL, not a
+# skip — without it 03c would assert that an empty string is absent, which is vacuous.
+_LEGACY_GRANT="$(python3 -c '
+import re,sys
+line = next((l for l in open(sys.argv[1]) if "if entry in (" in l), "")
+m = re.search(r"\"(Bash\([^\"]* -p \*\))\"", line)
+print(m.group(1) if m else "")' "$AI_BIN")"
+assert_status 0 "E-213.03-: the generator declares a legacy grant to strip" \
+  test -n "$_LEGACY_GRANT"
+assert_status 1 "E-213.03a: the generator no longer ADDS the legacy grant" \
+  grep -qF "new_allow.append(\"${_LEGACY_GRANT}\")" "$AI_BIN"
 assert_status 0 "E-213.03b: the generator PRUNES an existing legacy grant" \
   grep -q 'Removed legacy grant' "$AI_BIN"
 # Behavioural: a settings file that already carries the rule loses it on sync.
 _LEG="$(mktemp -d)/.claude"; mkdir -p "$_LEG"
-printf '{"permissions":{"allow":["Bash(gemini -p *)","mcp__keep-me__tool"]}}' > "$_LEG/settings.json"
+printf '{"permissions":{"allow":["%s","mcp__keep-me__tool"]}}' "$_LEGACY_GRANT" > "$_LEG/settings.json"
 bash -c "source '$AI_BIN' 2>/dev/null; AIOS=\"\$HOME/.ai-os\"; _configure_project_claude_settings '$_LEG'" >/dev/null 2>&1
 assert_not_contains "E-213.03c: sync removes the legacy grant from an existing file" \
-  "gemini -p" "$(cat "$_LEG/settings.json")"
+  "${_LEGACY_GRANT:-<no-grant-extracted>}" "$(cat "$_LEG/settings.json")"
 assert_contains "E-213.03d: unrelated allow rules survive the prune" \
   "mcp__keep-me__tool" "$(cat "$_LEG/settings.json")"
 
@@ -121,7 +132,7 @@ assert_status 0 "E-213.04c: the role comes from the launch-time pane role" \
 assert_status 0 "E-213.04d: an unknown role falls back rather than being stamped" \
   grep -q 'architect|engineer) ;;' "$STOP_HOOK"
 
-# ── E-213.5: ACCEPTANCE — MCP spawn identity parity with agy ───────────────
+# ── E-213.5: ACCEPTANCE — MCP spawn identity follows the pane role ─────────
 # The point of the whole task: a server spawned by the Architect pane must SEE
 # caller_role=architect, so the Architect sovereignty rules actually apply to it.
 _analyze() {  # <role> <command> → the analysis report

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # idempotency_test.sh — Idempotency tests for `ai init` and `ai sync` (T-1)
 #
-# Verifies that CLAUDE.md, GEMINI.md, and .mcp.json are ALWAYS overwritten by
+# Verifies that CLAUDE.md, ENGINEER.md, ARCHITECT.md and .mcp.json are ALWAYS overwritten by
 # ensure_ai_templates() (called by do_init and do_sync), even when the files
 # already exist with different content.
 #
@@ -48,27 +48,27 @@ run_init() {
 mkdir -p "$PROJECT_DIR/.ai"
 
 # Check: bootloader templates exist in src. E-183/D-050: ENGINEER.md/ARCHITECT.md are the
-# canonical rulefiles; CLAUDE.md/GEMINI.md are @import shims. All four are synced by `ai sync`.
+# canonical rulefiles; CLAUDE.md is the @import shim. All three are synced by `ai sync`.
 assert_exists "${AIOS}/templates/CLAUDE.md"
 assert_exists "${AIOS}/templates/ENGINEER.md"
 assert_exists "${AIOS}/templates/ARCHITECT.md"
 
 # ── Test 2: CLAUDE.md always matches template (idempotency) ──────────────────
 TEMPLATE_CLAUDE="${AIOS}/templates/CLAUDE.md"
-TEMPLATE_GEMINI="${AIOS}/templates/GEMINI.md"
+TEMPLATE_ENGINEER="${AIOS}/templates/ENGINEER.md"
 
-# Manually corrupt CLAUDE.md and GEMINI.md to simulate stale state
+# Manually corrupt CLAUDE.md and ENGINEER.md to simulate stale state
 echo "STALE CONTENT - should be overwritten" > "${PROJECT_DIR}/CLAUDE.md"
-echo "STALE CONTENT - should be overwritten" > "${PROJECT_DIR}/GEMINI.md"
+echo "STALE CONTENT - should be overwritten" > "${PROJECT_DIR}/ENGINEER.md"
 
 # Verify the stale content was actually written
 STALE_CONTENT=$(cat "${PROJECT_DIR}/CLAUDE.md")
 assert_contains "stale CLAUDE.md written" "STALE CONTENT" "$STALE_CONTENT"
 
-# Run ensure_ai_templates (which calls cp -f for CLAUDE.md and GEMINI.md)
+# Run ensure_ai_templates (which calls cp -f for CLAUDE.md and ENGINEER.md)
 # We test this by simulating what ensure_ai_templates does for the bootloaders:
 cp -f "$TEMPLATE_CLAUDE" "${PROJECT_DIR}/CLAUDE.md"
-cp -f "$TEMPLATE_GEMINI" "${PROJECT_DIR}/GEMINI.md"
+cp -f "$TEMPLATE_ENGINEER" "${PROJECT_DIR}/ENGINEER.md"
 
 # CLAUDE.md must now match template exactly
 ACTUAL_CLAUDE=$(cat "${PROJECT_DIR}/CLAUDE.md")
@@ -79,25 +79,25 @@ else
   _fail "CLAUDE.md did not match template after overwrite"
 fi
 
-# GEMINI.md must now match template exactly
-ACTUAL_GEMINI=$(cat "${PROJECT_DIR}/GEMINI.md")
-EXPECTED_GEMINI=$(cat "$TEMPLATE_GEMINI")
-if [[ "$ACTUAL_GEMINI" == "$EXPECTED_GEMINI" ]]; then
-  _pass "GEMINI.md overwritten to match template on second run"
+# ENGINEER.md must now match template exactly
+ACTUAL_ENGINEER=$(cat "${PROJECT_DIR}/ENGINEER.md")
+EXPECTED_ENGINEER=$(cat "$TEMPLATE_ENGINEER")
+if [[ "$ACTUAL_ENGINEER" == "$EXPECTED_ENGINEER" ]]; then
+  _pass "ENGINEER.md overwritten to match template on second run"
 else
-  _fail "GEMINI.md did not match template after overwrite"
+  _fail "ENGINEER.md did not match template after overwrite"
 fi
 
 # ── Test 3: CLAUDE.md is not stale content after overwrite ───────────────────
 assert_not_contains "CLAUDE.md no longer has stale content" "STALE CONTENT" "$ACTUAL_CLAUDE"
-assert_not_contains "GEMINI.md no longer has stale content" "STALE CONTENT" "$ACTUAL_GEMINI"
+assert_not_contains "ENGINEER.md no longer has stale content" "STALE CONTENT" "$ACTUAL_ENGINEER"
 
 # ── Test 4: Third run is also idempotent (content stays identical) ────────────
 cp -f "$TEMPLATE_CLAUDE" "${PROJECT_DIR}/CLAUDE.md"
-cp -f "$TEMPLATE_GEMINI" "${PROJECT_DIR}/GEMINI.md"
+cp -f "$TEMPLATE_ENGINEER" "${PROJECT_DIR}/ENGINEER.md"
 
 THIRD_RUN_CLAUDE=$(cat "${PROJECT_DIR}/CLAUDE.md")
-THIRD_RUN_GEMINI=$(cat "${PROJECT_DIR}/GEMINI.md")
+THIRD_RUN_ENGINEER=$(cat "${PROJECT_DIR}/ENGINEER.md")
 
 if [[ "$THIRD_RUN_CLAUDE" == "$EXPECTED_CLAUDE" ]]; then
   _pass "CLAUDE.md identical on third run (stable idempotency)"
@@ -105,10 +105,10 @@ else
   _fail "CLAUDE.md changed between second and third run (not idempotent)"
 fi
 
-if [[ "$THIRD_RUN_GEMINI" == "$EXPECTED_GEMINI" ]]; then
-  _pass "GEMINI.md identical on third run (stable idempotency)"
+if [[ "$THIRD_RUN_ENGINEER" == "$EXPECTED_ENGINEER" ]]; then
+  _pass "ENGINEER.md identical on third run (stable idempotency)"
 else
-  _fail "GEMINI.md changed between second and third run (not idempotent)"
+  _fail "ENGINEER.md changed between second and third run (not idempotent)"
 fi
 
 # ── Test 5: .mcp.json overwrite idempotency ───────────────────────────────────
@@ -170,17 +170,20 @@ else
 fi
 
 # ── Test 6: ensure_ai_templates cp -f flag is present in source ──────────────
-# This is a static source code check: the function must use cp -f (force overwrite).
-INIT_USES_CP_F=$(grep -c 'cp -f.*CLAUDE.md\|cp -f.*GEMINI.md' "${AI_BIN}" 2>/dev/null || echo "0")
-if [[ "$INIT_USES_CP_F" -ge 2 ]]; then
-  _pass "src/bin/ai uses 'cp -f' for CLAUDE.md and GEMINI.md (force overwrite enforced)"
-else
-  _fail "src/bin/ai does NOT use 'cp -f' for CLAUDE.md/GEMINI.md — idempotency not enforced in source"
-fi
+# This is a static source code check: the function must use cp -f (force overwrite)
+# for each bootloader, in both ensure_ai_templates and do_sync (>= 2 sites each).
+for _bl in CLAUDE.md ENGINEER.md ARCHITECT.md; do
+  _n=$(grep -cE "cp -f .*\"${_bl}\"" "${AI_BIN}" 2>/dev/null || true)
+  if [[ "${_n:-0}" -ge 2 ]]; then
+    _pass "src/bin/ai uses 'cp -f' for ${_bl} in init and sync (force overwrite enforced)"
+  else
+    _fail "src/bin/ai has ${_n:-0} 'cp -f' sites for ${_bl} (want >= 2) — idempotency not enforced in source"
+  fi
+done
 
 # ── Test 7: do_sync also rewrites the bootloaders ────────────────────────────
-# Static check: do_sync must also call cp -f on these files.
-SYNC_CP_F=$(grep -n 'cp -f.*CLAUDE.md\|cp -f.*GEMINI.md' "${AI_BIN}" 2>/dev/null || true)
+# Static check: do_sync must also call cp -f on these files (its copies echo "updated").
+SYNC_CP_F=$(sed -n '/^do_sync()/,/^}/p' "${AI_BIN}" | grep -E 'cp -f .*"CLAUDE.md"' || true)
 if echo "$SYNC_CP_F" | grep -q 'cp -f'; then
   _pass "do_sync section also contains 'cp -f' bootloader overwrites"
 else
@@ -188,12 +191,12 @@ else
 fi
 
 # ── Test 8: ANTI-DRIFT PROTOCOL header survives template overwrite ────────────
-# E-183/D-050: the header lives in the canonical ENGINEER.md/ARCHITECT.md; CLAUDE.md/GEMINI.md
-# are @import shims that re-export it and carry no header of their own.
+# E-183/D-050: the header lives in the canonical ENGINEER.md/ARCHITECT.md; CLAUDE.md is the
+# @import shim that re-exports it and carries no header of its own.
 assert_contains "ENGINEER.md template has ANTI-DRIFT PROTOCOL" "ANTI-DRIFT PROTOCOL" "$(cat "${AIOS}/templates/ENGINEER.md")"
 assert_contains "ARCHITECT.md template has ANTI-DRIFT PROTOCOL" "ANTI-DRIFT PROTOCOL" "$(cat "${AIOS}/templates/ARCHITECT.md")"
 assert_contains "CLAUDE.md shim imports ENGINEER.md" "@ENGINEER.md" "$EXPECTED_CLAUDE"
-assert_contains "GEMINI.md shim imports ARCHITECT.md" "@ARCHITECT.md" "$EXPECTED_GEMINI"
+assert_not_contains "CLAUDE.md shim carries no header of its own" "ANTI-DRIFT PROTOCOL" "$EXPECTED_CLAUDE"
 
 # ── Test 9: .mcp.json is valid JSON after second run ─────────────────────────
 if command -v python3 &>/dev/null && [[ -f "${PROJECT_DIR}/.mcp.json" ]]; then

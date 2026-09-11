@@ -132,9 +132,9 @@ _mc() {
     console.log(r ? r.length : 0);
   ' "$1" 2>/dev/null
 }
-assert_contains "E-234.06a: src memory_curator.md passes unchanged" "0" \
-  "$(_mc src/gemini/agents/memory_curator.md)"
-assert_contains "E-234.06b: the .claude mirror passes too" "0" \
+assert_match "E-234.06a: src memory_curator.md passes unchanged" "^0$" \
+  "$(_mc src/claude/agents/memory_curator.md)"
+assert_match "E-234.06b: the .claude mirror passes too" "^0$" \
   "$(_mc .claude/agents/memory_curator.md)"
 
 _CORPUS_FILE="$(test_tmpdir e234-corpus)/corpus.txt"

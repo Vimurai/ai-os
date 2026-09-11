@@ -55,7 +55,7 @@ HW=$($DBN "import { getDb } from '${REPO_ROOT}/src/mcp/shared/state-db.js'; cons
 assert_status 0 "D: high-water last_id_E persisted at 52" bash -c "[ \"$HW\" = '52' ]"
 
 # ── E: an unrelated prefix (P-) is independent ───────────────────────────────
-r=$(call add_task "{\"owner\":\"Architect (Gemini)\",\"description\":\"p task\",\"prefix\":\"P\",\"tier\":2}")
+r=$(call add_task "{\"owner\":\"Architect (Claude)\",\"description\":\"p task\",\"prefix\":\"P\",\"tier\":2}")
 assert_contains "E: P- prefix independent → P-1" "Added P-1" "$r"
 
 cd "${REPO_ROOT}"

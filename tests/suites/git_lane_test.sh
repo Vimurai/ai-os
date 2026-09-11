@@ -2,7 +2,7 @@
 # git_lane_test.sh — E-214 (architect-provider-parity.md §Git Lane, D-054):
 # the Architect-scoped commit lane.
 #
-# A Claude Architect HAS git, unlike agy, so the D-053 proxy-commit workaround (the
+# A Claude Architect HAS git, so the D-053 proxy-commit workaround (the
 # Engineer commits the Architect's .ai/ edits) is retired for same-provider Triads.
 # The lane is the LAST checkpoint before history: an Architect may commit only paths
 # under .ai/ or plans/, and for such a commit the [CRITIC_STAMP] requirement is waived

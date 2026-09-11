@@ -12,9 +12,9 @@ HARD RULES:
 2) Session stamp (.ai/SESSION.md):
    - The Stop hook auto-stamps after every session — only manual-stamp if hook fails.
 
-3) Agy ↔ Claude handoff:
-   - Architect (Agy) creates P-## tasks via add_task MCP tool.
-   - Engineer (Claude) picks up open E-## tasks from TASKS.md.
+3) Architect ↔ Engineer handoff:
+   - The Architect creates P-## tasks via add_task MCP tool.
+   - The Engineer picks up open E-## tasks from TASKS.md.
    - After completing: run_handover({ task_id: "E-##", summary: "..." })
    - Record architectural decisions in .ai/DECISIONS.md.
 

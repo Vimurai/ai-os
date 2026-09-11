@@ -74,7 +74,7 @@ warranted yet.
 
 Use `context-invoker-mcp::activate_agent` to switch the conversation
 into the `meta_analyst` persona. The agent's contract is enumerated in
-`src/gemini/agents/meta_analyst.md` (E-85) — it runs the five canonical
+`src/claude/agents/meta_analyst.md` (E-85) — it runs the five canonical
 aggregate queries, classifies findings, and writes `INSIGHTS.md`.
 
 ```

@@ -2,9 +2,9 @@
 # handoff_cli_test.sh — E-158 (cli-agnostic-handoff): the provider-agnostic
 # `ai handoff` shell command + src/shared/signal-handoff.mjs helper.
 #
-# WHY: agy (Antigravity Architect) runs shell via `run_command` reliably but does
-# NOT dependably invoke custom project MCP servers, so a shell-native handoff is the
-# robust path. This suite proves the CLI/helper writes the SAME locked signal.json
+# WHY: a pane cannot always rely on the project MCP servers being attached (a session
+# launched outside the repo root, a server that failed to start), so a shell-native
+# handoff is the robust path. This suite proves the CLI/helper writes the SAME locked signal.json
 # queue entry as task-synchronizer-mcp::handoff_control (see handoff_control_test.sh),
 # validates targets/messages, discovers .ai/ from subdirs, and never executes input.
 set -euo pipefail

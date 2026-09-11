@@ -107,8 +107,10 @@ assert_contains "S10: hook uses the HK1 architect token over env=engineer → BL
 
 # ── S11: installer wiring (src/bin/ai) ────────────────────────────────────────
 assert_status 0 "S11: SessionStart hook passes role arg 'engineer'" grep -qF 'ss_script + " engineer"' "$AI_BIN"
-assert_status 0 "S11: gemini freezes architect role in per-server env" \
-  grep -qF 'servers["safe-exec-mcp"].setdefault("env", {})["AI_OS_CALLER_ROLE"] = "architect"' "$AI_BIN"
+assert_status 0 "S11: base settings freeze the engineer role in env" \
+  grep -qF 'env["AI_OS_CALLER_ROLE"] = "engineer"' "$AI_BIN"
+assert_status 0 "S11: per-role settings overlay freezes its own role (architect pane)" \
+  grep -qF 'env["AI_OS_CALLER_ROLE"] = role' "$AI_BIN"
 assert_status 0 "S11: install_global provisions the HMAC key" grep -qF 'role-hmac.key' "$AI_BIN"
 
 assert_summary

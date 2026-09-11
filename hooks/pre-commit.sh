@@ -458,9 +458,8 @@ check_standards_gate
 
 
 # ── E-214: Architect-scoped Git Lane (architect-provider-parity.md §Git Lane) ──
-# A Claude Architect HAS git, unlike agy — so the D-053 proxy-commit workaround (the
-# Engineer commits the Architect's .ai/ edits) is no longer needed for a same-provider
-# Triad. The ruling: an Architect may commit ONLY when every staged path is under
+# The Architect HAS git — so the D-053 proxy-commit workaround (the Engineer commits the
+# Architect's .ai/ edits) is no longer needed. The ruling: an Architect may commit ONLY when every staged path is under
 # .ai/ or plans/. Anything else is implementation work and belongs to the Engineer.
 #
 # ROLE RESOLUTION — record first, env fallback. A git hook receives no PreToolUse

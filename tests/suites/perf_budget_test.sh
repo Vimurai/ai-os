@@ -112,8 +112,6 @@ assert_status 0 "E-239.07d: telemetry's baseline includes its own measurement ov
   grep -q '2 \* \$(perf_baseline_node) + \$(perf_baseline_hook)' "${REPO_ROOT}/tests/suites/telemetry_test.sh"
 assert_status 0 "E-239.07e: critic_tests flags an absolute budget with no baseline" \
   grep -q 'Absolute performance budgets without a baseline' "${REPO_ROOT}/src/claude/agents/critic_tests.md"
-assert_status 0 "E-239.07f: the generated plugin artifact was rebuilt (E-236 lesson)" \
-  bash -c "grep -q 'Absolute performance budgets' '${REPO_ROOT}/src/agents/plugin/agents/critic_tests/agent.json'"
 
 echo ""
 assert_summary

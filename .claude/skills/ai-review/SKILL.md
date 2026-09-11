@@ -92,7 +92,7 @@ Five defects in the 2026-09-09 sprint were exactly this, and each was invisible 
 
 | Assertion | What it actually measured |
 |---|---|
-| `~/.ai-os` gemini mirror byte-identity | whether that machine's mirror predated a strip |
+| `~/.ai-os` legacy-provider mirror byte-identity | whether that machine's mirror predated a strip |
 | `ls` exit code 1 for a missing path | BSD vs GNU coreutils |
 | an unpruned `node_modules` corpus scan | whether deps happened to be installed |
 | "nothing is running" for tmux | whether a tmux server happened to be up |
@@ -163,8 +163,8 @@ A suite that forms a corpus and then asserts something about its contents is ass
 nothing when the corpus is empty — and "no violations found" is exactly what an empty
 corpus reports. The failure is silent, permanent, and looks like health.
 
-Three rule-scanning suites built their corpus with `find src .claude .agents .gemini`.
-E-244 made provisioning role-aware, so `.agents/` and `.gemini/` stopped existing under the
+Three rule-scanning suites built their corpus with `find src .claude` plus the two legacy provider
+workspace dirs. E-244 made provisioning role-aware, so those two dirs stopped existing under the
 all-Claude default; `find` exited non-zero, `execSync` threw, and the corpus came back
 EMPTY. All three would have gone on printing "no findings" indefinitely. The only thing
 that caught it was a file-count assertion each suite happened to carry, added when this

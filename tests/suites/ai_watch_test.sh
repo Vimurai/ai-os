@@ -37,17 +37,62 @@ assert_status 0 "filters panes by PROJECT_DIR" \
 assert_status 0 "send-keys uses literal -l -- (no key/shell interpretation)" \
   grep -qE 'send-keys -t "\$pane" -l -- "\$message"' "$WATCH"
 
-# ── S05: target→pane mapping (claude→0, gemini→1, or pane title) ─────────────
-# E-211 prepended a deprecation guard to these arms, so assert the BEHAVIOUR
-# (which ordinal each legacy target resolves to) rather than the source layout.
-_legacy_ordinal() {  # <target> → resolved pane id, non-colliding roles map
+# ── S05: target→pane mapping (claude→0, roles via roles.json, or pane title) ──
+# E-211 prepended a deprecation guard to the legacy arm, so assert the BEHAVIOUR
+# (which ordinal each target resolves to) rather than the source layout.
+# E-254: `claude` is the ONLY legacy provider target left. It still delivers when
+# roles.json binds just one role to claude (here the other role uses the neutral
+# provider `acme`), and REFUSES when both roles are claude — which, with no roles.json,
+# is now always the case (default architect=claude:1, engineer=claude:0).
+_legacy_ordinal() {  # <target> [roles_mapping] → resolved pane id
   ( source "$WATCH" 2>/dev/null
-    ROLES_MAPPING='architect:agy:1|engineer:claude:0'
+    ROLES_MAPPING="${2-architect:acme:1|engineer:claude:0}"
     _project_panes() { printf '%b' '%p0\t0\tMac.lan\twin\t/p\t2.1.1\n%p1\t1\tMac.lan\twin\t/p\t2.1.1\n'; }
     resolve_pane "$1" ) 2>/dev/null
 }
-assert_contains "maps claude→index 0" "%p0" "$(_legacy_ordinal claude)"
-assert_contains "maps gemini→index 1" "%p1" "$(_legacy_ordinal gemini)"
+_legacy_stderr() {  # <target> [roles_mapping] → the watcher's stderr for one resolve
+  ( source "$WATCH" 2>/dev/null
+    ROLES_MAPPING="${2-}"
+    _project_panes() { printf '%b' '%p0\t0\tMac.lan\twin\t/p\t2.1.1\n%p1\t1\tMac.lan\twin\t/p\t2.1.1\n'; }
+    resolve_pane "$1" >/dev/null ) 2>&1
+}
+assert_contains "maps claude→index 0 (only the engineer role on claude)" "%p0" "$(_legacy_ordinal claude)"
+assert_contains "maps architect→index 1 via the roles map" "%p1" "$(_legacy_ordinal architect)"
+assert_contains "maps engineer→index 0 via the roles map"  "%p0" "$(_legacy_ordinal engineer)"
+_s05_default="$(_legacy_ordinal claude '')"
+assert_status 0 "E-254.S05a: legacy claude REFUSES under the default map (both roles claude)" \
+  test -z "$_s05_default"
+_s05_both="$(_legacy_ordinal claude 'architect:claude:1|engineer:claude:0')"
+assert_status 0 "E-254.S05b: legacy claude REFUSES when roles.json maps both roles to claude" \
+  test -z "$_s05_both"
+assert_contains "E-254.S05c: the refusal names the ambiguity on stderr" \
+  'is AMBIGUOUS' "$(_legacy_stderr claude '')"
+assert_contains "E-254.S05d: the default fallback still routes architect→1 without roles.json" \
+  "%p1" "$(_legacy_ordinal architect '')"
+_s05_unknown="$(_legacy_ordinal acme)"
+assert_status 0 "E-254.S05e: a non-role, non-claude provider name is not a target" \
+  test -z "$_s05_unknown"
+assert_status 0 "E-254.S05f: WATCH_TARGETS is roles + the claude legacy name only" \
+  grep -qE '^WATCH_TARGETS="engineer architect claude"$' "$WATCH"
+
+# E-254: the real roles.json parser feeds the same routing. A project whose roles.json
+# binds the architect to another provider keeps the legacy `claude` target usable.
+_roles_probe() {  # <architect_provider> → "<mapping> -> <claude pane or empty>"
+  local d; d="$(test_tmpdir e254-roles)"; mkdir -p "$d/.ai"
+  printf '{"roles":{"architect":{"provider":"%s","pane_identifier":"1"},"engineer":{"provider":"claude","pane_identifier":"0"}}}' \
+    "$1" > "$d/.ai/roles.json"
+  ( source "$WATCH" 2>/dev/null
+    PROJECT_DIR="$d"
+    ROLES_MAPPING="$(_load_roles_mapping)"
+    _project_panes() { printf '%b' '%p0\t0\tMac.lan\twin\t/p\t2.1.1\n%p1\t1\tMac.lan\twin\t/p\t2.1.1\n'; }
+    printf '%s -> %s' "$ROLES_MAPPING" "$(resolve_pane claude 2>/dev/null)" )
+}
+assert_contains "E-254.S05g: roles.json architect=acme → claude target delivers to %p0" \
+  "architect:acme:1|engineer:claude:0 -> %p0" "$(_roles_probe acme)"
+_rp_claude="$(_roles_probe claude)"
+assert_contains "E-254.S05h: roles.json architect=claude parses to an all-claude map" \
+  "architect:claude:1|engineer:claude:0 -> " "$_rp_claude"
+assert_not_contains "E-254.S05i: …and the claude target then resolves no pane" "%p" "$_rp_claude"
 assert_status 0 "prefers pane title match" grep -qE 'ptitle" == "\$target"' "$WATCH"
 
 # ── S06: behavioural — run outside an AI-OS project exits fast (never loops) ──
@@ -91,29 +136,31 @@ assert_status 0 "E-117.S13: preconditions are guarded in a function" \
 # The mock reads $_PANES (printf %b → \t/\n become real); the subshell inherits it.
 _PANES=""
 _resolve() {  # _resolve <target> → resolved pane id (sourced + mocked, no tmux)
+  # E-254: only the engineer role is bound to claude here, so the legacy `claude`
+  # target stays unambiguous and these cases keep exercising the E-117 pass order.
   ( source "$WATCH" 2>/dev/null
+    ROLES_MAPPING='architect:acme:1|engineer:claude:0'
     _project_panes() { printf '%b' "$_PANES"; }
-    resolve_pane "$1" )
+    resolve_pane "$1" 2>/dev/null )
 }
 
 # Pass 1 — exact pane-title (5-field mocks: no command column → TIER B ordinal).
-_PANES='%0\t0\tclaude\twin0\t/p\n%1\t1\tgemini\twin1\t/p\n'
+_PANES='%0\t0\tclaude\twin0\t/p\n%1\t1\tarchitect\twin1\t/p\n'
 assert_contains "E-117.B1: exact title claude→%0" "%0" "$(_resolve claude)"
-assert_contains "E-117.B1: exact title gemini→%1" "%1" "$(_resolve gemini)"
+assert_contains "E-117.B1: exact title architect→%1" "%1" "$(_resolve architect)"
 
 # Pass 2 — fuzzy, case-insensitive pane-title ("Claude-Code").
-_PANES='%7\t0\tClaude-Code\tbash\t/p\n%8\t1\tGemini-CLI\tbash\t/p\n'
+_PANES='%7\t0\tClaude-Code\tbash\t/p\n%8\t1\tOther-CLI\tbash\t/p\n'
 assert_contains "E-117.B2: fuzzy CI title claude-code→%7" "%7" "$(_resolve claude)"
 
 # Pass 3 — window-name match when pane titles are generic shells.
-_PANES='%3\t0\tzsh\tclaude-engineer\t/p\n%4\t1\tzsh\tgemini-arch\t/p\n'
-assert_contains "E-117.B3: window-name claude→%3" "%3" "$(_resolve claude)"
-assert_contains "E-117.B3: window-name gemini→%4" "%4" "$(_resolve gemini)"
+_PANES='%4\t0\tzsh\tother-arch\t/p\n%3\t1\tzsh\tclaude-engineer\t/p\n'
+assert_contains "E-117.B3: window-name claude→%3 (beats the ordinal-0 pane %4)" "%3" "$(_resolve claude)"
 
 # Pass 4 — base-index 1, NO command column → TIER B all-panes ordinal still works.
 _PANES='%21\t1\tzsh\tmain\t/p\n%22\t2\tzsh\tmain\t/p\n'
 assert_contains "E-117.B4: base-index-1 claude→1st(%21)" "%21" "$(_resolve claude)"
-assert_contains "E-117.B4: base-index-1 gemini→2nd(%22)" "%22" "$(_resolve gemini)"
+assert_contains "E-117.B4: base-index-1 architect→2nd(%22)" "%22" "$(_resolve architect)"
 
 # Pass 4 — unsorted input still picks the lowest-index pane for claude.
 _PANES='%32\t2\tzsh\tmain\t/p\n%31\t1\tzsh\tmain\t/p\n'
@@ -131,34 +178,32 @@ assert_status 0 "E-122.R0: _is_agent_cmd shared predicate defined" \
 assert_status 0 "E-122.R0: resolution adds pane_current_command field" \
   grep -qF '#{pane_current_command}' "$WATCH"
 
-# 6-field mock (with command column): claude=version pane, gemini=node pane, plus
+# 6-field mock (with command column): 1st agent=version pane, 2nd agent=node pane, plus
 # two plain shells that MUST be skipped — reproduces the live ai-os-v2 bug.
 _PANES='%1\t1\tt1\twin\t/p\t2.1.161\n%2\t2\tt2\twin\t/p\tnode\n%33\t3\tt3\twin\t/p\tbash\n%34\t1\tt4\twin\t/p\tzsh\n'
 assert_contains "E-122.R1: claude → 1st agent pane (%1 version cmd)" "%1" "$(_resolve claude)"
-assert_contains "E-122.R2: gemini → 2nd agent pane (%2 node, NOT %34 zsh)" "%2" "$(_resolve gemini)"
+assert_contains "E-122.R2: architect → 2nd agent pane (%2 node, NOT %34 zsh)" "%2" "$(_resolve architect)"
 
-# v3.0 (E-134 post-migration): the Architect runs `agy` (Antigravity CLI). Without
-# agy in the agent-command set the agy pane was treated as a shell and architect/
-# gemini handoffs resolved to NOTHING (the live bug: handoffs stuck delivered:false).
-_PANES='%1\t1\tt1\twin\t/p\t2.1.168\n%2\t2\tt2\twin\t/p\tagy\n%33\t3\tt3\twin\t/p\tbash\n'
-assert_contains "E-134: gemini → agy pane (%2), not dropped"      "%2" "$(_resolve gemini)"
-assert_contains "E-134: architect → agy pane (%2) via legacy map" "%2" "$(_resolve architect)"
-assert_contains "E-134: claude still → 1st agent (%1) past agy"   "%1" "$(_resolve claude)"
+# E-254: a foreground command outside the default ready set (node/claude/version) is
+# not an agent pane, so it is skipped exactly like a shell.
+_PANES='%1\t1\tt1\twin\t/p\t2.1.168\n%2\t2\tt2\twin\t/p\tacme\n%33\t3\tt3\twin\t/p\tnode\n'
+assert_contains "E-254: architect skips a non-agent 'acme' pane → %33 (node)" "%33" "$(_resolve architect)"
+assert_contains "E-254: claude still → 1st agent (%1)"                        "%1"  "$(_resolve claude)"
 
-# v3.0 (E-134): agy panes carry an EMPTY pane_title. The tmux -F format MUST guard
+# E-134: a pane can carry an EMPTY pane_title. The tmux -F format MUST guard
 # empty title/window with a placeholder — otherwise `IFS=$'\t' read` collapses the
 # resulting consecutive tabs (tab is whitespace-class) and shifts pane_current_path
-# out of position, so the PROJECT_DIR filter silently drops the agy pane (the live
+# out of position, so the PROJECT_DIR filter silently drops the pane (the live
 # bug: handoffs to the Architect stuck delivered:false). Structural guard — a real
 # empty-title repro needs live tmux (absent in CI).
-assert_status 0 "E-134: _project_panes guards empty pane_title (agy has none)" \
+assert_status 0 "E-134: _project_panes guards empty pane_title" \
   grep -qF '#{?pane_title,#{pane_title}' "$WATCH"
 assert_status 0 "E-134: _project_panes guards empty window_name" \
   grep -qF '#{?window_name,#{window_name}' "$WATCH"
 
 # All eligible panes are shells (command column present) → no misroute, empty.
 _PANES='%5\t1\tt\twin\t/p\tbash\n%6\t2\tt\twin\t/p\tzsh\n'
-_r_allsh="$(_resolve gemini)"
+_r_allsh="$(_resolve architect)"
 assert_status 0 "E-122.R3: all-shells (cmd present) → empty, never a shell" test -z "$_r_allsh"
 
 # ── E-118: queue parsing helpers + busy-state gate (source contract) ──────────
@@ -183,7 +228,10 @@ _ready_probe() {  # _ready_probe <cmd> <bypass:0|1> → "READY"|"BUSY"
     if _pane_ready "%X"; then echo READY; else echo BUSY; fi )
 }
 assert_contains "E-118.B7: node → READY"   "READY" "$(_ready_probe node 0)"
-assert_contains "E-134: agy → READY (Antigravity Architect pane)" "READY" "$(_ready_probe agy 0)"
+assert_contains "E-254: claude → READY"   "READY" "$(_ready_probe claude 0)"
+assert_contains "E-254: unlisted 'acme' → BUSY (default ready set is node/claude)" "BUSY" "$(_ready_probe acme 0)"
+assert_status 0 "E-254: default AI_WATCH_READY_CMDS is exactly 'node claude'" \
+  grep -qF 'AI_WATCH_READY_CMDS="${AI_WATCH_READY_CMDS:-node claude}"' "$WATCH"
 assert_contains "E-118.B7: bash → BUSY"    "BUSY"  "$(_ready_probe bash 0)"
 assert_contains "E-118.B7: python → BUSY"  "BUSY"  "$(_ready_probe python3 0)"
 assert_contains "E-118.B7: bypass → READY" "READY" "$(_ready_probe bash 1)"
@@ -239,14 +287,14 @@ assert_status 0 "E-123.S20: legacy rollback mode"             grep -qF 'AI_WATCH
 
 # Behavioural harness: write a queue to a temp SIGNAL, mock tmux/resolve/ready
 # (TARGET-AWARE), run _drain_once N times, report sends + final delivered flags.
-_run_drain() {  # <qjson> <claude_pane|''> <gemini_pane|''> <ready_panes> <passes>
+_run_drain() {  # <qjson> <claude_pane|''> <architect_pane|''> <ready_panes> <passes>
   ( source "$WATCH" 2>/dev/null
     SIGNAL="$(mktemp)"; printf '%s' "$1" > "$SIGNAL"
     SUBMIT_DELAY=0; MAX_HOLD=0
-    _CL="$2"; _GE="$3"; _READY="$4"; _P="${5:-1}"
+    _CL="$2"; _AR="$3"; _READY="$4"; _P="${5:-1}"
     _SENT=""
     tmux() { if [ "$1" = "send-keys" ]; then shift; _SENT="${_SENT}|$*"; fi; return 0; }
-    resolve_pane() { case "$1" in claude) printf '%s' "$_CL" ;; gemini) printf '%s' "$_GE" ;; esac; }
+    resolve_pane() { case "$1" in claude) printf '%s' "$_CL" ;; architect) printf '%s' "$_AR" ;; esac; }
     _pane_ready() { case " $_READY " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
     _i=0; while [ "$_i" -lt "$_P" ]; do _drain_once 2>/dev/null; _i=$((_i + 1)); done
     _c=$(printf '%s' "$_SENT" | grep -o -- '-l --' | wc -l | tr -d ' ')
@@ -260,35 +308,35 @@ PY
     rm -f "$SIGNAL" )
 }
 
-# TC-03 (THE live bug): a busy/blocked gemini must NOT hold up ready claude work.
-out="$(_run_drain '[{"timestamp":"1","target":"gemini","message":"g1"},{"timestamp":"2","target":"claude","message":"c1"}]' '%cl' '%ge' '%cl' 1)"
-assert_contains "E-123.TC03: claude delivered though gemini busy" "-l -- c1" "$out"
-assert_contains "E-123.TC03: only claude delivered (gemini held)" "count=1" "$out"
-assert_contains "E-123.TC03: gemini pending, claude delivered"    "gemini:P,claude:D" "$out"
+# TC-03 (THE live bug): a busy/blocked architect must NOT hold up ready claude work.
+out="$(_run_drain '[{"timestamp":"1","target":"architect","message":"g1"},{"timestamp":"2","target":"claude","message":"c1"}]' '%cl' '%ar' '%cl' 1)"
+assert_contains "E-123.TC03: claude delivered though architect busy" "-l -- c1" "$out"
+assert_contains "E-123.TC03: only claude delivered (architect held)" "count=1" "$out"
+assert_contains "E-123.TC03: architect pending, claude delivered"    "architect:P,claude:D" "$out"
 
 # TC-02 sequential per target: two claude entries deliver in FIFO order over 2 passes.
-out="$(_run_drain '[{"timestamp":"1","target":"claude","message":"a"},{"timestamp":"2","target":"claude","message":"b"}]' '%cl' '%ge' '%cl' 2)"
+out="$(_run_drain '[{"timestamp":"1","target":"claude","message":"a"},{"timestamp":"2","target":"claude","message":"b"}]' '%cl' '%ar' '%cl' 2)"
 assert_contains "E-123.TC02: both claude entries delivered"  "count=2" "$out"
 assert_contains "E-123.TC02: FIFO a before b"                "-l -- a|-t %cl Enter|-t %cl -l -- b" "$out"
 
-# TC-04 persistent idempotency: 1 claude + 1 gemini, ready, 2 passes → 2 sends, no replay.
-out="$(_run_drain '[{"timestamp":"1","target":"claude","message":"a"},{"timestamp":"2","target":"gemini","message":"g"}]' '%cl' '%ge' '%cl %ge' 2)"
+# TC-04 persistent idempotency: 1 claude + 1 architect, ready, 2 passes → 2 sends, no replay.
+out="$(_run_drain '[{"timestamp":"1","target":"claude","message":"a"},{"timestamp":"2","target":"architect","message":"g"}]' '%cl' '%ar' '%cl %ar' 2)"
 assert_contains "E-123.TC04: delivered-flag blocks replay (2 not 4)" "count=2" "$out"
-assert_contains "E-123.TC04: both flagged delivered"                "claude:D,gemini:D" "$out"
+assert_contains "E-123.TC04: both flagged delivered"                "claude:D,architect:D" "$out"
 
 # TC-02b busy → held (not dropped): busy target injects nothing, entry stays pending.
-out="$(_run_drain '[{"timestamp":"1","target":"claude","message":"a"}]' '%cl' '%ge' '' 1)"
+out="$(_run_drain '[{"timestamp":"1","target":"claude","message":"a"}]' '%cl' '%ar' '' 1)"
 assert_contains "E-123.TC02b: busy target injects nothing" "count=0" "$out"
 assert_contains "E-123.TC02b: held entry stays pending"    "claude:P" "$out"
 
 # TC-09 malformed entry (no message) skipped; the valid neighbour is delivered.
-out="$(_run_drain '[{"timestamp":"1","target":"claude"},{"timestamp":"2","target":"claude","message":"ok"}]' '%cl' '%ge' '%cl' 2)"
+out="$(_run_drain '[{"timestamp":"1","target":"claude"},{"timestamp":"2","target":"claude","message":"ok"}]' '%cl' '%ar' '%cl' 2)"
 assert_contains "E-123.TC09: malformed skipped, valid delivered" "-l -- ok" "$out"
 
 # TC-NoPane: a transient missing pane HOLDS (not drops); MAX_HOLD bounds the hold.
 _nopane_probe() {  # <max_hold> <passes> → "<D|P>:<reason>:att<n>"
   ( source "$WATCH" 2>/dev/null
-    SIGNAL="$(mktemp)"; printf '%s' '[{"timestamp":"1","target":"gemini","message":"g"}]' > "$SIGNAL"
+    SIGNAL="$(mktemp)"; printf '%s' '[{"timestamp":"1","target":"architect","message":"g"}]' > "$SIGNAL"
     SUBMIT_DELAY=0; MAX_HOLD="$1"
     tmux() { return 0; }
     resolve_pane() { printf ''; }            # no pane resolvable
@@ -319,8 +367,8 @@ PY
 out="$(_reconcile_probe '[{"timestamp":"1","target":"claude","message":"x"},{"timestamp":"2","target":"claude","message":"x"}]' 1)"
 assert_contains "E-123.TC06: drain supersedes the older duplicate" "claude:D:superseded" "$out"
 assert_contains "E-123.TC06: drain keeps the latest pending"       "claude:P:" "$out"
-out="$(_reconcile_probe '[{"timestamp":"1","target":"gemini","message":"g"}]' 0)"
-assert_contains "E-123.TC06: drain=0 marks backlog skipped" "gemini:D:skipped-backlog" "$out"
+out="$(_reconcile_probe '[{"timestamp":"1","target":"architect","message":"g"}]' 0)"
+assert_contains "E-123.TC06: drain=0 marks backlog skipped" "architect:D:skipped-backlog" "$out"
 
 # TC-07 single-writer lock: fresh acquire ok; live holder rejected; stale reclaimed; disabled.
 _lock_probe() {  # <mode> → OK|FAIL
@@ -392,7 +440,7 @@ assert_contains "E-123.MH: defensive guard survives bad runtime MAX_HOLD" "rc=0"
 _agent_probe() { ( source "$WATCH" 2>/dev/null; _is_agent_cmd "$1" && echo agent || echo no ); }
 assert_contains "E-123.AG: node → agent"            "agent" "$(_agent_probe node)"
 assert_contains "E-123.AG: claude → agent"          "agent" "$(_agent_probe claude)"
-assert_contains "E-123.AG: gemini → agent"          "agent" "$(_agent_probe gemini)"
+assert_contains "E-254.AG: acme → no (not in the default ready set)" "no" "$(_agent_probe acme)"
 assert_contains "E-123.AG: 2.1.161 → agent"         "agent" "$(_agent_probe 2.1.161)"
 assert_contains "E-123.AG: bash → no"               "no"    "$(_agent_probe bash)"
 assert_contains "E-123.AG: zsh → no"                "no"    "$(_agent_probe zsh)"
@@ -407,22 +455,22 @@ assert_contains "E-123.PR: empty cmd → BUSY (safe default)" "BUSY"  "$(_ready_
 assert_contains "E-123.PR: empty cmd + bypass → READY"      "READY" "$(_ready_probe '' 1)"
 
 # HC: has_cmd boundary — an empty-cmd pane is NOT chosen via TIER-B when another
-# pane reported a command (otherwise gemini could fall back onto a command-less pane).
+# pane reported a command (otherwise architect could fall back onto a command-less pane).
 _PANES='%1\t1\tt\twin\t/p\tnode\n%2\t2\tt\twin\t/p\t\n'
 assert_contains "E-123.HC: mixed cmd/empty → claude = real agent pane %1" "%1" "$(_resolve claude)"
-_hc_g="$(_resolve gemini)"
+_hc_g="$(_resolve architect)"
 assert_status 0 "E-123.HC: mixed → no 2nd agent pane → empty (TIER-B suppressed)" test -z "$_hc_g"
 
 # RESTART idempotency (the headline claim): a fresh process re-reconciling the SAME
 # on-disk file neither replays a delivered entry nor skips an undelivered one.
 _restart_file="$(mktemp)"
-printf '%s' '[{"timestamp":"1","target":"claude","message":"a"},{"timestamp":"2","target":"gemini","message":"g"}]' > "$_restart_file"
+printf '%s' '[{"timestamp":"1","target":"claude","message":"a"},{"timestamp":"2","target":"architect","message":"g"}]' > "$_restart_file"
 _boot_pass() {  # <signalfile> → number of literal sends this "boot"
   ( source "$WATCH" 2>/dev/null
     SIGNAL="$1"; SUBMIT_DELAY=0; MAX_HOLD=0
     _S=""
     tmux() { if [ "$1" = "send-keys" ]; then shift; _S="${_S}|$*"; fi; return 0; }
-    resolve_pane() { case "$1" in claude) printf '%%cl' ;; gemini) printf '%%ge' ;; esac; }
+    resolve_pane() { case "$1" in claude) printf '%%cl' ;; architect) printf '%%ar' ;; esac; }
     _pane_ready() { return 0; }
     _reconcile_startup 1
     _drain_once 2>/dev/null
@@ -463,7 +511,7 @@ assert_contains "E-123.RL: leaves a foreign lock intact" "PRESENT" "$(_releaselo
 
 # INT: integration — only tmux (+sleep) mocked at the boundary; the REAL
 # resolve_pane → _pane_ready → _is_agent_cmd chain runs. Reproduces the live
-# ai-os-v2 layout and proves gemini routes to the node pane, not a shell.
+# ai-os-v2 layout and proves architect routes to the node pane, not a shell.
 _integration_drain() {  # <qjson> <panes_tsv> → captured send-keys args
   ( source "$WATCH" 2>/dev/null
     PROJECT_DIR="/proj"; SIGNAL="$(mktemp)"; SUBMIT_DELAY=0; MAX_HOLD=0
@@ -484,16 +532,22 @@ _integration_drain() {  # <qjson> <panes_tsv> → captured send-keys args
     rm -f "$SIGNAL" )
 }
 _panes_live='%1\t1\tt\twin\t/proj\t2.1.161\n%2\t2\tt\twin\t/proj\tnode\n%33\t3\tt\twin\t/proj\tbash\n%34\t1\tt\twin\t/proj\tzsh\n'
-assert_contains "E-123.INT: gemini → node agent pane %2 (real chain, shells skipped)" \
-  "%2 -l -- hello" "$(_integration_drain '[{"timestamp":"1","target":"gemini","message":"hello"}]' "$_panes_live")"
+assert_contains "E-123.INT: architect → node agent pane %2 (real chain, shells skipped)" \
+  "%2 -l -- hello" "$(_integration_drain '[{"timestamp":"1","target":"architect","message":"hello"}]' "$_panes_live")"
+# E-254: through the REAL chain with no roles.json, a legacy `claude` entry is refused
+# (both roles default to claude) — held, nothing sent — while the semantic target above
+# is delivered from the identical pane layout.
+_int_legacy="$(_integration_drain '[{"timestamp":"1","target":"claude","message":"hello"}]' "$_panes_live")"
+assert_status 0 "E-254.INT: legacy claude entry refused under the all-claude default — nothing sent" \
+  test -z "$_int_legacy"
 # title-matched pane that is mid-tool (bash) → real busy gate holds it.
-_panes_titlebusy='%9\t1\tgemini\twin\t/proj\tbash\n'
-_int_busy="$(_integration_drain '[{"timestamp":"1","target":"gemini","message":"x"}]' "$_panes_titlebusy")"
+_panes_titlebusy='%9\t1\tarchitect\twin\t/proj\tbash\n'
+_int_busy="$(_integration_drain '[{"timestamp":"1","target":"architect","message":"x"}]' "$_panes_titlebusy")"
 assert_status 0 "E-123.INT: title-matched but busy (bash) holds — nothing sent" test -z "$_int_busy"
 # title-matched pane that is ready (node) → delivered through the real gate.
-_panes_titleready='%9\t1\tgemini\twin\t/proj\tnode\n'
+_panes_titleready='%9\t1\tarchitect\twin\t/proj\tnode\n'
 assert_contains "E-123.INT: title-matched + ready delivers (real gate)" \
-  "%9 -l -- x" "$(_integration_drain '[{"timestamp":"1","target":"gemini","message":"x"}]' "$_panes_titleready")"
+  "%9 -l -- x" "$(_integration_drain '[{"timestamp":"1","target":"architect","message":"x"}]' "$_panes_titleready")"
 
 # ── E-123: signal handling (Ctrl-C) + --clear (fresh start) ───────────────────
 echo "── E-123: Ctrl-C exit + --clear ────────────────────────────────────"

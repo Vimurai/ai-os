@@ -197,7 +197,7 @@ function hasRootPaths(tokens, raw) {
 }
 
 // ── E-102: Architect sovereignty rules (sovereignty-hardening.md §Components 1) ─
-// When caller_role === 'architect', the Architect (Agy) may not run
+// When caller_role === 'architect', the Architect may not run
 // destructive *implementation* git operations or create/destroy files outside
 // the Architect-owned .ai/ and plans/ trees. These are honour-system today
 // (caller_role is self-reported) but enforced fail-closed: a forbidden verb is
@@ -371,7 +371,7 @@ function runAnalysis(raw, callerRole) {
     lines.push("### [SOVEREIGNTY_BLOCK] — Forbidden Architect Operation");
     sovereignty.forEach((v) => lines.push(`- [${v.id}] ${v.message}`));
     lines.push("");
-    lines.push("The Architect (Agy) role may not run destructive implementation commands (sovereignty-hardening.md §Components 1). Switch to the Engineer (Claude) to execute this, or rescope the command to .ai/ or plans/.");
+    lines.push("The Architect role may not run destructive implementation commands (sovereignty-hardening.md §Components 1). Switch to the Engineer to execute this, or rescope the command to .ai/ or plans/.");
   }
   if (blocked.length > 0) {
     lines.push("### BLOCKED — Do Not Execute");

@@ -1,13 +1,13 @@
 # Token Discipline (Global)
 
-- **Gemini-First Planning:** Every non-trivial task MUST start with a `/gemini` planning session to generate a `PLAN.md`.
+- **Architect-First Planning:** Every non-trivial task MUST start with an Architect planning session that produces a blueprint and tasks.
 - **Model Auto-Switching:** Use the lowest capable model for the task.
-  - *Preflight/Maintenance:* Haiku/Flash.
+  - *Preflight/Maintenance:* Haiku.
   - *Implementation:* Sonnet.
   - *Deep Reasoning:* Opus/Extended Thinking.
 - Output only what is needed. Prefer bullets/tables over prose.
 - One run = update ONE target file (except append-only logs).
-- Use /gemini skill for Planning/UX/Frontend/SEO; do not burn Claude tokens on these.
+- Planning/UX/Frontend/SEO belong to the Architect pane; the Engineer does not redo them.
 - Use /copilot skill for CLI/shell command lookups.
-- Read budget: max 6 files per session. Use Gemini's summaries to stay under budget.
+- Read budget: max 6 files per session. Use DIGEST.md and blueprint summaries to stay under budget.
 - Never re-output file content you already read this session in full.

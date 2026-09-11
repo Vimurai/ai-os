@@ -2,12 +2,12 @@
 
 Single Writer Principle: one file = one owner. If you don't own it, you do NOT modify it.
 
-## Architect (Agy) OWNS:
+## Architect OWNS:
 - `.ai/architect.md` — system blueprint and architectural decisions
 - `.ai/blueprints/*.md` — domain-specific blueprints
 - P-## tasks (via add_task MCP tool)
 
-## Engineer (Claude) OWNS:
+## Engineer OWNS:
 - `src/**` — all source code
 - E-## tasks (via add_task MCP tool)
 - `.ai/DECISIONS.md` — implementation decisions (append-only)

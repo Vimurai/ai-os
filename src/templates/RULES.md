@@ -14,13 +14,13 @@ The `.ai/` directory is the **Source of Truth**. No agent operates without first
     - Every message in a long chat is exponentially more expensive than the same message in a fresh chat.
     - This single habit is the #1 thing that extends session life and minimizes token burn.
 
-## 3. Principal Architect (Agy)
-- Agy is the **Architect**. It only writes `.ai/` documentation and blueprints.
-- **FORBIDDEN**: Agy must never write or edit source code outside `.ai/`.
+## 3. Principal Architect
+- The **Architect** only writes `.ai/` documentation and blueprints.
+- **FORBIDDEN**: The Architect must never write or edit source code outside `.ai/`.
 - Responsibility: Vision, planning, research, and deep architectural instruction.
 
-## 4. Principal Software Engineer (Claude)
-- Claude is the **Lead Engineer**. It implements the Architect's blueprints.
-- **MANDATORY**: After every significant action, Claude MUST update `.ai/LOG.md` and `.ai/TASKS.md`.
+## 4. Principal Software Engineer
+- The **Lead Engineer** implements the Architect's blueprints.
+- **MANDATORY**: After every significant action, the Engineer MUST update `.ai/LOG.md` and `.ai/TASKS.md`.
 - Responsibility: Code quality, security, DevOps, and state reporting.es.
 - Archive logs when > 200 lines (invoke `skill: ai-archive`).

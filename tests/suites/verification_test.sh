@@ -18,7 +18,7 @@ assert_status 0 "T-05.01: verification-mcp syntax OK" \
   node -e "import('file://${VERIFY_MCP}').catch(e => { if (e instanceof SyntaxError) process.exit(1); })"
 
 # Helper: audit agent markdown content (inlines parseFrontmatter + auditAgent logic)
-# $1 = content, $2 = optional path hint (e.g. "/gemini/skills/foo/SKILL.md")
+# $1 = content, $2 = optional path hint (e.g. "/claude/agents/foo.md")
 audit_agent() {
   local content="$1"
   local path_hint="${2:-/claude/skills/test.md}"
@@ -63,8 +63,8 @@ audit_agent() {
       return false;
     }
     const mdPath = '${path_hint}';
-    const isGeminiPath = mdPath.includes('/gemini/') || mdPath.includes('/agents/'); // E-132: /agents/ = lenient (mirrors src/mcp/verification-mcp)
-    const requiredFields = isGeminiPath
+    const isAgentPath = mdPath.includes('/agents/'); // E-254: agent personas = lenient (mirrors src/mcp/verification-mcp)
+    const requiredFields = isAgentPath
       ? ['name','description']
       : ['name','description','disable-model-invocation','user-invocable','allowed-tools'];
     const text = readFileSync('${MD_FILE}', 'utf8');
@@ -176,9 +176,14 @@ assert_contains "T-05.06d: list-form valid tools PASS" "PASS" "$result"
 # inlined helpers above can't silently diverge from src/mcp/verification-mcp).
 assert_status 0 "T-05.06e: real parseFrontmatter handles list-form" \
   grep -q 'keyOnly' "$VERIFY_MCP"
-# T-05.06f: default scan covers Antigravity workspace skills (E-132: src/agents/skills).
-assert_status 0 "T-05.06f: scan includes src/agents/skills" \
-  grep -qE '"src", *"agents", *"skills"|src.*agents.*skills' "$VERIFY_MCP"
+# T-05.06f (E-254): the lenient-path rule in the inlined helper matches the real module.
+assert_status 0 "T-05.06f: real auditAgent keys leniency on /agents/ (isAgentPath)" \
+  grep -qF 'const isAgentPath = mdPath.includes("/agents/");' "$VERIFY_MCP"
+# T-05.06g (E-254): default scan roots are the claude + shared trees only. Every
+# resolve(cwd, "src", X) / join(aios, X) root must name claude or shared.
+roots=$(grep -oE 'resolve\(cwd, "src", "[a-z_-]+"|join\(aios, "[a-z_-]+"' "$VERIFY_MCP" | grep -oE '"[a-z_-]+"$' | grep -v '"config"' | sort -u | tr '\n' ' ')
+assert_match "T-05.06g: default scan roots are claude/shared only (got: ${roots})" \
+  '^("claude" |"shared" )+$' "$roots"
 
 # T-05.07: Bulk scan of src/claude/agents/ — zero CRITICAL violations
 AGENTS_DIR="${REPO_ROOT}/src/claude/agents"
@@ -239,35 +244,34 @@ if [[ -d "$AGENTS_DIR" ]]; then
   assert_contains "T-05.07: bulk scan of src/claude/agents/ — zero CRITICAL violations" "criticals=0" "$bulk"
 fi
 
-# ── E-3: Gemini path conditionalization ──────────────────────────────────────
+# ── E-3 / E-254: agent-persona path conditionalization ──────────────────────
 
-# T-05.08: Gemini skill with only name+description → PASS (Claude fields not required)
-GEMINI_MINIMAL='---
+# T-05.08: agent persona with only name+description → PASS (skill fields not required)
+PERSONA_MINIMAL='---
 name: blueprint-writer
 description: Enforce blueprint structure before writing to .ai/blueprints/.
 context: default
 agent: default
 ---
 # Blueprint Writer body'
-result=$(audit_agent "$GEMINI_MINIMAL" "/gemini/skills/blueprint-writer/SKILL.md")
-assert_contains "T-05.08: Gemini skill missing Claude fields → PASS (not WARN)" "PASS" "$result"
-assert_not_contains "T-05.08b: disable-model-invocation not required for Gemini" "MISSING_FIELD:disable-model-invocation" "$result"
-assert_not_contains "T-05.08c: user-invocable not required for Gemini" "MISSING_FIELD:user-invocable" "$result"
-assert_not_contains "T-05.08d: allowed-tools not required for Gemini" "MISSING_FIELD:allowed-tools" "$result"
+result=$(audit_agent "$PERSONA_MINIMAL" "/claude/agents/blueprint-writer.md")
+assert_contains "T-05.08: agent persona missing skill fields → PASS (not WARN)" "PASS" "$result"
+assert_not_contains "T-05.08b: disable-model-invocation not required for /agents/" "MISSING_FIELD:disable-model-invocation" "$result"
+assert_not_contains "T-05.08c: user-invocable not required for /agents/" "MISSING_FIELD:user-invocable" "$result"
+assert_not_contains "T-05.08d: allowed-tools not required for /agents/" "MISSING_FIELD:allowed-tools" "$result"
 
-# T-05.08e (E-132): an /agents/ (Antigravity) skill follows the SAME lenient ruleset
-# as /gemini/ — the migrated workspace skills must not be misclassified as Claude skills.
-result=$(audit_agent "$GEMINI_MINIMAL" "/agents/skills/blueprint-writer/SKILL.md")
-assert_contains "T-05.08e: /agents/ skill missing Claude fields → PASS (lenient like gemini)" "PASS" "$result"
-assert_not_contains "T-05.08f: disable-model-invocation not required for /agents/ skills" "MISSING_FIELD:disable-model-invocation" "$result"
+# T-05.08e: the SAME content under a skills path is held to all 5 fields.
+result=$(audit_agent "$PERSONA_MINIMAL" "/claude/skills/blueprint-writer/SKILL.md")
+assert_contains "T-05.08e: same content as a skill → WARN (strict path)" "WARN" "$result"
+assert_contains "T-05.08f: disable-model-invocation required for skills" "MISSING_FIELD:disable-model-invocation" "$result"
 
-# T-05.09: Gemini skill missing name → WARN (name is always required)
-GEMINI_NO_NAME='---
-description: A Gemini skill without a name field.
+# T-05.09: agent persona missing name → WARN (name is always required)
+PERSONA_NO_NAME='---
+description: An agent persona without a name field.
 ---
 # No name'
-result=$(audit_agent "$GEMINI_NO_NAME" "/gemini/skills/no-name/SKILL.md")
-assert_contains "T-05.09: Gemini skill missing name → WARN" "WARN" "$result"
+result=$(audit_agent "$PERSONA_NO_NAME" "/claude/agents/no-name.md")
+assert_contains "T-05.09: agent persona missing name → WARN" "WARN" "$result"
 assert_contains "T-05.09b: name reported as missing" "MISSING_FIELD:name" "$result"
 
 # T-05.10: Claude skill missing disable-model-invocation → WARN (Claude path enforces all 5)
@@ -281,15 +285,48 @@ result=$(audit_agent "$CLAUDE_PARTIAL" "/claude/skills/partial/SKILL.md")
 assert_contains "T-05.10: Claude skill missing disable-model-invocation → WARN" "WARN" "$result"
 assert_contains "T-05.10b: disable-model-invocation reported missing for Claude" "MISSING_FIELD:disable-model-invocation" "$result"
 
-# T-05.11: Ghost Tool in Gemini skill → FAIL (tool checks still apply if allowed-tools present)
-GEMINI_GHOST='---
-name: bad-gemini-skill
-description: Gemini skill with a ghost tool declared.
+# T-05.11: Ghost Tool in an agent persona → FAIL (tool checks still apply if allowed-tools present)
+PERSONA_GHOST='---
+name: bad-persona
+description: Agent persona with a ghost tool declared.
 allowed-tools: Read, GhostTool999
 ---
-# Ghost in Gemini'
-result=$(audit_agent "$GEMINI_GHOST" "/gemini/skills/bad/SKILL.md")
-assert_contains "T-05.11: Ghost Tool in Gemini skill still detected as FAIL" "FAIL" "$result"
+# Ghost in persona'
+result=$(audit_agent "$PERSONA_GHOST" "/claude/agents/bad.md")
+assert_contains "T-05.11: Ghost Tool in agent persona still detected as FAIL" "FAIL" "$result"
 assert_contains "T-05.11b: Ghost Tool name reported" "GhostTool999" "$result"
+
+# ── T-05.12 (E-254): real server — the E-68 snake_case alias table is gone ────
+# Roundtrip against the actual verify_compliance handler (no inlined copy). HOME points at
+# an empty dir so no installed registry.json can whitelist the names, and `paths` is
+# relative to the server cwd (D-009 bounds it there).
+source "${SCRIPT_DIR}/../lib/mcp-client.sh"
+VERIFY_ABS="$(cd "$(dirname "$VERIFY_MCP")" && pwd -P)/index.js"
+VT="$(test_tmpdir verify)"
+mkdir -p "$VT/skills/aliased" "$VT/agents"
+cat > "$VT/skills/aliased/SKILL.md" <<'MD'
+---
+name: aliased
+description: Declares former snake_case alias names.
+disable-model-invocation: false
+user-invocable: false
+allowed-tools: Read, run_shell_command, google_web_search
+---
+# aliased
+MD
+cat > "$VT/agents/persona.md" <<'MD'
+---
+name: persona
+description: Minimal agent persona.
+---
+# persona
+MD
+real=$(cd "$VT" && HOME="$VT" mcp_call_tool "$VERIFY_ABS" verify_compliance '{"paths":["skills","agents"]}' 2>/dev/null || echo '{}')
+assert_contains "T-05.12: former alias run_shell_command is now a Ghost Tool" "Ghost Tool: 'run_shell_command'" "$real"
+assert_contains "T-05.12b: former alias google_web_search is now a Ghost Tool" "Ghost Tool: 'google_web_search'" "$real"
+assert_not_contains "T-05.12c: builtin Read is still accepted" "Ghost Tool: 'Read'" "$real"
+assert_contains "T-05.12d: minimal /agents/ persona passes (1 PASS, 1 FAIL)" "PASS: 1 | WARN: 0 | FAIL: 1" "$real"
+assert_status 1 "T-05.12e: alias table removed from source" \
+  grep -qE 'TOOL_ALIASES|ALIAS_VALUES|normaliseToolName' "$VERIFY_MCP"
 
 assert_summary

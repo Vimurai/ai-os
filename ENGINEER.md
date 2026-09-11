@@ -1,7 +1,7 @@
 # ENGINEER.md — Project Bootloader (Lead Engineer)
 
-> Canonical Engineer rulefile (D-050 / E-183). The role is decoupled from the CLI
-> vendor; the Engineer defaults to the `claude` provider but any provider may assume it.
+> Canonical Engineer rulefile (D-050 / E-183). AI-OS is Claude-native (D-069): the
+> Engineer runs on the `claude` provider on model `opus`.
 > `CLAUDE.md` is a thin shim that `@import`s this file so vendor auto-load still works.
 
 ## Role Resolution (D-054 / E-208 — READ FIRST)
@@ -79,16 +79,13 @@ your thinking step — zero added latency, never trial-and-error a tool that may
   `db_architect`, `dependency_manager`, `chaos_monkey`, `security_engineer`. Choose an
   agent when you need an independent expert whose work must NOT pollute your context.
 
-**HOW — environment-aware, resilient tool selection (inspect your own toolset first):**
-1. If a native subagent tool (`invoke_subagent` / `define_subagent`) is exposed → you are
-   in **Antigravity (`agy`)**; invoke agents with `invoke_subagent`.
-2. Else if MCP tools are exposed → invoke agents with `activate_agent`
-   (context-invoker-mcp) and skills with the **Skill tool** / `activate_skill`.
+**HOW — resilient tool selection (inspect your own toolset first):**
+1. Skills → the **Skill tool**; agents → the **Agent tool**.
+2. If those are unavailable → context-invoker-mcp: `activate_skill` / `activate_agent`.
 3. If neither is available → fall back to the CLI script or print the manual steps.
 
 Never call a tool that is not in your current toolset — it throws and aborts the task.
-Do not assume MCP is present (agy may not expose it), and do not assume `invoke_subagent`
-exists outside agy. Match the path to the tools you actually have.
+Do not assume the MCP servers are up. Match the path to the tools you actually have.
 
 ## Bookkeeping and Triage (D-062 / E-238 — learned the hard way)
 
@@ -182,4 +179,4 @@ I do NOT:
 I DO:
 - Implement blueprints from `architect.md` and `TASKS.md`
 - Fix bugs, write tests, refactor code
-- Ask the Architect (Agy) to clarify ambiguous blueprints before implementing
+- Ask the Architect to clarify ambiguous blueprints before implementing

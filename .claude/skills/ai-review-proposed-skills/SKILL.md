@@ -12,12 +12,12 @@ agent: default
 
 The **activation** half of the self-learning loop (E-145, ecc-integrations.md §Components 2).
 The `meta_analyst` stages recurring successful patterns as **inert** proposals under
-`.agents/skills/proposed/<slug>/SKILL.md` (capture stage — see `skill: ai-archive`). Nothing
+`.claude/skills/proposed/<slug>/SKILL.md` (capture stage — see `skill: ai-archive`). Nothing
 runs until a human approves it here. Promotion is gated by `approval-mcp` and re-scanned for
 dangerous content by the promoter; auto-activation NEVER happens.
 
 ## Dynamic Context Injection
-Proposed skills awaiting review: !ls -1 .agents/skills/proposed 2>/dev/null || echo "(none staged)"
+Proposed skills awaiting review: !ls -1 .claude/skills/proposed 2>/dev/null || echo "(none staged)"
 
 ## Locate the promoter (locator chain — mirrors E-58/E-65/E-75)
 ```bash
@@ -40,7 +40,7 @@ PROMOTER="$(ai_os_locate shared/skill-promoter.mjs 2>/dev/null)"
 node --input-type=module -e "
 import { listProposedSkills } from 'file://${PROMOTER}';
 import { resolve } from 'node:path';
-const list = listProposedSkills(resolve('.agents/skills/proposed'));
+const list = listProposedSkills(resolve('.claude/skills/proposed'));
 process.stdout.write(JSON.stringify(list, null, 2) + '\n');
 "
 ```
@@ -48,7 +48,7 @@ If the list is empty, report "No proposed skills awaiting review." and stop.
 
 ## Step 2 — Review each proposal (HUMAN-IN-THE-LOOP)
 For EACH proposed `<slug>`:
-1. `Read` `.agents/skills/proposed/<slug>/SKILL.md` and show the operator its body + the
+1. `Read` `.claude/skills/proposed/<slug>/SKILL.md` and show the operator its body + the
    `pattern_id` / `confidence_score` from its provenance block.
 2. Request an explicit human decision via **approval-mcp** (it blocks on a terminal y/N; it is the
    only sanctioned gate — never self-approve):
@@ -71,8 +71,8 @@ import { promoteSkill } from 'file://${PROMOTER}';
 import { resolve } from 'node:path';
 const decision = JSON.parse(process.env.DECISION);
 const r = promoteSkill('<slug>', {
-  proposedDir: resolve('.agents/skills/proposed'),
-  activeDir:   resolve('.agents/skills'),
+  proposedDir: resolve('.claude/skills/proposed'),
+  activeDir:   resolve('.claude/skills'),
   decision,
 });
 process.stdout.write(JSON.stringify(r) + '\n');

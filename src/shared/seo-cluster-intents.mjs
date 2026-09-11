@@ -17,10 +17,10 @@
  * Consumers:
  *   - task-synchronizer-mcp (E-88): validate ClusterPage.intent_type and
  *     enforce the cluster-page cap on add_cluster_page.
- *   - src/gemini/agents/seo_manager.md (E-87): SEO-Topic-Cluster-Manager —
+ *   - src/claude/agents/seo_manager.md (E-87): SEO-Topic-Cluster-Manager —
  *     documents the same intents as a markdown table; kept in sync via
  *     tests/suites/seo_manager_test.sh.
- *   - src/gemini/agents/seo_content_generator.md: same — one template per
+ *   - src/claude/agents/seo_content_generator.md: same — one template per
  *     intent.
  *   - src/claude/agents/seo_engineer.md (E-90): technical-SEO persona that
  *     wires each generated page (meta tags, JSON-LD, canonicals, internal

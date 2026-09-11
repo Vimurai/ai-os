@@ -3,18 +3,10 @@
 // should actually have, and which are left over from a provider nothing is bound to.
 //
 // WHY THIS EXISTS (E-244, D-066 §4):
-//   `ai sync` provisioned .claude/, .gemini/ AND .agents/ unconditionally, on every
-//   project, forever. That made sense while the Triad was genuinely split across three
-//   vendors. Under the D-066 all-Claude default it means every project carries two
-//   fully-populated workspaces for CLIs no role is bound to and nothing will ever read —
-//   40-odd skill directories of pure noise in `git status`, in search results, and in
-//   the reader's head. This repository is the live case: .agents/ and .gemini/ are
-//   TRACKED, so the noise is in the history too.
-//
-//   The directories are still vendor-named and the src/agents + src/gemini adapters
-//   stay exactly where they are (D-052) — this is about the PROJECT's workspaces, not
-//   about retiring a provider. Bind a role back to `gemini` and the next sync
-//   provisions .gemini/ again.
+//   `ai sync` must only provision workspaces for providers a role is bound to, so a
+//   project never carries fully-populated workspaces for CLIs nothing will ever read.
+//   The only built-in provider is `claude`; a provider named in .ai/providers.json with
+//   a `workspace_dir` is classified the same way.
 //
 // .claude/ IS NEVER STALE. The git hooks, settings.json and the SessionStart role stamp
 // live there and are read whether or not roles.json happens to name `claude` — a project
@@ -29,13 +21,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Vendor-named workspace directories (D-052). A provider registered later via
-// `ai provider add` supplies its own `workspace_dir`; these are the built-ins that
-// predate that field, so an older .ai/providers.json still classifies correctly.
+// Vendor-named workspace directories (D-052). A provider named in .ai/providers.json
+// supplies its own `workspace_dir`; this is the built-in, so a providers.json without
+// that field still classifies correctly.
 const BUILTIN_WORKSPACE_DIRS = {
   claude: ".claude",
-  gemini: ".gemini",
-  agy: ".agents",
 };
 
 // Never pruned, whatever roles.json says — see the header.

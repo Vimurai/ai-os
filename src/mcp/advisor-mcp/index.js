@@ -8,9 +8,7 @@
  *
  * Provider: RESOLVED per call, never hardcoded (E-210 / D-054). `.ai/roles.json`
  * names the provider bound to the `architect` role and `.ai/providers.json` supplies
- * that provider's `print_mode` argv template, so an all-Claude Triad consults a Claude
- * Architect and an agy Triad consults agy. Default when unconfigured: agy (D-050).
- * The legacy Gemini CLI was retired (IneligibleTierError — individual tier deprecated).
+ * that provider's `print_mode` argv template. Default when unconfigured: claude.
  * The queue/handoff loop (ai handoff / handoff_control) is the ASYNC channel; this MCP
  * is the SYNCHRONOUS one for mid-task rulings.
  *
@@ -151,15 +149,14 @@ function buildPrompt(query, blueprintContent, blueprintName) {
  * E-210 (D-054): the executable and its argv are RESOLVED, never hardcoded —
  * `.ai/roles.json` names the provider bound to the `architect` role, and that
  * provider's `print_mode` template in `.ai/providers.json` supplies the argv.
- * A same-provider (all-Claude) Triad therefore consults a Claude Architect; an
- * agy Triad still consults agy. Absent config falls back to the D-050 default (agy).
+ * Absent config falls back to the default architect provider (claude).
  *
  * READ-ONLY INVARIANT (unchanged): print mode carries no tool-permission grant and
  * we never pass a permission-bypass flag, so a write attempt by the Architect blocks
  * and times out into the graceful-degradation fallback rather than mutating the tree.
  */
 function invokeArchitect(prompt) {
-  const provider = roleProvider(AI_DIR, "architect") || "agy";
+  const provider = roleProvider(AI_DIR, "architect") || "claude";
   const adapter = providerAdapter(AI_DIR, provider);
 
   // Explicit env ALLOWLIST — never spread process.env. Spreading would leak host
@@ -171,9 +168,9 @@ function invokeArchitect(prompt) {
   // stored login against the account identity. Bisected against the live CLI — USER
   // alone fixes it; SHELL/LOGNAME/TMPDIR/XPC_SERVICE_NAME do not. It carries no
   // secret (it is the account name, already implicit in HOME), so the allowlist stays
-  // secret-free. agy is unaffected. NOTE for the Architect: role-abstraction.md
-  // §Security states "PATH + HOME"; that is measurably insufficient for a claude
-  // Architect and the blueprint line wants amending.
+  // secret-free. NOTE for the Architect: role-abstraction.md §Security states
+  // "PATH + HOME"; that is measurably insufficient for a claude Architect and the
+  // blueprint line wants amending.
   const baseEnv = {
     PATH: process.env.PATH ?? "",
     HOME: process.env.HOME ?? "",
@@ -321,7 +318,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (err) {
     const latency_ms = Date.now() - start;
     const failedProvider = (() => {
-      try { return roleProvider(AI_DIR, "architect") || "agy"; } catch { return "agy"; }
+      try { return roleProvider(AI_DIR, "architect") || "claude"; } catch { return "claude"; }
     })();
     log("error", "ask_architect", "Architect invocation failed", {
       latency_ms,
@@ -342,7 +339,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               fallback:
                 `advisor-mcp could not reach the Architect via provider "${failedProvider}" ` +
                 "(resolved from .ai/roles.json). Check that the provider CLI is installed and " +
-                "signed in (agy: re-auth if the Antigravity login lapsed; claude: check ~/.claude). " +
+                "signed in (check ~/.claude). " +
                 "Proceed with your best judgement or hand off to the Architect via `ai handoff architect` for an async ruling.",
             },
             null,

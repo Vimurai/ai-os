@@ -102,7 +102,7 @@ node --input-type=module -e "
     INSERT INTO tasks VALUES ('E-100','Engineer (Claude)','OPEN',2,'open desc','2026-01-01',NULL,NULL);
     INSERT INTO tasks VALUES ('E-101','Engineer (Claude)','BLOCKED',2,'blocked desc','2026-01-01',NULL,NULL);
     INSERT INTO tasks VALUES ('E-102','Engineer (Claude)','DONE',2,'done desc','2026-01-01','2026-01-02','done sum');
-    INSERT INTO tasks VALUES ('P-99','Architect (Gemini)','OPEN',1,'planner desc','2026-01-01',NULL,NULL);
+    INSERT INTO tasks VALUES ('P-99','Architect (Claude)','OPEN',1,'planner desc','2026-01-01',NULL,NULL);
   \`);
   db.close();
 "
@@ -320,7 +320,7 @@ node --input-type=module -e "
       completed_at TEXT, summary TEXT
     );
     INSERT INTO tasks VALUES ('X-1','Engineer (Claude)','OPEN',2,'d','t',NULL,NULL);
-    INSERT INTO tasks VALUES ('X-2','Architect (Gemini)','OPEN',2,'d','t',NULL,NULL);
+    INSERT INTO tasks VALUES ('X-2','Architect (Claude)','OPEN',2,'d','t',NULL,NULL);
     INSERT INTO tasks VALUES ('X-3','Tester (TestSprite)','OPEN',2,'d','t',NULL,NULL);
     INSERT INTO tasks VALUES ('X-4','SomethingElse','OPEN',2,'d','t',NULL,NULL);
   \`);
@@ -332,7 +332,7 @@ out="$(node --input-type=module -e "
   console.log(JSON.stringify(m.projectState({ dbPath: '${SBOX_DB}' }).payload.active_tasks));
 " 2>/dev/null)"
 assert_status 0 "Engineer (Claude) → Engineer"        bash -c "echo '$out' | grep -q '\"id\":\"X-1\",\"status\":\"OPEN\",\"owner\":\"Engineer\"'"
-assert_status 0 "Architect (Gemini) → Architect"      bash -c "echo '$out' | grep -q '\"id\":\"X-2\",\"status\":\"OPEN\",\"owner\":\"Architect\"'"
+assert_status 0 "Architect (Claude) → Architect"      bash -c "echo '$out' | grep -q '\"id\":\"X-2\",\"status\":\"OPEN\",\"owner\":\"Architect\"'"
 assert_status 0 "Tester (TestSprite) → Tester"        bash -c "echo '$out' | grep -q '\"id\":\"X-3\",\"status\":\"OPEN\",\"owner\":\"Tester\"'"
 assert_status 0 "Unknown owner passes through"        bash -c "echo '$out' | grep -q '\"id\":\"X-4\",\"status\":\"OPEN\",\"owner\":\"SomethingElse\"'"
 

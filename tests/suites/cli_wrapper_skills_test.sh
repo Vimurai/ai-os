@@ -2,7 +2,7 @@
 # cli_wrapper_skills_test.sh — Tests for E-178: CLI automation wrapper skills for
 # the top-5 high-frequency MCP tools identified by the meta-cognition INSIGHTS report.
 # Each wrapper must (a) exist in the canonical src/shared/skills tree, (b) be mirrored
-# byte-identically into the .claude/skills and .agents/skills runtime trees, and
+# byte-identically into the .claude/skills runtime tree, and
 # (c) carry compliant, operational frontmatter (user-invocable, context: default,
 # allowed-tools naming the wrapped mcp__ tool).
 set -uo pipefail
@@ -15,7 +15,6 @@ echo "===== cli_wrapper_skills_test.sh (E-178) ====="
 
 SRC="${REPO_ROOT}/src/shared/skills"
 CLAUDE="${REPO_ROOT}/.claude/skills"
-AGENTS="${REPO_ROOT}/.agents/skills"
 
 # skill-name → the canonical mcp__ tool it wraps
 declare -a SKILLS=(
@@ -36,11 +35,8 @@ for entry in "${SKILLS[@]}"; do
   # (a) canonical source exists
   assert_exists "${src_file}"
 
-  # (b) runtime mirrors exist and are byte-identical to source
+  # (b) runtime mirror exists and is byte-identical to source
   assert_status 0 "T-178: ${name} → .claude mirror identical" diff -q "${src_file}" "${CLAUDE}/${name}/SKILL.md"
-  # E-244 (D-066 §4): .agents/ exists only for a project with a role bound to agy.
-  assert_mirror_if_present "T-178: ${name} → .agents mirror identical" \
-    "${src_file}" "${AGENTS}/${name}/SKILL.md"
 
   # (c) compliant operational frontmatter
   front="$(fm "${src_file}")"

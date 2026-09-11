@@ -49,7 +49,7 @@ export const DOMAINS = {
     servers: ["TestSprite", "vibe-check-mcp", "computer-use-mcp"],
   },
   Interop: {
-    description: "A2A bridge to Gemini and HITL approval gate.",
+    description: "A2A bridge to the Architect and HITL approval gate.",
     servers: ["advisor-mcp", "approval-mcp"],
   },
   Caching: {
