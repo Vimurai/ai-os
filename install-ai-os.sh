@@ -240,6 +240,29 @@ echo ""
 echo "Running: ai install (global configs + hooks + settings.json) ..."
 "${AIOS}/bin/ai" install
 
+# ── E-249 (D-067 §3): stale running servers ───────────────────────────────────
+#
+# This is the moment the defect is created. `install-ai-os.sh` has just rewritten
+# ${AIOS}; every MCP server already running is, from this line onward, serving code that
+# is no longer on disk — and nothing about the install tells them so. Saying it HERE, in
+# the output the operator is already reading, is the difference between a restart now and
+# a review cycle later spent on a verdict from a build that no longer exists (E-227).
+#
+# Never fatal, and never allowed to fail the install: the CLI it calls always exits 0, and
+# the whole block is guarded so a missing node or an unreadable run dir is silent.
+if command -v node >/dev/null 2>&1 && [[ -f "${AIOS}/shared/build-stamp.mjs" ]]; then
+  _stale_after_install="$(node --no-warnings "${AIOS}/shared/build-stamp.mjs" --stale 2>/dev/null || true)"
+  if [[ -n "${_stale_after_install}" ]]; then
+    echo ""
+    echo "⚠  MCP servers running from the previous build (E-249):"
+    while IFS= read -r _l; do
+      [[ -n "$_l" ]] && echo "   ${_l}"
+    done <<< "${_stale_after_install}"
+    echo "   These do NOT hot-reload (D-067 §3). Restart the MCP servers, or the session,"
+    echo "   before trusting anything they report. Rollback: AI_OS_BUILD_STAMP=0."
+  fi
+fi
+
 # ── Done ──────────────────────────────────────────────────────────────────────
 
 cat <<EOF

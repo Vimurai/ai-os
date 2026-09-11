@@ -16,6 +16,7 @@
 // stamps t0 + classifies status. Telemetry failure must NEVER break or delay the wrapped tool.
 
 import { recordToolExecution } from "./telemetry.mjs";
+import { bootedBuild, buildStampEnabled } from "./build-stamp.mjs";
 
 // Status the wrapper can emit: SUCCESS / ERROR / TIMEOUT, plus REJECTED (E-180) for an EXPECTED
 // rejection flagged via _meta.expected_rejection. The telemetry.sqlite CHECK accepts all four
@@ -40,6 +41,31 @@ export function toolNameFor(serverName, request) {
 // REJECTED status so the friction signal stays VISIBLE to the meta_analyst without inflating
 // ERROR. `_meta` is a spec-sanctioned passthrough field, so the result the model receives is unchanged.
 export const EXPECTED_REJECTION_META = "expected_rejection";
+
+// E-249 (D-067 §3): the key under which every tool result carries the build this SERVER
+// PROCESS booted with. It rides on `_meta` for the same reason expected_rejection does —
+// a spec-sanctioned passthrough leaves the result the model receives unchanged — and it
+// is attached here, in the one interceptor all 23 servers already call, rather than in 23
+// handlers that would drift apart. A caller comparing it against the build on disk learns
+// whether the answer it just received came from the code currently installed.
+export const BOOTED_BUILD_META = "booted_build";
+
+// Attach the booted-build stamp to a result. Never throws, never replaces a result, and
+// never overwrites an existing `_meta` key: telemetry and its neighbours are side-effects
+// on the response path, and a stamping bug must not surface as a tool failure.
+export function stampBootedBuild(result, serverName) {
+  if (!result || typeof result !== "object") return result;
+  if (!buildStampEnabled()) return result;
+  try {
+    const stamp = bootedBuild(serverName);
+    if (!stamp) return result;
+    result._meta = {
+      ...(result._meta || {}),
+      [BOOTED_BUILD_META]: { hash: stamp.hash, mtime_iso: stamp.mtime_iso, entry: stamp.entry },
+    };
+  } catch { /* a stamp is never worth a failed tool call */ }
+  return result;
+}
 
 // Classify an MCP CallTool result. A handler that returns `{ isError: true }` is normally a
 // tool-level failure (E-154); a non-object/undefined return is MALFORMED — the SDK validates
@@ -100,8 +126,11 @@ export function withTelemetry(serverName, handler, opts = {}) {
     let status = TELEMETRY_STATUS.SUCCESS;
     try {
       const result = await handler(request, extra);
+      // Classify BEFORE stamping. statusForResult reads `_meta.expected_rejection`, and
+      // stamping rebuilds `_meta`; ordering it the other way would work today and break
+      // the first time either function grew an opinion about the other's key.
       status = statusForResult(result);
-      return result;
+      return stampBootedBuild(result, serverName);
     } catch (e) {
       status = TELEMETRY_STATUS.ERROR;
       throw e; // never swallow the tool's own error — telemetry is a side-effect
@@ -139,6 +168,11 @@ export function withTelemetry(serverName, handler, opts = {}) {
  * @returns {object} the same server, for chaining
  */
 export function instrument(server, serverName, callToolSchema, opts = {}) {
+  // E-249: record the booted build NOW, at startup, not on the first tool call. A server
+  // that is never called still needs to appear in `ai doctor`'s stale list — a stale
+  // server nobody has invoked yet is exactly the one about to serve a wrong answer.
+  try { bootedBuild(serverName); } catch { /* startup must survive a read-only HOME */ }
+
   const orig = server.setRequestHandler.bind(server);
   server.setRequestHandler = (schema, handler) =>
     orig(schema, schema === callToolSchema ? withTelemetry(serverName, handler, opts) : handler);

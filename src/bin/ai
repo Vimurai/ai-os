@@ -2307,6 +2307,48 @@ PY
   echo "  stale verdicts (AI_OS_POLICY_HOT_RELOAD=0 disables hot reload entirely)."
 }
 
+# ── E-249 (D-067 §3): booted-build staleness ──────────────────────────────────
+#
+# The neighbour above (E-237's policy note) answers a DIFFERENT question and must not be
+# confused with this one. That note lists servers older than the four HOT-RELOADED policy
+# modules, and its own text says no action is needed. This one lists servers whose booted
+# build no longer matches what is on disk at all — state-db, the projectors, every handler
+# — and those are NOT hot-reloaded by ruling (D-067 §3 refusal): they must be restarted.
+#
+# The scan itself lives in src/shared/build-stamp.mjs so there is exactly one definition of
+# "stale" in the tree; this is a thin printer. It never fails the sync: staleness is an
+# announcement, and the CLI it calls always exits 0 for the same reason.
+# The raw `[STALE_SERVER] …` lines, indented, or nothing. Two callers frame them
+# differently (sync explains the restart, doctor reports the clean case), so the SCAN is
+# shared and the prose is not.
+_stale_server_lines() {
+  command -v node >/dev/null 2>&1 || return 0
+  local probe; probe="$(ai_os_locate shared/build-stamp.mjs 2>/dev/null || true)"
+  [[ -n "${probe:-}" && -f "$probe" ]] || return 0
+  local out; out="$(node --no-warnings "$probe" --stale 2>/dev/null || true)"
+  [[ -z "$out" ]] && return 0
+  local _l
+  while IFS= read -r _l; do
+    [[ -n "$_l" ]] && echo "  ${_l}"
+  done <<< "$out"
+}
+
+_report_stale_servers() {
+  command -v node >/dev/null 2>&1 || return 0
+
+  local lines
+  lines="$(_stale_server_lines)"
+  [[ -z "$lines" ]] && return 0
+
+  echo ""
+  echo "Stale MCP servers (E-249) — these booted a build that is no longer on disk:"
+  printf '%s\n' "$lines"
+  echo "  Unlike the policy note above, these do NOT hot-reload (D-067 §3): state-db and the"
+  echo "  projectors are never swapped mid-process. Restart the MCP servers — in Claude Code,"
+  echo "  /mcp then restart, or restart the session."
+  echo "  Rollback: AI_OS_BUILD_STAMP=0 suppresses this check."
+}
+
 # ── E-247 (D-067 §1): fail-open step wrapper for the second half of `ai sync` ──
 #
 # Every step in sync's tail was designed to be fail-open — each one already guards its own
@@ -2468,6 +2510,7 @@ do_sync() {
     _sync_step memory_palace   _generate_memory_palace
     _sync_step gitignore       _ensure_generated_gitignore "."
     _sync_step policy_report   _report_policy_staleness
+    _sync_step stale_servers   _report_stale_servers
 
     # The summary is what makes a silent loss loud. "Done." on its own returned in E-217's
     # shape too — a function reaching its end says nothing about how much of it ran, which
@@ -2637,6 +2680,20 @@ doctor() {
 
   echo "Claude (Global — user-owned, not managed by AI-OS):"
   [[ -d "${HOME}/.claude" ]] && echo "  ✓ ~/.claude exists" || echo "  ✗ ~/.claude missing"
+  echo ""
+
+  # E-249 (D-067 §3): machine-level, so it runs whether or not this directory is a
+  # project — the servers are shared across every project on the host. Doctor prints the
+  # CLEAN case too: a diagnostic that is silent when healthy is indistinguishable from one
+  # that did not run, which is the E-251 lesson applied to a report rather than a scan.
+  echo "MCP server builds (E-249):"
+  _stale_srv_report="$(_stale_server_lines)"
+  if [[ -n "$_stale_srv_report" ]]; then
+    printf '%s\n' "$_stale_srv_report"
+    echo "  These do NOT hot-reload (D-067 §3) — restart the MCP servers or the session."
+  else
+    echo "  ✓ every running server booted the build that is on disk"
+  fi
   echo ""
 
   if [[ -d ".ai" ]]; then
