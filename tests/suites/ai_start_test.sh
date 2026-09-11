@@ -143,7 +143,10 @@ if command -v tmux >/dev/null 2>&1; then
   _win="$(basename "$_lp")"
   # Resolve by ID — the window name is the project basename and mktemp names contain a
   # dot, which is exactly the target ambiguity this suite exists to keep closed.
-  _wid="$("$_tb" -L "$_sock" list-windows -t aios -F '#{window_id} #{window_name}' 2>/dev/null \
+  # E-252 (D-068): the project now gets its OWN session, named after it — this lookup used
+  # to hard-code `-t aios`, which is the shared session that no longer exists by default.
+  _sess="$(awk '/^_start_session_name\(\) \{/,/^\}$/' "$AI" > "$_shim/fn.sh"; ( . "$_shim/fn.sh"; _start_session_name "$_lp" ))"
+  _wid="$("$_tb" -L "$_sock" list-windows -t "$_sess" -F '#{window_id} #{window_name}' 2>/dev/null \
           | awk -v n="$_win" '$2 == n { print $1; exit }')"
   assert_status 0 "E-227.06a: the project window exists" bash -c "[[ -n '$_wid' ]]"
 
@@ -191,6 +194,148 @@ else
   for _n in a b c d e0 e1 e2 f f-pre; do
     _skip "E-227.06${_n}: live tmux layer (tmux not installed)"
   done
+fi
+
+
+# ── E-252 (D-068): one tmux session per project ────────────────────────────
+#
+# `ai start` used to put every project into ONE shared `aios` session. A tmux session has
+# a single CURRENT WINDOW shared by every attached client, so starting project B flipped
+# the terminal showing project A; and the project window was found by NAME ONLY, so two
+# checkouts with the same basename shared one window.
+#
+# THE STAMP IS THE IDENTITY, THE NAME IS A LABEL: a session carries AI_OS_PROJECT and is
+# discovered by it, so a suffixed name is still found and a foreign session that merely
+# shares a name is never adopted.
+
+# The derivation is a PURE function, so it is driven directly rather than through a live
+# server — the cases that matter (a dot, a leading dash, non-ASCII, over-length) are
+# exactly the ones that are awkward to create as real directories on every platform.
+_sname_direct() {
+  # `ai` is a command script, not a library: sourcing it runs main. The function is
+  # extracted and run in a subshell instead — which also keeps this honest about testing
+  # the SHIPPED definition rather than a copy of it drifting in the test file.
+  awk '/^_start_session_name\(\) \{/,/^\}$/' "$AI" > "${_E252_FN:?}"
+  ( set -u; AI_OS_SHARED_SESSION="${AI_OS_SHARED_SESSION:-0}"; . "${_E252_FN}"; _start_session_name "$1" "${2:-}" )
+}
+_E252_FN="$(test_tmpdir e252)/fn.sh"
+
+assert_contains "E-252.01a: a dot in the project name becomes a dash (tmux parses session:window.pane)" \
+  "my-app" "$(_sname_direct /tmp/my.app)"
+assert_contains "E-252.01b: a leading dash is stripped (tmux would read it as a flag)" \
+  "weird" "$(_sname_direct /tmp/-weird)"
+# Non-ASCII: the exact output matters less than the guarantee — whatever comes out is a
+# legal tmux session name, because the rewrite is a WHITELIST rather than a blocklist.
+_uber="$(_sname_direct /tmp/über)"
+assert_status 0 "E-252.01c: a non-ASCII name yields a legal tmux name ('${_uber}')" \
+  bash -c "printf '%s' '${_uber}' | grep -qE '^[A-Za-z0-9_][A-Za-z0-9_-]*$'"
+_long="$(_sname_direct "/tmp/$(printf 'a%.0s' $(seq 1 40))")"
+assert_contains "E-252.01d: a 40-character name is truncated to 32" "32" "${#_long}"
+assert_contains "E-252.01e: an explicit start.json session wins verbatim" \
+  "pinned" "$(_sname_direct /tmp/my.app pinned)"
+assert_contains "E-252.01f: AI_OS_SHARED_SESSION=1 restores the single shared session" \
+  "aios" "$(AI_OS_SHARED_SESSION=1 _sname_direct /tmp/my.app)"
+
+# The dry run shows the two commands that make a session a project's own.
+_p="$(_proj 0 1)"
+_out="$(_dry "$_p")"
+_derived="$(_sname_direct "$_p")"
+assert_contains "E-252.02a: --dry-run creates the DERIVED session, not 'aios'" \
+  "new-session -d -s ${_derived}" "$_out"
+assert_contains "E-252.02b: and stamps it with the project path" \
+  "set-environment -t ${_derived} AI_OS_PROJECT" "$_out"
+assert_status 1 "E-252.02c: select-window is no longer composed (it moves OTHER clients)" \
+  bash -c "printf '%s' \"\$_out\" | grep -q 'select-window'"
+rm -rf "$_p"
+
+# ── E-252 LIVE: the properties that only a real server can show ────────────
+if skip_unless_cmd tmux "E-252 live session-isolation layer"; then
+  _tb2="$(command -v tmux)"
+  _sock2="$(test_tmux_socket e252)"
+  _shim2="$(mktemp -d)"
+  register_cleanup "rm -rf '${_shim2}'"
+  printf '#!/usr/bin/env bash\nexec %s -L %s "$@"\n' "$_tb2" "$_sock2" > "$_shim2/tmux"
+  chmod +x "$_shim2/tmux"
+  _t2() { "$_tb2" -L "$_sock2" "$@"; }
+  _start2() { ( cd "$1" && PATH="$_shim2:$PATH" bash "$AI" start --detach 2>&1 ); }
+
+  # TWO PROJECTS → TWO SESSIONS. The headline property.
+  _pA="$(_proj 0 1)"; _pB="$(_proj 0 1)"
+  _outA="$(_start2 "$_pA")"; _outB="$(_start2 "$_pB")"
+  _sA="$(_sname_direct "$_pA")"; _sB="$(_sname_direct "$_pB")"
+  _sessions="$(_t2 list-sessions -F '#{session_name}' 2>/dev/null | tr '\n' ' ')"
+  assert_contains "E-252.03a: project A has its own session (${_sessions})" "$_sA" "$_sessions"
+  assert_contains "E-252.03b: project B has its own session" "$_sB" "$_sessions"
+  assert_status 1 "E-252.03c: and neither landed in the shared 'aios' session" \
+    bash -c "_t2() { '$_tb2' -L '$_sock2' \"\$@\"; }; _t2 has-session -t aios 2>/dev/null"
+
+  # THE STAMP is what makes them findable. Asserted directly, because everything below
+  # (reuse, --status, --kill) is a consequence of it.
+  assert_contains "E-252.03d: A's session is stamped with A's physical path" \
+    "$(cd "$_pA" && pwd -P)" "$(_t2 show-environment -t "$_sA" AI_OS_PROJECT 2>/dev/null)"
+
+  # REUSE goes through the stamp, so a re-run does not create a second session.
+  _nbefore="$(_t2 list-sessions 2>/dev/null | grep -c .)"
+  _start2 "$_pA" >/dev/null 2>&1
+  _nafter="$(_t2 list-sessions 2>/dev/null | grep -c .)"
+  assert_status 0 "E-252.03e-pre: there were sessions to duplicate (guards 03e)" \
+    bash -c "[[ '$_nbefore' -ge 2 ]]"
+  assert_contains "E-252.03e: a re-run reuses the stamped session (before=${_nbefore} after=${_nafter})" \
+    "$_nbefore" "$_nafter"
+
+  # THE ORIGINAL COMPLAINT: starting B must not move the terminal showing A. With separate
+  # sessions that is structural rather than careful — a session's current window cannot be
+  # changed by an operation on a different session — so what is asserted is the structure:
+  # A's session still exists, still holds its own window, and B's start touched neither.
+  _aWinBefore="$(_t2 display-message -p -t "$_sA" '#{window_id}' 2>/dev/null || true)"
+  _start2 "$_pB" >/dev/null 2>&1
+  _aWinAfter="$(_t2 display-message -p -t "$_sA" '#{window_id}' 2>/dev/null || true)"
+  assert_status 0 "E-252.03f-pre: A had a current window to lose (guards 03f)" \
+    bash -c "[[ -n '${_aWinBefore}' ]]"
+  assert_contains "E-252.03f: starting B leaves A's current window alone (${_aWinBefore}→${_aWinAfter})" \
+    "$_aWinBefore" "$_aWinAfter"
+
+  # --status and --kill find the session BY STAMP and say how they found it.
+  _st="$( cd "$_pA" && PATH="$_shim2:$PATH" bash "$AI" start --status 2>&1 )"
+  assert_contains "E-252.04a: --status names the owned session" "$_sA" "$_st"
+  assert_contains "E-252.04b: and reports how it was found" "[owned]" "$_st"
+
+  # A FOREIGN SESSION with the same name is never adopted — it is suffixed around.
+  # This is the security property: reuse requires stamp equality, not a name match.
+  _pC="$(_proj 0 1)"
+  _sC="$(_sname_direct "$_pC")"
+  _t2 kill-session -t "$_sC" 2>/dev/null || true
+  _t2 new-session -d -s "$_sC" 2>/dev/null   # unstamped: someone else's session
+  _outC="$(_start2 "$_pC")"
+  _foundC="$(_t2 list-sessions -F '#{session_name}' 2>/dev/null \
+             | while IFS= read -r _s; do
+                 [[ "$(_t2 show-environment -t "$_s" AI_OS_PROJECT 2>/dev/null | sed -n 's/^AI_OS_PROJECT=//p')" == "$(cd "$_pC" && pwd -P)" ]] && printf '%s' "$_s"
+               done)"
+  assert_status 0 "E-252.05a: a foreign same-name session is NOT adopted (got '${_foundC}')" \
+    bash -c "[[ -n '${_foundC}' && '${_foundC}' != '${_sC}' ]]"
+  assert_match "E-252.05b: the new name carries a path-derived suffix" \
+    "^${_sC:0:25}-[0-9a-f]{6}$" "${_foundC}"
+  # The suffix is DERIVED FROM THE PATH, so the same project gets the same name next time —
+  # a random suffix would strand the previous session on every run.
+  _start2 "$_pC" >/dev/null 2>&1
+  _nC="$(_t2 list-sessions -F '#{session_name}' 2>/dev/null | grep -c "^${_sC:0:25}-")"
+  assert_contains "E-252.05c: and is stable across runs (one suffixed session, not two)" "1" "$_nC"
+
+  # LEGACY ADOPTION: a pre-D-068 window in the shared session is reused IN PLACE, and the
+  # operator is told how to migrate. Without this, an upgrade tears down a live layout.
+  _pL="$(_proj 0 1)"
+  _pLp="$(cd "$_pL" && pwd -P)"
+  _t2 new-session -d -s aios -n "$(basename "$_pLp")" -c "$_pLp"
+  _wL_before="$(_t2 list-windows -t aios 2>/dev/null | grep -c .)"
+  _outL="$(_start2 "$_pL")"
+  _wL_after="$(_t2 list-windows -t aios 2>/dev/null | grep -c .)"
+  assert_contains "E-252.06a: the legacy window is adopted, not duplicated (${_wL_before}→${_wL_after})" \
+    "$_wL_before" "$_wL_after"
+  assert_contains "E-252.06b: and the migration path is printed once" "reusing legacy shared window" "$_outL"
+  assert_contains "E-252.06c: naming the session it would move to" "ai start --kill" "$_outL"
+
+  _t2 kill-server 2>/dev/null || true
+  rm -rf "$_pA" "$_pB" "$_pC" "$_pL"
 fi
 
 # ── E-227.7: non-tmux hosts get the manual recipe, not a stack trace ───────

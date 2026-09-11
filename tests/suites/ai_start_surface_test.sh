@@ -150,8 +150,17 @@ assert_status 0 "E-228.06c: README documents --kill"          grep -q 'ai start 
 # and prints it. Replacing the docs with "just run ai start" would strand those users.
 assert_status 0 "E-228.06d: README keeps the manual fallback" \
   grep -q 'Manual fallback' "${REPO_ROOT}/README.md"
-assert_status 0 "E-228.06e: README still shows the raw tmux recipe" \
-  grep -q 'tmux new-session -s ai-os' "${REPO_ROOT}/README.md"
+# E-252 (D-068): the recipe is now PER PROJECT. It used to read `tmux new-session -s
+# ai-os` — a single shared session, which is the arrangement D-068 removed because one
+# session has one current window shared by every attached client. The assertion follows the
+# recipe rather than pinning the old literal, and checks BOTH halves: the recipe still
+# exists (tmux-less hosts depend on it) and it no longer hands every project one session.
+assert_status 0 "E-228.06e: README still shows a manual tmux recipe" \
+  grep -q 'tmux new-session -s' "${REPO_ROOT}/README.md"
+assert_status 0 "E-252.07a: and the recipe is per-project, not one shared session" \
+  grep -q 'tmux new-session -s "\$(basename "\$PWD")"' "${REPO_ROOT}/README.md"
+assert_status 1 "E-252.07b: the shared 'ai-os' session name is gone from the recipe" \
+  grep -q 'new-session -s ai-os' "${REPO_ROOT}/README.md"
 assert_status 0 "E-228.06f: CONTRIBUTING points at ai start" \
   grep -q 'ai start' "${REPO_ROOT}/CONTRIBUTING.md"
 

@@ -1188,3 +1188,33 @@ Three rule-scanning suites built their corpus with `find` over roots that E-244 
 §1 `AI_OS_SYNC_MINIMAL=1` stops after provisioning (the current behaviour, made explicit). §2 `AI_OS_STRIP_MIRROR=1`. §3 `AI_OS_BUILD_STAMP=0` suppresses the meta and the gate. §4/§5 helpers only.
 
 ---
+
+## D-068 — One tmux Session per Project; the Stamp Is the Identity; the Watcher Scopes to Its Session
+
+**Date**: 2026-09-11
+**Task**: E-252, E-253 (Architect ruling on the operator's report: several projects started with `ai start` all landed in one session and interfered with each other's watchers and handoffs)
+**Decision**: `ai start` creates one tmux session per project, named after the project (sanitised basename, `.ai/start.json` `session` still overrides), owned by a session-environment stamp `AI_OS_PROJECT=<physical path>` that discovery, `--status` and `--kill` use instead of the name; a name already held by another project or by a foreign session is suffixed with a short path hash; a live legacy `aios:<basename>` window is adopted in place with a migration notice; only the invoking client is moved (`switch-client`/`attach-session`, never `select-window` on a shared session). `ai watch` restricts its candidate panes to its own session in addition to the project path, and compares paths physically (`pwd -P`).
+
+### Why needed
+A tmux session has ONE current window shared by every attached client. With every project in `aios`, `ai start` for project B ran `select-window`/`switch-client` to B's window and flipped the terminal showing project A as well. The project window was found by NAME only, so same-basename checkouts shared a window and a drifted name produced a duplicate window beside the old one. Per-project watchers all scanned `list-panes -a` over the same session, relying on the cwd prefix alone — which also failed silently for a project entered through a symlink, because tmux reports the resolved path and `pwd` the logical one.
+
+### Alternatives considered
+1. **Keep one shared session, fix only the client movement** — rejected; `switch-client -t <window>` in a shared session still changes that session's current window for every client. The property the operator needs (independent projects) is a property of sessions, not windows.
+2. **Name the session after the project and stop there** — rejected as insufficient; same-basename checkouts and a foreign session with the same name would be adopted by name. The stamp makes ownership explicit and the name a label.
+3. **Prefix every session (`ai-<name>`)** — rejected; the operator asked for sessions named after the project, and the stamp already distinguishes AI-OS sessions from foreign ones.
+4. **Kill and recreate the legacy `aios` window on first run** — rejected; destroying live agent panes without asking is exactly what `--kill` requires `--yes` for. Adopt in place, print the migration line.
+5. **Chosen** — per-project session + stamp + suffix-on-collision + legacy adoption + session-scoped watcher.
+
+### Constraints driving this decision
+- Every value that reaches tmux is an exec surface (E-208 audit): the name is produced by a whitelist rewrite, the stamp is only compared.
+- Idempotency (D-059 §4) must survive the migration: an operator mid-sprint in `aios` must not get a second set of panes.
+- Live tmux tests run on an isolated server with `register_cleanup` before create (E-240).
+
+### Impact
+- Unlocks: E-252 (Tier 2, launcher), E-253 (Tier 2, watcher). Order E-252 → E-253.
+- Risk if wrong: a stamp read that fails on an old tmux would make every run create a fresh session — mitigated by the fail-open "proceed by name and say ownership was not stamped" path and its test.
+
+### Rollback
+`AI_OS_SHARED_SESSION=1` (or `.ai/start.json` `{"session":"aios"}`) restores the shared session; `AI_WATCH_ALL_SESSIONS=1` restores the watcher's all-sessions scan. No state change to undo.
+
+---
