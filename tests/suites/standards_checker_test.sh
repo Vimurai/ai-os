@@ -309,9 +309,16 @@ assert_status 0 "--json output parses cleanly" \
   bash -c "echo '$json_out' | python3 -c 'import json, sys; json.loads(sys.stdin.read())'"
 
 # `list-rules --json` round-trips the standards.json shape.
+# E-250: the JSON is piped, never interpolated into a quoted shell string. It used to be
+# embedded as \$list_json, so the first apostrophe in any rule description or
+# exemption reason closed the quote and the assertion failed on the CONTENT of
+# standards.json rather than on its shape — which is what happened when a reason
+# containing "rule's scope" was added.
 list_json="$(node "$CLI" list-rules --json 2>/dev/null)"
+_lj_file="$(test_tmpdir std-json)/list.json"
+printf '%s' "$list_json" > "$_lj_file"
 assert_status 0 "list-rules --json parses + carries rules[]" \
-  bash -c "echo '$list_json' | python3 -c 'import json, sys; d=json.loads(sys.stdin.read()); sys.exit(0 if isinstance(d.get(\"rules\"), list) and len(d[\"rules\"]) >= 6 else 1)'"
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d.get("rules"), list) and len(d["rules"]) >= 6 else 1)' "$_lj_file"
 
 # ── T-STD-S12: AI_OS_SKIP_STANDARDS=1 rollback path ─────────────────────────
 echo ""
@@ -380,6 +387,88 @@ rc=$?
 assert_status 0 "orphan layout → exit 1"                bash -c "[[ $rc -eq 1 ]]"
 assert_status 0 "fail-closed stderr marker present"     \
   bash -c "echo '$stderr_out' | grep -q '\[standards\] ERROR: standards-checker.mjs not found'"
+
+# ── E-250 (D-067 §4 / D-065 §1): counted suppressions, named exemptions ──────
+#
+# D-065 ruled that a false positive is silenced by an explicit greppable marker and a
+# legitimately out-of-scope file is exempted BY NAME — and that both, being coverage
+# REDUCTIONS, must be visible. The markers existed; nothing counted them, and the one
+# by-name exemption was a hardcoded regex inside a rule where no report could reach it.
+# A suppression nobody counts is indistinguishable from a rule that stopped working.
+_e250_sandbox() {
+  local d; d="$(test_tmpdir e250)"
+  mkdir -p "$d/tests"
+  printf '%s\n' 'trap "rm -rf /tmp/x" EXIT' > "$d/tests/plain_test.sh"  # standards:allow-raw-trap - fixture data
+  printf '%s\n' 'trap "rm -rf /tmp/x" EXIT  # standards:allow-raw-trap - fixture data' \
+    > "$d/tests/suppressed_test.sh"
+  printf '%s\n' '# standards:allow-no_raw_exit_trap_in_tests' \
+                 'trap "rm -rf /tmp/x" EXIT' > "$d/tests/above_test.sh"  # standards:allow-raw-trap - fixture data
+  printf '%s\n' 'echo hi  # standards:allow-not-a-real-rule' > "$d/tests/typo_test.sh"
+  printf '%s' "$d"
+}
+_E250="$(_e250_sandbox)"
+_e250_check() { ( cd "$_E250" && node "$CLI" check --file "$1" 2>&1 ); }
+
+# The rule still FIRES — everything below is meaningless if it does not.
+_plain="$(_e250_check tests/plain_test.sh)"
+assert_contains "E-250.01a: an unsuppressed raw EXIT trap is still an error" \
+  "no_raw_exit_trap_in_tests" "$_plain"
+assert_contains "E-250.01b: and the run reports zero suppressions" \
+  "Active suppressions (# standards:allow-<rule>): 0" "$_plain"
+
+# THE MARKER, on the flagged line and on the line above it (D-065 §1 allows both).
+_sup="$(_e250_check tests/suppressed_test.sh)"
+assert_status 1 "E-250.02a: a marked line produces NO violation" \
+  bash -c "printf '%s' \"\$_sup\" | grep -q 'error'"
+assert_contains "E-250.02b: and the suppression is COUNTED, not silently swallowed" \
+  "no_raw_exit_trap_in_tests: 1" "$_sup"
+assert_contains "E-250.02c: with the file:line that carries it" "tests/suppressed_test.sh:1" "$_sup"
+
+_above="$(_e250_check tests/above_test.sh)"
+assert_status 1 "E-250.03a: a marker on the line ABOVE also suppresses" \
+  bash -c "printf '%s' \"\$_above\" | grep -q 'error'"
+assert_contains "E-250.03b: and the rule_id form of the token works, not just the alias" \
+  "no_raw_exit_trap_in_tests: 1" "$_above"
+
+# A MARKER THAT MATCHES NOTHING is a finding: the author believed they had silenced
+# something, and a marker that silences nothing reads to the next person as a reviewed
+# and accepted exception.
+_typo="$(_e250_check tests/typo_test.sh)"
+assert_contains "E-250.04a: an unknown suppression token is reported" \
+  "standards_suppression_unknown" "$_typo"
+assert_contains "E-250.04b: at P1" "[P1]" "$_typo"
+assert_contains "E-250.04c: and it lists the tokens that WOULD have matched" \
+  "no_raw_exit_trap_in_tests" "$_typo"
+# A typo in a comment must not block a commit — over-block is what D-056 governs against.
+assert_contains "E-250.04d: it is a warning, not a commit-blocking error" "warnings: 1" "$_typo"
+
+# THE SUMMARY PRINTS ON EVERY RUN, including the clean one. A section that appears only
+# when there is something to say is indistinguishable from one that did not run — which is
+# review question #5 (E-251) applied to a report instead of a scan.
+assert_contains "E-250.05a: the suppression section prints even at zero" \
+  "Active suppressions" "$_plain"
+assert_contains "E-250.05b: and says (none) rather than omitting itself" "(none)" "$_plain"
+
+# BY-NAME EXEMPTIONS come from standards.json, with their reasons, on every run — NOT from
+# the files this run happened to touch. A staged-file run sees only the diff, so an
+# exemption that vanished when its file was not staged would read as "none" almost always.
+assert_contains "E-250.06a: exemptions are listed from the config" \
+  "By-name exemptions (standards.json): 1" "$_plain"
+assert_contains "E-250.06b: named by rule and path" "no_raw_exit_trap_in_tests" "$_plain"
+assert_contains "E-250.06c: with the one-line reason D-065 requires" "reason:" "$_plain"
+assert_status 0 "E-250.06d: the exemption lives in standards.json, not in a rule's code" \
+  bash -c "python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); r=[x for x in d[\"rules\"] if x[\"rule_id\"]==\"no_raw_exit_trap_in_tests\"][0]; sys.exit(0 if any(e[\"path\"]==\"tests/run.sh\" and e.get(\"reason\") for e in r.get(\"exempt_files\",[])) else 1)' '${STANDARDS_JSON}'"
+# The exemption must still WORK, or moving it was a deletion.
+_runsh="$( cd "$REPO_ROOT" && node "$CLI" check --file tests/run.sh 2>&1 )"
+assert_contains "E-250.06f: tests/run.sh is still exempt in the real repo" \
+  "applied this run" "$_runsh"
+
+# Central application: the marker is applied AFTER a rule produces its finding, which is
+# what makes the count possible and what "every E-80 rule supports the marker" means.
+assert_status 0 "E-250.07a: suppression is applied centrally in validateFile" \
+  grep -q 'isSuppressed(lines, v.line, rule)' "$CHECKER"
+assert_status 0 "E-250.07b: and validateFile reports what it suppressed and exempted" \
+  grep -q 'suppressions, exemptions' "$CHECKER"
 
 echo ""
 assert_summary
