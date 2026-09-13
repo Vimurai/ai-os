@@ -9,11 +9,11 @@
 - **Aesthetic**: A CLI-native, developer-first framework focused on robustness, strict access control, and zero-friction workflows.
 
 ## 2. Information Architecture & The Triad
-- **Principal Architect**: Owns `.ai/blueprints/` and `TASKS.md`. Responsible for architectural design, strategy, and producing P-## and E-## tasks. Blocked from writing source code via the ANTI-DRIFT Protocol. (Default: `claude` CLI on model `fable` — D-066; `agy`/`gemini` selectable via `roles.json`. Governed by `ARCHITECT.md`).
-- **Lead Engineer**: Owns `src/` and `tests/`. Responsible for execution, fuzzy patching, and resolving E-## tasks. Blocked from altering sovereign blueprints. (Default: `claude` CLI on model `opus` — D-066. Governed by `ENGINEER.md`).
-- **Same-provider topology (D-054)**: both roles MAY run on the same provider in separate tmux panes; role identity is bound per pane at launch via `ai pane <role>` (see `.ai/blueprints/role-abstraction.md §Same-Provider Triad`).
-- **Quality/QA (TestSprite)**: Owns `REVIEWS.md` and `LOG.md`. Responsible for vibe checks, chaos testing, and structural validation.
-- **Specialist Extensions (20 Native Agents)**: The ecosystem includes 20 native plugin agents. Key specialists include the `performance_engineer`, `db_architect`, `dependency_manager`, and `sre_responder` (read-only incident triage).
+- **Principal Architect**: Owns `.ai/blueprints/` and `TASKS.md`. Responsible for architectural design, strategy, and producing P-## and E-## tasks. Blocked from writing source code via the ANTI-DRIFT Protocol. (`claude` on model `fable` — D-066/D-069. Governed by `ARCHITECT.md`).
+- **Lead Engineer**: Owns `src/` and `tests/`. Responsible for execution, fuzzy patching, and resolving E-## tasks. Blocked from altering sovereign blueprints. (`claude` on model `opus` — D-066. Governed by `ENGINEER.md`).
+- **Tester (D-069, v4)**: a HEADLESS Claude role (`claude` on model `sonnet`, `haiku` for `--fast`) — no tmux pane; dispatched by `skill: ai-test` as the `test_engineer` subagent. Writes tests only under `tests/`, runs the project's own harness, stamps `[TESTS_PASS]`/`[TESTS_FAIL]` via `add_stamp`. Replaces TestSprite (see `.ai/blueprints/claude-native-consolidation.md`).
+- **Claude-native topology (D-069)**: AI-OS v4 ships ONE provider, `claude`. Roles stay decoupled from the vendor (`roles.json` binds role → provider + model; `providers.json` is the single-entry adapter registry), but the `agy`/`gemini` adapters, workspaces, shims and TestSprite are removed — by deletion, not by flags. Both pane-bound roles run in separate tmux panes of a per-project session (D-054, D-068); role identity is bound per pane at launch via `ai pane <role>`.
+- **Specialist Extensions (Claude subagents)**: the specialist personas ship as `.claude/agents/*.md` (no vendor plugin). Key specialists include the `performance_engineer`, `db_architect`, `dependency_manager`, `sre_responder` (read-only incident triage) and, from v4, `test_engineer`.
 
 ## 3. Interaction Flows (Zero-Friction Workflow)
 - **Planning**: User prompts the Architect -> Architect researches, writes domain blueprint, and emits P-##/E-## tasks to the SQLite store.
@@ -21,10 +21,10 @@
 - **Validation**: User runs `ai test --vibe` or `ai review engineer` -> Automated quality gates and critics validate the work against the blueprint.
 
 ## 4. Architecture & Technical Strategy
-- **Framework & Stack**: Node.js 20+ for MCP servers, Python 3.10+ for legacy fallbacks, and SQLite3 for ACID state management.
+- **Framework & Stack**: Node.js 22.5+ for MCP servers, Python 3.10+ for legacy fallbacks, SQLite3 for ACID state management, Claude Code as the sole agent runtime (D-069). Memory Palace indexing is the text/hash index implemented in `memory-batch-scanner.mjs`; no embedding provider is configured and multimodal retrieval is deferred.
 - **State Management (SQLite-First Singularity)**: All task synchronization, execution states, and system metadata are stored in `.ai/state.sqlite` to prevent race conditions and ensure transactional integrity.
 - **Context & Memory Strategy (JIT)**: Avoids monolithic token consumption. Domain blueprints and skills are loaded Just-In-Time (JIT) as metadata first, expanding to full content only when needed.
-- **Sovereignty & provisioning helpers (D-054..D-057)**: `src/mcp/shared/caller-role.mjs` (server-side role derivation, E-219), `src/mcp/safe-exec-mcp/architect-writes.mjs` (shell write gate, E-216), `src/shared/provider-adapter.mjs` (A2A argv/env adapters, E-210), `src/shared/role-manifest.mjs` (role → directory manifest, E-212), `src/shared/sync-manifest.mjs` (manifest-scoped pruning, E-220), and the install-first helper resolver (E-223). Design: `.ai/blueprints/role-abstraction.md` and `.ai/blueprints/architect-provider-parity.md`. A new shared helper is named here in the same change that introduces it.
+- **Sovereignty & provisioning helpers (D-054..D-057)**: `src/mcp/shared/caller-role.mjs` (server-side role derivation, E-219), `src/mcp/safe-exec-mcp/architect-writes.mjs` (shell write gate, E-216), `src/shared/provider-adapter.mjs` (A2A argv/env adapters, E-210), `src/shared/role-manifest.mjs` (role → directory manifest, E-212), `src/shared/sync-manifest.mjs` (manifest-scoped pruning, E-220), the install-first helper resolver (E-223), and `src/shared/build-stamp.mjs` (booted-build stamp — content hash + newest mtime of a server's entry file and its `mcp/shared/` sibling, recorded by the `instrument()` interceptor and read by the staleness consumers and the completion gate, E-249; ratified D-071 §3; spec `.ai/blueprints/telemetry-hardening.md §Booted-Build Staleness`). Design: `.ai/blueprints/role-abstraction.md` and `.ai/blueprints/architect-provider-parity.md`. A new shared helper is named here in the same change that introduces it.
 
 ## 5. Data Models & API Contracts (MCP Nervous System)
 > [!IMPORTANT]
@@ -40,9 +40,9 @@
 - **Security (RBAC)**: Strict Role-Based Access Control and §32 Verification Audits are enforced. Ghost tools are blocked. The Architect cannot write logic; the Engineer cannot modify rules. Commands touching auth or secrets require explicit `[SEC_CLEARED]` validation.
 
 ## 7. Development Cycle (Plan-Build-Test)
-1. **Plan**: Architects the vision in `architect.md` (Gemini). Mandatory: Ask questions to clarify ambiguities before finalizing the plan. Do not be lazy.
-2. **Build**: Implements the technical logic (Claude).
-3. **Test**: Verifies quality and performance (TestSprite).
+1. **Plan**: The Architect (Claude · fable) writes the vision in `architect.md` and the domain blueprints. Mandatory: ask questions to clarify ambiguities before finalizing the plan. Do not be lazy.
+2. **Build**: The Engineer (Claude · opus) implements the technical logic.
+3. **Test**: The Tester (Claude · sonnet, headless) generates and runs tests in the project's own harness via `skill: ai-test`; critics stamp the result.
 
 ## 30. Bootloader Resilience
 - **Concept**: Ensure the Triad maintains operational context even if the primary `orchestrator-mcp` is unavailable.

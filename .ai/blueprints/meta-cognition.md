@@ -48,3 +48,24 @@ The "Second Brain" operates on a telemetry-to-insight pipeline: local project ro
 - **E-##:** Implement `telemetry.sqlite` schema and background writing hook in the MCP router.
 - **E-##:** Create the `meta_analyst` agent definition and the `ai-insights` skill.
 - **E-##:** Update `ai-preflight` skill to check `INSIGHTS.md` staleness and emit warnings.
+
+## Telemetry Provenance and Isolation (D-070 Amendment, 2026-09-11)
+- **Isolation**: the test suite must never write to the operator's telemetry store — see
+  `test-harness-isolation.md §The Sixth Variety`. `AI_TELEMETRY_DB_PATH` is the per-run seam.
+- **One tool, one name**: the hook path records `safe-exec-mcp.analyze_command` (151 rows,
+  avg 149 ms) while the interceptor records `mcp__safe-exec-mcp__analyze_command` (7,502 rows,
+  avg 2 ms). Aggregates split one tool in two and the timings are not comparable. Normalise
+  `tool_name` to the `mcp__<server>__<tool>` form at WRITE time in both emitters, and record
+  the emitting path in a new `source` column (`hook` | `interceptor`) so latency is compared
+  like with like. Timestamps are ISO-8601 `T` form everywhere (the `datetime()` space form
+  drifted the 30-day window boundary by up to a day). No back-migration of old rows: the
+  store is reset under E-257.
+- **Staleness probe**: `insights-staleness.mjs` reported 132,436 total rows against 128,677 in
+  `tool_executions`; it sums both tables. Count `tool_executions` only.
+- **task_velocity is unwired**: 1,729 rows, every `turn_count` and `tokens_consumed` zero,
+  since the first report. E-259 wires the counters from the token-budget session record per
+  task id at `update_task_status(DONE)` time and rejects a `report_performance` payload with
+  both counters zero as `expected_rejection` with the field names in the message.
+- **Reading a report**: every table separates REAL traffic (hashes seen on non-test days or
+  with ≥ 2 sessions) from fixture traffic until E-257 lands; after it, the split is a
+  regression alarm — any single-use hash is a leak.
