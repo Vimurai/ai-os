@@ -140,7 +140,7 @@ assert_status 0 "skill adds Bash to allowed-tools (needed for node invocation)" 
   grep -qE '^allowed-tools:.*Bash' "$SKILL"
 
 assert_status 0 "skill defers blueprint drafting to Architect (anti-drift §35)" \
-  grep -qE 'Architect|Gemini' "$SKILL"
+  grep -q 'Architect' "$SKILL"
 
 assert_status 0 "skill documents AI_INCIDENT_TRACKER_DISABLE rollback" \
   grep -q 'AI_INCIDENT_TRACKER_DISABLE' "$SKILL"

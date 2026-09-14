@@ -1,6 +1,6 @@
 ---
 name: ai-incident
-description: Record an unpredictable AI-OS event (MCP crash, drift, env failure, hook regression) to ~/.ai-os/incidents.ndjson for later aggregation. Sanitises PII; rotates monthly. Triggered by Claude/Agy when an action surfaces unexpected behaviour the user didn't anticipate.
+description: Record an unpredictable AI-OS event (MCP crash, drift, env failure, hook regression) to ~/.ai-os/incidents.ndjson for later aggregation. Sanitises PII; rotates monthly. Triggered by the Architect or Engineer when an action surfaces unexpected behaviour the user didn't anticipate.
 disable-model-invocation: false
 user-invocable: true
 context: default
@@ -35,7 +35,7 @@ when a threshold is exceeded.
   across multiple sessions
 - A hook (`pre-commit`, `stop-hook`, `post-tool-log`) silently fails
 - `ai sync` overwrites a per-project skill mirror in a way the user did
-  not expect (drift between `claude/` and `gemini/` skill copies)
+  not expect (drift between a source skill and its installed mirror)
 - Any task is filed into the wrong workspace (project vs framework)
 - A deterministic test starts producing flaky results
 
@@ -66,7 +66,7 @@ when a threshold is exceeded.
 - `stack_signature` — *stable grouping key*. Use the same string for the
   same root cause across sessions; the aggregator counts duplicates
   here. Pattern: `<file>:<symbol>` or `<file>:<line>`.
-- `source_agent` — `Claude`, `Agy`, or `TestSprite`. Anything else is
+- `source_agent` — `Claude` or `TestSprite`. Anything else is
   normalised to `unknown`.
 
 The helper injects `timestamp` (UTC ISO-8601) automatically — do not

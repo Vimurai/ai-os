@@ -5,10 +5,9 @@
 //   Two callers need exactly this resolution and must never drift apart:
 //     - advisor-mcp::ask_architect  — the SYNCHRONOUS A2A bridge (print mode)
 //     - `ai pane <role>` (src/bin/ai) — the per-pane role binding launcher
-//   Before E-210 the bridge hardcoded `execFileSync("agy", ...)`, so an all-Claude
-//   Triad (D-054) either failed outright (agy uninstalled / auth lapsed) or silently
-//   consulted the WRONG architect. Vendor literals are banned here by construction:
-//   the executable and its argv both come from .ai/roles.json × .ai/providers.json.
+//   Before E-210 the bridge hardcoded its executable, so a Triad bound to another
+//   provider silently consulted the WRONG architect. The executable and its argv
+//   both come from .ai/roles.json × .ai/providers.json.
 //
 // DATA MODEL (role-abstraction.md §Data Model):
 //   .ai/roles.json     { roles: { <role>: { provider, pane_identifier, model? } } }
@@ -24,7 +23,6 @@ import { resolve as resolvePath, join } from "node:path";
 
 // D-066 defaults — used when .ai/roles.json is absent or malformed. Kept in sync with
 // src/templates/roles.json (architect=claude:1 · fable, engineer=claude:0 · opus).
-// The all-Claude Triad is the DEFAULT topology; agy and gemini remain selectable providers.
 export const DEFAULT_ROLE_PROVIDERS = { architect: "claude", engineer: "claude" };
 // Per-role model fallbacks, applied only when the role's provider is claude — another
 // provider has no use for a claude model name.
@@ -38,8 +36,6 @@ export const DEFAULT_ADAPTERS = {
     print_mode: ["-p", "--append-system-prompt-file", "{rulefile}", "{prompt}"],
     child_env_unset: ["CLAUDECODE"],
   },
-  agy: { launch: [], print_mode: ["--print-timeout", "90s", "-p", "{prompt}"] },
-  gemini: { launch: [], print_mode: ["-p", "{prompt}"] },
 };
 
 function readJson(path) {

@@ -1218,3 +1218,95 @@ A tmux session has ONE current window shared by every attached client. With ever
 `AI_OS_SHARED_SESSION=1` (or `.ai/start.json` `{"session":"aios"}`) restores the shared session; `AI_WATCH_ALL_SESSIONS=1` restores the watcher's all-sessions scan. No state change to undo.
 
 ---
+
+## D-069 — AI-OS v4 Is Claude-Native: Remove the agy/gemini Providers and TestSprite; the Tester Is a Headless Claude Role on Sonnet
+
+**Date**: 2026-09-11
+**Task**: E-254, E-255, E-256, E-263 (operator ruling: "total cleanup — remove gemini and agy everywhere, replace TestSprite with Claude, update the README; the project goes fully Claude-scoped"). Task ids corrected 2026-09-13: the release task was registered as E-263 after D-070 took E-257..E-262.
+**Decision**: Delete every `agy`/`gemini` adapter, workspace, shim, plugin builder, TOML command, field strip and model pin; keep the role→provider decoupling (`roles.json`, `providers.json`, `provider-adapter.mjs`) with exactly one provider, `claude`. Replace TestSprite with a headless Claude Tester role (`tester`: `claude`, model `sonnet`, `haiku` for `--fast`) dispatched by `ai-test` as the `test_engineer` subagent, its label derived from `roles.json` like the other two. `CLAUDE.md` stays as the one auto-load shim; `GEMINI.md`/`AGENTS.md` go. `ai sync` prunes manifest-owned legacy workspaces and only PRINTS for anything it did not generate. Ship as v4.0.0 with a BREAKING section. Blueprint: `.ai/blueprints/claude-native-consolidation.md`.
+
+### Why needed
+Both roles have run on Claude since D-066. The agy/gemini branches are now the largest body of dead code in the CLI (163 hits in `src/bin/ai`, 22 in the installer, 59 test files, 218 lines across 27 blueprints) and they still cause defects — D-067 §2 (E-248) existed only because a Gemini strip ran on the install mirror. TestSprite needs an API key, is never exercised by the harness, and its name is hard-coded in five label sites that D-066 already had to fix for the other two roles.
+
+### Alternatives considered
+1. **Keep the adapters behind flags** — rejected; a flag keeps dead code compiled into every path and tested by nobody. Removal is by deletion.
+2. **Also delete the role/provider decoupling** — rejected; `roles.json` is how models are configured per role and how labels are derived (D-066). A single-entry registry costs nothing and keeps the door open.
+3. **Tester as a third pane-bound role** — rejected; a test generator has no interactive session to keep, and a third pane would change the D-059 layout for no benefit. Headless subagent of the Engineer.
+4. **Tester on Opus** — rejected on cost; **on Haiku by default** — rejected on quality for test authoring against a real harness. Sonnet 5 default, Haiku 4.5 as `--fast`. Aliases, never dated ids.
+5. **Rename `src/claude/` to `src/provider/` now that it is the only one** — rejected (D-052 reasoning still holds: it is a provider adapter directory; renaming ~25 mirror tests for cosmetics is the same trade-off D-052 declined).
+
+### Constraints driving this decision
+- Sovereignty gates and mirror-identity tests must survive: personas move as files, not as rewrites; `.claude/agents/*.md` end byte-identical to `src/claude/agents/*.md`.
+- `ai sync` deletes only what the sync manifest owns (E-220) — an operator's hand-written `.gemini/` content is never removed silently.
+- Every wave touches `src/bin` and `src/mcp` → D-067 §3 install + restart gate applies to each PR.
+- Order: D-067's E-249..E-251 and D-068's E-252..E-253 first; then E-254 → E-255 → E-256 → D-070 insights fixes → E-263 (release last, so v4.0.0 carries the fixes).
+
+### Impact
+- Unlocks: E-254 (T2), E-255 (T2), E-256 (T2), E-263 (T2).
+- Supersedes: D-050's default providers, D-051's `GEMINI.md` shim, D-052's plural provider directories (the reasoning stands, the set shrinks to one), E-45 Gemini Model Mandate. D-053's shell-native `ai add-task`/`ai handoff` STAY — they are useful on Claude too and the bridge depends on them.
+- Risk if wrong: a future non-Claude provider must be re-added as an adapter; the registry shape makes that a config + adapter change, not an architecture change.
+
+### Rollback
+Tag `v3.1.0` + `bash install-ai-os.sh`. No in-version flags for the removed providers. `AI_OS_KEEP_LEGACY_WORKSPACES=1` makes `ai sync` print instead of prune.
+
+---
+
+## D-070 — Telemetry Isolation First; Then the Two Real Signals (ai-insights 2026-09-11)
+
+**Date**: 2026-09-11
+**Task**: E-257..E-262 (from `~/.ai-os/INSIGHTS.md` regenerated 2026-09-11, 51,382 executions, meta_analyst)
+**Decision**: The insights wave is ordered by what the report proved. (§1) Test isolation for telemetry — the suite writes into the operator's `~/.ai-os/telemetry.sqlite`; ~92% of the store is fixtures; fix the seam, add a leak assertion, reset the store once with a backup. (§2) `execute_code` is rejected 935/935 times at 4 ms across three reports — an environmental precondition (Docker) that no surface announces; make `ai doctor`, the startup log and the rejection message say WHY, and record one incident per session. (§3) `task_velocity` counters are wired (all zeros since the first report). (§4) `activate_domain` has a genuine 20% error rate in live traffic and no wrapper — audit the error classes, then an `ai-domain` skill. (§5) Normalise `tool_name`/timestamps across the two emitters and fix the staleness probe's double count. (§6) `handoff_control`'s 780 errors are re-read after §1 — no fix funded on contaminated numbers. WITHDRAWN: the `ai-patch`/`ai-map` skills and the `patch_file` deprecation from the two prior reports — they were fixtures.
+
+### Why needed
+Two consecutive reports recommended work against numbers produced by the test suite. A report that cannot tell operator traffic from fixtures is worse than no report: it directs engineering at phantoms (`patch_file` 56% "errors": 1,920 fixture calls, 0 live) while the one tool that has never worked for a real caller (`execute_code`) sat at 100% rejection for two months.
+
+### Alternatives considered
+1. **Tag fixture rows with a heuristic and keep the store** — rejected; single-use hash + test-day is a good detector but not a proof, and 8% real traffic is not worth a migration. Backup + reset.
+2. **Fix `patch_file`'s md5 contract as the prior report asked** — rejected; zero live calls. Fixtures exercising a guard are the guard working.
+3. **Wrap `execute_code` in a skill** — rejected; it is refused before any work happens. Announce the precondition instead.
+4. **Skip §5 as cosmetic** — rejected; one tool under two names with 75× different average latency makes every latency table wrong.
+
+### Constraints driving this decision
+- Leaked external state fails the run (D-063); the live telemetry DB is external state.
+- Environmental preconditions are announced with evidence, never silently booked (E-179/D-062 lineage).
+- No back-migration of telemetry rows; normalise at write time.
+
+### Impact
+- Unlocks: E-257 (T2), E-258 (T2), E-259 (T2), E-260 (T2), E-261 (T1), E-262 (T1, conditional). Order: E-257 first — every later number depends on it.
+- Risk if wrong: resetting the store loses the 13,093 live rows — mitigated by the dated backup and by the fact that they are what the next 30 days will regenerate cleanly.
+
+### Rollback
+`AI_TELEMETRY_DB_PATH` unset restores the shared path; the backup file restores the store. §5 changes emitters only.
+
+---
+
+## D-071 — The Completion Gate Reads State, Not Prose; Generated Blueprints Take No Hand-Authored Sections; the Harness Strips Inherited Launch Variables; Suppression Lives in `validateFile`
+
+**Date**: 2026-09-13
+**Task**: E-264 (ratification of the E-249/E-250 deviations; Engineer handoff 2026-09-11 — D-067 and D-068 complete, PRs #56–#58 merged, master `632b362`)
+**Decision**: Four ratifications and one new rule. (§1) D-067 §3's task-completion gate is ratified AS IMPLEMENTED: it lives in `update_task_status` — the only place a refusal can be enforced — and takes its evidence from STATE: the install mirror still differs from `src/` under `src/mcp/**` or `src/bin/**` (lockfiles excluded), or a running server is serving a build that is no longer on disk. It does not read `LOG.md`, does not reconstruct "the task's diff", and is exempt outside the framework clone. The third bullet of D-067 §3 is superseded by this wording. (§2) A GENERATED blueprint — `mcp.md`, `_INDEX.md`, any file whose first line says AUTO-GENERATED — never receives a hand-authored section and is never named as a task's specification. Booted-build staleness is specified in `.ai/blueprints/telemetry-hardening.md §Booted-Build Staleness`, the blueprint that owns the interceptor recording it. There is NO appendix mechanism for generated files. (§3) `src/shared/build-stamp.mjs` is named in `architect.md §4` (D-057). (§4) Inherited LAUNCH variables are the fourth shape of environment dependence: the harness strips them centrally in `tests/lib` from a named list before any suite, hook, resolver or server is spawned; a suite that needs one sets it explicitly; per-suite `env -u` is retired; standing review question #7. → E-264. (§5) `validateFile` is the standards checker's only public entry: suppression markers and by-name exemptions are applied there, AFTER a rule fires (E-250); `RULE_REGISTRY` handlers return raw findings by design, and a caller may invoke one directly only in that rule's own unit test on a marker-free fixture.
+
+### Why needed
+E-249's task text named a specification (`mcp.md §Booted-Build Staleness`) that `ai sync` regenerates away on every run, and asked a markdown skill to refuse — which markdown cannot do — on the evidence of a LOG line, which proves only that words were typed. Three consecutive tasks (E-248, E-249 twice) then lost assertions to variables the suite inherited from the tmux pane it ran in — `AI_OS_PANE_ROLE` from `ai pane`, `AIOS_WORKSPACE` from the AI-OS shell — each time failing in the direction that looks like a product bug, and each time fixed with a per-suite `env -u` that the next suite will have to rediscover. E-250's central suppression created a bypass (`leaked_state_test` hit it the day it shipped) that the next direct-handler caller will hit the same way.
+
+### Alternatives considered
+1. **§1: parse `LOG.md` for `bash install-ai-os.sh`** — rejected; evidence that words were typed, and the diff a task id names is not determinable (uncommitted, on a branch, or merged).
+2. **§1: keep the gate in the `ai-task` skill as D-067 wrote it** — rejected; a skill is prose, `update_task_status` is where DONE is written and the only place a refusal takes effect.
+3. **§2: an appendix or `<!-- hand -->` island the generator preserves across regeneration** — rejected; a generator that merges hand-written islands makes one file carry two sources of truth (the D-067 §2 "two transformations drift" problem), and `mcp_doc_sync_test` S02's byte-identity gate would need an exemption to allow it.
+4. **§4: keep per-suite `env -u`** — rejected; three suites each rediscovered the rule. **§4: `skip_unless_env`'s inverse (skip when the variable is set)** — rejected; the variable is contamination, not an optional requirement; strip is the correct default and a suite that wants the variable opts in. **§4: make the hooks ignore launch variables under a test flag** — rejected; that tests a path production never takes (E-244's "filter the roots" mistake in a new place).
+5. **§5: apply suppression in the handlers as well as `validateFile`** — rejected; two places to count is how D-065's uncounted-suppression defect returns.
+
+### Constraints driving this decision
+- A gate takes its evidence from state, never from a report that something was done (D-062, D-067 lineage).
+- A generated artefact has exactly one source; hand-authored content lives in hand-authored files (D-067 §2 lineage).
+- Harness rules are central and named, never per-suite folklore (D-061 → D-067: supply-or-skip, host-relative budgets, leak sweep, trap chaining, corpus floor).
+- One definition, reused — the `validateFile` entry, the `LAUNCH_VARS` list (D-064, D-065).
+
+### Impact
+- Unlocks: E-264 (T1, after E-257 so the two `tests/lib` changes do not interleave). Ratifies E-249 and E-250 as shipped; supersedes D-067 §3 bullet three; corrects E-249's specification pointer in the record (the task is DONE; its text is not rewritten).
+- Risk if wrong: §4's list is incomplete on the day a hook starts ranking a new variable — mitigated by the no-dead-entries test, the same-change rule and review question #7. §2 leaves `mcp.md` purely generated; a reader looking there for the staleness spec finds a pointer only if the generator emits one — the generator is Engineer territory and is NOT asked to change.
+
+### Rollback
+§4 `AI_OS_TEST_KEEP_LAUNCH_ENV=1` skips the strip. §1, §2, §3 and §5 are documentation of shipped behaviour; their rollbacks are E-249's `AI_OS_BUILD_STAMP=0` and E-250's own.
+
+---

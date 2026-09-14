@@ -7,7 +7,7 @@
 > [!IMPORTANT]
 > This document maps every AI-OS Model Context Protocol (MCP) server, grouped by routing domain. It is generated from `src/config/registry.json` — edit the registry, then re-run the generator. Never edit this file directly.
 
-Total registered servers: **25**. The Architect (Agy) curates DOMAINS; the Engineer (Claude) wires them into the registry.
+Total registered servers: **25**. The Architect curates DOMAINS; the Engineer wires them into the registry.
 
 ## State
 State and task management — TASKS.md, state.json, archives, semantic memory.
@@ -50,9 +50,9 @@ Test generation, visual audit, OS-level computer use.
 - **`computer-use-mcp`** (EXECUTE) — E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for TestSprite visual QA.
 
 ## Interop
-A2A bridge to Gemini and HITL approval gate.
+A2A bridge to the Architect and HITL approval gate.
 
-- **`advisor-mcp`** (EXECUTE) — E-9 A2A Bridge: Claude queries Gemini Architect mid-execution via `gemini -p`.
+- **`advisor-mcp`** (EXECUTE) — E-9 A2A Bridge: the Engineer queries the Architect mid-execution via `claude -p`.
 - **`approval-mcp`** (EXECUTE) — E-10 HITL Gate: blocks Tier 3 ops until human types y/Y in terminal.
 
 ## Caching

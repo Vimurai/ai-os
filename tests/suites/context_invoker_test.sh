@@ -61,23 +61,20 @@ _assert_contains \
   "$SOURCE" \
   '".claude", "skills"'
 
-# T-02: .agents/skills appears in SKILL_ROOTS definition (E-132: migrated from .gemini/skills)
-_assert_contains \
-  "T-02: .agents/skills in SKILL_ROOTS" \
-  "$SOURCE" \
-  '".agents", "skills"'
+# T-02 (E-254): the removed vendor workspaces are no longer scanned. Every root
+# segment in SOURCE must be ".claude" or ".ai-os" — a re-added workspace fails here.
+foreign_roots=$(echo "$SOURCE" | grep -oE 'join\((cwd|HOME), "\.[a-z-]+"' | grep -vE '"\.(claude|ai-os|ai)"' || true)
+if [[ -z "$foreign_roots" ]] && echo "$SOURCE" | grep -qE 'join\(HOME, "\.claude"'; then
+  _pass "T-02: only .claude/.ai-os workspace roots scanned"
+else
+  _fail "T-02: unexpected workspace root(s): ${foreign_roots:-<no .claude root found>}"
+fi
 
 # T-03: .claude/agents appears in AGENT_ROOTS definition
 _assert_contains \
   "T-03: .claude/agents in AGENT_ROOTS" \
   "$SOURCE" \
   '".claude", "agents"'
-
-# T-04: .gemini/agents appears in AGENT_ROOTS definition
-_assert_contains \
-  "T-04: .gemini/agents in AGENT_ROOTS" \
-  "$SOURCE" \
-  '".gemini", "agents"'
 
 # T-05: project-scoped roots spread before global HOME roots in SKILL_ROOTS
 _assert_index_before \
@@ -105,21 +102,15 @@ AI_BIN="${REPO_ROOT}/src/bin/ai"
 _assert_file_contains "T-08: compliance audit includes .claude/agents" \
   "$AI_BIN" 'Path(".claude/agents")'
 
-_assert_file_contains "T-09: compliance audit includes .gemini/agents" \
-  "$AI_BIN" 'Path(".gemini/agents")'
-
 _assert_file_contains "T-10: compliance audit includes .claude/skills" \
   "$AI_BIN" 'Path(".claude/skills")'
-
-_assert_file_contains "T-11: compliance audit includes .agents/skills" \
-  "$AI_BIN" 'Path(".agents/skills")'
 
 # ── Test 12: ANTI-DRIFT check present in compliance audit (E-121) ─────────────
 _assert_file_contains "T-12: ANTI-DRIFT PROTOCOL check in compliance audit" \
   "$AI_BIN" 'ANTI_DRIFT_HEADER'
 
 # E-183/D-050: the project anti-drift targets are the canonical role rulefiles
-# (CLAUDE.md/GEMINI.md became @import shims that carry no header).
+# (CLAUDE.md became an @import shim that carries no header).
 _assert_file_contains "T-13: ANTI-DRIFT check targets ENGINEER.md" \
   "$AI_BIN" '"ENGINEER.md"'
 
@@ -138,9 +129,6 @@ check_anti_drift_present() {
 
 check_anti_drift_present "T-15: src/claude/CLAUDE.md has ANTI-DRIFT PROTOCOL" \
   "${REPO_ROOT}/src/claude/CLAUDE.md"
-
-check_anti_drift_present "T-16: src/gemini/GEMINI.md has ANTI-DRIFT PROTOCOL" \
-  "${REPO_ROOT}/src/gemini/GEMINI.md"
 
 check_anti_drift_present "T-17: src/templates/ENGINEER.md has ANTI-DRIFT PROTOCOL" \
   "${REPO_ROOT}/src/templates/ENGINEER.md"

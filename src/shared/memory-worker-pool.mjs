@@ -31,14 +31,16 @@
  *   - AI_EMBEDDING_CONCURRENCY=1   → serial fallback (one worker).
  *
  * Pure node:fs / node:path — no external deps. The embedding call is
- * injected as `opts.sendEmbedding` so this module never talks to the
- * Gemini API directly — keeps the unit-test surface clean and avoids
- * coupling to whichever transport memory_curator chooses.
+ * injected as `opts.sendEmbedding` so this module never talks to an
+ * embedding API directly — keeps the unit-test surface clean and avoids
+ * coupling to whichever transport memory_curator chooses. No embedding
+ * provider is configured today: the live index is the text/hash index in
+ * memory-batch-scanner.mjs, and multimodal retrieval is deferred.
  *
  * Usage (programmatic):
  *   import { processBatch, flushDlq } from "./shared/memory-worker-pool.mjs";
  *   const result = await processBatch(eligible, {
- *     sendEmbedding: async (file) => embedViaGemini(file),
+ *     sendEmbedding: async (file) => embed(file),
  *     dlqPath: ".ai/memory/dlq.json",
  *     concurrency: 3,
  *   });
@@ -71,7 +73,7 @@ function log(level, message, extras = {}) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── Rate-limit error detection ───────────────────────────────────────────────
-// Flexible: accepts the common shapes that Gemini SDK / fetch wrappers /
+// Flexible: accepts the common shapes that embedding SDKs / fetch wrappers /
 // custom errors throw. Test code can mark errors as rate-limit via any
 // of: e.code, e.status, e.statusCode, or a "429"/"rate limit" message.
 export function isRateLimitError(e) {

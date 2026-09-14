@@ -3,7 +3,7 @@
  * github-bridge-mcp — AI-OS GitHub Bridge (E-142, §28)
  *
  * Connects GitHub events to the AI-OS Architect cycle.
- * Fetches assigned issues via `gh` CLI and formats them as P-## task proposals for Agy.
+ * Fetches assigned issues via `gh` CLI and formats them as P-## task proposals for the Architect.
  *
  * Requires: GitHub CLI (`gh`) installed and authenticated (`gh auth status`).
  *
@@ -122,8 +122,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "create_intent_from_issues",
       description:
-        "Formats selected GitHub issues as structured P-## task proposals for the Architect (Agy) cycle. " +
-        "Returns formatted issue content with an 'Action Required' prompt — Agy then creates tasks via add_task. " +
+        "Formats selected GitHub issues as structured P-## task proposals for the Architect cycle. " +
+        "Returns formatted issue content with an 'Action Required' prompt — the Architect then creates tasks via add_task. " +
         "Does not write to any file — intent is returned inline for immediate use in conversation.",
       inputSchema: {
         type: "object",

@@ -59,7 +59,7 @@ _p="$(_proj 0 1)"; _out="$(_dry "$_p")"
 # which the overlay pre-check legitimately names — so the assertion failed on a path, not on
 # a launch. Match an invocation instead: the provider in command position.
 assert_status 1 "E-227.02a: no provider binary is launched directly" \
-  bash -c "printf '%s' \"\$_out\" | grep -qE '(^|[;&|]|send-keys .)[[:space:]]*(claude|agy|gemini)[[:space:]]'"
+  bash -c "printf '%s' \"\$_out\" | grep -qE '(^|[;&|]|send-keys .)[[:space:]]*claude[[:space:]]'"
 # The dry run prints commands through `printf %q`, so the sent string appears as
 # `ai\ pane\ engineer`. An assertion written against a literal space silently matched
 # nothing and passed for the wrong reason.
@@ -168,7 +168,14 @@ if command -v tmux >/dev/null 2>&1; then
   _i=0
   for _want in "ai pane engineer" "ai pane architect" "ai watch"; do
     _pid="$(printf '%s\n' "$_panes" | sed -n "$((_i + 1))p")"
-    _body="$("$_tb" -L "$_sock" capture-pane -p -t "$_pid" 2>/dev/null || true)"
+    # Polled: send-keys returns before the pane's shell has echoed the line, so a capture
+    # taken at once intermittently sees an empty screen (1 of ~5 full runs).
+    _w=0
+    while :; do
+      _body="$("$_tb" -L "$_sock" capture-pane -p -t "$_pid" 2>/dev/null || true)"
+      [[ "$_body" == *"$_want"* || $_w -ge 40 ]] && break
+      sleep 0.05; _w=$((_w + 1))
+    done
     assert_contains "E-227.06e: pane ${_i} received '${_want}'" "$_want" "$_body"
     _i=$((_i + 1))
   done

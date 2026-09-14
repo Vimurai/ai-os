@@ -33,7 +33,7 @@ Gate: All tests must pass at 100% before any commit. If a test fails, you are **
 Trigger this when the user requests `--vibe` or for any **Tier 3** release.
 
 ### Phase 1 — Visual Audit (ux_reviewer)
-Use the `ux_reviewer` agent (Gemini) to:
+Use the `ux_reviewer` agent to:
 1. Spin up the dev server (`npm run dev` or `npm start`).
 2. Check each primary route for: CLS < 0.1, WCAG AA contrast, 44px touch targets, visible focus rings.
 3. Run Lighthouse: Performance ≥ 80, Accessibility ≥ 90.

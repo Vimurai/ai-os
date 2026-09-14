@@ -3,9 +3,8 @@
 # ARCHITECT.md runtime ladder + the `ai doctor` per-role provisioning report.
 #
 # ARCHITECT.md named `activate_skill` as THE way to invoke a skill. That is an MCP tool
-# a Claude-hosted Architect may not have, while the Skill tool does not exist on agy —
-# so the rulefile was wrong for whichever runtime it was not written for. The ladder
-# makes it correct on both.
+# a Claude-hosted Architect may not have when the MCP servers are down. The ladder puts
+# the native Skill tool first and keeps the MCP invoker as the fallback.
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
@@ -35,23 +34,22 @@ done
 # ── E-215.2: Skill Invocation is runtime-aware ─────────────────────────────
 assert_status 0 "E-215.02a: 'use the Skill tool when present' is stated" \
   grep -qi 'Use the Skill tool when present' "$ARCH_TPL"
-assert_status 0 "E-215.02b: the MCP invoker remains documented for agy" \
+assert_status 0 "E-215.02b: the MCP invoker remains documented as the fallback" \
   grep -q 'activate_skill({ skill_name: "", list_skills: true })' "$ARCH_TPL"
 assert_status 0 "E-215.02c: the compact pattern offers both runtimes" \
   grep -q 'skill: "ai-compact"' "$ARCH_TPL"
 
-# ── E-215.3: Gemini Model Mandate moved under Provider notes ───────────────
-assert_status 0 "E-215.03a: a Provider notes heading exists" \
-  grep -qE '^## Provider notes$' "$ARCH_TPL"
-assert_status 1 "E-215.03b: Model Mandate is no longer a top-level heading" \
-  grep -qE '^## Model Mandate' "$ARCH_TPL"
-assert_status 0 "E-215.03c: it survives as a gemini-scoped subsection" \
-  grep -qE '^### Gemini provider — Model Mandate' "$ARCH_TPL"
-# The content itself must not be lost — this is a re-home, not a deletion.
-assert_status 0 "E-215.03d: the pinned model is still named" \
-  grep -q 'gemini-3.1-pro' "$ARCH_TPL"
-assert_status 0 "E-215.03e: the rollback path is still documented" \
-  grep -q 'GEMINI_MODEL=gemini-2.5-pro' "$ARCH_TPL"
+# ── E-215.3 / E-254: no provider-specific section survives (D-069) ─────────
+# v4 is Claude-native: the Architect runs on claude · fable, so a "Provider notes" block
+# or a vendor Model Mandate would be instructions for a runtime that no longer exists.
+assert_status 1 "E-254.03a: no Provider notes heading remains" \
+  grep -qE '^## Provider notes' "$ARCH_TPL"
+assert_status 1 "E-254.03b: no Model Mandate heading at any level" \
+  grep -qE '^#+ .*Model Mandate' "$ARCH_TPL"
+# Non-vacuity: the model the Architect DOES run on is still stated, so 03a/03b cannot
+# pass merely because the header block was emptied.
+assert_status 0 "E-254.03c: the header names the claude provider on model fable" \
+  grep -q 'the `claude` provider on model `fable`' "$ARCH_TPL"
 
 # ── E-215.4: sovereign text untouched ──────────────────────────────────────
 assert_status 0 "E-215.04a: the Forbidden Zone section is intact" \
@@ -60,9 +58,11 @@ assert_status 0 "E-215.04b: the §35 ANTI-DRIFT section is intact" \
   grep -qE '^## ANTI-DRIFT PROTOCOL' "$ARCH_TPL"
 assert_status 0 "E-215.04c: the Role Resolution clause (E-208) is intact" \
   grep -q 'Role Resolution (D-054' "$ARCH_TPL"
-# The shims are load-bearing (D-051) and must not have been touched.
-assert_status 0 "E-215.04d: GEMINI.md is still a pure @import shim" \
-  grep -q '@ARCHITECT.md' "${REPO_ROOT}/src/templates/GEMINI.md"
+# CLAUDE.md is the one load-bearing shim (D-051): Claude Code auto-loads it.
+# E-254: no template imports ARCHITECT.md any more — the vendor shim that did is gone, and
+# the Architect pane receives its rulefile via --append-system-prompt-file instead.
+assert_status 1 "E-254.04d: no template is an @import shim for ARCHITECT.md" \
+  bash -c "grep -rlx '@ARCHITECT.md' '${REPO_ROOT}/src/templates'"
 assert_status 0 "E-215.04e: CLAUDE.md is still a pure @import shim" \
   grep -q '@ENGINEER.md' "${REPO_ROOT}/src/templates/CLAUDE.md"
 
@@ -119,18 +119,25 @@ _AFTER="$(cd "$REPO_ROOT" && git status --porcelain | md5 -q)"
 assert_status 0 "E-215.06k: doctor is read-only (working tree unchanged)" \
   bash -c "[[ '$_BEFORE' == '$_AFTER' ]]"
 
-# A project with a role bound to a non-claude provider must report n/a, not a failure.
-_AGY="$(mktemp -d)"; mkdir -p "$_AGY/.ai"
-cat > "$_AGY/.ai/roles.json" <<'JSON'
-{ "roles": { "architect": { "provider": "agy", "pane_identifier": "1" },
+# A role bound to a provider with no known workspace is REPORTED, and the report goes on
+# to the next role rather than aborting. `acme` is a neutral non-claude provider name.
+_ACME="$(mktemp -d)"; mkdir -p "$_ACME/.ai"
+cat > "$_ACME/.ai/roles.json" <<'JSON'
+{ "roles": { "architect": { "provider": "acme", "pane_identifier": "1" },
              "engineer":  { "provider": "claude", "pane_identifier": "0" } } }
 JSON
-_DOC_AGY="$( cd "$_AGY" && bash "$AI_BIN" doctor 2>&1 )"
-assert_contains "E-215.06l: an agy-bound architect is reported as such" "architect → agy" "$_DOC_AGY"
-assert_contains "E-215.06m: agy agents are reported n/a (they ship as a plugin)" \
-  "n/a for agy" "$_DOC_AGY"
-assert_contains "E-215.06n: the overlay is n/a for a non-claude provider" \
-  "n/a for provider" "$_DOC_AGY"
-rm -rf "$_AGY"
+_DOC_ACME="$( cd "$_ACME" && bash "$AI_BIN" doctor 2>&1 )"
+assert_contains "E-215.06l: a non-claude architect is reported as such" "architect → acme" "$_DOC_ACME"
+assert_contains "E-254.06m: its workspace is reported unknown, not probed" \
+  "no known workspace directory for provider 'acme'" "$_DOC_ACME"
+assert_contains "E-254.06n: the report continues to the engineer" "engineer → claude" "$_DOC_ACME"
+rm -rf "$_ACME"
+
+# No roles.json: the D-050 fallback is now all-Claude (D-069).
+_NOROLES="$(mktemp -d)"; mkdir -p "$_NOROLES/.ai"
+_DOC_NR="$( cd "$_NOROLES" && bash "$AI_BIN" doctor 2>&1 )"
+assert_contains "E-254.06o: a missing roles.json falls back to architect=claude, engineer=claude" \
+  "architect=claude, engineer=claude" "$_DOC_NR"
+rm -rf "$_NOROLES"
 
 assert_summary

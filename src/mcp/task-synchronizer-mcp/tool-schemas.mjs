@@ -16,7 +16,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
         properties: {
           summary: { type: "boolean",  description: "Return counts + project info only (no task list). Use this by default." },
           status:  { type: "string",   enum: ["OPEN", "BLOCKED", "DONE"], description: "Filter tasks by status" },
-          owner:   { type: "string",   description: "Filter tasks by owner substring (e.g. 'claude', 'agy')" },
+          owner:   { type: "string",   description: "Filter tasks by owner substring (e.g. 'Architect', 'Engineer')" },
           tier:    { type: "number",   enum: [1, 2, 3], description: "Filter tasks by tier" },
         },
       },
@@ -27,7 +27,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       inputSchema: {
         type: "object",
         properties: {
-          owner:             { type: "string",  description: "Task owner: 'Architect (Agy)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+          owner:             { type: "string",  description: "Task owner: 'Architect (Claude)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
           description:       { type: "string",  description: "Task description" },
           tier:              { type: "number",  description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
           prefix:            { type: "string",  description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },
@@ -72,7 +72,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       inputSchema: {
         type: "object",
         properties: {
-          target:  { type: "string", enum: ["architect", "engineer", "claude", "gemini"], description: "Which agent to wake. Prefer semantic roles 'architect' / 'engineer' (E-136) — ai-watch resolves them to a provider+pane via .ai/roles.json. Legacy provider names 'claude' (pane 0) / 'gemini' (pane 1) remain supported for backwards compatibility." },
+          target:  { type: "string", enum: ["architect", "engineer", "claude"], description: "Which agent to wake. Prefer semantic roles 'architect' / 'engineer' (E-136) — ai-watch resolves them to a provider+pane via .ai/roles.json. The legacy provider name 'claude' (pane 0) remains supported for backwards compatibility." },
           message: { type: "string", description: "Message to inject into the target pane, e.g. 'Planning complete. Execute OPEN tasks.'" },
         },
         required: ["target", "message"],
@@ -148,7 +148,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     // state.
     {
       name: "add_topic_seed",
-      description: "Register a new TopicSeed (E-88). Returns an auto-assigned TS-N id. Use this once at the start of a generateTopicCluster(term) expansion in src/gemini/agents/seo_manager.md; the SEO-Content-Generator then attaches one Pillar + up to MAX_CLUSTER_PAGES_PER_SEED Cluster pages to it.",
+      description: "Register a new TopicSeed (E-88). Returns an auto-assigned TS-N id. Use this once at the start of a generateTopicCluster(term) expansion in src/claude/agents/seo_manager.md; the SEO-Content-Generator then attaches one Pillar + up to MAX_CLUSTER_PAGES_PER_SEED Cluster pages to it.",
       inputSchema: {
         type: "object",
         properties: {

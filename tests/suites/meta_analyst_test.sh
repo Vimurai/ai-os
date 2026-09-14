@@ -4,7 +4,7 @@
 # Verifies the contract demanded by .ai/blueprints/meta-cognition.md §Components
 # 2 + 3:
 #
-#   • src/gemini/agents/meta_analyst.md — restricted toolset, read-only over
+#   • src/claude/agents/meta_analyst.md — restricted toolset, read-only over
 #     telemetry, write-only over INSIGHTS.md, SQL-aggregates-only contract.
 #   • Anti-drift: no source-code edits, no add_task, no proxy_call.
 #   • Cross-reference with E-84 telemetry helper (locator chain).
@@ -12,31 +12,19 @@
 #     delegates to meta_analyst, never queries the DB directly.
 #   • Frontmatter parses cleanly (description quoted — colon-parse guard
 #     mirrors E-49 / E-65 / E-77 / E-78).
-#   • Mirrors byte-identical to .gemini/ + .claude/ + ~/.ai-os/.
+#   • Mirrors byte-identical to .claude/ + ~/.ai-os/.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
 
 
-# E-212: .gemini/agents is NOT byte-identical to src/gemini/agents any more. The
-# personas now carry the Claude agent contract (so a Claude-bound Architect can load
-# them), and strip_gemini_agent_fields deliberately removes the three Claude-only keys
-# for the Gemini CLI. Compare ignoring exactly those keys — real content drift still fails.
-_diff_ignoring_claude_keys() {  # <src> <mirror>
-  diff -q \
-    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$1") \
-    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$2") \
-    >/dev/null 2>&1
-}
-
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-AGENT_SRC="${REPO_ROOT}/src/gemini/agents/meta_analyst.md"
-AGENT_GEM="${REPO_ROOT}/.gemini/agents/meta_analyst.md"
-AGENT_MIRROR="${HOME}/.ai-os/gemini/agents/meta_analyst.md"
+AGENT_SRC="${REPO_ROOT}/src/claude/agents/meta_analyst.md"
+AGENT_CLAUDE="${REPO_ROOT}/.claude/agents/meta_analyst.md"
+AGENT_MIRROR="${HOME}/.ai-os/claude/agents/meta_analyst.md"
 SKILL_SRC="${REPO_ROOT}/src/shared/skills/ai-insights/SKILL.md"
 SKILL_CLAUDE="${REPO_ROOT}/.claude/skills/ai-insights/SKILL.md"
-SKILL_GEMINI="${REPO_ROOT}/.agents/skills/ai-insights/SKILL.md"
 SKILL_MIRROR="${HOME}/.ai-os/shared/skills/ai-insights/SKILL.md"
 BLUEPRINT="${REPO_ROOT}/.ai/blueprints/meta-cognition.md"
 TELEMETRY="${REPO_ROOT}/src/shared/telemetry.mjs"
@@ -56,6 +44,8 @@ assert_status 0 "description names blueprint"        \
   grep -q 'meta-cognition\.md' "$AGENT_SRC"
 assert_status 0 "description names E-85"             \
   grep -q 'E-85' "$AGENT_SRC"
+assert_status 0 "instinct proposals staged as Claude skills under .claude/skills/proposed (E-254)" \
+  grep -q 'PROPOSED Claude skills (staged under .claude/skills/proposed)' "$AGENT_SRC"
 
 # YAML closes on second --- (between line 2 and 12).
 assert_status 0 "frontmatter terminates within first 10 lines" \
@@ -204,17 +194,9 @@ assert_contains "telemetry --stats emits status key" "\"status\":" "$STATS"
 echo ""
 echo "  [T-META-S10] mirrors byte-identical"
 
-# E-244 (D-066 §4): .gemini/ exists only for a project with a role bound to gemini.
-assert_file_if_present "meta_analyst → .gemini mirror (modulo stripped Claude keys, E-212)" \
-  "$AGENT_GEM" _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
-# The ~/.ai-os GEMINI workspace is a TRANSFORMED copy, not a mirror. `ai install`
-# runs strip_gemini_agent_fields over it because disable-model-invocation,
-# user-invocable and allowed-tools are unsupported by Gemini CLI v0.37+. Asserting
-# byte-identity here passed only on a developer machine whose ~/.ai-os predated the
-# strip; on a fresh install (CI) it failed, and it had been failing on master since
-# 2026-09-07. The correct invariant is "identical apart from the stripped keys",
-# plus a check that the strip actually ran — otherwise this assertion would pass on
-# an untransformed copy too.
+assert_status 0 "meta_analyst → .claude mirror"    diff -q "$AGENT_SRC" "$AGENT_CLAUDE"
+# E-248 (D-067 §2): the installed copy is canonical — byte identity, and the three
+# Claude agent-contract keys PRESENT.
 # E-236 (D-061 §4): the INSTALL is genuinely optional — a clone with no `ai install` has
 # no ~/.ai-os to compare against. Asserting unconditionally made the verdict depend on
 # whether this machine happened to be installed, which is the pattern this sprint kept
@@ -226,10 +208,9 @@ if [[ -f "$AGENT_MIRROR" ]]; then
     grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_MIRROR"
 else
   _skip "meta_analyst → ~/.ai-os copy comparison (framework not installed)"
-  _skip "meta_analyst → ~/.ai-os strip check (framework not installed)"
+  _skip "meta_analyst → ~/.ai-os Claude-key check (framework not installed)"
 fi
 assert_status 0 "ai-insights  → .claude mirror"     diff -q "$SKILL_SRC" "$SKILL_CLAUDE"
-assert_mirror_if_present "ai-insights  → .agents mirror" "$SKILL_SRC" "$SKILL_GEMINI"
 # E-236: same reasoning as the agent mirror above — an uninstalled clone has nothing to
 # compare, and asserting anyway makes the verdict a property of the machine.
 if [[ -f "$SKILL_MIRROR" ]]; then

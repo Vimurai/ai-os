@@ -145,7 +145,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           owner: {
             type: "string",
-            description: "Optional owner substring filter (e.g. 'claude', 'agy', 'tester')",
+            description: "Optional owner substring filter (e.g. 'architect', 'engineer', 'tester')",
           },
         },
       },

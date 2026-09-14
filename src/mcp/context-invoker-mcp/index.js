@@ -43,32 +43,22 @@ const cwd = process.cwd();
 const projectSkillRoots = [];
 const projectAgentRoots = [];
 if (existsSync(join(cwd, ".ai"))) {
-  projectSkillRoots.push(
-    join(cwd, ".claude", "skills"),
-    join(cwd, ".agents", "skills") // E-132: Antigravity workspace skills (was .gemini/skills)
-  );
-  projectAgentRoots.push(
-    join(cwd, ".claude", "agents"),
-    join(cwd, ".gemini", "agents")
-  );
+  projectSkillRoots.push(join(cwd, ".claude", "skills"));
+  projectAgentRoots.push(join(cwd, ".claude", "agents"));
 }
 
 // Search roots — ordered by priority: project-scoped → global → source dev
 const SKILL_ROOTS = [
   ...projectSkillRoots,
   join(HOME, ".claude", "skills"),
-  join(HOME, ".gemini", "skills"),
-  join(HOME, ".agents", "skills"), // E-167: workspace skills migrated to .agents/skills (E-132)
   join(HOME, ".ai-os", "shared", "skills"),
   join(HOME, ".ai-os", "claude", "skills"),
-  join(HOME, ".ai-os", "agents", "skills"), // E-167: installed-framework mirror of agents/skills
 ];
 
 const AGENT_ROOTS = [
   ...projectAgentRoots,
   join(HOME, ".claude", "agents"),
   join(HOME, ".ai-os", "claude", "agents"),
-  join(HOME, ".ai-os", "gemini", "agents"),
 ];
 
 // Also scan source repo if CWD contains src/
@@ -76,13 +66,9 @@ const srcBase = resolve(cwd, "src");
 if (existsSync(srcBase)) {
   SKILL_ROOTS.push(
     join(srcBase, "shared", "skills"),
-    join(srcBase, "claude", "skills"),
-    join(srcBase, "agents", "skills") // E-132: migrated from src/gemini/skills
+    join(srcBase, "claude", "skills")
   );
-  AGENT_ROOTS.push(
-    join(srcBase, "claude", "agents"),
-    join(srcBase, "gemini", "agents")
-  );
+  AGENT_ROOTS.push(join(srcBase, "claude", "agents"));
 }
 
 const SAFE_NAME_RE = /^[a-z0-9_-]+$/i;
@@ -217,7 +203,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "activate_agent",
       description:
-        "Returns the FULL agent .md content for a named Claude/Gemini agent (Level 2 — full load). " +
+        "Returns the FULL agent .md content for a named agent (Level 2 — full load). " +
         "Call list_agents first to discover available agent names with metadata-only cost. " +
         "Only call this when you are ready to delegate to the agent — do NOT preload speculatively.",
       inputSchema: {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # handoff_enforcement_test.sh — E-119 (interactive-bridge.md §Automated Handoff
-# Enforcement): the ai-handoff and ai-task skills (Claude + Gemini) strictly
+# Enforcement): the ai-handoff, ai-task (Engineer) and arch-task (Architect) skills strictly
 # mandate calling handoff_control at session completion so the `ai watch` bridge
 # wakes the other agent's pane without a human keypress.
 set -uo pipefail
@@ -11,8 +11,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 HANDOFF="${REPO_ROOT}/src/shared/skills/ai-handoff/SKILL.md"
 TASK_CLAUDE="${REPO_ROOT}/src/shared/skills/ai-task/SKILL.md"
 # E-217 (D-055 R2): the Architect's task skill is arch-task — renamed so it cannot
-# collide with the Engineer's ai-task in a same-provider workspace.
-TASK_GEMINI="${REPO_ROOT}/src/agents/skills/arch-task/SKILL.md"
+# collide with the Engineer's ai-task in a same-provider workspace. E-254: it lives with
+# the other Claude skills now that the separate Architect provider tree is gone.
+TASK_ARCH="${REPO_ROOT}/src/claude/skills/arch-task/SKILL.md"
 
 echo "===== handoff_enforcement_test.sh (E-119) ====="
 
@@ -38,24 +39,24 @@ assert_status 0 "E-119.S02: claude ai-task cites E-119" \
 assert_status 0 "E-119.S02: handoff_control in claude ai-task allowed-tools" \
   grep -qE '^allowed-tools:.*handoff_control' "$TASK_CLAUDE"
 # E-158 (cli-agnostic-handoff): the hand-back now targets the semantic role 'architect'
-# (provider-agnostic — the Architect runtime is agy, not literally gemini) via the
+# (provider-agnostic — the pane is resolved from .ai/roles.json, not a vendor name) via the
 # shell `ai handoff architect` primitive, with handoff_control({target:"architect"}) as
 # the equivalent fallback. Either form satisfies the "engineer wakes the architect" invariant.
 assert_status 0 "E-119.S02: claude ai-task targets the architect on hand-back" \
   grep -qE 'ai handoff architect|target:[[:space:]]*"architect"' "$TASK_CLAUDE"
 
-# ── S03: ai-task (Gemini) mandates handoff to Claude at session completion ────
-assert_status 0 "E-119.S03: gemini ai-task hand-off step is MANDATORY" \
-  grep -qE 'Trigger Handoff to Claude \(MANDATORY' "$TASK_GEMINI"
-assert_status 0 "E-119.S03: gemini ai-task triggers ai-handoff (emits signal)" \
-  grep -qF 'ai-handoff' "$TASK_GEMINI"
-assert_status 0 "E-119.S03: gemini ai-task notes the bridge signal" \
-  grep -qF 'handoff_control' "$TASK_GEMINI"
-assert_status 0 "E-119.S03: gemini ai-task cites E-119" \
-  grep -qF 'E-119' "$TASK_GEMINI"
+# ── S03: arch-task (Architect) mandates handoff to the Engineer at session completion ─
+assert_status 0 "E-119.S03: arch-task hand-off step is MANDATORY" \
+  grep -qE 'Trigger Handoff to the Engineer \(MANDATORY' "$TASK_ARCH"
+assert_status 0 "E-119.S03: arch-task triggers ai-handoff (emits signal)" \
+  grep -qF 'ai-handoff' "$TASK_ARCH"
+assert_status 0 "E-119.S03: arch-task notes the bridge signal" \
+  grep -qF 'handoff_control' "$TASK_ARCH"
+assert_status 0 "E-119.S03: arch-task cites E-119" \
+  grep -qF 'E-119' "$TASK_ARCH"
 
 # ── S04: frontmatter integrity (name present, single opening fence) ──────────
-for f in "$HANDOFF" "$TASK_CLAUDE" "$TASK_GEMINI"; do
+for f in "$HANDOFF" "$TASK_CLAUDE" "$TASK_ARCH"; do
   assert_status 0 "E-119.S04: $(basename "$(dirname "$(dirname "$f")")")/$(basename "$(dirname "$f")") has name:" \
     bash -c "head -10 '$f' | grep -qE '^name:'"
 done
@@ -69,16 +70,10 @@ chk_mirror() { # chk_mirror <canonical> <mirror>
   fi
 }
 chk_mirror "$HANDOFF" "${REPO_ROOT}/.claude/skills/ai-handoff/SKILL.md"
-# E-244: an unprovisioned workspace is a SKIP, not a missing mirror. `ai sync` writes
-# .agents/ only when a role is bound to agy (D-066 §4); a _fail here would report the
-# all-Claude default as a deployment gap.
-assert_mirror_if_present "E-119.S05: mirror identical → .agents/skills/ai-handoff" \
-  "$HANDOFF" "${REPO_ROOT}/.agents/skills/ai-handoff/SKILL.md"
 chk_mirror "$HANDOFF" "${HOME}/.ai-os/shared/skills/ai-handoff/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${REPO_ROOT}/.claude/skills/ai-task/SKILL.md"
 chk_mirror "$TASK_CLAUDE" "${HOME}/.ai-os/shared/skills/ai-task/SKILL.md"
-assert_mirror_if_present "E-119.S05: mirror identical → .agents/skills/arch-task" \
-  "$TASK_GEMINI" "${REPO_ROOT}/.agents/skills/arch-task/SKILL.md"
-chk_mirror "$TASK_GEMINI" "${HOME}/.ai-os/agents/skills/arch-task/SKILL.md"
+chk_mirror "$TASK_ARCH" "${REPO_ROOT}/.claude/skills/arch-task/SKILL.md"
+chk_mirror "$TASK_ARCH" "${HOME}/.ai-os/claude/skills/arch-task/SKILL.md"
 
 assert_summary

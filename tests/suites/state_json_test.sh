@@ -234,7 +234,7 @@ const state = {
   tasks: [
     { id: 'E-1', owner: 'Engineer (Claude)', status: 'DONE', tier: 2, description: 'Build feature', completed_at: '2026-03-15T10:00:00Z', summary: 'Complete' },
     { id: 'E-2', owner: 'Engineer (Claude)', status: 'OPEN', tier: 1, description: 'Fix bug' },
-    { id: 'P-1', owner: 'Architect (Gemini)', status: 'DONE', tier: 2, description: 'Design API', completed_at: '2026-03-14T10:00:00Z', summary: 'Blueprint done' }
+    { id: 'P-1', owner: 'Architect (Claude)', status: 'DONE', tier: 2, description: 'Design API', completed_at: '2026-03-14T10:00:00Z', summary: 'Blueprint done' }
   ],
   stamps: [
     { type: 'ARCH_PASS', agent: 'critic_arch', timestamp: '2026-03-15T10:00:00Z', summary: 'All clear' }

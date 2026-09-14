@@ -14,7 +14,7 @@ source "${SCRIPT_DIR}/../lib/assert.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 PROMOTER="${REPO_ROOT}/src/shared/skill-promoter.mjs"
 STAGER="${REPO_ROOT}/src/shared/instinct-stager.mjs"
-META="${REPO_ROOT}/src/gemini/agents/meta_analyst.md"
+META="${REPO_ROOT}/src/claude/agents/meta_analyst.md"
 
 echo "── Suite: skill_promoter_test (E-94) ───────────────────────────────"
 

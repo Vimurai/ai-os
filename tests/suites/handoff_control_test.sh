@@ -64,10 +64,10 @@ assert_status 0 "E-118.01: signal.json top-level is an array" \
 assert_contains "E-118.01: queue length is 1 after first append" "1" "$(qlen "$SIGNAL")"
 
 # ── E-118.02: a second signal APPENDS (does not overwrite) + preserves order ─
-call handoff_control '{"target":"gemini","message":"Engineer done. Review the diff."}' >/dev/null
+call handoff_control '{"target":"architect","message":"Engineer done. Review the diff."}' >/dev/null
 assert_contains "E-118.02: queue grew to 2"            "2" "$(qlen "$SIGNAL")"
 assert_contains "E-118.02: entry[0] preserved (claude)" "claude" "$(qfield "$SIGNAL" 0 target)"
-assert_contains "E-118.02: entry[1] appended (gemini)"  "gemini" "$(qfield "$SIGNAL" 1 target)"
+assert_contains "E-118.02: entry[1] appended (architect)" "architect" "$(qfield "$SIGNAL" 1 target)"
 assert_contains "E-118.02: entry[1] message"            "Review the diff" "$(qfield "$SIGNAL" 1 message)"
 assert_contains "E-118.02: confirmation reports queue position" "queued #3" \
   "$(call handoff_control '{"target":"claude","message":"third"}')"
@@ -91,7 +91,7 @@ assert_contains "E-114.06: metachars stored verbatim as JSON data" 'rm -rf /tmp/
   "$(qfield "$SIGNAL" -1 message)"
 
 # ── E-118.03: a legacy flat-object signal is migrated into the queue ─────────
-printf '{"timestamp":"2026-06-02T12:00:00Z","target":"gemini","message":"legacy single"}\n' > "$SIGNAL"
+printf '{"timestamp":"2026-06-02T12:00:00Z","target":"architect","message":"legacy single"}\n' > "$SIGNAL"
 call handoff_control '{"target":"claude","message":"after legacy"}' >/dev/null
 assert_contains "E-118.03: legacy object migrated → array len 2" "2" "$(qlen "$SIGNAL")"
 assert_contains "E-118.03: legacy entry preserved at [0]" "legacy single" "$(qfield "$SIGNAL" 0 message)"
@@ -128,7 +128,7 @@ p = sys.argv[1]; d = json.load(open(p))
 for e in d: e["delivered"] = True
 json.dump(d, open(p, "w"), indent=2)
 PY
-call handoff_control '{"target":"gemini","message":"freshest"}' >/dev/null
+call handoff_control '{"target":"engineer","message":"freshest"}' >/dev/null
 cap2="$(qlen "$SIGNAL")"
 assert_status 0 "E-118.05: delivered entries evicted back to cap (got ${cap2})" bash -c "[ '${cap2}' -le 50 ]"
 assert_contains "E-118.05: newest (undelivered) entry survives eviction" "freshest" "$(qfield "$SIGNAL" -1 message)"
@@ -147,8 +147,6 @@ assert_contains "E-136.01b: signal persists target=architect verbatim" "architec
 # ── E-136.02: legacy provider names still work (backwards compatibility) ─────
 assert_contains "E-136.02: legacy 'claude' target still accepted" "[HANDOFF] → claude" \
   "$(call handoff_control '{"target":"claude","message":"legacy provider name"}')"
-assert_contains "E-136.02b: legacy 'gemini' target still accepted" "[HANDOFF] → gemini" \
-  "$(call handoff_control '{"target":"gemini","message":"legacy provider name"}')"
 
 # ── E-136.03: genuinely invalid targets are still rejected ───────────────────
 assert_contains "E-136.03: unknown role/provider rejected" "[INVALID_TARGET]" \

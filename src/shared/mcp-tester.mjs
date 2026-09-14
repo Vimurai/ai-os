@@ -38,7 +38,7 @@ const DEFAULT_CONCURRENCY = 8;
 /**
  * Read an MCP config file and return [{ name, command, args, env }].
  * Supports the standard `{ "mcpServers": { name: { command, args, env } } }`
- * shape used by .mcp.json and .agents/mcp_config.json.
+ * shape used by .mcp.json.
  */
 export function loadServerConfigs(configPath, mcpKey = "mcpServers") {
   if (!existsSync(configPath)) {

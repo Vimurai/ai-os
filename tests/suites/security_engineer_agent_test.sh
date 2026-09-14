@@ -24,7 +24,7 @@ AGENT_FILES=(
 )
 
 echo ""
-echo "  [T-SECENG-S01] Agent files exist (Claude-only — no Gemini mirror)"
+echo "  [T-SECENG-S01] Agent files exist (canonical + .claude workspace copy)"
 for f in "${AGENT_FILES[@]}"; do
   assert_status 0 "exists: ${f#${REPO_ROOT}/}" test -f "$f"
 done

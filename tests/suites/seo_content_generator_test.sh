@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # seo_content_generator_test.sh — Tests for the SEO-Content-Generator agent.
 #
-# Verifies src/gemini/agents/seo_content_generator.md against the contract
+# Verifies src/claude/agents/seo_content_generator.md against the contract
 # in .ai/blueprints/seo-keyword-multiplier.md §Components 2 + §API:
 #
 #   - generateClusterContent(seed_id, intent_type) → content_blob
@@ -11,29 +11,17 @@
 #   - Intent taxonomy is single-sourced from seo-cluster-intents.mjs /
 #     the seo_manager cluster-intent table
 #   - Frontmatter description double-quoted (colon-parse guard)
-#   - Mirrored byte-identical to .gemini/ + ~/.ai-os/gemini/
+#   - Mirrored byte-identical to .claude/ + ~/.ai-os/claude/
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
 
-
-# E-212: .gemini/agents is no longer byte-identical to src/gemini/agents — the persona
-# carries the Claude agent contract so a Claude-bound Architect can load it, and
-# strip_gemini_agent_fields deliberately removes the three Claude-only keys for the
-# Gemini CLI's own workspace. Compare ignoring exactly those keys; real drift fails.
-_diff_ignoring_claude_keys() {  # <src> <mirror>
-  diff -q \
-    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$1") \
-    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$2") \
-    >/dev/null 2>&1
-}
-
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-AGENT_SRC="${REPO_ROOT}/src/gemini/agents/seo_content_generator.md"
-AGENT_GEM="${REPO_ROOT}/.gemini/agents/seo_content_generator.md"
-AGENT_MIRROR="${HOME}/.ai-os/gemini/agents/seo_content_generator.md"
-MANAGER_SRC="${REPO_ROOT}/src/gemini/agents/seo_manager.md"
+AGENT_SRC="${REPO_ROOT}/src/claude/agents/seo_content_generator.md"
+AGENT_CLAUDE="${REPO_ROOT}/.claude/agents/seo_content_generator.md"
+AGENT_MIRROR="${HOME}/.ai-os/claude/agents/seo_content_generator.md"
+MANAGER_SRC="${REPO_ROOT}/src/claude/agents/seo_manager.md"
 BLUEPRINT="${REPO_ROOT}/.ai/blueprints/seo-keyword-multiplier.md"
 
 echo "===== seo_content_generator_test.sh ====="
@@ -43,8 +31,7 @@ echo ""
 echo "  [T-SCG-S01] Agent file exists with parseable frontmatter"
 
 assert_status 0 "src/ agent file exists"             test -f "$AGENT_SRC"
-# E-244 (D-066 §4): .gemini/ exists only for a project with a role bound to gemini.
-assert_file_if_present ".gemini/ mirror exists" "$AGENT_GEM" test -f "$AGENT_GEM"
+assert_status 0 ".claude/ mirror exists"             test -f "$AGENT_CLAUDE"
 assert_status 0 "frontmatter opens on line 1"        bash -c "head -1 '$AGENT_SRC' | grep -q '^---$'"
 assert_status 0 "name: seo_content_generator"        grep -q '^name: seo_content_generator$' "$AGENT_SRC"
 assert_status 0 "description present"                grep -q '^description: ' "$AGENT_SRC"
@@ -181,27 +168,13 @@ assert_status 0 "Rollback references git restore for staged content" \
 
 # ── T-SCG-S10: Mirror byte-identity ─────────────────────────────────────────
 echo ""
-echo "  [T-SCG-S10] .gemini/ + ~/.ai-os/gemini/ mirrors match src/"
+echo "  [T-SCG-S10] .claude/ + ~/.ai-os/claude/ mirrors match src/"
 
-assert_file_if_present ".gemini/ mirror matches src/ (modulo stripped Claude keys, E-212)" \
-  "$AGENT_GEM" _diff_ignoring_claude_keys "$AGENT_SRC" "$AGENT_GEM"
-if [[ -f "$AGENT_GEM" ]]; then
-  assert_status 1 ".gemini/ copy carries no Claude-only keys (strip actually ran)" \
-    grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' "$AGENT_GEM"
-else
-  _skip ".gemini/ copy carries no Claude-only keys (workspace not provisioned)"
-fi
+assert_status 0 ".claude/ mirror byte-identical to src/" \
+  diff -q "$AGENT_SRC" "$AGENT_CLAUDE"
 if [[ -f "$AGENT_MIRROR" ]]; then
-  # E-248 (D-067 §2) INVERTED this pair. The mirror used to be a TRANSFORMED copy —
-  # `ai install` ran strip_gemini_agent_fields over ~/.ai-os/gemini/agents — so the
-  # invariant was "identical apart from the stripped keys, and the strip ran". E-212 then
-  # made provisioning role-aware: `gemini/agents` is the ARCHITECT's agent directory
-  # whatever provider holds the role, so under the D-066 all-Claude default these agents
-  # are copied into `.claude/agents/` FROM THIS MIRROR — arriving without the three keys
-  # that tell Claude Code what they may do. The mirror is now CANONICAL and the strip
-  # happens only on the copy written into `.gemini/` (asserted just above). So: byte
-  # identity, and the keys PRESENT. The strip's own non-vacuity lives in the .gemini/
-  # assertion above and in gemini_strip_boundary_test.sh.
+  # E-248 (D-067 §2): the installed copy is canonical — byte identity, and the three
+  # Claude agent-contract keys PRESENT (they tell Claude Code what the agent may do).
   assert_status 0 "~/.ai-os copy is byte-identical to src/ (the mirror is canonical)" \
     diff -q "$AGENT_SRC" "$AGENT_MIRROR"
   assert_status 0 "~/.ai-os copy KEEPS the Claude-only keys (E-248)" \

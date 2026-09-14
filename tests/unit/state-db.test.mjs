@@ -92,7 +92,7 @@ test("parseDeps: non-array JSON degrades to []", () => {
 
 test("roleFromOwner: strips the provider parenthetical", () => {
   assert.equal(roleFromOwner("Engineer (Claude)"), "Engineer");
-  assert.equal(roleFromOwner("Architect (Agy)"), "Architect");
+  assert.equal(roleFromOwner("Architect (Claude)"), "Architect");
   assert.equal(roleFromOwner("Tester (TestSprite)"), "Tester");
 });
 

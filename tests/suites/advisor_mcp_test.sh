@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # advisor_mcp_test.sh — Unit tests for advisor-mcp (E-9)
 # Tests A2A bridge logic: prompt construction, LOG.md writes, error handling,
-# graceful degradation when the Architect (agy) is unavailable, registry registration.
+# graceful degradation when the Architect is unavailable, registry registration.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,19 +37,17 @@ assert_status 1 "blueprint parameter optional (NOT in inputSchema.required)" \
 
 # ── T-A2A-03: Read-only constraint — no write flags in Architect invocation ──
 echo ""
-echo "  [T-A2A-03] Architect (agy) read-only constraint"
+echo "  [T-A2A-03] Architect read-only constraint"
 
-# D-050: bridge re-pointed from the retired Gemini CLI to `agy --print`.
 # E-210 (D-054): the executable is RESOLVED from .ai/roles.json, never a literal.
-assert_status 1 "no hardcoded agy literal in execFileSync (E-210)" \
-  grep -q 'execFileSync("agy"' "$SERVER"
+assert_status 1 "no hardcoded executable literal in execFileSync (E-210)" \
+  grep -qE 'execFileSync\("' "$SERVER"
+assert_status 0 "execFileSync spawns the resolved provider" \
+  grep -q 'execFileSync(provider, args' "$SERVER"
 assert_status 0 "architect provider resolved from roles.json" \
   grep -q 'roleProvider(AI_DIR, "architect")' "$SERVER"
 assert_status 0 "argv built from the providers.json print_mode template" \
   grep -q 'buildArgv(adapter.print_mode' "$SERVER"
-
-assert_status 1 "gemini CLI no longer spawned (execFileSync gemini)" \
-  grep -q 'execFileSync("gemini"' "$SERVER"
 
 # Match the quoted argv form so the docstring's prose mention of the flag
 # (explaining why we omit it) doesn't trip the guard — mirrors --write/--edit below.
@@ -137,7 +135,7 @@ assert_status 0 "empty query rejected" \
 assert_status 0 "non-string query rejected" \
   grep -q "typeof query !== \"string\"" "$SERVER"
 
-# ── T-A2A-08: Graceful degradation when the Architect (agy) is unavailable ──
+# ── T-A2A-08: Graceful degradation when the Architect is unavailable ────────
 echo ""
 echo "  [T-A2A-08] Graceful degradation"
 
@@ -204,7 +202,7 @@ JS
 
 # ── T-A2A-12 (E-210 / D-054): provider-aware argv + nested-session env strip ──
 # The bridge must build argv from .ai/providers.json rather than a vendor literal, so
-# an all-Claude Triad consults a CLAUDE Architect and an agy Triad still consults agy.
+# the bridge consults whichever provider roles.json binds to the architect role.
 echo "  [T-A2A-12] Provider-aware bridge (E-210)"
 
 _argv() {  # <provider> <key> [model] → JSON argv from the real shared module
@@ -220,10 +218,14 @@ assert_contains "T-A2A-12.01: claude print_mode appends ARCHITECT.md (else it bo
 assert_contains "T-A2A-12.02: claude print_mode is read-only print mode" '"-p"' "$(_argv claude print_mode)"
 assert_not_contains "T-A2A-12.03: claude print_mode carries NO permission bypass" \
   "dangerously" "$(_argv claude print_mode)"
-assert_contains "T-A2A-12.04: agy print_mode keeps its bounded --print-timeout" \
-  '"--print-timeout","90s"' "$(_argv agy print_mode)"
-assert_not_contains "T-A2A-12.05: agy print_mode does not take a rulefile flag" \
-  "append-system-prompt-file" "$(_argv agy print_mode)"
+# E-254: claude is the only built-in adapter; an unknown provider borrows no argv.
+assert_match "T-A2A-12.04: built-in adapters are claude only (E-254)" '^\["claude"\]$' \
+  "$(node --input-type=module -e "
+import { DEFAULT_ADAPTERS } from './src/shared/provider-adapter.mjs';
+console.log(JSON.stringify(Object.keys(DEFAULT_ADAPTERS)));
+" 2>/dev/null)"
+assert_match "T-A2A-12.05: unknown provider (acme) gets an empty print_mode argv, not claude's" \
+  '^\[\]$' "$(_argv acme print_mode)"
 
 # Launch argv (consumed by `ai pane`, E-208) — the {model} pair must vanish when unset.
 assert_contains "T-A2A-12.06: claude launch forwards a configured model" \
@@ -261,8 +263,7 @@ assert_status 0 "T-A2A-12.13c: PATH still allowlisted" \
 assert_status 0 "T-A2A-12.13d: HOME still allowlisted" \
   grep -qE 'HOME: process\.env\.HOME' "$SERVER"
 
-# Fallback to the D-066 default when roles.json is absent — the all-Claude Triad is the
-# DEFAULT topology; agy remains selectable and an EXPLICIT agy binding is asserted above.
+# Fallback to the D-066 default when roles.json is absent — the all-Claude Triad.
 assert_contains "T-A2A-12.14: unconfigured architect role falls back to claude (D-066)" "claude" \
   "$(node --input-type=module -e "
 import { roleProvider } from './src/shared/provider-adapter.mjs';

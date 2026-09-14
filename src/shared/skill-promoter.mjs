@@ -2,7 +2,7 @@
  * skill-promoter.mjs — E-94 (ecc-integrations.md §Components 2 & §Security)
  *
  * Promotes a PROPOSED instinct skill (staged inert by instinct-stager, E-93)
- * to an ACTIVE Gemini skill — but ONLY behind the Human-in-the-Loop
+ * to an ACTIVE skill — but ONLY behind the Human-in-the-Loop
  * approval-mcp gate. The caller obtains a decision from
  * `approval-mcp::request_approval` and passes it here; promotion proceeds only
  * when `decision.status === "APPROVED"`. Every other state (REJECTED, NON_TTY,
@@ -71,8 +71,8 @@ export function activateContent(content, meta = {}) {
  *
  * @param {string} slug
  * @param {object} opts
- * @param {string} opts.proposedDir         Staging dir (…/.agents/skills/proposed).
- * @param {string} opts.activeDir           Active skills dir (…/.agents/skills).
+ * @param {string} opts.proposedDir         Staging dir (…/.claude/skills/proposed).
+ * @param {string} opts.activeDir           Active skills dir (…/.claude/skills).
  * @param {object} opts.decision            approval-mcp result: { status, id, ... }.
  * @returns {{ promoted: boolean, slug: string, activePath?: string, reason?: string }}
  */

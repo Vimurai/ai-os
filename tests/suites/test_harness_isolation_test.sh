@@ -56,8 +56,8 @@ fi
 
 # ── E-251 (D-067 §5): corpus_or_fail — variety #5, "the scan that never ran" ──
 #
-# Three rule-scanning suites built their corpus with `find src .claude .agents .gemini`.
-# E-244 stopped provisioning two of those roots, `find` exited non-zero, and the corpus came
+# Three rule-scanning suites built their corpus with `find` over src/ plus every provider
+# workspace root. E-244 stopped provisioning two of those roots, `find` exited non-zero, and the corpus came
 # back EMPTY — so all three reported "no violations" about nothing, and would have gone on
 # doing so. The helper makes the CORPUS STEP fail rather than the assertion that reads it.
 #
@@ -119,5 +119,30 @@ for _s in skill_consent_test program_position_test operand_retokenise_test; do
   assert_status 1 "E-251.07: ${_s} no longer filters roots for existence" \
     grep -q 'filter((d) => existsSync' "${SCRIPT_DIR}/${_s}.sh"
 done
+
+# ── A private socket does not isolate the CONFIG ─────────────────────────────
+# The operator's ~/.tmux.conf (tmux-continuum auto-restore) put their saved sessions into
+# ai_start_test's server. assert.sh now shims `tmux` with `-f /dev/null`; prove it against a
+# fixture HOME whose config sets a marker option, and prove the fixture itself would load.
+if skip_unless_cmd tmux "tmux config isolation"; then
+  _cf_home="$(mktemp -d)"; register_cleanup "rm -rf '${_cf_home}'"
+  printf 'set -g @aios_conf_probe loaded\n' > "${_cf_home}/.tmux.conf"
+  _cf_real="${AIOS_TEST_REAL_TMUX:-}"
+  assert_status 0 "E-254.T1a: the tmux on PATH is the harness shim" \
+    bash -c "[[ '$(command -v tmux)' == '${AIOS_TEST_TMUX_SHIM:-/nonexistent}/tmux' && -x '${_cf_real}' ]]"
+
+  _cf_sock="$(test_tmux_socket conf)"
+  HOME="$_cf_home" tmux -L "$_cf_sock" new-session -d -s probe 2>/dev/null
+  assert_not_contains "E-254.T1b: a server started through the harness loads no config" \
+    "loaded" "$(tmux -L "$_cf_sock" show-options -gqv @aios_conf_probe 2>/dev/null)"
+  tmux -L "$_cf_sock" kill-server 2>/dev/null || true
+
+  # Non-vacuity: the same fixture, started with the real binary, DOES load the marker.
+  _cf_sock2="$(test_tmux_socket conf2)"
+  HOME="$_cf_home" XDG_CONFIG_HOME="${_cf_home}/.config" "$_cf_real" -L "$_cf_sock2" new-session -d -s probe 2>/dev/null
+  assert_contains "E-254.T1c: without the shim the fixture config is loaded (guards T1b)" \
+    "loaded" "$("$_cf_real" -L "$_cf_sock2" show-options -gqv @aios_conf_probe 2>/dev/null)"
+  "$_cf_real" -L "$_cf_sock2" kill-server 2>/dev/null || true
+fi
 
 assert_summary

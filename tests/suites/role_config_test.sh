@@ -20,12 +20,12 @@ assert_status 0 "T-1: roles.json template is valid JSON" \
   node -e "JSON.parse(require('fs').readFileSync('${TEMPLATE}','utf8'))"
 tmpl=$(node -e "const r=require('${TEMPLATE}').roles; process.stdout.write([r.architect.provider,r.architect.pane_identifier,r.engineer.provider,r.engineer.pane_identifier].join(','))")
 # D-066 supersedes the D-050 default: the all-Claude Triad is the DEFAULT topology
-# (architect claude:1 · fable, engineer claude:0 · opus). agy and gemini remain selectable.
+# (architect claude:1 · fable, engineer claude:0 · opus). Roles stay provider-abstract (D-069).
 assert_contains "T-1b: template defaults architect=claude:1 engineer=claude:0 (D-066)" "claude,1,claude,0" "$tmpl"
 
 # T-2: _parse_role_flags accepts valid <provider:pane> flags
-assert_status 0 "T-2: parses --architect claude:1 --engineer gemini:0" \
-  bash -c "source '$AI_BIN'; _parse_role_flags --architect claude:1 --engineer gemini:0; [[ \"\$ROLE_ARCHITECT\" == claude:1 && \"\$ROLE_ENGINEER\" == gemini:0 ]]"
+assert_status 0 "T-2: parses --architect claude:1 --engineer acme:0 (any provider name)" \
+  bash -c "source '$AI_BIN'; _parse_role_flags --architect claude:1 --engineer acme:0; [[ \"\$ROLE_ARCHITECT\" == claude:1 && \"\$ROLE_ENGINEER\" == acme:0 ]]"
 
 # T-3: malformed role values abort with exit 2 (fail-closed)
 assert_status 2 "T-3a: rejects missing pane (no colon)" \
@@ -41,7 +41,7 @@ assert_status 0 "T-4: override roles.json is valid JSON" \
 over=$(node -e "const r=require('${tmp_over}/.ai/roles.json').roles; process.stdout.write([r.architect.provider,r.architect.pane_identifier,r.engineer.provider,r.engineer.pane_identifier].join(','))")
 assert_contains "T-4b: dual-claude override architect=claude:1 engineer=claude:0" "claude,1,claude,0" "$over"
 
-# T-5: _write_roles_json falls back to the default mapping when no flags set (D-050/E-183: agy)
+# T-5: _write_roles_json falls back to the default mapping when no flags set (D-066/D-069)
 tmp_def="$(mktemp -d)"
 ( cd "$tmp_def" && mkdir -p .ai && bash -c "source '$AI_BIN'; _write_roles_json" >/dev/null )
 def=$(node -e "const r=require('${tmp_def}/.ai/roles.json').roles; process.stdout.write([r.architect.provider,r.architect.pane_identifier,r.engineer.provider,r.engineer.pane_identifier].join(','))")

@@ -62,7 +62,7 @@ assert_status 0 "E-220.04a: an edited synced skill survives" test -d "$D3/gone"
 assert_contains "E-220.04b: the edit is the stated reason" "modified since sync wrote it" "$_o"
 
 # ── E-220.5: --prune-known removes ONLY a byte-identical leftover ────────────
-# The E-217 shape specifically: `.agents/skills/ai-task` holding an exact copy of a
+# The E-217 shape specifically: a workspace's `skills/ai-task` holding an exact copy of a
 # skill that now lives under another name. Identity is the evidence — a byte-for-byte
 # match with a CURRENT canonical skill carries nothing a user could lose.
 T4="$(mktemp -d)"; S4="$T4/src"; D4="$T4/dst"; mkdir -p "$S4" "$D4"
@@ -139,20 +139,16 @@ assert_status 0 "E-220.09c: the workspace was still provisioned" test -d "$T8/.c
 # `git rev-parse --show-toplevel` (the USER's repo, not the AI-OS install) and never ran
 # at all. These assertions pin the observable effect, not the exit code.
 TA="$(mktemp -d)"; mkdir -p "$TA/.ai"
-# E-244: bind the Architect to agy EXPLICITLY rather than copying this repo's roles.json.
-# Under the D-066 all-Claude default no role is bound to agy, so .agents/ is never
-# provisioned — and 11b, which exists to prove the manifest covers MORE than .claude,
-# would fail for the one reason it is not testing. A fixture that asserts "every
-# provisioned workspace" must be the one that decides which are provisioned.
+# The fixture decides its own binding rather than copying this repo's roles.json.
+# (E-254: v4 provisions .claude/ only, so the former "every provisioned workspace is
+# covered" case 11b has no second workspace to cover and was removed.)
 cat > "$TA/.ai/roles.json" <<'JSON'
-{ "roles": { "architect": {"provider":"agy","pane_identifier":"1"},
+{ "roles": { "architect": {"provider":"claude","pane_identifier":"1","model":"fable"},
              "engineer":  {"provider":"claude","pane_identifier":"0","model":"opus"} } }
 JSON
 (cd "$TA" && bash "$AI_BIN" sync >/dev/null 2>&1)
 assert_status 0 "E-220.11a: the first real sync records a manifest" \
   test -f "$TA/.claude/skills/_SYNC_MANIFEST.json"
-assert_status 0 "E-220.11b: every provisioned workspace is covered, not just .claude" \
-  test -f "$TA/.agents/skills/_SYNC_MANIFEST.json"
 # A renamed-away skill: a copy sync itself recorded, now absent upstream.
 _seed="$(find "$TA/.claude/skills" -maxdepth 1 -mindepth 1 -type d | head -1)"
 cp -R "$_seed" "$TA/.claude/skills/zz-renamed-away"
@@ -195,6 +191,139 @@ assert_status 0 "E-220.10a: AI_OS_NO_PRUNE=1 is honoured by the shell caller" \
   bash -c "grep -q 'AI_OS_NO_PRUNE' '$AI_BIN'"
 assert_status 0 "E-220.10b: pruning is wired into the provisioner, not one workspace" \
   bash -c "grep -q '_prune_workspace_dir \"\${ws}/skills\"' '$AI_BIN'"
+
+# ── E-254 (D-069 §Components 2): legacy v3 workspaces are pruned on evidence ──
+# A v3 project still carries the two retired provider workspaces and their shims. `ai
+# sync` removes what the sync manifest proves it wrote and nobody changed, and prints
+# every other leftover with the exact `rm` — the E-220 rule, applied to a directory that
+# has no source set at all.
+#
+# SANCTIONED GREP EXCEPTION (E-254): the four legacy path literals below are the ones
+# _prune_legacy_workspaces necessarily names. They are confined to this block and to the
+# _lg_* fixture helpers; nothing else in tests/ may name them.
+_LG_DIR_A=".gemini"; _LG_DIR_B=".agents"; _LG_SHIM_A="GEMINI.md"; _LG_SHIM_B="AGENTS.md"
+
+# _lg_fixture → a non-git all-Claude project holding both legacy workspaces:
+#   DIR_A: agents/synced.md + skills/synced-skill   — both recorded, unmodified
+#   DIR_B: skills/synced (recorded, unmodified), skills/edited (recorded, then EDITED),
+#          skills/mine (NEVER recorded — user-authored)
+_lg_fixture() {
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/.ai"
+  cat > "$d/.ai/roles.json" <<'JSON'
+{ "roles": { "architect": {"provider":"claude","pane_identifier":"1"},
+             "engineer":  {"provider":"claude","pane_identifier":"0"} } }
+JSON
+  mkdir -p "$d/${_LG_DIR_A}/agents" "$d/${_LG_DIR_A}/skills"
+  printf -- "---\nname: synced\n---\nagent\n" > "$d/${_LG_DIR_A}/agents/synced.md"
+  _mkskill "$d/${_LG_DIR_A}/skills" synced-skill
+  node --no-warnings "$SM" record "$d/${_LG_DIR_A}/agents" >/dev/null 2>&1
+  node --no-warnings "$SM" record "$d/${_LG_DIR_A}/skills" >/dev/null 2>&1
+  mkdir -p "$d/${_LG_DIR_B}/skills"
+  _mkskill "$d/${_LG_DIR_B}/skills" synced
+  _mkskill "$d/${_LG_DIR_B}/skills" edited "as-synced"
+  node --no-warnings "$SM" record "$d/${_LG_DIR_B}/skills" >/dev/null 2>&1
+  printf -- "---\nname: edited\n---\nEDITED BY THE USER\n" > "$d/${_LG_DIR_B}/skills/edited/SKILL.md"
+  _mkskill "$d/${_LG_DIR_B}/skills" mine "handwritten"
+  printf '%s' "$d"
+}
+_lg_sync() { ( cd "$1" && shift && env AI_OS_DISABLE_REPO_MAP=1 "$@" bash "$AI_BIN" sync 2>&1 ); }
+
+# (a) + (b) in ONE fixture: every deletion is paired with a survival beside it.
+LG1="$(_lg_fixture)"
+_o="$(_lg_sync "$LG1")"
+# (a) manifest-owned + unmodified → pruned, and the whole directory goes with it.
+assert_status 1 "E-254.01a: a recorded, unmodified legacy agent is pruned" \
+  test -f "$LG1/${_LG_DIR_A}/agents/synced.md"
+assert_status 1 "E-254.01b: a fully-prunable legacy workspace directory is removed" \
+  test -d "$LG1/${_LG_DIR_A}"
+assert_contains "E-254.01c: the removal is announced" \
+  "pruned legacy workspace: ${_LG_DIR_A}" "$_o"
+assert_status 1 "E-254.01d: the recorded, unmodified skill beside the user's is pruned too" \
+  test -d "$LG1/${_LG_DIR_B}/skills/synced"
+# (b) not in the manifest, or modified since sync wrote it → kept and reported.
+assert_status 0 "E-254.02a: a legacy skill sync never recorded is KEPT" \
+  test -f "$LG1/${_LG_DIR_B}/skills/mine/SKILL.md"
+assert_status 0 "E-254.02b: a recorded skill EDITED since sync wrote it is KEPT" \
+  grep -q 'EDITED BY THE USER' "$LG1/${_LG_DIR_B}/skills/edited/SKILL.md"
+assert_contains "E-254.02c: the surviving directory is reported with its rm command" \
+  "legacy leftover (not generated by sync): ${_LG_DIR_B} — remove with: rm -r ${_LG_DIR_B}" "$_o"
+assert_contains "E-254.02d: and the files that kept it are listed" \
+  "${_LG_DIR_B}/skills/mine/SKILL.md" "$_o"
+assert_not_contains "E-254.02e: a kept directory is never announced as pruned" \
+  "pruned legacy workspace: ${_LG_DIR_B}" "$_o"
+
+# A settings file the v3 sync MERGED into (it preserved every key already present) can
+# hold keys the user wrote. There is no manifest entry or hash for it, so by the rule
+# above it is not provably disposable and must survive.
+LG2="$(mktemp -d)"; mkdir -p "$LG2/.ai" "$LG2/${_LG_DIR_A}"
+cp "$LG1/.ai/roles.json" "$LG2/.ai/roles.json"
+printf '{ "mcpServers": {}, "env": {"AI_OS_CALLER_ROLE": "architect"}, "theme": "user-chosen" }\n' \
+  > "$LG2/${_LG_DIR_A}/settings.json"
+_o="$(_lg_sync "$LG2")"
+assert_status 0 "E-254.02f: a legacy settings.json with no manifest evidence is not deleted" \
+  test -f "$LG2/${_LG_DIR_A}/settings.json"
+
+# (c) the rollback flag prints every leftover and deletes NOTHING — not even the entries
+# (a) proved prunable. Compared as a full file listing, so any deletion fails it.
+LG3="$(_lg_fixture)"
+printf 'shim\n' > "$LG3/${_LG_SHIM_A}"; printf 'shim\n' > "$LG3/${_LG_SHIM_B}"
+_lg_list() { ( cd "$1" && find "${_LG_DIR_A}" "${_LG_DIR_B}" "${_LG_SHIM_A}" "${_LG_SHIM_B}" 2>/dev/null | sort ); }
+_before="$(_lg_list "$LG3")"
+_o="$(_lg_sync "$LG3" AI_OS_KEEP_LEGACY_WORKSPACES=1)"
+assert_status 0 "E-254.03a: AI_OS_KEEP_LEGACY_WORKSPACES=1 deletes nothing" \
+  test "$_before" = "$(_lg_list "$LG3")"
+assert_status 0 "E-254.03b: including the entry that is otherwise prunable (non-vacuity)" \
+  test -f "$LG3/${_LG_DIR_A}/agents/synced.md"
+assert_contains "E-254.03c: it says nothing was removed" "AI_OS_KEEP_LEGACY_WORKSPACES=1 — nothing removed" "$_o"
+assert_contains "E-254.03d: and prints the first legacy directory" \
+  "legacy leftover (not generated by sync): ${_LG_DIR_A} — remove with: rm -r ${_LG_DIR_A}" "$_o"
+assert_contains "E-254.03e: the second legacy directory" \
+  "legacy leftover (not generated by sync): ${_LG_DIR_B} — remove with: rm -r ${_LG_DIR_B}" "$_o"
+assert_contains "E-254.03f: the first shim" \
+  "legacy leftover (not generated by sync): ${_LG_SHIM_A} — remove with: rm ${_LG_SHIM_A}" "$_o"
+assert_contains "E-254.03g: and the second shim" \
+  "legacy leftover (not generated by sync): ${_LG_SHIM_B} — remove with: rm ${_LG_SHIM_B}" "$_o"
+assert_not_contains "E-254.03h: no line claims a prune" "pruned legacy" "$_o"
+
+# The shims. Evidence for a shim is byte-identity with the template the install shipped,
+# so these run the REAL function against a controlled install root — the live
+# ~/.ai-os/templates may or may not still hold the retired templates on this machine.
+LG4="$(mktemp -d)"; LGA="$LG4/aios"; LGP="$LG4/proj"
+mkdir -p "$LGA/templates" "$LGP"
+printf '@ARCHITECT.md\n' > "$LGA/templates/${_LG_SHIM_A}"
+printf '@ARCHITECT.md\n' > "$LGA/templates/${_LG_SHIM_B}"
+cp "$LGA/templates/${_LG_SHIM_A}" "$LGP/${_LG_SHIM_A}"               # unmodified copy
+printf '@ARCHITECT.md\nmy own notes\n' > "$LGP/${_LG_SHIM_B}"          # edited by the user
+_lg_fn() {  # <project> <aios> — source the CLI (guarded) and call the pruner directly
+  ( cd "$1" || exit 1
+    # shellcheck disable=SC1090
+    source "$AI_BIN" >/dev/null 2>&1
+    AIOS="$2"
+    _prune_legacy_workspaces sync 2>&1 || true )
+}
+_o="$(_lg_fn "$LGP" "$LGA")"
+assert_status 1 "E-254.04a: a shim byte-identical to its installed template is pruned" \
+  test -f "$LGP/${_LG_SHIM_A}"
+assert_contains "E-254.04b: the shim prune is announced" "pruned legacy shim: ${_LG_SHIM_A}" "$_o"
+assert_status 0 "E-254.04c: an EDITED shim is kept" test -f "$LGP/${_LG_SHIM_B}"
+assert_contains "E-254.04d: and reported with its rm command" \
+  "legacy leftover (not generated by sync): ${_LG_SHIM_B} — remove with: rm ${_LG_SHIM_B}" "$_o"
+# No template to compare against = no evidence: an unmodified-looking shim is still kept.
+rm -f "$LGA/templates/${_LG_SHIM_A}"
+printf '@ARCHITECT.md\n' > "$LGP/${_LG_SHIM_A}"
+_o="$(_lg_fn "$LGP" "$LGA")"
+assert_status 0 "E-254.04e: with no installed template to prove it, the shim is kept" \
+  test -f "$LGP/${_LG_SHIM_A}"
+assert_contains "E-254.04f: and reported as a leftover" \
+  "legacy leftover (not generated by sync): ${_LG_SHIM_A}" "$_o"
+
+# A project with none of the legacy paths hears nothing about them.
+LG5="$(mktemp -d)"; mkdir -p "$LG5/.ai"; cp "$LG1/.ai/roles.json" "$LG5/.ai/roles.json"
+_o="$(_lg_sync "$LG5")"
+assert_not_contains "E-254.05a: a clean v4 project gets no leftover report" "legacy leftover" "$_o"
+assert_not_contains "E-254.05b: nor a prune line" "pruned legacy" "$_o"
+rm -rf "$LG1" "$LG2" "$LG3" "$LG4" "$LG5"
 
 # ── E-233 (D-060 §4): the artefacts sync regenerates must not dirty the project ──
 # The manifest is machine-local by construction — its hashes describe what THIS machine

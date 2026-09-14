@@ -28,23 +28,29 @@ _role_pp() {  # <roles_mapping> <role> → provider:pane
   ( source "$WATCH" 2>/dev/null; ROLES_MAPPING="$rm"; _role_to_provider_pane "$role" )
 }
 
-# Two distinct-provider panes (claude idx0, gemini idx1).
-PANES_AB='%cl\t0\tclaude\twin\t/p\n%ge\t1\tgemini\twin\t/p\n'
+# Two panes for a split-provider map (claude idx0, a neutral 'acme' provider idx1).
+PANES_AB='%cl\t0\tclaude\twin\t/p\n%ac\t1\tacme\twin\t/p\n'
 # Two SAME-provider panes (claude idx0, claude idx1) — the dual-Claude case.
 PANES_CC='%c0\t0\tclaude\twin\t/p\n%c1\t1\tclaude\twin\t/p\n'
 
-# ── E-137.01: legacy fallback (no roles.json) — engineer→claude, architect→gemini ─
-assert_contains "E-137.01a: fallback engineer → claude pane (idx0)" "%cl" "$(_resolve_with '' "$PANES_AB" engineer)"
-assert_contains "E-137.01b: fallback architect → gemini pane (idx1)" "%ge" "$(_resolve_with '' "$PANES_AB" architect)"
+# ── E-137.01: fallback (no roles.json) — engineer→idx0, architect→idx1 ────────
+assert_contains "E-137.01a: fallback engineer → idx0 pane" "%cl" "$(_resolve_with '' "$PANES_AB" engineer)"
+assert_contains "E-137.01b: fallback architect → idx1 pane" "%ac" "$(_resolve_with '' "$PANES_AB" architect)"
 
-# ── E-137.02: legacy provider-name targets still resolve (backwards compat) ───
-assert_contains "E-137.02a: 'claude' → idx0 pane" "%cl" "$(_resolve_with '' "$PANES_AB" claude)"
-assert_contains "E-137.02b: 'gemini' → idx1 pane" "%ge" "$(_resolve_with '' "$PANES_AB" gemini)"
+# ── E-137.02: the legacy provider-name target 'claude' ───────────────────────
+# v4 (D-054/D-069): the fallback maps BOTH roles to claude, so without roles.json the
+# legacy 'claude' target is ambiguous and must refuse; with a split map it still resolves.
+assert_status 1 "E-137.02a: 'claude' under the all-claude fallback refuses (ambiguous)" \
+  bash -c "source '$WATCH' 2>/dev/null; ROLES_MAPPING=''; _project_panes() { printf '%b' \"$PANES_AB\"; }; resolve_pane claude 2>/dev/null"
+assert_contains "E-137.02b: 'claude' under a split map → idx0 pane" "%cl" \
+  "$(_resolve_with 'architect:acme:1|engineer:claude:0' "$PANES_AB" claude 2>/dev/null)"
+assert_status 1 "E-137.02c: a non-legacy provider name is not a target" \
+  bash -c "source '$WATCH' 2>/dev/null; ROLES_MAPPING=''; _project_panes() { printf '%b' \"$PANES_AB\"; }; resolve_pane acme"
 
-# ── E-137.03: dynamic roles.json mapping (default) routes like the fallback ───
-MAP_DEFAULT='architect:gemini:1|engineer:claude:0'
+# ── E-137.03: dynamic roles.json mapping (split provider) routes like the fallback ─
+MAP_DEFAULT='architect:acme:1|engineer:claude:0'
 assert_contains "E-137.03a: mapped engineer → claude pane" "%cl" "$(_resolve_with "$MAP_DEFAULT" "$PANES_AB" engineer)"
-assert_contains "E-137.03b: mapped architect → gemini pane" "%ge" "$(_resolve_with "$MAP_DEFAULT" "$PANES_AB" architect)"
+assert_contains "E-137.03b: mapped architect → acme pane" "%ac" "$(_resolve_with "$MAP_DEFAULT" "$PANES_AB" architect)"
 
 # ── E-137.04: DUAL-CLAUDE — distinct pane indices keep roles separate ─────────
 # architect=claude:1, engineer=claude:0 against two claude panes → different panes.
@@ -73,7 +79,7 @@ rm -rf "$EMPTYP"
 BADP="$(mktemp -d)"; mkdir -p "${BADP}/.ai"
 cat > "${BADP}/.ai/roles.json" <<'JSON'
 { "roles": {
-  "architect": { "provider": "gemini", "pane_identifier": "x" },
+  "architect": { "provider": "claude", "pane_identifier": "x" },
   "engineer":  { "provider": "claude", "pane_identifier": "0" } } }
 JSON
 bad_map="$(_load_map "$BADP")"
@@ -83,21 +89,20 @@ rm -rf "$BADP"
 
 # ── E-137.08: _role_to_provider_pane fallback for unmapped roles ──────────────
 assert_contains "E-137.08a: fallback engineer → claude:0" "claude:0" "$(_role_pp '' engineer)"
-assert_contains "E-137.08b: fallback architect → agy:1 (D-050 default, E-188)" "agy:1" "$(_role_pp '' architect)"
+assert_contains "E-137.08b: fallback architect → claude:1 (v4 default, D-069)" "claude:1" "$(_role_pp '' architect)"
 assert_status 1 "E-137.08c: non-role returns 1" bash -c "source '$WATCH' 2>/dev/null; _role_to_provider_pane bob"
 
 # ── E-137.09: WATCH_TARGETS drains semantic roles + legacy names ─────────────
-assert_status 0 "E-137.09: WATCH_TARGETS includes engineer + architect" \
-  grep -qE 'WATCH_TARGETS="engineer architect claude gemini"' "$WATCH"
+assert_status 0 "E-137.09: WATCH_TARGETS is the semantic roles + legacy 'claude'" \
+  grep -qE 'WATCH_TARGETS="engineer architect claude"' "$WATCH"
 
-# ── E-134: handoff routes to the agy (Antigravity) provider when a role maps to it ─
-# Proves the end-to-end role→pane handoff works for a brand-new provider (agy), not
-# just claude/gemini — the payoff of the provider-agnostic abstraction.
-PANES_AGY='%cl\t0\tclaude\twin\t/p\n%agy\t1\tagy\twin\t/p\n'
-assert_contains "E-134: architect→agy:1 routes to the agy pane" "%agy" \
-  "$(_resolve_with 'architect:agy:1|engineer:claude:0' "$PANES_AGY" architect)"
-assert_contains "E-134b: engineer→claude:0 co-resident with agy still routes to claude" "%cl" \
-  "$(_resolve_with 'architect:agy:1|engineer:claude:0' "$PANES_AGY" engineer)"
+# ── E-134: handoff routes to an arbitrary provider when a role maps to it ─────
+# Proves role→pane routing is provider-agnostic: the provider string never gates it.
+PANES_ACME='%cl\t0\tclaude\twin\t/p\n%acme\t1\tacme\twin\t/p\n'
+assert_contains "E-134: architect→acme:1 routes to the acme pane" "%acme" \
+  "$(_resolve_with 'architect:acme:1|engineer:claude:0' "$PANES_ACME" architect)"
+assert_contains "E-134b: engineer→claude:0 co-resident with acme still routes to claude" "%cl" \
+  "$(_resolve_with 'architect:acme:1|engineer:claude:0' "$PANES_ACME" engineer)"
 
 # ── E-209 (D-054): resolve_pane precedence — config beats heuristics ──────────
 # REGRESSION for the live G3 misroute (COMM.md 2026-09-04, reproduced twice): Claude
@@ -142,7 +147,7 @@ assert_status 1 "E-209.06: no agent pane at the ordinal and no title/window hit 
 PANES_LEGACY='%x\t1\tMac.lan\tWindow\t/p\t2.1.261\n%y\t2\tclaude-code\tWindow\t/p\t2.1.261\n'
 # Non-colliding map (only engineer is claude) — E-211 fails closed on a colliding one.
 assert_contains "E-209.07: legacy 'claude' target keeps E-117 order — fuzzy title wins over ordinal 0" "%y" \
-  "$(_resolve_with 'architect:agy:1|engineer:claude:0' "$PANES_LEGACY" claude 2>/dev/null)"
+  "$(_resolve_with 'architect:acme:1|engineer:claude:0' "$PANES_LEGACY" claude 2>/dev/null)"
 
 # TIER-B degrade (no command column) still works through the re-ordered path.
 PANES_TIERB='%p0\t1\tMac.lan\tWindow\t/p\t\n%p1\t2\tMac.lan\tWindow\t/p\t\n'
@@ -162,14 +167,14 @@ _stderr_of() {  # <roles_mapping> <panes> <target> → stderr only
     resolve_pane "$tgt" ) 2>&1 >/dev/null
 }
 MAP_DUAL_CLAUDE='architect:claude:1|engineer:claude:0'
-MAP_MIXED='architect:agy:1|engineer:claude:0'
+MAP_MIXED='architect:acme:1|engineer:claude:0'
 
 assert_contains "E-211.01: 'claude' target warns DEPRECATED on stderr" "DEPRECATED" \
   "$(_stderr_of "$MAP_MIXED" "$PANES_LEGACY" claude)"
 assert_contains "E-211.01b: deprecation warning names the removal version" "v4.0" \
   "$(_stderr_of "$MAP_MIXED" "$PANES_LEGACY" claude)"
-assert_contains "E-211.02: 'gemini' target warns DEPRECATED on stderr" "DEPRECATED" \
-  "$(_stderr_of "$MAP_MIXED" "$PANES_AB" gemini)"
+assert_contains "E-211.02: no roles.json (all-claude fallback) makes 'claude' AMBIGUOUS" "AMBIGUOUS" \
+  "$(_stderr_of '' "$PANES_AB" claude)"
 
 # Same-provider ambiguity → fail closed with an actionable hint.
 assert_contains "E-211.03a: dual-claude makes 'claude' AMBIGUOUS" "AMBIGUOUS" \

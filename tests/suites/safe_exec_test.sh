@@ -246,6 +246,8 @@ assert_contains "E-127: no env → caller_role arg still honoured (legacy)" "[SO
 assert_status 0 "E-127: handler resolves role via effectiveRole" grep -qF 'effectiveRole(args.caller_role)' "$SE_SERVER"
 assert_status 0 "E-127: effectiveRole prioritises AI_OS_CALLER_ROLE" grep -qE 'process\.env\.AI_OS_CALLER_ROLE \|\| argRole' "$SE_SERVER"
 assert_status 0 "E-127: claude bootloader injects role=engineer" grep -qF 'env["AI_OS_CALLER_ROLE"] = "engineer"' "${REPO_ROOT}/src/bin/ai"
-assert_status 0 "E-127: gemini bootloader injects role=architect" grep -qF 'AI_OS_CALLER_ROLE"] = "architect"' "${REPO_ROOT}/src/bin/ai"
+# E-254: the Architect is a Claude pane too — its role arrives via the per-role settings
+# overlay (settings.<role>.json), which stamps the bound role name authoritatively.
+assert_status 0 "E-127: role overlay injects the bound role (architect pane)" grep -qF 'env["AI_OS_CALLER_ROLE"] = role' "${REPO_ROOT}/src/bin/ai"
 
 assert_summary

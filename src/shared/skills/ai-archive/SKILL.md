@@ -42,7 +42,7 @@ successful patterns as PROPOSED skills BEFORE archiving moves it away. This is t
    ```
 2. meta_analyst clusters recurring successful tool/workflow patterns and stages each via
    `stageInstincts(...)` (`src/shared/instinct-stager.mjs`) into
-   `.agents/skills/proposed/<slug>/SKILL.md` — **inert** by construction
+   `.claude/skills/proposed/<slug>/SKILL.md` — **inert** by construction
    (`disable-model-invocation: true`, `user-invocable: false`, `status: proposed`;
    dangerous-content statically rejected; confidence ≥ 0.7).
 3. Staged skills do NOTHING until a human approves them via

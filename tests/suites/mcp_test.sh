@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mcp_test.sh — generate_mcp_json + configure_gemini_mcp tests (P-15 / §22)
+# mcp_test.sh — generate_mcp_json tests (P-15 / §22)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

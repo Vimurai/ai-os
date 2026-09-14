@@ -188,14 +188,11 @@ assert_status 0 "schema migrated, legacy row preserved, idempotent" bash -c "[[ 
 echo ""
 echo "  [T-SES-S04] ai-log skill body"
 
-# E-244 (D-066 §4): a provider workspace exists only when a role is bound to it.
+# The canonical source plus the Claude workspace copy — the only workspace in v4 (E-254).
 _AI_LOG_COPIES=(
   "${REPO_ROOT}/src/shared/skills/ai-log/SKILL.md"
   "${REPO_ROOT}/.claude/skills/ai-log/SKILL.md"
 )
-[[ -f "${REPO_ROOT}/.agents/skills/ai-log/SKILL.md" ]] \
-  && _AI_LOG_COPIES+=("${REPO_ROOT}/.agents/skills/ai-log/SKILL.md") \
-  || _skip "ai-log .agents/ copy (workspace not provisioned — no role bound to agy)"
 for f in "${_AI_LOG_COPIES[@]}"; do
 
   assert_status 0 "${f#${REPO_ROOT}/} exists" test -f "$f"
@@ -213,8 +210,5 @@ done
 SRC_HASH="$(md5sum "${REPO_ROOT}/src/shared/skills/ai-log/SKILL.md" | awk '{print $1}')"
 CLA_HASH="$(md5sum "${REPO_ROOT}/.claude/skills/ai-log/SKILL.md"     | awk '{print $1}')"
 assert_status 0 ".claude mirror = src" bash -c "[[ '$SRC_HASH' == '$CLA_HASH' ]]"
-assert_mirror_if_present ".agents mirror = src" \
-  "${REPO_ROOT}/src/shared/skills/ai-log/SKILL.md" \
-  "${REPO_ROOT}/.agents/skills/ai-log/SKILL.md"
 
 assert_summary

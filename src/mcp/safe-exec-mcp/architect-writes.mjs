@@ -34,8 +34,8 @@ export function isSafeArchitectPath(tok) {
 // can be applied. Kept separate from the token-based command analyser because the
 // input shape differs: one path, already parsed, no shell quoting to reason about.
 //
-// WHY THIS EXISTS: under a same-provider Triad the Architect pane is Claude, which
-// unlike agy HAS Write/Edit tools. §35 ANTI-DRIFT was prompt-level only for those.
+// WHY THIS EXISTS: the Architect pane is Claude, which HAS Write/Edit tools. §35
+// ANTI-DRIFT was prompt-level only for those.
 //
 // SCOPE — READ THIS BEFORE RELYING ON IT (E-208 audit; widened by E-216 / D-055 R1):
 // this function covers the NATIVE write tools (Write|Edit|MultiEdit|NotebookEdit).

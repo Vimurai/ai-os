@@ -2,14 +2,11 @@
 // Architect Ruling A / pending D-053).
 //
 // WHY THIS EXISTS (symmetric to signal-handoff.mjs / E-158):
-//   State mutation is normally MCP-only (structured-outputs.md §32). That works for
-//   Claude (which reliably calls custom MCP tools) but NOT for the agy (Antigravity)
-//   Architect runtime, which does not dependably expose/invoke project MCP servers to
-//   the model — so when agy authors a blueprint and hand-edits TASKS.md, the next
+//   State mutation is normally MCP-only (structured-outputs.md §32). A session without
+//   the project MCP servers that hand-edits TASKS.md loses those rows: the next
 //   `verify_markdown_sync` regenerates TASKS.md from state.sqlite and DROPS the
-//   unpersisted rows (the "orphaned blueprint" incident). agy DOES reliably run shell
-//   via its run_command built-in, so this helper is the deterministic primitive behind
-//   a provider-agnostic `ai add-task`.
+//   unpersisted rows (the "orphaned blueprint" incident). This helper is the
+//   deterministic shell primitive behind `ai add-task`.
 //
 //   Both this CLI and task-synchronizer-mcp::add_task route through the SAME
 //   state-db::addTask(), so state.sqlite stays the single writer and the two callers
@@ -20,7 +17,7 @@
 //   1. Invoke the EXACT same state logic as the MCP tool — done via the shared
 //      addTask() (nextId → DAG validate → INSERT → id high-water → regenerate views).
 //   2. Stamp the caller_role: the created task's owner reflects the resolved Triad
-//      role (architect → "Architect (Agy)", engineer → "Engineer (Claude)"), taken
+//      role (architect → "Architect (Claude)", engineer → "Engineer (Claude)"), taken
 //      from the bootloader-injected AI_OS_CALLER_ROLE (E-127) unless overridden.
 //   3. Respect the sovereignty lock: writes go through getDb() (node:sqlite WAL,
 //      single-writer) — the same handle discipline the MCP uses; no divergent raw write.
@@ -41,12 +38,11 @@ import { roleProvider } from "./provider-adapter.mjs";
 // tamper-resistant HMAC role boundary, E-129); here we just record who created the row.
 //
 // E-213 (architect-provider-parity.md §Components 4): the PROVIDER half is resolved
-// from .ai/roles.json rather than hardcoded. "Architect (Agy)" was baked in, so an
-// all-Claude Triad (D-054) attributed every Architect-created task to Agy — a provider
-// that is not even running. state-db::roleFromOwner splits on " (" for the generated
+// from .ai/roles.json rather than hardcoded, so the label always names the provider the
+// role is actually bound to. state-db::roleFromOwner splits on " (" for the generated
 // TASKS.md section headers, so making the provider dynamic cannot churn those headers.
 export const DEFAULT_ROLE_OWNER = {
-  architect: "Architect (Agy)",
+  architect: "Architect (Claude)",
   engineer:  "Engineer (Claude)",
 };
 
@@ -155,9 +151,9 @@ export function runAddTask({ aiDir, description, owner, role, tier, prefix, depe
 // Eliminates the manual `ai handoff` step: when a role creates a task the OTHER role
 // must execute, wake that role automatically. The task prefix is the authoritative
 // signal for WHICH queue the task lands in (E-## → Engineer, P-## → Architect); the
-// creator is the bootloader-injected AI_OS_CALLER_ROLE (E-127: agy→architect,
-// claude→engineer). This mirrors the shell-native philosophy of `ai handoff` (E-158)
-// and closes the loop with the E-200 settle barrier from the opposite side.
+// creator is the bootloader-injected AI_OS_CALLER_ROLE (E-127). This mirrors the
+// shell-native philosophy of `ai handoff` (E-158) and closes the loop with the E-200
+// settle barrier from the opposite side.
 
 // Task-id prefix → the Triad role that owns/executes that queue.
 export const PREFIX_ROLE = { E: "engineer", P: "architect" };

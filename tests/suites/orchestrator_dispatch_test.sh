@@ -59,7 +59,7 @@ print("MISSING" if t is None else ",".join(t.get("blocked_by",[])))' <<<"$1"
 }
 
 OWNER='Engineer (Claude)'
-ARCH='Architect (Gemini)'
+ARCH='Architect (Claude)'
 
 # ── T-92.00: run_dispatch is registered in orchestrator allowed-tools (v3.0 W1-T1)
 # so the mcp-router RBAC gate (proxy_call rejects tools absent from allowed-tools)
@@ -103,14 +103,16 @@ r=$(call "${ORCH}" run_dispatch "{}")
 assert_contains "T-92.05: idle when all DONE" '"dispatch_mode": "idle"' "$r"
 
 # ── T-92.06: owner filter isolates the dispatch frontier by role ─────────────
-call "${SYNC}" add_task "{\"owner\":\"${OWNER}\",\"description\":\"eng task\",\"tier\":2}"                 >/dev/null  # E-4 (Claude)
-call "${SYNC}" add_task "{\"owner\":\"${ARCH}\",\"description\":\"arch task\",\"prefix\":\"P\",\"tier\":2}" >/dev/null  # P-1 (Gemini)
-sum_claude=$(dispatch_summary "$(call "${ORCH}" run_dispatch "{\"owner\":\"claude\"}")")
-sum_gemini=$(dispatch_summary "$(call "${ORCH}" run_dispatch "{\"owner\":\"gemini\"}")")
-assert_contains "T-92.06: claude filter → E-4 ready"   "E-4" "${sum_claude#*|}"
-assert_not_contains "T-92.06: claude filter excludes P-1" "P-1" "${sum_claude#*|}"
-assert_contains "T-92.06: gemini filter → P-1 ready"   "P-1" "${sum_gemini#*|}"
-assert_not_contains "T-92.06: gemini filter excludes E-4" "E-4" "${sum_gemini#*|}"
+# Both roles run on the same provider (E-254), so the filter must key on the ROLE half of
+# the owner label — a provider-name filter could no longer tell them apart.
+call "${SYNC}" add_task "{\"owner\":\"${OWNER}\",\"description\":\"eng task\",\"tier\":2}"                 >/dev/null  # E-4 (Engineer)
+call "${SYNC}" add_task "{\"owner\":\"${ARCH}\",\"description\":\"arch task\",\"prefix\":\"P\",\"tier\":2}" >/dev/null  # P-1 (Architect)
+sum_eng=$(dispatch_summary "$(call "${ORCH}" run_dispatch "{\"owner\":\"engineer\"}")")
+sum_arch=$(dispatch_summary "$(call "${ORCH}" run_dispatch "{\"owner\":\"architect\"}")")
+assert_contains "T-92.06: engineer filter → E-4 ready"      "E-4" "${sum_eng#*|}"
+assert_not_contains "T-92.06: engineer filter excludes P-1" "P-1" "${sum_eng#*|}"
+assert_contains "T-92.06: architect filter → P-1 ready"      "P-1" "${sum_arch#*|}"
+assert_not_contains "T-92.06: architect filter excludes E-4" "E-4" "${sum_arch#*|}"
 
 cd "${REPO_ROOT}"
 rm -rf "${TMP}"

@@ -3,8 +3,9 @@
 #
 # Verifies the memory_curator + knowledge_architect agent files (and tracked
 # mirrors) carry the contract demanded by may-2026-upgrades.md §"Multimodal
-# Memory Curator" / §"knowledge_architect":
-#   - Gemini Embedding 2 reference
+# Memory Curator" / §"knowledge_architect", as narrowed by E-254:
+#   - honest scope: text index + SHA-256 hash index, embedding provider
+#     unconfigured, multimodal (vector) retrieval deferred — no vendor model claimed
 #   - department metadata (Architecture | UX)
 #   - sensitive-file exclusion (.env, .ssh, .gitignore)
 #   - 5MB visual cap
@@ -18,30 +19,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
 
 
-# E-212: .gemini/agents is NOT byte-identical to src/gemini/agents any more. The
-# personas now carry the Claude agent contract (so a Claude-bound Architect can load
-# them), and strip_gemini_agent_fields deliberately removes the three Claude-only keys
-# for the Gemini CLI. Compare ignoring exactly those keys — real content drift still fails.
-_diff_ignoring_claude_keys() {  # <src> <mirror>
-  diff -q \
-    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$1") \
-    <(grep -vE '^(disable-model-invocation|user-invocable|allowed-tools):' "$2") \
-    >/dev/null 2>&1
-}
-
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 echo "===== multimodal_memory_test.sh ====="
 
-# E-244 (D-066 §4): a provider workspace exists only when a role is bound to it.
-CURATOR_FILES=("${REPO_ROOT}/src/gemini/agents/memory_curator.md")
-[[ -f "${REPO_ROOT}/.gemini/agents/memory_curator.md" ]] \
-  && CURATOR_FILES+=("${REPO_ROOT}/.gemini/agents/memory_curator.md") \
-  || _skip "memory_curator .gemini/ copy (workspace not provisioned — no role bound to gemini)"
-ARCHITECT_FILES=("${REPO_ROOT}/src/gemini/agents/knowledge_architect.md")
-[[ -f "${REPO_ROOT}/.gemini/agents/knowledge_architect.md" ]] \
-  && ARCHITECT_FILES+=("${REPO_ROOT}/.gemini/agents/knowledge_architect.md") \
-  || _skip "knowledge_architect .gemini/ copy (workspace not provisioned — no role bound to gemini)"
+# Content contract is asserted on the canonical src/ copies; workspace mirrors are
+# held to byte identity in T-MM-S08.
+CURATOR_SRC="${REPO_ROOT}/src/claude/agents/memory_curator.md"
+ARCHITECT_SRC="${REPO_ROOT}/src/claude/agents/knowledge_architect.md"
+CURATOR_FILES=("$CURATOR_SRC")
+ARCHITECT_FILES=("$ARCHITECT_SRC")
+SCANNER="${REPO_ROOT}/src/shared/memory-batch-scanner.mjs"
 
 # ── T-MM-S01: Files exist and frontmatter parses ──────────────────────────────
 echo ""
@@ -76,11 +64,17 @@ done
 
 # ── T-MM-S02: memory_curator — multimodal contract ───────────────────────────
 echo ""
-echo "  [T-MM-S02] memory_curator multimodal contract"
+echo "  [T-MM-S02] memory_curator index contract (text + hash index, vectors deferred)"
 
 for f in "${CURATOR_FILES[@]}"; do
-  assert_status 0 "${f##*/agents/} → cites Gemini Embedding 2" \
-    grep -qE 'Gemini Embedding 2|gemini-embedding-002' "$f"
+  assert_status 0 "${f##*/agents/} → states the text index"               grep -q 'text index' "$f"
+  assert_status 0 "${f##*/agents/} → states the SHA-256 hash index"       grep -q 'SHA-256 hash index' "$f"
+  assert_status 0 "${f##*/agents/} → names the implementing scanner"      grep -q 'memory-batch-scanner.mjs' "$f"
+  assert_status 0 "${f##*/agents/} → embedding provider is unconfigured"  grep -q 'No embedding provider is configured' "$f"
+  assert_status 0 "${f##*/agents/} → multimodal retrieval is deferred"    grep -qE 'multimodal (\(vector\) )?retrieval is (\*\*)?deferred' "$f"
+  assert_status 0 "${f##*/agents/} → runs text-only by default"           grep -q 'AI_RAG_MODE=text-only' "$f"
+  assert_status 1 "${f##*/agents/} → claims no vendor embedding model"    grep -qiE 'embedding[ -]0*2\b|embedding-00[0-9]' "$f"
+  assert_status 1 "${f##*/agents/} → hash-index schema carries no vector" grep -q '"vector": \[' "$f"
   assert_status 0 "${f##*/agents/} → declares department classifier"   grep -q 'department' "$f"
   assert_status 0 "${f##*/agents/} → covers Architecture department"   grep -q 'Architecture' "$f"
   assert_status 0 "${f##*/agents/} → covers UX department"             grep -q 'UX' "$f"
@@ -112,15 +106,19 @@ done
 
 # ── T-MM-S05: knowledge_architect — multimodal output ────────────────────────
 echo ""
-echo "  [T-MM-S05] knowledge_architect multimodal output"
+echo "  [T-MM-S05] knowledge_architect citations (text-based retrieval)"
 
 for f in "${ARCHITECT_FILES[@]}"; do
   assert_status 0 "${f##*/agents/} → cites page-level PDF citations" \
     grep -qE 'page-level|#p<page>' "$f"
   assert_status 0 "${f##*/agents/} → cites visual diagrams" \
     grep -qiE 'visual diagrams|retrieved diagrams|diagram references' "$f"
-  assert_status 0 "${f##*/agents/} → uses gemini-embedding-002" \
-    grep -q 'gemini-embedding-002' "$f"
+  assert_status 0 "${f##*/agents/} → retrieval is text-based over the Palace indexes" \
+    grep -q 'Retrieval is text-based' "$f"
+  assert_status 0 "${f##*/agents/} → vector retrieval deferred until a provider is configured" \
+    grep -q 'deferred until an embedding provider is configured' "$f"
+  assert_status 1 "${f##*/agents/} → claims no vendor embedding model" \
+    grep -qiE 'embedding[ -]0*2\b|embedding-00[0-9]' "$f"
   assert_status 0 "${f##*/agents/} → applies department metadata filter" \
     grep -q 'department' "$f"
 done
@@ -135,20 +133,23 @@ for f in "${ARCHITECT_FILES[@]}"; do
     grep -q '"department"' "$f"
 done
 
-# ── T-MM-S06: knowledge_architect — RETRIEVAL_QUERY task type ────────────────
+# ── T-MM-S06: no embedding call is attempted; the hash index is real ─────────
 echo ""
-echo "  [T-MM-S06] RETRIEVAL_QUERY task_type for queries"
+echo "  [T-MM-S06] No query embedding; hash-index claim backed by source"
 
 for f in "${ARCHITECT_FILES[@]}"; do
-  assert_status 0 "${f##*/agents/} → RETRIEVAL_QUERY task type" \
-    grep -q 'RETRIEVAL_QUERY' "$f"
+  assert_status 0 "${f##*/agents/} → does not embed the query" \
+    grep -q 'do not attempt to embed the query' "$f"
 done
 
-# memory_curator embeds with RETRIEVAL_DOCUMENT task_type.
 for f in "${CURATOR_FILES[@]}"; do
-  assert_status 0 "${f##*/agents/} → RETRIEVAL_DOCUMENT task type" \
-    grep -q 'RETRIEVAL_DOCUMENT' "$f"
+  assert_status 0 "${f##*/agents/} → names loadIndexedHashes as the dedup reader" \
+    grep -q 'loadIndexedHashes' "$f"
 done
+assert_status 0 "memory-batch-scanner exports loadIndexedHashes (the doc claim is real)" \
+  grep -q '^export function loadIndexedHashes' "$SCANNER"
+assert_status 0 "memory-batch-scanner hashes with SHA-256 (the doc claim is real)" \
+  grep -q '^export function computeFileSha256' "$SCANNER"
 
 # ── T-MM-S07: SEED.md token discipline preserved ─────────────────────────────
 echo ""
@@ -163,30 +164,13 @@ done
 echo ""
 echo "  [T-MM-S08] Source-of-truth ⇄ project mirror byte-identical"
 
-# E-244 (D-066 §4): .gemini/ is provisioned only for a project with a role bound to
-# gemini. Each check runs against the workspace copy when it is there and is recorded as
-# a SKIP when it is not — a pass for a comparison that never happened would be worse than
-# either.
-assert_file_if_present "memory_curator mirror = src (modulo stripped Claude keys, E-212)" \
-  "${REPO_ROOT}/.gemini/agents/memory_curator.md" \
-  _diff_ignoring_claude_keys "${REPO_ROOT}/src/gemini/agents/memory_curator.md" \
-                             "${REPO_ROOT}/.gemini/agents/memory_curator.md"
+# E-244 (D-066 §4): a mirror is compared only where the workspace exists; absent → SKIP.
+assert_mirror_if_present "memory_curator .claude mirror = src" \
+  "$CURATOR_SRC" "${REPO_ROOT}/.claude/agents/memory_curator.md"
+assert_mirror_if_present "knowledge_architect .claude mirror = src" \
+  "$ARCHITECT_SRC" "${REPO_ROOT}/.claude/agents/knowledge_architect.md"
 
-assert_file_if_present "knowledge_architect mirror = src (modulo stripped Claude keys, E-212)" \
-  "${REPO_ROOT}/.gemini/agents/knowledge_architect.md" \
-  _diff_ignoring_claude_keys "${REPO_ROOT}/src/gemini/agents/knowledge_architect.md" \
-                             "${REPO_ROOT}/.gemini/agents/knowledge_architect.md"
-
-# The stripped keys must ACTUALLY be absent from the Gemini workspace — otherwise the
-# comparison above would pass by ignoring keys that were never removed.
-if [[ -f "${REPO_ROOT}/.gemini/agents/memory_curator.md" ]]; then
-  assert_status 1 "memory_curator .gemini copy carries no Claude-only keys" \
-    grep -qE '^(disable-model-invocation|user-invocable|allowed-tools):' \
-      "${REPO_ROOT}/.gemini/agents/memory_curator.md"
-else
-  _skip "memory_curator .gemini copy carries no Claude-only keys (workspace not provisioned)"
-fi
 assert_status 0 "memory_curator src DOES carry the Claude contract (E-212)" \
-  grep -qE '^allowed-tools:' "${REPO_ROOT}/src/gemini/agents/memory_curator.md"
+  grep -qE '^allowed-tools:' "$CURATOR_SRC"
 
 assert_summary

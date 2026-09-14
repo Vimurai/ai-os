@@ -76,7 +76,7 @@ mcp__orchestrator-mcp__run_handover({
 })
 ```
 
-This stamps the delta so the Architect (Agy) can review implementation divergence from the blueprint.
+This stamps the delta so the Architect can review implementation divergence from the blueprint.
 
 ## Step 4 — Surface Next Task & Hand Control Back (MANDATORY)
 
@@ -95,8 +95,7 @@ Read `.ai/TASKS.md` and report any remaining open E-## tasks.
     ai handoff architect "Engineer queue exhausted. <one-line of what shipped>. Please review and plan next."
     ```
     (`mcp__task-synchronizer-mcp__handoff_control({ target: "architect", message: ... })`
-    is an equivalent fallback. Use the semantic role `architect`, not `gemini` — the
-    Architect runtime is now provider-agnostic, e.g. agy.)
+    is an equivalent fallback. Use the semantic role `architect`.)
   Then report: "All Engineer tasks complete. Handed control to the Architect."
 
 If `ai watch` is not running the signal is a harmless no-op (it stays queued for

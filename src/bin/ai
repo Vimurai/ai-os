@@ -78,25 +78,21 @@ usage() {
 ai — AI-OS v${VERSION}
 
 The shell CLI is a thin bootloader. Operational commands (planning, review,
-testing, archive, digest) now run as prompts inside Claude Code or Gemini CLI.
+testing, archive, digest) now run as prompts inside Claude Code.
 See .ai/blueprints/cli-collapse.md for the migration map.
 
 Commands:
-  ai install     Install configs to ~/.gemini + ~/.claude + ~/.config/github-copilot;
+  ai install     Install configs to ~/.claude + ~/.config/github-copilot;
                  enable agent teams; install hooks
   ai init        Create/upgrade .ai/ in current repo (safe, no overwrite)
   ai sync        Re-sync agents, skills, bootloaders (ENGINEER.md, ARCHITECT.md +
-                 CLAUDE.md/GEMINI.md shims, .mcp.json) and hooks into the project
+                 CLAUDE.md shim, .mcp.json) and hooks into the project
   ai sync --github   Fetch assigned GitHub issues for the Architect cycle (§28)
   ai sync --prune-providers
-                 Remove the workspace directories (.gemini/, .agents/, ...) of
+                 Remove the workspace directories of
                  providers no role in .ai/roles.json is bound to. Manifest-aware:
                  only files sync wrote and nobody edited are deleted; anything else
                  is reported and kept. Never runs implicitly (E-244).
-  ai provider install-plugin agy
-                 Install AI-OS personas as a native Antigravity plugin (E-144).
-                 agy shows custom subagents only via installed plugins; run once
-                 per machine after installing the Antigravity CLI.
   ai doctor [--repair] [--compliance] [--env]
                  Diagnose PATH, configs, hooks, MCP; --compliance audits agent
                  frontmatter for Ghost Tools; --env deep-checks Node/binaries/
@@ -105,14 +101,14 @@ Commands:
   ai handoff <role> [message]
                  Hand control to the other agent via the bridge (role =
                  architect|engineer). Shell-native — works from any CLI runtime
-                 (incl. agy), no MCP needed; drives auto-handoff (E-158).
+                 no MCP needed; drives auto-handoff (E-158).
   ai watch       Run the Interactive Bridge tmux watcher — routes queued
                  handoff signals to the Architect/Engineer pane to drive the
                  autonomous ping-pong loop (E-115). Run in a dedicated pane.
   ai version     Print version
 
 Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
-  update / onboard → Open Agy, type the planning request directly
+  update / onboard → Run 'ai start', type the planning request in the Architect pane
   preflight        → skill: ai-preflight  (auto-runs at session start)
   digest           → skill: ai-digest
   archive          → skill: ai-archive
@@ -321,8 +317,8 @@ _resolve_aios_workspace() {
 generate_mcp_json() {
   local DEST_DIR="${1:-.}"
   # E-138 (role-abstraction.md): optional explicit output path + top-level key so the
-  # Provider Adapter System can emit per-provider MCP configs (e.g. agy →
-  # .agents/mcp_config.json under "mcpServers"). Defaults preserve .mcp.json behaviour.
+  # Provider Adapter System can emit per-provider MCP configs. Defaults preserve
+  # .mcp.json behaviour.
   local MCP_FILE="${2:-${DEST_DIR}/.mcp.json}"
   local MCP_KEY="${3:-mcpServers}"
   local REGISTRY="${AIOS}/config/registry.json"
@@ -389,34 +385,11 @@ with open(mcp_path, "w") as f:
 PY
 }
 
-# Remove frontmatter fields unsupported by Gemini CLI v0.37+
-# Usage: strip_gemini_agent_fields <dir>
-strip_gemini_agent_fields() {
-  local dir="${1:-.gemini/agents}"
-  local f tmp
-  for f in "${dir}"/*.md; do
-    [[ -f "$f" ]] || continue
-    # Strip disable-model-invocation, user-invocable, allowed-tools lines inside ---...--- block.
-    # Portable in-place edit: `sed -i ''` is BSD/macOS-only — GNU sed (Linux/CI)
-    # reads the empty '' as the script and the real script as a filename, failing
-    # with "No such file or directory". Use a temp file + cat-back instead, which
-    # works on both seds and preserves the original file's permissions/inode.
-    tmp="$(mktemp)" || continue
-    if sed '/^---$/,/^---$/{
-      /^disable-model-invocation:/d
-      /^user-invocable:/d
-      /^allowed-tools:/d
-    }' "$f" > "$tmp"; then
-      cat "$tmp" > "$f"
-    fi
-    rm -f "$tmp"
-  done
-}
 
 # ── E-135 (role-abstraction.md): Role Configuration Store ─────────────────────
 # Decouples functional roles (architect/engineer) from specific CLIs. `ai install`
 # accepts `--architect <provider:pane>` / `--engineer <provider:pane>` overrides and
-# persists them to .ai/roles.json. Defaults (D-050/E-183) map architect=agy:1,
+# persists them to .ai/roles.json. Defaults (D-066/D-069) map architect=claude:1,
 # engineer=claude:0 — any provider may still assume either role via the flags.
 ROLE_ARCHITECT=""
 ROLE_ENGINEER=""
@@ -447,7 +420,7 @@ _parse_role_flags() {
 # unspecified). No-op outside a project (.ai/ absent). Values are pre-validated by
 # _parse_role_flags, so direct interpolation is injection-safe.
 # D-066: the all-Claude Triad is the DEFAULT — architect on `fable`, engineer on `opus`.
-# agy and gemini remain fully selectable providers via --architect/--engineer; what changed
+# claude is the only provider in v4 (D-069); roles stay abstract so a future one is config, not code. What changed
 # is which topology a project gets when nobody says otherwise.
 #
 # The MODEL is written per role because the two roles want different ones, and `ai pane`
@@ -485,13 +458,13 @@ EOF
 # E-182/E-184 follow-up: cosmetic Triad-banner labels for do_init. Prints
 # "<architect_provider>|<engineer_provider>" read from .ai/roles.json, mirroring
 # ai-watch's _load_roles_mapping so the banner never restales when a role is
-# re-bound. Falls back to the D-050 defaults (architect=agy, engineer=claude)
+# re-bound. Falls back to the D-066 defaults (architect=claude, engineer=claude)
 # when the file is missing/malformed or python3 is unavailable. Cosmetic only —
 # this NEVER affects handoff routing (ai-watch owns that). Safe under set -euo
 # pipefail: the python heredoc is guarded by `|| printf ''`.
 # D-066/E-243: labels are DERIVED, never literal. Every vendor name a user sees now comes
-# from roles.json, so re-binding a role with `ai install --architect agy:1` changes the
-# banners, the task owner and the footer together — the drift that left "Architect (Agy)"
+# from roles.json, so re-binding a role changes the banners, the task owner and the
+# footer together — the drift that once left a vendor name on every task
 # hard-coded in three places while the project ran all-Claude.
 #
 # Emits "<arch_provider>·<arch_model>|<eng_provider>·<eng_model>"; the model half is empty
@@ -522,11 +495,10 @@ PY
 }
 
 # v3.0 (W3-T3): single source for scaffolding/refreshing the project-scoped agent
-# dirs (.claude/, .gemini/, .agents/) from the installed mirror. Collapses the
+# dirs (.claude/) from the installed mirror. Collapses the
 # duplicated blocks in ensure_ai_templates (init) and do_sync (sync). $1 selects
 # the user-facing wording only ("init" → "Created …", "sync" → indented "… synced");
-# the filesystem operations are identical. Antigravity native subagents are NOT
-# synced here — they ship as an installed plugin (`ai provider install-plugin agy`).
+# the filesystem operations are identical.
 
 # ── E-212 (architect-provider-parity.md §Components 1-2): role-aware provisioning ──
 # Locate the role-manifest resolver (dev tree first, then the install mirror).
@@ -579,7 +551,7 @@ _provider_source_dirs() {
 #
 # THE OVERRIDE RULE DEPENDS ON HOW MANY ROLES THE WORKSPACE SERVES:
 #   - SINGLE-role workspace: a role skill legitimately OVERRIDES the shared baseline.
-#     That is the historical behaviour (an agy Architect gets the Architect's ai-task)
+#     That is the historical behaviour (an Architect pane gets the Architect's ai-task)
 #     and it is preserved exactly — changing it would regress every split Triad.
 #   - MULTI-role workspace (the D-054 same-provider case): the "override" is no longer
 #     meaningful, because the shared copy is what the OTHER role in the same directory
@@ -646,7 +618,7 @@ _provision_workspace() {
 
   while IFS= read -r line; do [[ -n "$line" ]] && skill_dirs+=("$line"); done < <(_provider_source_dirs "$provider")
   # A provider bound to NO role keeps its historical provisioning rather than being
-  # stripped back to `shared` only. Rebinding a role (e.g. architect agy -> claude)
+  # stripped back to `shared` only. Rebinding a role
   # must not quietly empty the other provider's workspace: the user may switch back,
   # and sync is additive everywhere else. The manifest always yields at least
   # `shared/skills`, so the emptiness test is on SERVED ROLES, not on the dir list.
@@ -784,11 +756,11 @@ _prune_workspace_dir() {
 
 
 # ── E-244 (D-066 §4): mapped-only provider workspaces ────────────────────────
-# `ai sync` provisioned .claude/, .gemini/ AND .agents/ on every project unconditionally.
+# `ai sync` provisioned a workspace per vendor on every project unconditionally.
 # Under the all-Claude default that leaves two fully-populated workspaces for CLIs no
 # role is bound to — and in THIS repository they are tracked, so the noise is in git too.
 # Provisioning now follows the binding; the directories stay vendor-named and the
-# src/agents + src/gemini adapters are untouched (D-052).
+# the single src/claude adapter is untouched.
 _locate_provider_workspace() {
   ai_os_locate "shared/provider-workspace.mjs" && return 0
   local _sd; _sd="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
@@ -867,8 +839,8 @@ _report_stale_provider_workspaces() {
 # unmapped provider nothing is upstream any more, so every entry sync wrote and nobody
 # edited is prunable, and everything else is reported as `orphan (kept)`. That is why
 # this reuses _prune_workspace_dir instead of reaching for `rm -rf`: a user's own skill
-# sitting in .agents/skills/ is protected here by exactly the same rule that protects it
-# during an ordinary sync.
+# sitting in a stale workspace's skills/ is protected here by exactly the same rule that
+# protects it during an ordinary sync.
 #
 # The directory itself is removed ONLY when it ends up empty. Anything left is named,
 # with the reason, so the operator finishes the job deliberately or not at all.
@@ -894,7 +866,7 @@ _prune_provider_workspaces() {
     # ships today. The NAME set stays empty (nothing is upstream for an unmapped
     # provider); only the identity evidence is added.
     local -a _canon=()
-    for sub in shared/skills agents/skills claude/skills shared/agents claude/agents gemini/agents; do
+    for sub in shared/skills claude/skills shared/agents claude/agents; do
       [[ -d "${AIOS}/${sub}" ]] && _canon+=("${AIOS}/${sub}")
     done
     for sub in skills agents; do
@@ -912,15 +884,6 @@ _prune_provider_workspaces() {
     if [[ -n "$mcp" && "$mcp" == "${dir}/"* && -f "$mcp" ]]; then
       rm -f "$mcp" && echo "    - removed ${mcp} (generated MCP config for '${provider}')"
     fi
-    # Scaffolding this project's installed framework still ships: removable only when it
-    # is BYTE-IDENTICAL to the source, i.e. provably not something anyone has edited.
-    local scaffold src
-    for scaffold in AGENTS.md GEMINI.md; do
-      src="${AIOS}/templates/${scaffold}"
-      if [[ -f "${dir}/${scaffold}" && -f "$src" ]] && cmp -s "${dir}/${scaffold}" "$src"; then
-        rm -f "${dir}/${scaffold}" && echo "    - removed ${dir}/${scaffold} (unmodified copy of the template)"
-      fi
-    done
     # Empty directories are the only ones removed outright.
     find "$dir" -type d -empty -delete 2>/dev/null || true
     if [[ -d "$dir" ]]; then
@@ -967,6 +930,78 @@ _prune_stale_workspace_dir() {
   return 0
 }
 
+# ── E-254 (D-069 §Components 2): legacy workspace pruning ────────────────────
+#
+# A project upgraded from v3 still has the two retired providers' workspace dirs and shims
+# — directories and shims for two providers v4 no longer has. Leaving them is confusing
+# (they look current) and deleting them outright is worse: sync did not write everything
+# inside them, and a tool that removes a file a person wrote is a tool nobody trusts again.
+#
+# The rule is the E-220 one, unchanged: remove ONLY what the sync manifest says sync
+# generated and the file still matches; print the rest with the exact `rm` the operator can
+# run. Never delete a file this command did not generate.
+#
+# Rollback: AI_OS_KEEP_LEGACY_WORKSPACES=1 prints every leftover and deletes nothing.
+_prune_legacy_workspaces() {
+  local mode="${1:-sync}"
+  local keep="${AI_OS_KEEP_LEGACY_WORKSPACES:-0}"
+  local -a legacy_dirs=(".gemini" ".agents")
+  local -a legacy_files=("GEMINI.md" "AGENTS.md")
+  local found=0 d f
+
+  for d in "${legacy_dirs[@]}"; do [[ -d "$d" ]] && found=1; done
+  for f in "${legacy_files[@]}"; do [[ -f "$f" ]] && found=1; done
+  [[ "$found" -eq 0 ]] && return 0
+
+  if [[ "$keep" == "1" ]]; then
+    echo "  Legacy v3 workspaces present (AI_OS_KEEP_LEGACY_WORKSPACES=1 — nothing removed):"
+    for d in "${legacy_dirs[@]}"; do [[ -d "$d" ]] && echo "    legacy leftover (not generated by sync): ${d} — remove with: rm -r ${d}"; done
+    for f in "${legacy_files[@]}"; do [[ -f "$f" ]] && echo "    legacy leftover (not generated by sync): ${f} — remove with: rm ${f}"; done
+    return 0
+  fi
+
+  # Manifest-owned entries first. The canonical set is src/claude + src/shared only: in v4
+  # those are the ONLY directories that ship, so a leftover matching one of them byte for
+  # byte is provably a copy of something the framework still distributes.
+  local -a _canon=()
+  local sub
+  for sub in shared/skills claude/skills shared/agents claude/agents; do
+    [[ -d "${AIOS}/${sub}" ]] && _canon+=("${AIOS}/${sub}")
+  done
+
+  for d in "${legacy_dirs[@]}"; do
+    [[ -d "$d" ]] || continue
+    for sub in skills agents; do
+      [[ -d "${d}/${sub}" ]] && AI_OS_PRUNE_KNOWN=1 \
+        _prune_stale_workspace_dir "${d}/${sub}" ${_canon[@]+"${_canon[@]}"}
+    done
+    # Sync's own bookkeeping — written by sync, read only by sync. NOT settings.json: v3
+    # MERGED into it, keeping the user's own keys, so nothing proves it is ours to delete.
+    rm -f "${d}/skills/_SKILLS_INDEX.md" "${d}/agents/_SKILLS_INDEX.md" \
+          "${d}/skills/_SYNC_MANIFEST.json" "${d}/agents/_SYNC_MANIFEST.json" 2>/dev/null || true
+    find "$d" -type d -empty -delete 2>/dev/null || true
+    if [[ -d "$d" ]]; then
+      echo "  legacy leftover (not generated by sync): ${d} — remove with: rm -r ${d}"
+      find "$d" -type f 2>/dev/null | sed 's/^/      /'
+    else
+      echo "  pruned legacy workspace: ${d}"
+    fi
+  done
+
+  # The shims. Removable only when BYTE-IDENTICAL to the template this install shipped —
+  # the one piece of evidence that proves nobody edited them. v4 no longer ships either
+  # template, so the comparison runs against the last-installed copy when it is still
+  # present and otherwise refuses, which is the safe direction.
+  for f in "${legacy_files[@]}"; do
+    [[ -f "$f" ]] || continue
+    if [[ -f "${AIOS}/templates/${f}" ]] && cmp -s "$f" "${AIOS}/templates/${f}"; then
+      rm -f "$f" && echo "  pruned legacy shim: ${f} (unmodified copy of the template)"
+    else
+      echo "  legacy leftover (not generated by sync): ${f} — remove with: rm ${f}"
+    fi
+  done
+}
+
 _sync_workspace_dirs() {
   local mode="${1:-sync}"
   # E-217: counts unresolved multi-role skill-name collisions across every workspace.
@@ -984,53 +1019,12 @@ _sync_workspace_dirs() {
     echo "  .claude/ synced (agents + skills + _SKILLS_INDEX.md + settings.json)"
   fi
 
-  # E-132 (antigravity-migration): workspace skills migrated to .agents/skills/;
-  # Gemini agents + GEMINI.md remain in .gemini/ per blueprint §API/Interface Contracts.
-  # E-244: only when a role is actually bound to gemini. Skipping is announced rather
-  # than silent — a reader who expects .gemini/ to appear needs to know WHY it did not,
-  # or the next debugging session starts by suspecting sync is broken.
-  if ! _provider_is_provisionable gemini; then
-    [[ "$mode" == "init" ]] || echo "  .gemini/ skipped (no role bound to 'gemini' — see .ai/roles.json)"
-  else
-  mkdir -p ".gemini/agents"
-  # E-212: gemini receives the agent dirs of whatever role it serves; when it serves
-  # none the legacy set still lands, so a gemini-Architect project is unchanged.
-  # gemini takes AGENTS ONLY — E-132 moved the workspace skills to .agents/skills,
-  # and nothing reads .gemini/skills, so provisioning it would create dead dirs.
-  _provision_workspace "gemini" ".gemini" "no" "yes"
-  cp -f "${AIOS}/gemini/agents/"*.md ".gemini/agents/" 2>/dev/null || true
-  # Claude-only frontmatter keys are stripped for the Gemini CLI. This runs AFTER the copy
-  # and is now the ONLY place the strip happens (E-248 / D-067 §2): the transformation
-  # belongs at this provider's boundary, applied to the copy being written here, never to
-  # the mirror or src/ that every other provider reads from.
-  strip_gemini_agent_fields ".gemini/agents"
-  _configure_project_gemini_settings ".gemini"
-  if [[ "$mode" == "init" ]]; then
-    echo "Created .gemini/ (project-scoped agents + settings.json)"
-  else
-    echo "  .gemini/ synced (agents + settings.json)"
-  fi
-  fi
-
-  # .agents/ — Antigravity CLI workspace skills (E-132 migration target).
-  # E-244: only when a role is actually bound to agy.
-  if ! _provider_is_provisionable agy; then
-    [[ "$mode" == "init" ]] || echo "  .agents/ skipped (no role bound to 'agy' — see .ai/roles.json)"
-  else
-  mkdir -p ".agents/skills"
-  # E-212: skills only — agy subagents ship as an installed plugin (E-144), never as
-  # loose .agents/agents/ files, so agent_dirs are deliberately NOT provisioned here.
-  _provision_workspace "agy" ".agents" "yes" "no" "shared/skills" "agents/skills"
-  # E-195: scaffold the Architect bootloader shim into the agy workspace so
-  # Antigravity auto-loads ARCHITECT.md and stays in the Architect persona
-  # (no source-code drift, §35). AGENTS.md @imports the root ARCHITECT.md.
-  cp -f "${AIOS}/templates/AGENTS.md" ".agents/AGENTS.md" 2>/dev/null || true
-  if [[ "$mode" == "init" ]]; then
-    echo "Created .agents/ (Antigravity workspace skills + AGENTS.md → ARCHITECT.md)"
-  else
-    echo "  .agents/ synced (Antigravity workspace skills + _SKILLS_INDEX.md + AGENTS.md)"
-  fi
-  fi
+  # E-254 (D-069): v4 is Claude-native — one provider, three Claude roles — so there is
+  # exactly one workspace to provision, and E-244's "provisioned only when a role is bound
+  # to it" machinery has nothing left to decide.
+  # A project upgrading from v3 still has the old workspaces; _prune_legacy_workspaces
+  # removes the ones sync generated and reports the rest rather than guessing.
+  _prune_legacy_workspaces "$mode"
 }
 
 ensure_ai_templates() {
@@ -1063,15 +1057,14 @@ ensure_ai_templates() {
   echo "Updated .mcp.json (MCP servers: filesystem + memory + AI-OS custom servers)"
 
   # Bootloaders (D-050/E-183): ENGINEER.md/ARCHITECT.md are the canonical rulefiles;
-  # CLAUDE.md/GEMINI.md are thin @import shims so vendor auto-load (Claude Code, Gemini)
+  # CLAUDE.md is a thin @import shim so Claude Code's auto-load
   # still bootstraps the right persona. Copy all four so skill invocation stays current.
   cp -f "$T/ENGINEER.md"  "ENGINEER.md"
   cp -f "$T/ARCHITECT.md" "ARCHITECT.md"
   cp -f "$T/CLAUDE.md"    "CLAUDE.md"
-  cp -f "$T/GEMINI.md"    "GEMINI.md"
-  echo "Updated ENGINEER.md/ARCHITECT.md (canonical bootloaders) + CLAUDE.md/GEMINI.md (shims)"
+  echo "Updated ENGINEER.md/ARCHITECT.md (canonical bootloaders) + CLAUDE.md (shim)"
 
-  # .claude/, .gemini/, .agents/ — project-scoped agent dirs (v3.0 W3-T3: shared helper).
+  # .claude/ — the project-scoped agent dir (v3.0 W3-T3: shared helper).
   _sync_workspace_dirs init
 
   # .github/copilot-instructions.md — read automatically by GitHub Copilot Chat
@@ -1100,7 +1093,7 @@ migrate_legacy_ai_if_present() {
 
 
 # Writes .claude/settings.json in a project directory with project-scoped hooks,
-# agent teams env var, Gemini permission, and registry-driven MCP tool permissions.
+# agent teams env var and registry-driven MCP tool permissions.
 # $1: target dir (e.g. ".claude")
 
 # ── E-208 (D-054, role-abstraction.md §Components 3): per-role settings overlay ──
@@ -1259,7 +1252,8 @@ if _aios_ws:
 env["AI_OS_CALLER_ROLE"] = "engineer"
 
 # Permissions: registry-driven MCP tools.
-# E-213: the legacy `Bash(gemini -p *)` grant is DROPPED. The Gemini CLI was retired
+# E-213/E-254: the legacy v3 vendor-CLI shell grants are DROPPED and actively stripped from
+# any settings.json carried over from v3. The CLI they granted was retired
 # (D-050) and the A2A bridge is provider-aware as of E-210, so the base Engineer
 # settings no longer need a vendor-specific shell grant. Existing entries are pruned
 # on sync so the rule does not linger in projects that already have it.
@@ -1377,100 +1371,6 @@ print(f"{path} updated ✓")
 PY
 }
 
-# Writes .gemini/settings.json in a project directory with project-scoped MCP server config.
-# $1: target dir (e.g. ".gemini")
-_configure_project_gemini_settings() {
-  local TARGET_DIR="${1:-.gemini}"
-  local REGISTRY="${AIOS}/config/registry.json"
-  mkdir -p "$TARGET_DIR"
-  python3 - "$TARGET_DIR" "$REGISTRY" "$AIOS" <<'PY'
-import json, os, sys
-
-target_dir, registry_path, aios = sys.argv[1], sys.argv[2], sys.argv[3]
-path = os.path.join(target_dir, "settings.json")
-
-# Base npm-managed servers (not path-based, shared between Claude and Gemini)
-servers = {
-    "filesystem": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem@2026.1.14", os.getcwd()]
-    },
-    "memory": {
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"]
-    }
-}
-
-# Registry-driven custom servers (same source of truth as generate_mcp_json)
-gemini_cfg = {}
-if os.path.exists(registry_path):
-    with open(registry_path) as f:
-        reg = json.load(f)
-    for name, info in reg.get("mcp_servers", {}).items():
-        if "path" in info:
-            abs_path = os.path.join(aios, "mcp", name, "index.js")
-            entry = {"command": "node", "args": [abs_path]}
-            # E-38: propagate registry env so sandboxed servers (computer-use-mcp)
-            # keep DISPLAY/HOME across `ai sync` regenerations.
-            if isinstance(info.get("env"), dict) and info["env"]:
-                entry["env"] = dict(info["env"])
-            servers[name] = entry
-    gemini_cfg = reg.get("gemini") or {}
-
-data = {}
-if os.path.exists(path):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f) or {}
-    except Exception as e:
-        print(f"WARN: {path} is not valid JSON ({e}). Recreating.")
-
-data["mcpServers"] = servers
-
-# E-129 (sovereignty-hardening.md §Security): freeze the Architect role into the
-# safe-exec-mcp server's PER-SERVER spawn env. The long-running server captures
-# this once at spawn, so an in-session `unset/export AI_OS_CALLER_ROLE` in a Bash
-# subprocess cannot reach the running server — the architect's sole enforcement
-# surface (analyze_command) stays authoritative. Defense-in-depth over the global
-# session env (which is also spawn-frozen for the long-running server).
-if "safe-exec-mcp" in servers:
-    servers["safe-exec-mcp"].setdefault("env", {})["AI_OS_CALLER_ROLE"] = "architect"
-
-# E-45: pin gemini-3.1-pro and the May 2026 'steps' Interactions API schema.
-# Honour an explicit env override (GEMINI_MODEL) so the rollback path
-# documented in may-2026-upgrades.md works without re-editing the registry.
-#
-# Gemini CLI v0.40+ rejects a bare string for `model`: "Expected object,
-# received string". The setting must be an object with at least a `name`
-# key. We migrate any pre-existing string value in place so users don't
-# have to manually fix .gemini/settings.json.
-default_model = os.environ.get("GEMINI_MODEL") or gemini_cfg.get("default_model")
-api_schema    = gemini_cfg.get("interactions_api_schema")
-if default_model:
-    existing = data.get("model")
-    if existing is None:
-        data["model"] = {"name": default_model}
-    elif isinstance(existing, str):
-        # Legacy string shape — migrate to the object form, preserving the
-        # user's chosen value.
-        data["model"] = {"name": existing}
-    elif isinstance(existing, dict) and not existing.get("name"):
-        existing["name"] = default_model
-    # else: well-formed object with explicit name — leave alone (user override).
-if api_schema and not data.get("interactions_api_schema"):
-    data["interactions_api_schema"] = api_schema
-
-# E-127 (sovereignty-hardening.md §Security): bootloader-inject the Triad role so
-# safe-exec trusts the ENVIRONMENT over the agent-self-reported caller_role. This
-# is Gemini's project → architect. Authoritative (not setdefault).
-data.setdefault("env", {})["AI_OS_CALLER_ROLE"] = "architect"
-
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2, ensure_ascii=False)
-    f.write("\n")
-print(f"{path} MCP config updated ✓")
-PY
-}
 
 install_global() {
   _parse_role_flags "$@"   # E-135: --architect/--engineer overrides (validated; bad format aborts)
@@ -1517,23 +1417,6 @@ install_global() {
     echo "  ⚠  Node.js not found — MCP setup skipped. Install Node.js then run: ai mcp-setup"
   fi
 
-  # E-248 (D-067 §2): the mirror is CANONICAL and is no longer stripped here.
-  #
-  # The three keys (disable-model-invocation, user-invocable, allowed-tools) are Claude
-  # frontmatter the Gemini CLI rejects, so install used to remove them from
-  # ${AIOS}/gemini/agents. That was harmless while src/gemini/agents served only Gemini.
-  # E-212 made provisioning ROLE-aware: `gemini/agents` is the ARCHITECT's agent directory
-  # whatever provider holds the role, so under the D-066 all-Claude default those seven
-  # agents are copied into .claude/agents/ — from the stripped mirror. A Claude Architect
-  # lost the very keys that tell Claude Code what its agents may do.
-  #
-  # The transformation now happens at the provider BOUNDARY (D-052): on the copy written
-  # into a .gemini/ workspace, never on the source every other provider reads.
-  if [[ "${AI_OS_STRIP_MIRROR:-0}" == "1" && -d "${AIOS}/gemini/agents" ]]; then
-    strip_gemini_agent_fields "${AIOS}/gemini/agents"
-    echo "✓ Gemini agent frontmatter sanitized in the MIRROR (AI_OS_STRIP_MIRROR=1 — pre-E-248 behaviour)"
-  fi
-
   # E-135: persist explicit role overrides to .ai/roles.json when run inside a project.
   if [[ -n "$ROLE_ARCHITECT" || -n "$ROLE_ENGINEER" ]]; then
     if [[ -d ".ai" ]]; then
@@ -1545,7 +1428,7 @@ install_global() {
 
   echo ""
   echo "✓ AI-OS global installation complete → ${AIOS}"
-  echo "  Run 'ai init' inside any project to scaffold .ai/, .claude/, and .gemini/."
+  echo "  Run 'ai init' inside any project to scaffold .ai/ and .claude/."
 }
 
 # Marker emitted in every AI-OS execution stub. Anything containing this line
@@ -1895,7 +1778,7 @@ import json, re, sys
 tasks_file = sys.argv[1]
 out_file   = sys.argv[2]
 # Derived label (E-243). Falls back to a bare role name rather than a vendor: if roles.json
-# cannot be read, "Architect" is still true, whereas "Architect (Agy)" may not be.
+# cannot be read, "Architect" is still true, whereas a vendor-qualified label may not be.
 import os as _os
 ARCH_OWNER = _os.environ.get("AIOS_ARCH_OWNER") or "Architect"
 
@@ -1907,9 +1790,9 @@ STATUS_RE  = re.compile(r'^\s{2}Status:\s+DONE\s+(\d{4}-\d{2}-\d{2})\s+[—–-]
 
 OWNER_PATTERNS = [
     # D-066/E-243: the owner label is DERIVED from roles.json, passed in as ARCH_OWNER.
-    # It was hard-coded as 'Architect (Agy)', so an all-Claude project stamped every
+    # It was hard-coded with a vendor name, so an all-Claude project stamped every
     # Architect-owned task with a vendor that no role was bound to.
-    (re.compile(r'\bArchitect\b|\(Gemini\)',     re.IGNORECASE), ARCH_OWNER),
+    (re.compile(r'\bArchitect\b',                re.IGNORECASE), ARCH_OWNER),
     (re.compile(r'\bEngineer\b|\(Claude\)',      re.IGNORECASE), 'Engineer (Claude)'),
     (re.compile(r'\bTester\b|\(TestSprite\)',    re.IGNORECASE), 'Tester (TestSprite)'),
 ]
@@ -2022,7 +1905,7 @@ PY
   echo "[MIGRATE-STATE] Migration complete."
   printf "  Tasks seeded to state.json: %s\n" "$TASK_COUNT"
   echo "  state.sqlite: will be created from state.json on first task-synchronizer-mcp call"
-  echo "  To verify: open Claude Code or Gemini and run skill: ai-test"
+  echo "  To verify: open Claude Code and run skill: ai-test"
 }
 
 
@@ -2180,13 +2063,13 @@ for issue in issues:
     ]))
     parts.append(block)
 # E-243: role-derived, not vendor-literal — an all-Claude project was told to hand work to
-# "Agy", a provider no role was bound to.
+# a vendor no role was bound to.
 _arch_owner = os.environ.get("AIOS_ARCH_OWNER") or "Architect"
 footer = "\n## Action Required\n%s: Review the issues above and create P-## blueprint tasks via:\n  mcp__task-synchronizer-mcp__add_task({ prefix: 'P', owner: '%s', description: '...', tier: N })\nThis writes to state.sqlite and regenerates TASKS.md automatically.\n" % (_arch_owner, _arch_owner)
 print(header + "\n\n---\n\n".join(parts) + "\n" + footer)
 PY
 
-  echo "✓ Issues fetched. Paste the output above into your chat with Agy to blueprint them."
+  echo "✓ Issues fetched. Paste the output above into the Architect pane to blueprint them."
 }
 
 # ── E-233 (D-060 §4): keep generated sync artefacts out of git ────────────────────
@@ -2429,33 +2312,21 @@ do_sync() {
     [[ "$arg" == "--prune-providers" ]] && PRUNE_PROVIDERS=1
   done
 
-  # E-165 (agy-subagent-robustness.md): OAuth token pre-flight, so a lapsed Antigravity
-  # login surfaces here rather than mid-subagent. Non-fatal (warn-only).
-  verify_auth_token
-
-  # E-144 (native-subagents.md, reconciled): the former `ai sync --agents` mapper
-  # (E-140) wrote loose .agents/agents/ manifests that agy never reads — it was a
-  # dead path and has been retired. Native agy subagents now ship as a plugin:
-  #   ai provider install-plugin agy   (installs globally, once per machine)
-
-  # Sync project-scoped dirs only — global ~/.claude and ~/.gemini are user-owned (§21)
+  # Sync project-scoped dirs only — global ~/.claude is user-owned (§21)
   if [[ -d ".ai" ]]; then
-    echo "Syncing project-scoped .claude/ and .gemini/ from ${AIOS} ..."
+    echo "Syncing project-scoped .claude/ from ${AIOS} ..."
 
     # Always update bootloaders so skill invocation stays current (D-050/E-183:
-    # canonical ENGINEER.md/ARCHITECT.md + CLAUDE.md/GEMINI.md @import shims).
+    # canonical ENGINEER.md/ARCHITECT.md + the CLAUDE.md @import shim).
     local T="${AIOS}/templates"
     cp -f "$T/ENGINEER.md"  "ENGINEER.md"  && echo "  ENGINEER.md updated (canonical bootloader)"
     cp -f "$T/ARCHITECT.md" "ARCHITECT.md" && echo "  ARCHITECT.md updated (canonical bootloader)"
     cp -f "$T/CLAUDE.md"    "CLAUDE.md"    && echo "  CLAUDE.md updated (shim → ENGINEER.md)"
-    cp -f "$T/GEMINI.md"    "GEMINI.md"    && echo "  GEMINI.md updated (shim → ARCHITECT.md)"
 
     # Always regenerate .mcp.json to pick up new servers (preserves user env values)
     generate_mcp_json "." && echo "  .mcp.json updated (MCP server registry)"
 
-    # .claude/, .gemini/, .agents/ — project-scoped agent dirs (v3.0 W3-T3: shared helper).
-    # Native agy subagents ship as an installed plugin (ai provider install-plugin agy),
-    # not loose .agents/agents/ files — so they are not synced here.
+    # .claude/ — the project-scoped workspace (v3.0 W3-T3: shared helper).
     _sync_workspace_dirs sync
     if [[ "${SKILL_COLLISIONS:-0}" -gt 0 ]]; then
       echo "" >&2
@@ -2533,7 +2404,7 @@ do_sync() {
     return 0
   else
     echo "  Not in an AI-OS project (.ai/ not found) — nothing to sync."
-    echo "  Run 'ai init' first to scaffold .ai/, .claude/, and .gemini/."
+    echo "  Run 'ai init' first to scaffold .ai/ and .claude/."
     exit 0
   fi
 
@@ -2556,7 +2427,7 @@ _report_role_provisioning() {
 
   local roles_json=".ai/roles.json"
   if [[ ! -f "$roles_json" ]]; then
-    echo "  ! .ai/roles.json missing — falling back to the D-050 defaults (architect=agy, engineer=claude)"
+    echo "  ! .ai/roles.json missing — falling back to the D-050 defaults (architect=claude, engineer=claude)"
   fi
 
   # Role -> provider straight from roles.json, defaults applied by the shared helper.
@@ -2572,8 +2443,6 @@ import(pathToFileURL(process.argv[1]).href).then(m =>
     # Vendor workspace for that provider (D-052 keeps these vendor-named).
     case "$provider" in
       claude) ws=".claude" ;;
-      gemini) ws=".gemini" ;;
-      agy)    ws=".agents" ;;
       *)      ws="" ;;
     esac
 
@@ -2589,19 +2458,12 @@ import(pathToFileURL(process.argv[1]).href).then(m =>
       n_sk="$(find "$skills_dir" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l | tr -d " ")"
       echo "      ✓ skills   ${skills_dir} (${n_sk})"
     else
-      # agy takes skills; gemini deliberately does not (E-132/E-212).
-      if [[ "$ws" == ".gemini" ]]; then
-        echo "      - skills   n/a for gemini (workspace skills live in .agents/skills)"
-      else
-        echo "      ✗ skills   ${skills_dir} missing — run: ai sync"
-      fi
+      echo "      ✗ skills   ${skills_dir} missing — run: ai sync"
     fi
 
-    # Agents: agy ships subagents as an installed plugin (E-144), not loose files.
+    # Agents
     agents_dir="${ws}/agents"
-    if [[ "$ws" == ".agents" ]]; then
-      echo "      - agents   n/a for agy (subagents ship as a plugin: ai provider install-plugin agy)"
-    elif [[ -d "$agents_dir" ]]; then
+    if [[ -d "$agents_dir" ]]; then
       n_ag="$(find "$agents_dir" -maxdepth 1 -name "*.md" 2>/dev/null | wc -l | tr -d " ")"
       echo "      ✓ agents   ${agents_dir} (${n_ag})"
     else
@@ -2674,10 +2536,6 @@ doctor() {
   fi
   echo ""
 
-  echo "Gemini (Global — user-owned, not managed by AI-OS):"
-  [[ -d "${HOME}/.gemini" ]] && echo "  ✓ ~/.gemini exists" || echo "  ✗ ~/.gemini missing (create with: mkdir -p ~/.gemini)"
-  echo ""
-
   echo "Claude (Global — user-owned, not managed by AI-OS):"
   [[ -d "${HOME}/.claude" ]] && echo "  ✓ ~/.claude exists" || echo "  ✗ ~/.claude missing"
   echo ""
@@ -2716,42 +2574,19 @@ doctor() {
     fi
     echo ""
 
-    echo "Project-Scoped (.claude/ / .gemini/ / .agents/):"
-    for agent_dir in ".claude" ".gemini"; do
-      if [[ -d "${agent_dir}/agents" ]]; then
-        echo "  ✓ ${agent_dir}/agents: $(ls "${agent_dir}/agents" | wc -l | tr -d ' ') files"
-      else
-        echo "  ✗ ${agent_dir}/agents: missing — run: ai init"
-      fi
-    done
-    # E-132: Claude skills live in .claude/skills; Antigravity workspace skills in
-    # .agents/skills. .gemini/skills was migrated away (E-132) — checking it here
-    # produced a false ✗, so skill dirs are checked at their real locations.
-    for skill_dir in ".claude/skills" ".agents/skills"; do
-      if [[ -d "${skill_dir}" ]]; then
-        echo "  ✓ ${skill_dir}: $(ls "${skill_dir}" | wc -l | tr -d ' ') entries"
-      else
-        echo "  ✗ ${skill_dir}: missing — run: ai init"
-      fi
-    done
+    echo "Project-Scoped (.claude/):"
+    if [[ -d ".claude/agents" ]]; then
+      echo "  ✓ .claude/agents: $(ls ".claude/agents" | wc -l | tr -d ' ') files"
+    else
+      echo "  ✗ .claude/agents: missing — run: ai init"
+    fi
+    if [[ -d ".claude/skills" ]]; then
+      echo "  ✓ .claude/skills: $(ls ".claude/skills" | wc -l | tr -d ' ') entries"
+    else
+      echo "  ✗ .claude/skills: missing — run: ai init"
+    fi
     echo ""
   fi
-
-  # E-144: Antigravity native subagents ship as a GLOBAL plugin (~/.gemini/config/
-  # plugins/ai-os/). Report install state — agy lists custom agents only when this
-  # plugin is installed; loose workspace .agents/agents/ files are never scanned.
-  echo "Antigravity (agy native subagents):"
-  if ! command -v agy >/dev/null 2>&1; then
-    echo "  - agy not on PATH (skip — install Antigravity to use native subagents)"
-  else
-    local _agy_plugin="${HOME}/.gemini/config/plugins/ai-os/agents"
-    if [[ -d "$_agy_plugin" ]]; then
-      echo "  ✓ ai-os plugin installed: $(ls "$_agy_plugin" 2>/dev/null | wc -l | tr -d ' ') subagents"
-    else
-      echo "  ✗ ai-os plugin NOT installed — run: ai provider install-plugin agy"
-    fi
-  fi
-  echo ""
 
   echo "Hooks:"
   if [[ -f "${HOME}/.ai-os/hooks/stop-hook.sh" ]]; then
@@ -2809,9 +2644,6 @@ print('  agent teams:', env.get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', 'NOT SET
 hooks = d.get('hooks', {})
 print('  Stop hook:', 'yes ✓' if hooks.get('Stop') else 'NO - run: ai install')
 print('  PostToolUse hook:', 'yes ✓' if hooks.get('PostToolUse') else 'NO - run: ai install')
-allow = d.get('permissions', {}).get('allow', [])
-broad = [x for x in allow if x == 'Bash(gemini *)']
-print('  Gemini perm:', 'BROAD (Bash(gemini *)) - run: ai install to fix' if broad else 'scoped ✓')
 " 2>/dev/null || echo "  ✗ could not parse settings.json"
   else
     echo "  ✗ missing — run: ai install"
@@ -3277,8 +3109,6 @@ search_paths = [
     Path(aios) / "claude" / "agents",
     Path(aios) / "claude" / "skills",
     Path(aios) / "shared" / "skills",
-    Path(aios) / "gemini" / "agents",
-    Path(aios) / "agents" / "skills",  # E-132: Antigravity workspace skills (was gemini/skills, E-116)
 ]
 # Also scan project-local if we're in an AI-OS project
 if Path(".ai").exists():
@@ -3286,12 +3116,9 @@ if Path(".ai").exists():
         Path("src/claude/agents"),
         Path("src/claude/skills"),
         Path("src/shared/skills"),
-        Path("src/agents/skills"),  # E-132: migrated from src/gemini/skills
         # E-118: project-scoped dirs (populated by ai init / ai sync)
         Path(".claude/agents"),
         Path(".claude/skills"),
-        Path(".gemini/agents"),
-        Path(".agents/skills"),  # E-132: migrated from .gemini/skills
     ]
 
 violations = []
@@ -3334,14 +3161,13 @@ for base in search_paths:
                 })
 
 # E-121: ANTI-DRIFT PROTOCOL check — the canonical project rulefiles must contain the
-# header. E-183/D-050: these are now ENGINEER.md/ARCHITECT.md (CLAUDE.md/GEMINI.md are
-# @import shims and carry no header). The global install rulefiles keep their vendor names.
+# header. E-183/D-050: these are now ENGINEER.md/ARCHITECT.md (CLAUDE.md is an
+# @import shim and carries no header). The global install rulefile keeps its vendor name.
 ANTI_DRIFT_HEADER = "ANTI-DRIFT PROTOCOL"
 anti_drift_targets = []
 if Path(".ai").exists():
     anti_drift_targets += [Path("ENGINEER.md"), Path("ARCHITECT.md")]
-anti_drift_targets += [Path(aios) / "claude" / "CLAUDE.md",
-                       Path(aios) / "gemini" / "GEMINI.md"]
+anti_drift_targets += [Path(aios) / "claude" / "CLAUDE.md"]
 seen_targets = set()
 for t in anti_drift_targets:
     if t in seen_targets or not t.exists():
@@ -3499,7 +3325,7 @@ for name, info in d.get('mcp_servers', {}).items():
 
 # E-34: Remove the global AI-OS install. Project .ai/ directories are
 # untouched; only ~/.ai-os/ (the shared install root) is deleted. PATH and
-# user configs (~/.claude, ~/.gemini) are flagged for manual cleanup since
+# user config (~/.claude) are flagged for manual cleanup since
 # they may contain unrelated user data.
 do_uninstall() {
   if [[ ! -d "$AIOS" ]]; then
@@ -3515,7 +3341,6 @@ Will be deleted:
 
 Will NOT be touched (manual cleanup):
   ~/.claude/      (your Claude settings + agents — may contain unrelated data)
-  ~/.gemini/      (your Gemini settings + agents — may contain unrelated data)
   ~/.config/github-copilot/
   any project's .ai/, .mcp.json, .git/hooks/pre-commit
   PATH entry in your shell rc (you must remove ~/.ai-os/bin manually)
@@ -3532,184 +3357,19 @@ WARN
   echo ""
   echo "Manual cleanup steps:"
   echo "  1. Edit ~/.zshrc or ~/.bashrc and remove:  export PATH=\"\$HOME/.ai-os/bin:\$PATH\""
-  echo "  2. Review ~/.claude/agents/ and ~/.gemini/agents/ for AI-OS-specific files"
+  echo "  2. Review ~/.claude/agents/ for AI-OS-specific files"
   echo "  3. In each project: \`rm .git/hooks/pre-commit\` if it sources hooks/pre-commit.sh"
-}
-
-# ── E-138 (role-abstraction.md): Provider Adapter System ──────────────────────
-# .ai/providers.json maps a CLI provider → { mcp_config_path, mcp_key }. New agents
-# are registered with `ai provider add`, which then generates that provider's MCP
-# config from the server registry. claude/gemini keep their dedicated generators;
-# this enables drop-in providers (e.g. agy → .agents/mcp_config.json) without code.
-
-# Reject a provider config path that escapes the project (blueprint §Security): no
-# absolute paths, no '..' traversal, no '~' home expansion, non-empty.
-_validate_provider_path() {
-  local p="$1"
-  case "$p" in
-    "")    echo "[ERROR] --config-path is required." >&2; return 1 ;;
-    /*)    echo "[ERROR] --config-path must be project-relative, not absolute: $p" >&2; return 1 ;;
-    "~"*)  echo "[ERROR] --config-path must not start with '~': $p" >&2; return 1 ;;
-    *..*)  echo "[ERROR] --config-path must not contain '..' (path traversal): $p" >&2; return 1 ;;
-  esac
-  # Symlink-safe containment: the path must canonicalize to within the project root.
-  # os.path.realpath follows symlinks (including dangling ones), closing the symlink-
-  # escape gap that the string checks alone miss (e.g. a planted in-repo symlink whose
-  # target is outside). python3 is already a framework dependency.
-  if command -v python3 >/dev/null 2>&1; then
-    if ! python3 - "$p" <<'PY'
-import os, sys
-proj = os.path.realpath(os.getcwd())
-target = os.path.realpath(os.path.join(os.getcwd(), sys.argv[1]))
-sys.exit(0 if (target == proj or target.startswith(proj + os.sep)) else 1)
-PY
-    then
-      echo "[ERROR] --config-path resolves outside the project (symlink escape?): $p" >&2
-      return 1
-    fi
-  fi
-  return 0
-}
-
-# `ai provider add <name> --config-path <path> --mcp-key <key>`
-ai_provider_add() {
-  local sub="${1:-}"; shift || true
-  if [[ "$sub" != "add" ]]; then
-    echo "Usage: ai provider add <name> --config-path <path> [--mcp-key <key>]" >&2
-    return 1
-  fi
-  local name="${1:-}"; shift || true
-  local config_path="" mcp_key="mcpServers"
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --config-path) config_path="${2:-}"; shift 2 ;;
-      --mcp-key)     mcp_key="${2:-}";     shift 2 ;;
-      *)             shift ;;
-    esac
-  done
-  if [[ -z "$name" || ! "$name" =~ ^[a-z][a-z0-9_-]*$ ]]; then
-    echo "[ERROR] provider name must match [a-z][a-z0-9_-]*, got '$name'" >&2; return 2
-  fi
-  _validate_provider_path "$config_path" || return 2
-  if [[ -z "$mcp_key" ]]; then
-    echo "[ERROR] --mcp-key must be non-empty." >&2; return 2
-  fi
-  if [[ ! -d ".ai" ]]; then
-    echo "[ERROR] no .ai/ here — run 'ai init' first." >&2; return 1
-  fi
-  local providers_file=".ai/providers.json"
-  [[ -f "$providers_file" ]] || printf '{\n  "providers": {}\n}\n' > "$providers_file"
-  # Safe JSON merge via python3 (no bash string surgery on JSON).
-  if ! python3 - "$providers_file" "$name" "$config_path" "$mcp_key" <<'PY'
-import json, sys
-path, name, cfg, key = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-try:
-    with open(path) as f: data = json.load(f)
-except Exception:
-    data = {}
-if not isinstance(data, dict): data = {}
-data.setdefault("providers", {})
-data["providers"][name] = {"mcp_config_path": cfg, "mcp_key": key}
-with open(path, "w") as f:
-    json.dump(data, f, indent=2); f.write("\n")
-PY
-  then
-    echo "[ERROR] failed to update ${providers_file}." >&2; return 1
-  fi
-  echo "✓ Registered provider '${name}' → ${config_path} (key: ${mcp_key})"
-  # Generate the provider's MCP config now, from the same server registry the other
-  # providers use. The path is validated above, so mkdir -p stays inside the project.
-  mkdir -p "$(dirname "$config_path")"
-  generate_mcp_json "." "$config_path" "$mcp_key"
-  echo "✓ Wrote ${config_path} (${mcp_key} from registry)"
-}
-
-# E-165 (agy-subagent-robustness.md): serialized OAuth token pre-flight. agy subagents
-# run in forked sandboxes that each need a live Google OAuth token in
-# ~/.gemini/oauth_creds.json; when it is expired/expiring, parallel spawns race on the
-# refresh and the subagent dies ("Agent execution terminated due to error"). This check
-# serializes via an atomic mkdir lock and verifies the token BEFORE subagents spawn,
-# warning the user to re-authenticate if it is missing or expiring within 5 minutes.
-# Fail-open: it never halts the CLI (rollback per blueprint §Rollback). Disable with
-# AI_OS_SKIP_TOKEN_CHECK=1.
-verify_auth_token() {
-  [[ "${AI_OS_SKIP_TOKEN_CHECK:-0}" == "1" ]] && return 0
-  command -v python3 >/dev/null 2>&1 || return 0   # can't parse JSON → skip silently
-  local creds="${HOME}/.gemini/oauth_creds.json"
-  local lock="${HOME}/.gemini/.ai-os-token.lock"
-  if [[ ! -f "$creds" ]]; then
-    echo "[AUTH_WARN] Not logged into Antigravity (no ~/.gemini/oauth_creds.json) — agy subagents will fail until you sign in." >&2
-    return 0
-  fi
-  # Atomic mkdir lock: if another ai process is already checking, skip (it handles it).
-  mkdir "$lock" 2>/dev/null || return 0
-  local now_ms exp_ms
-  now_ms=$(python3 -c 'import time; print(int(time.time()*1000))')
-  exp_ms=$(python3 -c "import json
-try:
-    print(int(json.load(open('$creds')).get('expiry_date', 0)))
-except Exception:
-    print(0)")
-  # Refresh window: warn if the token is absent/expired or expiring within 5 minutes.
-  if [[ "${exp_ms:-0}" -le $(( now_ms + 300000 )) ]]; then
-    echo "[AUTH_WARN] Antigravity OAuth token expired or expiring within 5m — re-authenticate before running agy subagents, or they fail with \"Agent execution terminated due to error\"." >&2
-  fi
-  rmdir "$lock" 2>/dev/null || true
-  return 0
-}
-
-# E-144 (native-subagents.md, reconciled): install the AI-OS personas into Antigravity
-# as a native plugin. agy registers custom subagents ONLY from installed plugins
-# (`agy plugin install <dir>` → ~/.gemini/config/plugins/ai-os/ → visible in /agents);
-# loose workspace .agents/agents/ files are never scanned. The plugin source is built
-# by src/shared/plugin-builder.mjs and shipped under <root>/agents/plugin/. The install
-# target is GLOBAL/user-scoped, so this is an explicit, idempotent, once-per-machine
-# command (not auto-run by ai init/sync). Re-running overwrites the installed plugin.
-agy_plugin_install() {
-  local plugin_dir=""
-  # NOT routed through _ai_os_helper: `agents/plugin` is a DIRECTORY and the resolver
-  # tests `[[ -f ]]`, so the call could never resolve — it would look routed while always
-  # falling through. The explicit install path is the honest form until the resolver grows
-  # a directory mode.
-  for c in "${AIOS}/agents/plugin"; do
-    [[ -f "$c/plugin.json" && -d "$c/agents" ]] && { plugin_dir="$c"; break; }
-  done
-  if [[ -z "$plugin_dir" ]]; then
-    echo "[ERROR] ai-os agy plugin not found (src/agents/plugin or ${AIOS}/agents/plugin)." >&2
-    echo "        Build it with: node \"${AIOS}/shared/plugin-builder.mjs\"  (or run: ai install)" >&2
-    return 1
-  fi
-  if ! command -v agy >/dev/null 2>&1; then
-    echo "[ERROR] agy (Antigravity CLI) not found on PATH." >&2
-    echo "        Install Antigravity, then re-run: ai provider install-plugin agy" >&2
-    return 1
-  fi
-  local abs; abs="$(cd "$plugin_dir" && pwd)"
-  echo "Installing ai-os agy plugin from ${abs} ..."
-  agy plugin install "$abs"
-  # E-165: verify the OAuth token now so a lapsed login surfaces here, not mid-subagent.
-  verify_auth_token
-  # E-164: agy may record a second 'ai-os' import (e.g. a prior `agy plugin import`),
-  # and the duplicate makes subagent selection fail. Collapse to a single registration.
-  local self_dir; self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local pb=""
-  pb="$(_ai_os_helper shared/plugin-builder.mjs || true)"
-  if [[ -n "$pb" ]] && command -v node >/dev/null 2>&1; then
-    node "$pb" --dedupe-imports || echo "[WARN] import_manifest dedup skipped (non-fatal)." >&2
-  fi
 }
 
 # E-158 (cli-agnostic-handoff): provider-agnostic handoff primitive. Writes the SAME
 # locked .ai/signal.json entry as task-synchronizer-mcp::handoff_control, but as a plain
-# shell command so ANY CLI runtime can emit a handoff — notably the agy (Antigravity)
-# Architect, which runs shell via its `run_command` built-in reliably but does NOT
-# dependably expose/invoke custom project MCP servers to the model (especially when its
-# Antigravity auth has lapsed). Both paths route through src/shared/signal-handoff.mjs so
-# the queue/lock semantics never drift. Usage: ai handoff <architect|engineer|claude|gemini> [message]
+# shell command so a session whose MCP servers are unavailable can still hand off. Both
+# paths route through src/shared/signal-handoff.mjs so the queue/lock semantics never
+# drift. Usage: ai handoff <architect|engineer|claude> [message]
 do_handoff() {
   local target="${1:-}"
   if [[ -z "$target" ]]; then
-    echo "usage: ai handoff <architect|engineer|claude|gemini> [--settle [--settle-timeout N]] [message]" >&2
+    echo "usage: ai handoff <architect|engineer|claude> [--settle [--settle-timeout N]] [message]" >&2
     return 2
   fi
   shift
@@ -3736,10 +3396,9 @@ do_handoff() {
 # E-198 (Ruling A / pending D-053): shell-native task creation. Persists the SAME
 # state.sqlite row as task-synchronizer-mcp::add_task — both route through the shared
 # state-db::addTask so state stays the single source of truth — but as a plain shell
-# command so ANY CLI runtime can register a task. This exists for the agy (Antigravity)
-# Architect, which runs shell reliably but does NOT dependably invoke custom project MCP
-# servers to the model; without it, agy's hand-edited TASKS.md rows are wiped by the next
-# verify_markdown_sync (the "orphaned blueprint" incident). Symmetric to `ai handoff`.
+# command so a session without MCP access can still register a task; without it,
+# hand-edited TASKS.md rows are wiped by the next verify_markdown_sync (the "orphaned
+# blueprint" incident). Symmetric to `ai handoff`.
 # Usage: ai add-task [--prefix E|P] [--owner <name>] [--role architect|engineer] [--tier N] [--depends-on E-1,E-2] <description>
 do_add_task() {
   if ! command -v node >/dev/null 2>&1; then
@@ -4608,27 +4267,26 @@ case "$cmd" in
   # (shell-native, no MCP needed). Usage: ai handoff <role> [message].
   handoff)       do_handoff "${@:2}" ;;
   # E-198 (Ruling A): shell-native task creation — persists to state.sqlite via the
-  # shared addTask (no MCP needed), so agy can register tasks that survive
+  # shared addTask (no MCP needed), so a session can register tasks that survive
   # verify_markdown_sync. Usage: ai add-task [flags] <description>.
   add-task)      do_add_task "${@:2}" ;;
   # E-208 (role-abstraction.md §Same-Provider Triad): bind THIS tmux pane to a role
   # and launch that role's provider CLI. Usage: ai pane <architect|engineer>.
   pane)          do_pane "${@:2}" ;;
   start)         do_start "${@:2}" ;;
-  # E-138 (role-abstraction.md): register a CLI provider in .ai/providers.json and
-  # generate its MCP config. Usage: ai provider add <name> --config-path <p> --mcp-key <k>
-  # E-144: `ai provider install-plugin agy` installs AI-OS personas as a native agy plugin.
+  # E-254 (D-069): `ai provider` is removed. v4 ships ONE provider, and a subcommand whose
+  # whole purpose was registering a second one is dead surface — the registry file remains
+  # the place to edit, so the exit says where rather than only that the command is gone.
   provider)
-    case "${2:-}" in
-      install-plugin) agy_plugin_install "${@:3}" ;;
-      *)              ai_provider_add "${@:2}" ;;
-    esac
+    echo "ai provider: removed in v4 — providers are configured in .ai/providers.json." >&2
+    echo "  AI-OS is Claude-native (D-069): one provider, three Claude roles." >&2
+    exit 2
     ;;
   version|-v|--version) echo "ai-os ${VERSION}" ;;
   ""|help|-h|--help) usage ;;
 
   # Deprecated user surface — removed, see .ai/blueprints/cli-collapse.md
-  update|onboard) _show_deprecated "$cmd" "Open Agy CLI and type the planning request as a prompt." ;;
+  update|onboard) _show_deprecated "$cmd" "Run 'ai start' and type the planning request in the Architect pane." ;;
   preflight)     _show_deprecated "preflight" "skill: ai-preflight  (auto-runs at every session start)" ;;
   digest)        _show_deprecated "digest" "skill: ai-digest" ;;
   archive)       _show_deprecated "archive" "skill: ai-archive" ;;

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # task_planner_routing_test.sh — Tests for E-64.
 #
-# Verifies that the task-planner skill (Gemini-owned) explicitly teaches
+# Verifies that the task-planner skill (Architect-owned) explicitly teaches
 # Step 4 path-classification + the is_framework_task payload contract
 # from .ai/blueprints/task-routing.md, and stays in sync with its
 # ~/.ai-os/ mirror.
@@ -12,8 +12,8 @@ source "${SCRIPT_DIR}/../lib/assert.sh"
 
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-SKILL_SRC="${REPO_ROOT}/src/agents/skills/task-planner/SKILL.md"
-SKILL_MIRROR="${HOME}/.ai-os/agents/skills/task-planner/SKILL.md"
+SKILL_SRC="${REPO_ROOT}/src/claude/skills/task-planner/SKILL.md"
+SKILL_MIRROR="${HOME}/.ai-os/claude/skills/task-planner/SKILL.md"
 
 echo "===== task_planner_routing_test.sh ====="
 

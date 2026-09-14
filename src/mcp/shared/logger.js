@@ -8,7 +8,7 @@
  *   import { createLogger } from "../shared/logger.js";
  *   const log = createLogger("advisor-mcp");
  *   log.info("ask_architect", "query received", { length: 42 });
- *   log.error("ask_architect", "gemini unavailable", { code: "ENOENT" });
+ *   log.error("ask_architect", "architect unavailable", { code: "ENOENT" });
  *
  * Schema (per line):
  *   { timestamp, level, service, tool?, message, ...extras }

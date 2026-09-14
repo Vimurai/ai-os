@@ -45,8 +45,8 @@ Required sections:
 - <one-line tech stack>
 
 ## Triad Health
-- Architect (Agy): <status — last P-## task>
-- Engineer (Claude): <status — last E-## task>
+- Architect: <status — last P-## task>
+- Engineer: <status — last E-## task>
 - Tester (TestSprite): <status — last test run>
 
 ## Current Focus

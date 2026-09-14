@@ -2,14 +2,12 @@
 // signal into a project's .ai/signal.json (interactive-bridge.md §API).
 //
 // WHY THIS EXISTS (E-158, cli-agnostic-handoff):
-//   The handoff was previously reachable ONLY via task-synchronizer-mcp::handoff_control.
-//   That works for Claude (which reliably calls custom MCP tools) but NOT for the agy
-//   (Antigravity) Architect runtime, which — especially when its Antigravity auth has
-//   lapsed — does not dependably expose/invoke project MCP servers to the model. agy
-//   DOES reliably run shell commands via its `run_command` built-in, so this helper is
-//   the deterministic primitive behind a provider-agnostic `ai handoff` CLI. Both the
-//   MCP tool and the CLI route through emitHandoff() so the queue/lock semantics can
-//   never drift between the two callers (engineering-standards.md §src/shared reuse).
+//   The handoff was previously reachable ONLY via task-synchronizer-mcp::handoff_control,
+//   so a session without the project MCP servers (or with them down) could not wake the
+//   other role. This helper is the deterministic primitive behind the shell-native
+//   `ai handoff` CLI. Both the MCP tool and the CLI route through emitHandoff() so the
+//   queue/lock semantics can never drift between the two callers
+//   (engineering-standards.md §src/shared reuse).
 //
 // SEMANTICS (must stay byte-for-byte compatible with the historical handoff_control):
 //   - signal.json is a FIFO QUEUE (array). The entry is APPENDED, never overwritten,
@@ -28,9 +26,9 @@ import { resolve, dirname } from "node:path";
 // E-200: read-only state access for the `--settle` completion barrier (below).
 import { getDb } from "../mcp/shared/state-db.js";
 
-// Semantic roles (architect/engineer) AND legacy provider names (claude/gemini).
+// Semantic roles (architect/engineer) AND the legacy provider name `claude` (pane 0).
 // ai-watch resolves either to a tmux pane via .ai/roles.json (E-136/E-137).
-export const VALID_TARGETS = new Set(["architect", "engineer", "claude", "gemini"]);
+export const VALID_TARGETS = new Set(["architect", "engineer", "claude"]);
 
 const MAX_QUEUE = 50; // bound growth — `ai watch` consumes via per-entry delivered flags.
 
@@ -50,7 +48,7 @@ const _sleepMs = (ms) => {
  */
 export function emitHandoff({ aiDir, target, message } = {}) {
   if (!VALID_TARGETS.has(target)) {
-    return { ok: false, code: "INVALID_TARGET", error: "target must be a semantic role ('architect'|'engineer') or a provider name ('claude'|'gemini')." };
+    return { ok: false, code: "INVALID_TARGET", error: "target must be a semantic role ('architect'|'engineer') or the legacy provider name 'claude'." };
   }
   const msg = typeof message === "string" ? message.trim() : "";
   if (!msg) {
@@ -136,8 +134,8 @@ function _taskSignature(db) {
 
 /**
  * E-200 — Completion barrier. Poll the task table until its signature stops changing,
- * so a handoff emitted right after an async/batch task registration (e.g. agy's
- * JSON-RPC insertion script) waits for that registration to quiesce before waking the
+ * so a handoff emitted right after an async/batch task registration (e.g. a
+ * batch insertion script) waits for that registration to quiesce before waking the
  * Engineer. Prevents the "Engineer wakes to a half-empty queue while the Architect is
  * still generating tasks" race. WAL lets this reader observe the writer process's
  * commits. Fail-open: any DB error skips the wait (never blocks a handoff on a broken
@@ -200,7 +198,7 @@ if (_isMain) {
   const argv = process.argv.slice(2);
   const target = argv[0];
   if (!target) {
-    console.error("usage: ai handoff <architect|engineer|claude|gemini> [--settle [--settle-timeout N]] [message]");
+    console.error("usage: ai handoff <architect|engineer|claude> [--settle [--settle-timeout N]] [message]");
     process.exit(2);
   }
   // Parse flags out of the remaining args; everything else is the message. E-200:

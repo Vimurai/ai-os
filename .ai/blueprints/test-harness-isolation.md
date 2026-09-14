@@ -44,3 +44,57 @@ A suite that installs `trap … EXIT` after sourcing `assert.sh` replaced the `r
 
 ## The Scan That Never Ran — Variety #5 (D-067 §5, 2026-09-10)
 Three rule-scanning suites built their corpus with `find` over roots that E-244 stopped provisioning; `find` exited non-zero, the corpus came back EMPTY, and the suites would have reported "no violations" indefinitely — only their own file-count assertions caught it. Rule: a scan-based suite builds its corpus with `corpus_or_fail <min> <root>…`, which fails when a root is missing or the count is below the minimum and prints the count every run. Standing review question #5 (`critic_tests`, `ai-review`): "can this scan return an empty set and still pass?". → E-251.
+
+## The Sixth Variety: the Instrument Recorded the Test (D-070, 2026-09-11)
+The five varieties above are all "the test measured something else". The sixth is the inverse:
+**the production instrument measured the tests.** Every MCP call the bash suite makes is
+telemetered by the global interceptor (E-153) into the operator's `~/.ai-os/telemetry.sqlite`,
+because E-159 isolation redirected `.ai/` but never the telemetry path. On 2026-09-11 the
+meta_analyst found 47,391 of 51,382 in-window rows on four test-run days, 4,864 single-use
+`project_hash` values (temp-dir fixtures), 1,659 of 1,729 `task_velocity` rows carrying fixture
+ids `E-1`/`E-2`/`E-3`, and `patch_file`'s "56% error rate" resting on 1,920 fixture calls and
+zero live ones. Two `ai-insights` reports (2026-08-04, 2026-09-10) had read fixtures as operator
+behaviour and recommended skills for them.
+
+Rules (E-257):
+- A test run sets `AI_TELEMETRY_DB_PATH` to a per-run temp file (or `AI_TELEMETRY_DISABLE=1`)
+  in `tests/lib/` BEFORE any server or hook is spawned; the interceptor honours it.
+- The harness treats the live telemetry DB as **leaked external state** (E-240 lineage): the
+  run records its row count at start and FAILS if it grew. Print both numbers.
+- The store the operator has now is reset once, with a dated backup, by an explicit command —
+  no silent purge, no heuristic row tagging; 8% real traffic mixed with 92% fixtures is not
+  worth a migration.
+- Standing review question #6 for `critic_tests` / `ai-review`: "does this test write to any
+  path under `~/.ai-os/` other than a per-run temp path?"
+
+## Inherited Launch Variables — Environment Dependence, Shape #4 (D-071 §4, 2026-09-13)
+Three consecutive tasks lost assertions to variables the suite INHERITED from the tmux pane it
+ran in, each time failing in the direction that looks like a product bug. `ai pane <role>`
+exports `AI_OS_PANE_ROLE`, which `hooks/pre-commit.sh` ranks above `AI_OS_CALLER_ROLE` and
+`hooks/session-start.sh` above its positional argument — deliberately and correctly, that IS
+the D-054 per-pane binding — so `git_lane_test` run from a bound pane lost its entire Architect
+lane (22 failures) and `role_token_test` minted the wrong token while its own "a token was
+minted" assertion still passed (E-248). The AI-OS shell exports `AIOS_WORKSPACE`, which
+`isFrameworkClone()` consults before the `package.json` fallback, so every E-249 gate fixture
+read as "not the framework clone" and the gate never fired. This is variety #1 ("what the
+machine has") in a new shape: what the machine has is an EXPORTED VARIABLE that outranks the
+test's own inputs, and the remedy is neither supply nor skip but **strip**.
+
+Rules (E-264):
+- `tests/lib` holds a named list, `LAUNCH_VARS` (`AI_OS_PANE_ROLE`, `AIOS_WORKSPACE`, and every
+  other variable `ai pane`, `ai start` or the AI-OS shell exports that a hook or resolver ranks
+  above its own inputs), and unsets every entry ONCE, centrally, before any suite, hook,
+  resolver or server is spawned.
+- A suite that needs a launch variable sets it explicitly in its own environment. The
+  per-suite `env -u` sites (`role_token_test`, `git_lane_test`, `booted_build_test`) are
+  retired — a rule rediscovered per suite is folklore, not a rule — each keeping one explicit
+  non-vacuity assertion that the variable is absent when its hook runs.
+- No dead entries: a test asserts every `LAUNCH_VARS` entry is referenced by `hooks/` or `src/`.
+  A hook or resolver that starts ranking a new launch variable adds it to the list in the
+  same change.
+- The hooks are NOT taught to ignore launch variables under a test flag — that would test a
+  path production never takes (E-244's "filter the roots" mistake in a new place).
+- Standing review question #7 (`critic_tests`, `ai-review`): "does this test drive a hook or
+  resolver that ranks an inherited launch variable above the test's own inputs — and is that
+  variable stripped?"
+- Rollback `AI_OS_TEST_KEEP_LAUNCH_ENV=1` skips the strip.

@@ -134,9 +134,6 @@ assert_status 0 "E-240.07b: ai-review asks it too" \
     "${REPO_ROOT}/src/claude/skills/ai-review/SKILL.md"
 assert_status 0 "E-240.07c: it insists cleanup is registered BEFORE the state exists" \
   grep -q 'registered before' "${REPO_ROOT}/src/claude/agents/critic_tests.md"
-assert_status 0 "E-240.07d: the generated plugin artifact was rebuilt (E-236 lesson)" \
-  grep -q 'leave behind when an assertion fails' \
-    "${REPO_ROOT}/src/agents/plugin/agents/critic_tests/agent.json"
 
 
 # ── E-241 (D-064 §1): trap chaining — the limitation E-240 could not close ──

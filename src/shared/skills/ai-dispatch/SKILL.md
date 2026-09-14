@@ -31,7 +31,7 @@ one-step wrapper for "what should I work on next?".
 mcp__orchestrator-mcp__run_dispatch()
 ```
 
-Optionally scope to one role with `{ owner: "engineer" }` (or `claude` / `agy` /
+Optionally scope to one role with `{ owner: "engineer" }` (or `architect` /
 `tester`). The tool is **read-only** — it plans, it never mutates task state.
 
 ## Step 2 — Interpret `dispatch_mode`

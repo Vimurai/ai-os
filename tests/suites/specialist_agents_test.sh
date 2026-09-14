@@ -2,8 +2,9 @@
 # specialist_agents_test.sh — E-149..E-152: the four new specialist agents
 # (performance_engineer, db_architect, dependency_manager, sre_responder) + their
 # skills (ai-profile, ai-migration, ai-upgrade, ai-triage), authored per the new
-# .ai/blueprints/*.md. Verifies each persona/skill exists with a matching `name:`,
-# is included in the agy plugin (E-144), and carries its blueprint safety invariant.
+# .ai/blueprints/*.md. Verifies each persona/skill exists with a matching `name:`
+# and carries its blueprint safety invariant. (E-254 removed the separate agent plugin;
+# src/claude/agents/ is the only agent tree.)
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/assert.sh"
@@ -13,15 +14,11 @@ echo "── Suite: specialist_agents_test (E-149..E-152) ───────�
 
 name_of() { grep -m1 '^name:' "$1" 2>/dev/null | sed 's/^name:[[:space:]]*//'; }
 
-# ── Agents: file exists, name matches filename, present in the agy plugin ────
+# ── Agents: file exists, name matches filename ──────────────────────────────
 for a in performance_engineer db_architect dependency_manager sre_responder; do
   f="${REPO_ROOT}/src/claude/agents/${a}.md"
   assert_status 0 "agent ${a}: persona file exists" test -f "$f"
   assert_contains "agent ${a}: frontmatter name matches" "$a" "$(name_of "$f")"
-  assert_status 0 "agent ${a}: included in agy plugin (E-144)" \
-    test -f "${REPO_ROOT}/src/agents/plugin/agents/${a}/agent.json"
-  assert_status 0 "agent ${a}: plugin agent.json is valid JSON" \
-    node -e "JSON.parse(require('fs').readFileSync('${REPO_ROOT}/src/agents/plugin/agents/${a}/agent.json','utf8'))"
 done
 
 # ── Skills: file exists, name matches ────────────────────────────────────────
@@ -44,9 +41,5 @@ assert_status 0 "dep: routes through critic_security" \
 # sre: READ-ONLY over logs — plans tasks, never edits code itself
 assert_status 0 "sre: read-only / plans tasks via add_task" \
   grep -qiE "read-only|add_task|plan" "${REPO_ROOT}/src/claude/agents/sre_responder.md"
-
-# ── Plugin still validates with all 20 agents (16 original + 4 new) ──────────
-nagents=$(find "${REPO_ROOT}/src/agents/plugin/agents" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-assert_match "plugin contains >=20 agents (got ${nagents})" "^(20|2[1-9]|[3-9][0-9])$" "$nagents"
 
 assert_summary

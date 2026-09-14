@@ -364,10 +364,30 @@ test_tmux_socket() {
   printf '%s' "$name"
 }
 
+# A private socket isolates the SERVER, not its CONFIG: every server a test starts still
+# reads the operator's ~/.tmux.conf. With tmux-continuum's `@continuum-restore 'on'`, that
+# restored the operator's saved sessions INTO the test server, so ai_start_test E-252.03e
+# counted five extra sessions and failed — on every Mac with that plugin, never on CI. It
+# is variety #1 again (what the machine has), and the restore also relaunches whatever the
+# saved panes were running, while continuum's autosave could overwrite the operator's save.
+#
+# Fixed once, here, for every tmux the suites or the code under test invoke by name: a
+# `tmux` shim first on PATH that passes `-f /dev/null`, so no server a test starts loads a
+# config. A suite that needs an option sets it explicitly on its own server.
+# Rollback: AI_OS_TEST_KEEP_TMUX_CONF=1 leaves PATH alone.
+# The shim is a checked-in script, not a generated temp dir: suites that exercise the
+# cleanup machinery itself exit in ways that skip cleanups, and a per-suite temp dir leaked.
+AIOS_TEST_TMUX_SHIM="$(cd "$(dirname "${BASH_SOURCE[0]}")/tmux-noconf" 2>/dev/null && pwd -P)"
+if [[ "${AI_OS_TEST_KEEP_TMUX_CONF:-0}" != "1" && -n "$AIOS_TEST_TMUX_SHIM" \
+      && "$(command -v tmux 2>/dev/null)" != "${AIOS_TEST_TMUX_SHIM}/tmux" ]] \
+   && AIOS_TEST_REAL_TMUX="$(command -v tmux 2>/dev/null)"; then
+  export AIOS_TEST_TMUX_SHIM AIOS_TEST_REAL_TMUX PATH="${AIOS_TEST_TMUX_SHIM}:${PATH}"
+fi
+
 # ── E-251 (D-067 §5): the scan that never ran — variety #5 ───────────────────
 #
-# Three rule-scanning suites built their corpus with `find src .claude .agents .gemini`.
-# E-244 stopped provisioning two of those roots; `find` then exited non-zero, `execSync`
+# Three rule-scanning suites built their corpus with `find` over src/ plus every provider
+# workspace root. E-244 stopped provisioning two of those roots; `find` then exited non-zero, `execSync`
 # threw, and the corpus came back EMPTY. A scan of zero files reports zero violations, so
 # all three would have gone on printing "no findings" for a scan that never happened —
 # indefinitely, and with every appearance of health. Only the file-count assertion each
@@ -514,16 +534,16 @@ assert_match() {
 
 # ── E-244 (D-066 §4): mirror parity only where the workspace EXISTS ──────────
 #
-# Many suites assert "the .agents/ (or .gemini/) copy of skill X is byte-identical to
-# src/". That check exists to catch an edit to src/ that was never synced — a real and
-# recurring failure. But `ai sync` now provisions a provider's workspace only when a role
-# in .ai/roles.json is bound to it, and under the all-Claude default neither .agents/ nor
-# .gemini/ exists at all. An unconditional assertion on an absent mirror stops testing
-# sync and starts testing whether a directory happens to be there.
+# Many suites assert "the workspace copy of skill X is byte-identical to src/". That check
+# exists to catch an edit to src/ that was never synced — a real and recurring failure. But
+# `ai sync` provisions a provider's workspace only when a role in .ai/roles.json is bound
+# to it, so a mirror directory may legitimately not exist. An unconditional assertion on an
+# absent mirror stops testing sync and starts testing whether a directory happens to be
+# there.
 #
 # Present → assert parity, exactly as before. Absent → SKIP, counted as a skip (E-236) so
 # the run says plainly that the check did not happen, instead of reporting a pass for a
-# comparison it never made. Bind a role to agy or gemini and the assertions come back.
+# comparison it never made. Provision the workspace and the assertions come back.
 #
 # assert_mirror_if_present <label> <canonical_src> <workspace_mirror>
 assert_mirror_if_present() {

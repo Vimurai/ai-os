@@ -66,15 +66,16 @@ assert_contains "E-208.02e: per-role model is forwarded when configured" \
 assert_not_contains "E-208.02f: no dangling --model when the role has none" \
   '--model' "$(_resolve engineer "$TMP_AI")"
 
-# An agy-bound architect must NOT get claude's flags — proves it is adapter-driven.
-cat > "$TMP_AI/roles.json.agy" <<'JSON'
-{ "roles": { "architect": { "provider": "agy", "pane_identifier": "1" } } }
+# An architect bound to another provider (neutral 'acme', no adapter entry) must NOT get
+# claude's flags — proves the argv is adapter-driven, not hardcoded to claude.
+cat > "$TMP_AI/roles.json.acme" <<'JSON'
+{ "roles": { "architect": { "provider": "acme", "pane_identifier": "1" } } }
 JSON
 mv "$TMP_AI/roles.json" "$TMP_AI/roles.json.claude"
-mv "$TMP_AI/roles.json.agy" "$TMP_AI/roles.json"
-assert_contains "E-208.02g: agy-bound architect resolves to the agy provider" \
-  "agy" "$(_resolve architect "$TMP_AI")"
-assert_not_contains "E-208.02h: agy-bound architect gets no claude launch flags" \
+mv "$TMP_AI/roles.json.acme" "$TMP_AI/roles.json"
+assert_contains "E-208.02g: acme-bound architect resolves to the acme provider" \
+  "acme" "$(_resolve architect "$TMP_AI")"
+assert_not_contains "E-208.02h: acme-bound architect gets no claude launch flags" \
   "settings.architect.json" "$(_resolve architect "$TMP_AI")"
 mv "$TMP_AI/roles.json.claude" "$TMP_AI/roles.json"
 
@@ -95,9 +96,9 @@ assert_not_contains "E-208.03e: overlay registers no SessionStart" 'SessionStart
 
 # A non-claude role gets no claude overlay.
 NO_OV="$(mktemp -d)/.claude"; mkdir -p "$NO_OV"
-AGY_AI="$(mktemp -d)/.ai"; mkdir -p "$AGY_AI"
-echo '{ "roles": { "architect": { "provider": "agy", "pane_identifier": "1" } } }' > "$AGY_AI/roles.json"
-bash -c "source '$AI_BIN' 2>/dev/null; _write_role_settings_overlays '$NO_OV' '$AGY_AI'" >/dev/null 2>&1
+ACME_AI="$(mktemp -d)/.ai"; mkdir -p "$ACME_AI"
+echo '{ "roles": { "architect": { "provider": "acme", "pane_identifier": "1" } } }' > "$ACME_AI/roles.json"
+bash -c "source '$AI_BIN' 2>/dev/null; _write_role_settings_overlays '$NO_OV' '$ACME_AI'" >/dev/null 2>&1
 assert_status 1 "E-208.03f: no overlay for a role bound to a non-claude provider" \
   test -f "$NO_OV/settings.architect.json"
 

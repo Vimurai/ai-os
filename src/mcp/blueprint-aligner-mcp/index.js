@@ -393,15 +393,13 @@ function validateBlueprint(content) {
 
 // E-42: Recognise UACS authorship stamps that authorise architect-owned-file
 // edits. Triggered by either:
-//   • a state.json stamp of type GEMINI_AUTHORED or ARCHITECT_HANDOFF dated
-//     within the last 24h, or
-//   • a [GEMINI_AUTHORED] / [ARCHITECT_HANDOFF] marker in the last 20 lines
-//     of .ai/LOG.md.
+//   • a state.json stamp of type ARCHITECT_HANDOFF dated within the last 24h, or
+//   • an [ARCHITECT_HANDOFF] marker in the last 20 lines of .ai/LOG.md.
 // Returns null when no stamp is found, otherwise a short reason string used
-// to downgrade GEMINI_FILE_MODIFIED to WARN.
+// to downgrade ARCHITECT_FILE_MODIFIED to WARN.
 function detectArchitectHandoffStamp(cwd) {
-  const STAMP_TYPES = /^(GEMINI_AUTHORED|ARCHITECT_HANDOFF)$/i;
-  const LOG_MARKER  = /\[(GEMINI_AUTHORED|ARCHITECT_HANDOFF)\]/i;
+  const STAMP_TYPES = /^ARCHITECT_HANDOFF$/i;
+  const LOG_MARKER  = /\[ARCHITECT_HANDOFF\]/i;
   const WINDOW_MS   = 24 * 60 * 60 * 1000;
 
   // 1. state.json stamps (authoritative)
@@ -437,12 +435,12 @@ function detectArchitectHandoffStamp(cwd) {
 
 const ALIGNMENT_RULES = [
   {
-    id: "GEMINI_FILE_MODIFIED",
+    id: "ARCHITECT_FILE_MODIFIED",
     severity: "FAIL",
     // Severity may be downgraded to WARN when an authorship stamp is present.
     check: (diff, cwd) => {
-      const geminiFiles = [".ai/architect.md", ".ai/BRIEF.md"];
-      const violations = geminiFiles.filter(
+      const architectFiles = [".ai/architect.md", ".ai/BRIEF.md"];
+      const violations = architectFiles.filter(
         (f) => diff.includes(`a/${f}`) || diff.includes(`b/${f}`)
       );
       if (violations.length === 0) return [];
@@ -461,7 +459,7 @@ const ALIGNMENT_RULES = [
       if (stamp) {
         return `Architect-owned files modified (${violations.join(", ")}) — handoff authorised by ${stamp}. Verify the change matches the stamped intent.`;
       }
-      return `Claude modified Architect-owned files: ${violations.join(", ")} — Domain Sovereignty violation (§12). If this is a Gemini handoff, record [GEMINI_AUTHORED] / [ARCHITECT_HANDOFF] in state.json stamps or .ai/LOG.md.`;
+      return `Claude modified Architect-owned files: ${violations.join(", ")} — Domain Sovereignty violation (§12). If this is an Architect handoff, record [ARCHITECT_HANDOFF] in state.json stamps or .ai/LOG.md.`;
     },
   },
   {
