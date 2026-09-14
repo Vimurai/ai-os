@@ -1,6 +1,6 @@
 # Token Saver Mode — Global
 
-Goal: minimize tokens without losing correctness by leveraging the Tripartite Engine (Architect/Engineer/TestSprite).
+Goal: minimize tokens without losing correctness by leveraging the Tripartite Engine (Architect/Engineer/Tester).
 
 ## 1. Tripartite Workflow Integration
 1) **Plan with the Architect:** The Architect pane does all research, requirement gathering, and architectural planning.
@@ -8,8 +8,8 @@ Goal: minimize tokens without losing correctness by leveraging the Tripartite En
    - Benefit: the Architect handles high-context ingestion; the Engineer only receives the plan.
 2) **Build with the Engineer:** The Engineer implements based on the blueprint.
    - Rule: the Engineer must NOT re-research what the Architect already covered.
-3) **Test with TestSprite:** Use TestSprite MCP/CLI to verify changes.
-   - Rule: If tests fail, TestSprite output becomes the "Plan" for the next Engineer iteration.
+3) **Test with the Tester:** Run `skill: ai-test` — the project's real test command, or `--generate` to dispatch the headless `test_engineer` agent.
+   - Rule: If tests fail, the Tester's output becomes the "Plan" for the next Engineer iteration.
 
 ## 2. Reading & Ingestion
 1) Read order: see .ai/SEED.md (canonical). Batch all 4 preflight reads in one parallel tool call.

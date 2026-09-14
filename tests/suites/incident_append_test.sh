@@ -118,9 +118,9 @@ run_helper '{"incident_type":"X","message":"y","stack_signature":"z:1","source_a
 assert_status 0 "BogusBot normalised to unknown" \
   bash -c "tail -n1 '$SBOX/.ai-os/incidents.ndjson' | grep -q '\"source_agent\":\"unknown\"'"
 
-# E-254: the allow-list is Claude | TestSprite. Pin that allowed agents are PRESERVED, so
+# E-255: the allow-list is Claude | Tester (the headless Claude Tester role, D-069). Pin that allowed agents are PRESERVED, so
 # the BogusBot case above cannot pass merely because every agent became 'unknown'.
-for _agent in Claude TestSprite; do
+for _agent in Claude Tester; do
   run_helper "{\"incident_type\":\"X\",\"message\":\"y\",\"stack_signature\":\"z:1\",\"source_agent\":\"${_agent}\"}" \
     >/dev/null 2>"$SBOX/err" || true
   assert_status 0 "${_agent} preserved (not normalised to unknown)" \

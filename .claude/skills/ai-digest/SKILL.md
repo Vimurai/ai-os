@@ -47,7 +47,7 @@ Required sections:
 ## Triad Health
 - Architect: <status — last P-## task>
 - Engineer: <status — last E-## task>
-- Tester (TestSprite): <status — last test run>
+- Tester (headless, skill: ai-test): <status — last test run>
 
 ## Current Focus
 - <top 3 open E-## tasks with status>

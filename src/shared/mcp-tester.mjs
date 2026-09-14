@@ -63,7 +63,7 @@ function curatedEnv(serverEnv) {
   if (process.env.PATH) base.PATH = process.env.PATH;
   if (process.env.HOME) base.HOME = process.env.HOME;
   // Resolve ${VAR} placeholders in declared env against the real environment so
-  // a configured token (e.g. ${TESTSPRITE_API_KEY}) is passed through, but only
+  // a configured token (e.g. ${SERVICE_API_KEY}) is passed through, but only
   // the specific vars the server opted into — never the whole parent env.
   for (const [k, v] of Object.entries(serverEnv)) {
     base[k] = typeof v === "string"

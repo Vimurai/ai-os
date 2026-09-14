@@ -114,9 +114,9 @@ function resolveServerCommand(serverName, registry, projectRoot) {
     }
     return { command: process.execPath, args: [target], env: info.env || null };
   }
-  // npm-published servers (filesystem, memory, TestSprite). Routing these is
-  // out of scope for v1: they require npx and per-instance args (filesystem
-  // root path, TestSprite API key) that the router has no business owning.
+  // npm-published servers (filesystem, memory). Routing these is out of scope
+  // for v1: they require npx and per-instance args (the filesystem root path)
+  // that the router has no business owning.
   throw new Error(
     `${serverName} is an npm-published MCP — routing not supported in v1`
   );

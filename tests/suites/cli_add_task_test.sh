@@ -70,8 +70,8 @@ id_eng="$(run_add engineer "Engineer created task")"
 assert_contains "T-04.05: engineer role → owner 'Engineer (Claude)'" "Engineer (Claude)" "$(task_field "$id_eng" owner)"
 
 # explicit --owner overrides the role mapping
-id_own="$(run_add architect --owner "Tester (TestSprite)" "Explicit owner task")"
-assert_contains "T-04.06: explicit --owner wins over role" "Tester (TestSprite)" "$(task_field "$id_own" owner)"
+id_own="$(run_add architect --owner "Tester (claude · sonnet)" "Explicit owner task")"
+assert_contains "T-04.06: explicit --owner wins over role" "Tester (claude · sonnet)" "$(task_field "$id_own" owner)"
 
 # ── T-05: survives verify_markdown_sync (row is in the regenerated view) ─────
 echo ""; echo "  [T-05] Regenerated views"

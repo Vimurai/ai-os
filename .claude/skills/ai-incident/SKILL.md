@@ -66,7 +66,7 @@ when a threshold is exceeded.
 - `stack_signature` — *stable grouping key*. Use the same string for the
   same root cause across sessions; the aggregator counts duplicates
   here. Pattern: `<file>:<symbol>` or `<file>:<line>`.
-- `source_agent` — `Claude` or `TestSprite`. Anything else is
+- `source_agent` — `Claude` or `Tester` (the headless Claude Tester, E-255). Anything else is
   normalised to `unknown`.
 
 The helper injects `timestamp` (UTC ISO-8601) automatically — do not

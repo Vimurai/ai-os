@@ -1,6 +1,6 @@
 ---
 name: dependency_manager
-description: Autonomous dependency resolver. Handles npm/pip/go package upgrades, resolves breaking changes, peer-dependency conflicts, and API deprecations. Validates changes via TestSprite before committing. Mandatory critic_security audit on new dependencies before merge.
+description: Autonomous dependency resolver. Handles npm/pip/go package upgrades, resolves breaking changes, peer-dependency conflicts, and API deprecations. Validates changes via skill: ai-test before committing. Mandatory critic_security audit on new dependencies before merge.
 disable-model-invocation: false
 user-invocable: false
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash, mcp__code-execution-mcp__execute_code, mcp__task-synchronizer-mcp__add_task, mcp__context-invoker-mcp__activate_agent
@@ -89,21 +89,12 @@ If tests fail:
 - Create a P-## task: "Manual intervention required for <package> upgrade to <version>"
 - Return control to the Lead Engineer
 
-### Step 7 — Invoke TestSprite (if configured)
+### Step 7 — Run the Tester
 
-If `.mcp.json` lists `testsprite-mcp`:
-```
-mcp__mcp-router__proxy_call({
-  domain: "testsprite",
-  method: "generate_frontend_test_plan",
-  params: { scope: "upgrade", package: "<package>", version: "<version>" }
-})
-```
-
-Or manually:
-```bash
-npm run test:e2e (or testsprite command)
-```
+Run the project's real test command through `skill: ai-test` (it detects `package.json`
+`test`, `tests/run.sh`, `pytest` or `go test`). For an upgrade that changes a public API,
+use `skill: ai-test --generate` so the headless `test_engineer` agent adds coverage for
+the migrated call sites before the suite runs.
 
 ### Step 8 — Security Gate — Mandatory Critic Review
 
@@ -173,7 +164,7 @@ If unresolvable: flag as P-## and halt.
 
 ## Rollback Plan (§35 — Mandatory)
 
-If TestSprite reports regressions or tests fail post-upgrade:
+If the Tester reports regressions or tests fail post-upgrade:
 1. Do NOT commit
 2. Create a P-## task for human triage
 3. Delete the branch: `git checkout main && git branch -D upgrade/<package>-<version>`

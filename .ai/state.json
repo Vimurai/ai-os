@@ -595,6 +595,13 @@
       "task_id": "E-85",
       "timestamp": "2026-09-11T19:24:25.642Z",
       "summary": "INSIGHTS.md regenerated — 51,382 rows analysed, 2 recommendations (ai-domain wrapper; execute_code 100% REJECTED); prior patch_file deprecation flag WITHDRAWN as test-suite contamination (92% of window is test traffic)"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "Claude (Engineer)",
+      "task_id": "E-255",
+      "timestamp": "2026-09-14T23:28:58.288Z",
+      "summary": "[TIER_2] E-255 (D-069 §3): headless Claude Tester — roles.json tester {claude, sonnet, headless}; ai start/overlays skip headless roles, ai pane tester exits 2; Tester label derived; test_engineer agent (model: sonnet); ai-test rewritten over test-command.mjs (--generate/--fast/--vibe); third-party test MCP removed from registry, .mcp.json, domains, doctor, key preservation. run_review Tier 2: P0 = generated .ai/blueprints/mcp.md (registry projection, as in E-254), P1 dep = false positive. New headless_tester_test 44/0; full suite 4690 passed / 0 failed / 1 skipped after fixes."
     }
   ],
   "deltas": [

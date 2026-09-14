@@ -60,10 +60,10 @@ assert_contains "E-213.01e: section headers are provider-agnostic (no churn)" \
   "Architect,Architect,Engineer" "$_ROLEOF"
 
 # An explicit --owner still wins over any role mapping.
-assert_contains "E-213.01f: explicit --owner still wins" "QA (TestSprite)" \
+assert_contains "E-213.01f: explicit --owner still wins" "QA (External)" \
   "$(AI_OS_MOD="file://${ADD_TASK}" node --input-type=module -e '
 const m = await import(process.env.AI_OS_MOD);
-process.stdout.write(m.resolveOwner({ owner: "QA (TestSprite)", role: "architect" }));
+process.stdout.write(m.resolveOwner({ owner: "QA (External)", role: "architect" }));
 ' 2>/dev/null)"
 
 # ── E-213.2: the Architect overlay carries its allow rules ─────────────────

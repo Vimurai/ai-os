@@ -342,12 +342,6 @@ servers = {
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-memory@2026.1.26"],
     "description": "Knowledge-graph memory store. Queryable alternative/supplement to DIGEST.md for semantic lookups."
-  },
-  "TestSprite": {
-    "command": "npx",
-    "args": ["@testsprite/testsprite-mcp@latest"],
-    "env": {"API_KEY": "your-testsprite-api-key"},
-    "description": "TestSprite MCP — AI-powered test generation and verification. Third brain in the Tripartite Engine (Plan->Build->Test)."
   }
 }
 
@@ -365,19 +359,6 @@ if os.path.exists(registry_path):
             if isinstance(info.get("env"), dict) and info["env"]:
                 entry["env"] = dict(info["env"])
             servers[name] = entry
-
-# Preserve user-set env values from existing .mcp.json (e.g. real TestSprite API key)
-if os.path.exists(mcp_path):
-    try:
-        with open(mcp_path) as f:
-            existing = json.load(f)
-        for name, cfg in existing.get(mcp_key, {}).items():
-            if name in servers and "env" in cfg:
-                env = cfg["env"]
-                if env.get("API_KEY", "").strip() not in ("", "your-testsprite-api-key"):
-                    servers[name].setdefault("env", {}).update(env)
-    except Exception:
-        pass
 
 with open(mcp_path, "w") as f:
     json.dump({mcp_key: servers}, f, indent=2)
@@ -448,11 +429,16 @@ _write_roles_json() {
     "engineer": {
       "provider": "${epr}",
       "pane_identifier": "${epn}"${eline}
+    },
+    "tester": {
+      "provider": "claude",
+      "model": "sonnet",
+      "headless": true
     }
   }
 }
 EOF
-  echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}${amod:+ · $amod}, engineer=${epr}:${epn}${emod:+ · $emod})"
+  echo "✓ Wrote .ai/roles.json (architect=${apr}:${apn}${amod:+ · $amod}, engineer=${epr}:${epn}${emod:+ · $emod}, tester=claude · sonnet (headless))"
 }
 
 # E-182/E-184 follow-up: cosmetic Triad-banner labels for do_init. Prints
@@ -470,7 +456,7 @@ EOF
 # Emits "<arch_provider>·<arch_model>|<eng_provider>·<eng_model>"; the model half is empty
 # when a role declares none.
 _roles_banner_labels() {
-  local roles_file=".ai/roles.json" arch="claude" eng="claude" parsed=""
+  local roles_file=".ai/roles.json" arch="claude·fable" eng="claude·opus" tst="claude·sonnet" parsed=""
   if [[ -f "$roles_file" ]] && command -v python3 &>/dev/null; then
     parsed="$(python3 - "$roles_file" 2>/dev/null <<'PY' || printf ''
 import json, sys
@@ -481,17 +467,18 @@ try:
         p = r.get("provider") or dprov
         m = r.get("model") or (dmodel if p == dprov else "")
         return "%s\u00b7%s" % (p, m) if m else p
-    sys.stdout.write("%s|%s" % (label("architect", "claude", "fable"),
-                                label("engineer", "claude", "opus")))
+    sys.stdout.write("%s|%s|%s" % (label("architect", "claude", "fable"),
+                                   label("engineer", "claude", "opus"),
+                                   label("tester", "claude", "sonnet")))
 except Exception:
     sys.stdout.write("")
 PY
 )"
-    if [[ "$parsed" == *"|"* ]]; then
-      arch="${parsed%%|*}"; eng="${parsed##*|}"
+    if [[ "$parsed" == *"|"*"|"* ]]; then
+      IFS='|' read -r arch eng tst <<< "$parsed"
     fi
   fi
-  printf '%s|%s' "$arch" "$eng"
+  printf '%s|%s|%s' "$arch" "$eng" "$tst"
 }
 
 # v3.0 (W3-T3): single source for scaffolding/refreshing the project-scoped agent
@@ -1135,6 +1122,10 @@ for role, cfg in roles.items():
         continue
     if not isinstance(cfg, dict) or cfg.get("provider") != "claude":
         continue
+    # E-255: a headless role runs as the Engineer's delegate and inherits its overlay;
+    # it gets no pane, so an overlay of its own would be a launch surface nobody uses.
+    if cfg.get("headless") is True:
+        continue
     path = os.path.join(target_dir, f"settings.{role}.json")
     data = load(path, {})
     env = data.setdefault("env", {})
@@ -1694,15 +1685,15 @@ do_init() {
   echo "  Builds the tmux Triad layout, binds each pane to its role, starts the watcher."
   echo "  Idempotent — safe to re-run.  ai start --status | --kill   (ai doctor checks readiness)"
   echo ""
-  local _triad_labels _arch_label _eng_label
-  _triad_labels="$(_roles_banner_labels)"
-  _arch_label="${_triad_labels%%|*}"; _eng_label="${_triad_labels##*|}"
+  local _arch_label _eng_label _tst_label
+  IFS='|' read -r _arch_label _eng_label _tst_label <<< "$(_roles_banner_labels)"
   echo "Triad Workflow (commands now run as agent prompts/skills):"
   # %-18s, not %-12s: labels now carry a model ("claude · fable") and the old width
   # silently truncated nothing but misaligned the arrows.
   printf '  Architect %-18s → Writes to architect.md / blueprints\n' "(${_arch_label})"
   printf '  Engineer  %-18s → Implements code based on blueprints\n' "(${_eng_label})"
-  printf '  Tester    %-18s → Quality gate via skill: ai-test\n' "(TestSprite)"
+  # E-255: the Tester is a headless Claude role — its label is derived like the other two.
+  printf '  Tester    %-18s → Quality gate via skill: ai-test (headless)\n' "(${_tst_label})"
   echo ""
   echo "MCP servers enabled in .mcp.json (filesystem + memory)."
 }
@@ -1770,8 +1761,9 @@ except:
   PARSED_TMPDIR=$(mktemp -d)
   PARSED_TMPFILE="${PARSED_TMPDIR}/parsed.json"
 
-  local _al; _al="$(_roles_banner_labels)"; _al="${_al%%|*}"
-  AIOS_ARCH_OWNER="Architect (${_al})" \
+  local _al _el _tl
+  IFS='|' read -r _al _el _tl <<< "$(_roles_banner_labels)"
+  AIOS_ARCH_OWNER="Architect (${_al})" AIOS_TESTER_OWNER="Tester (${_tl//·/ · })" \
   python3 - "$TASKS_FILE" "$PARSED_TMPFILE" <<'PY'
 import json, re, sys
 
@@ -1781,6 +1773,7 @@ out_file   = sys.argv[2]
 # cannot be read, "Architect" is still true, whereas a vendor-qualified label may not be.
 import os as _os
 ARCH_OWNER = _os.environ.get("AIOS_ARCH_OWNER") or "Architect"
+TESTER_OWNER = _os.environ.get("AIOS_TESTER_OWNER") or "Tester"
 
 tasks = []
 
@@ -1794,7 +1787,7 @@ OWNER_PATTERNS = [
     # Architect-owned task with a vendor that no role was bound to.
     (re.compile(r'\bArchitect\b',                re.IGNORECASE), ARCH_OWNER),
     (re.compile(r'\bEngineer\b|\(Claude\)',      re.IGNORECASE), 'Engineer (Claude)'),
-    (re.compile(r'\bTester\b|\(TestSprite\)',    re.IGNORECASE), 'Tester (TestSprite)'),
+    (re.compile(r'\bTester\b',                  re.IGNORECASE), TESTER_OWNER),
 ]
 
 current_owner = None
@@ -2674,11 +2667,6 @@ print('  PostToolUse hook:', 'yes ✓' if hooks.get('PostToolUse') else 'NO - ru
   fi
   if command -v npx &>/dev/null; then
     echo "  ✓ npx available"
-    if npx testsprite --version &>/dev/null 2>&1; then
-      echo "  ✓ TestSprite: available"
-    else
-      echo "  ✗ TestSprite: not installed — run: npx @testsprite/testsprite-mcp@latest"
-    fi
   else
     echo "  ✗ npx not found — install Node.js"
   fi
@@ -2854,16 +2842,6 @@ for name, info in reg.get("mcp_servers", {}).items():
             print(f"      expected: {expected}")
             print(f"      actual:   {args[0]}")
 PY
-    fi
-
-    # Check TESTSPRITE_API_KEY is not a literal placeholder
-    if [[ -f ".mcp.json" ]] && grep -q '${TESTSPRITE_API_KEY}' .mcp.json 2>/dev/null; then
-      if [[ -z "${TESTSPRITE_API_KEY:-}" ]]; then
-        echo "  ✗ TESTSPRITE_API_KEY: env var not set — TestSprite MCP will receive literal '\${TESTSPRITE_API_KEY}'"
-        echo "      Fix: export TESTSPRITE_API_KEY=<your-key> in ~/.zshrc or ~/.bashrc"
-      else
-        echo "  ✓ TESTSPRITE_API_KEY: set ($(echo "${TESTSPRITE_API_KEY}" | cut -c1-4)****)"
-      fi
     fi
 
     [[ "$deep_fail" -eq 0 ]] && echo "  ✓ all MCP servers: dependencies OK, syntax OK, paths consistent"
@@ -3529,7 +3507,9 @@ try:
 except Exception:
     roles = {}
 ordered = sorted(
-    ((str(v.get("pane_identifier", "99")), k) for k, v in roles.items() if k in ("engineer", "architect")),
+    # E-255: a headless role (the Tester) has no pane — never laid out, whatever its key.
+    ((str(v.get("pane_identifier", "99")), k) for k, v in roles.items()
+     if k in ("engineer", "architect") and isinstance(v, dict) and v.get("headless") is not True),
     key=lambda t: (int(t[0]) if t[0].lstrip("-").isdigit() else 99, t[1]),
 )
 for _, name in ordered:
@@ -4121,6 +4101,10 @@ do_pane() {
   local role="${1:-}"
   case "$role" in
     architect|engineer) ;;
+    tester)
+      # E-255 (D-069): the Tester is headless — dispatched as a subagent, never a pane.
+      echo "ai pane: tester is headless; run skill: ai-test" >&2
+      return 2 ;;
     ""|-h|--help)
       echo "Usage: ai pane <architect|engineer> [-- <extra provider args>]"
       echo "  Binds THIS tmux pane to a role and launches that role's provider CLI."

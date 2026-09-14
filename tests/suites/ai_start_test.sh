@@ -21,11 +21,14 @@ AI="${REPO_ROOT}/src/bin/ai"
 echo "── Suite: ai_start_test (E-227) ─────────────────────────────────────"
 
 # _proj <engineer_pane> <architect_pane> [start.json] → project dir
+# E-255: every fixture carries the headless tester, as the v4 template does — the layout
+# assertions below must hold with it present, not only in a two-role project.
 _proj() {
   local d; d="$(mktemp -d)"; mkdir -p "$d/.ai"
   cat > "$d/.ai/roles.json" <<EOF
 { "roles": { "engineer":  { "provider": "claude", "pane_identifier": "$1" },
-             "architect": { "provider": "claude", "pane_identifier": "$2" } } }
+             "architect": { "provider": "claude", "pane_identifier": "$2" },
+             "tester":    { "provider": "claude", "model": "sonnet", "headless": true } } }
 EOF
   [[ -n "${3:-}" ]] && printf '%s' "$3" > "$d/.ai/start.json"
   printf '%s' "$d"
