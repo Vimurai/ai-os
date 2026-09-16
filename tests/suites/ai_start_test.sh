@@ -175,7 +175,9 @@ if command -v tmux >/dev/null 2>&1; then
     # taken at once intermittently sees an empty screen (1 of ~5 full runs).
     _w=0
     while :; do
-      _body="$("$_tb" -L "$_sock" capture-pane -p -t "$_pid" 2>/dev/null || true)"
+      # -J joins wrapped lines. The panes are ~40 columns, so a long prompt (macOS bash 3.2's
+      # under `ai ci run`) wrapped "ai pane engineer" across two lines and the match missed it.
+      _body="$("$_tb" -L "$_sock" capture-pane -p -J -t "$_pid" 2>/dev/null || true)"
       [[ "$_body" == *"$_want"* || $_w -ge 40 ]] && break
       sleep 0.05; _w=$((_w + 1))
     done

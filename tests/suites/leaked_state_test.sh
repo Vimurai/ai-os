@@ -143,6 +143,9 @@ assert_contains "E-265.L2: without a CI flag the leak is reported, the run passe
 _lk_local="$(_lk_run AI_OS_CI=local)"
 assert_contains "E-265.L3: under AI_OS_CI=local the leak FAILS the run" "[LEAK_FAILED]" "$_lk_local"
 assert_contains "E-265.L4: and the run exits 1" "1 " "${_lk_local:0:2}"
+# Removed HERE as well as registered: a later block re-sources the library in a subshell
+# with the same $$, which truncates the registry file and would drop this handler.
+rm -rf "${_LK}"
 
 # ── E-240.6: the previously-leaking suites are converted ──────────────────
 for f in ai_start_test ai_start_surface_test; do

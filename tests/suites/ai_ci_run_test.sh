@@ -20,7 +20,13 @@ AI="${REPO_ROOT}/src/bin/ai"
 echo "── Suite: ai_ci_run_test (E-265) ───────────────────────────────────"
 
 FAKE_HOME="$(test_tmpdir ci-home)"
-RUN_TMP="$(test_tmpdir ci-tmp)"
+# TMPDIR is spelled through a SYMLINK, as macOS spells it (/var → /private/var). The node
+# helpers compare argv[1] with the resolved import.meta.url, so a run whose paths are not
+# physical silently skipped every helper CLI — the first real run failed 20 assertions.
+RUN_REAL="$(test_tmpdir ci-tmp)"
+mkdir -p "${RUN_REAL}/real"
+ln -s "${RUN_REAL}/real" "${RUN_REAL}/link"
+RUN_TMP="${RUN_REAL}/link"
 
 # _mk_repo <dir> [--no-gitignore] — a committed fixture repo with a probing stub runner.
 _mk_repo() {
@@ -29,6 +35,8 @@ _mk_repo() {
   cat > "${d}/tests/run.sh" <<'STUB'
 #!/usr/bin/env bash
 echo "PROBE_HOME=${HOME}"
+[[ "$HOME" == "$(cd "$HOME" && pwd -P)" && "$PWD" == "$(pwd -P)" ]] \
+  && echo "PROBE_PHYSICAL=yes" || echo "PROBE_PHYSICAL=no"
 echo "PROBE_ENV CI=${CI-unset} TMUX=${TMUX-unset} ROLE=${AI_OS_PANE_ROLE-unset} AI_OS_CI=${AI_OS_CI-unset}"
 [[ -f UNCOMMITTED.txt ]] && echo "PROBE_UNCOMMITTED=present" || echo "PROBE_UNCOMMITTED=absent"
 [[ -f tracked.txt ]] && echo "PROBE_TRACKED=present" || echo "PROBE_TRACKED=absent"
@@ -83,6 +91,9 @@ assert_status 0 "E-265.02e: the run's HOME is not the caller's HOME" \
   test -n "$PROBE_HOME" -a "$PROBE_HOME" != "$FAKE_HOME"
 assert_status 1 "E-265.02f: the run's HOME is not inside the caller's HOME either" \
   bash -c "[[ '$PROBE_HOME' == '$FAKE_HOME'/* ]]"
+
+assert_contains "E-265.02g: HOME and the worktree are PHYSICAL paths under a symlinked TMPDIR" \
+  "PROBE_PHYSICAL=yes" "$OUT"
 
 # ── E-265.3: the caller's ~/.ai-os is untouched, and nothing is left behind ──
 assert_status 1 "E-265.03a: the stub's HOME write did not reach the caller's ~/.ai-os" \

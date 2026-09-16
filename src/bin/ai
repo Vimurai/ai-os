@@ -4382,6 +4382,11 @@ _ci_run() {
   local tmpbase="${TMPDIR:-/tmp}"
   work="$(mktemp -d "${tmpbase%/}/ai-os-ci.XXXXXX")" || {
     rm -rf "$lock"; echo "ai ci run: mktemp failed" >&2; return 2; }
+  # PHYSICAL path. macOS TMPDIR is /var/folders/…, a symlink to /private/var/folders/…, and
+  # the node helpers' "am I the main module?" checks compare argv[1] against the resolved
+  # import.meta.url — so under the symlinked spelling every `node <mirror>/shared/*.mjs`
+  # CLI entry silently did nothing (the first real run failed 20 sync/handoff assertions).
+  work="$(cd "$work" && pwd -P)"
   CI_WT="${work}/wt"
   local ci_homedir="${work}/home" ci_tmp="${work}/tmp"
   mkdir -p "$ci_homedir" "$ci_tmp"
