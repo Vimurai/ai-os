@@ -98,6 +98,16 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
     // append_tasks intentionally removed from tool list — disabled (bypasses SQLite).
     // Call add_task instead.
     {
+      name: "get_ci_status",
+      description: "E-266 (D-072): the newest local CI run (ai ci run) recorded for a commit — default HEAD. Returns the ci_runs row plus `verdict` (PASS|FAIL|ERROR|SKIPPED|DIRTY|NONE; only a non-dirty PASS certifies a commit) and a one-line `summary`, or { status: \"NONE\" }. Read-only.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          sha: { type: "string", description: "Commit sha (7-40 hex). Defaults to the project's HEAD." },
+        },
+      },
+    },
+    {
       name: "verify_markdown_sync",
       description: "Checks that TASKS.md and REVIEWS.md are in sync with state. Returns PASS or FAIL.",
       inputSchema: { type: "object", properties: {} },

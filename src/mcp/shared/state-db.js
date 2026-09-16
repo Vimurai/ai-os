@@ -11,6 +11,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { DatabaseSync } from "node:sqlite";
+import { migrateCiRuns } from "./ci-runs.js";
 
 const _dbCache = new Map();
 
@@ -124,6 +125,8 @@ export function getDb(aiDir) {
   _migrateTaskDag(db);
   // E-221: pending patches must carry the root they were resolved against.
   _migratePatchProjectRoot(db);
+  // E-266 (D-072): the local CI run record (ci-runs.js owns the table).
+  migrateCiRuns(db);
 
   _dbCache.set(dbPath, db);
   return db;
