@@ -278,12 +278,12 @@
     {
       "id": "E-255",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Replace TestSprite with a headless Claude Tester per D-069 and .ai/blueprints/claude-native-consolidation.md §Component 3: add tester {provider: claude, model: sonnet, headless: true} to the roles.json template; ai start/_start_roles and ai pane ignore headless roles (ai pane tester exits 2 'tester is headless; run skill: ai-test'); derive the label 'Tester (claude · sonnet)' from roles.json everywhere 'Tester (TestSprite)' is hard-coded (init banner, OWNER_PATTERNS, managed-agents-client.mjs, state.json schema text, tool-schemas.mjs); add src/claude/agents/test_engineer.md with frontmatter model: sonnet that reads the task + diff, writes a test plan, adds tests only under tests/ in the project's own harness, runs them and stamps [TESTS_PASS]/[TESTS_FAIL] via add_stamp; rewrite the ai-test skill: default runs the project's real test command (package.json test, else detect tests/run.sh, pytest, go test), --generate dispatches test_engineer, --vibe unchanged, --fast runs the Tester on haiku; remove TestSprite from registry.json, the .mcp.json template, the API-key preservation code in bin/ai, mcp-domains.mjs Quality domain, the doctor check and the settings allow-lists; mcp-tester.mjs TESTSPRITE_API_KEY example becomes generic. Acceptance: grep -ri testsprite src tests hooks returns nothing; roles.json validation accepts headless roles and ai start layout tests pass with the tester entry present; label derivation covered for all three roles; ai-test default run + --fast model selection covered by fixture; full suite + CI green; bash install-ai-os.sh + server restart.",
       "created_at": "2026-09-11T19:24:59.403Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-16T18:36:26.836Z",
+      "summary": "TestSprite replaced by headless Claude Tester: tester role {claude, sonnet, headless} in roles.json, ai start/pane skip headless roles, derived Tester label, test_engineer agent, ai- …[full in LOG.md]",
       "depends_on": [
         "E-254"
       ],
@@ -293,7 +293,7 @@
     {
       "id": "E-256",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "OPEN",
       "tier": 2,
       "description": "Rewrite the public and generated surfaces for Claude-native v4 per D-069 and .ai/blueprints/claude-native-consolidation.md §Component 4: README (Triad table with Architect claude·fable / Engineer claude·opus / Tester claude·sonnet headless, prerequisites = Claude Code + tmux, tmux recipes replaced by 'ai start' with D-068 per-project sessions, MCP count '22 custom + 2 third-party', Native Subagents section = .claude/agents/ with no plugin, command reference without 'ai provider', Upgrading section describing ai sync legacy pruning), CONTRIBUTING (directory map, skill frontmatter section), ai --help and ai init banner text, src/templates (architect.md.template, BRIEF, RULES, CAPABILITIES), src/contracts/*.md, ARCHITECT.md and ENGINEER.md (drop Provider notes, the Gemini Model Mandate and the agy branches of §36; §36 becomes 'Skill tool for skills, Agent tool for agents'; keep CLAUDE.md as the only shim) and hooks/pre-commit.sh. Acceptance: grep -riE 'gemini|\\bagy\\b|antigravity|testsprite' src tests hooks README.md CONTRIBUTING.md ARCHITECT.md ENGINEER.md CLAUDE.md install-ai-os.sh returns nothing (CHANGELOG history and .ai/archive/** are the only permitted mentions repo-wide); ai_start_surface_test README assertion updated to the ai start recipe; full suite + CI green; bash install-ai-os.sh.",
       "created_at": "2026-09-11T19:24:59.491Z",
@@ -302,10 +302,8 @@
       "depends_on": [
         "E-255"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-255"
-      ]
+      "ready": true,
+      "blocked_by": []
     },
     {
       "id": "E-257",
