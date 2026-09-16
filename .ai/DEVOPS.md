@@ -323,3 +323,48 @@ restores the previous CI behaviour independently of the CLI change.
 
 Per this gate, not pushed to master directly: the change goes up as a PR so
 `on: pull_request` exercises the new cached browser step before master moves.
+
+---
+
+## DEVOPS-007 — Local CI runner `ai ci run` (E-265, D-072)
+
+Blueprint: `.ai/blueprints/local-ci.md` §Components 1-2. First task of the D-072 arc.
+
+### What is changing and why
+
+The operator is retiring GitHub-hosted CI (D-072). This task adds the local replacement
+**beside** the workflow; the workflow itself is deleted later, in E-268, so there is never
+a window with no CI at all.
+
+- `ai ci run [--ref <sha>|HEAD] [--dirty] [--suite-only|--unit-only] [--keep]` tests a
+  COMMITTED sha in a detached `git worktree` under a private temp dir, with a throwaway
+  `HOME` and `TMPDIR`, in an `env -i` environment (so `CI`, `TMUX` and every inherited
+  launch variable are absent by construction). `--dirty` checks out HEAD and overlays the
+  working tree's changes, so the operator's own checkout is only ever read.
+- Steps mirror the workflow: worktree → env → deps → browsers → install → toolchain →
+  suite → unit → secrets. Setup steps that fail are ERROR (exit 2); a failing suite, unit
+  layer or secrets check is FAIL (exit 1); PASS is exit 0.
+- `AI_OS_CI=local` (set only by the runner): a leak fails the run as under `CI=true`;
+  performance budgets stay host-relative.
+- Caches (`npm`, Playwright browsers) and logs live under `~/.ai-os/ci/`; a per-project
+  lock there refuses a concurrent run with exit 2.
+
+### Security implications
+
+No new secrets, no new permissions and no network access beyond what the workflow already
+used (npm registry, Playwright CDN). The run executes the repository's own tests, the same
+trust boundary as the workflow. The throwaway `HOME` keeps a run from writing the
+operator's real `~/.ai-os/` (mirror, telemetry, incidents) or shell rc files.
+
+### Rollback plan
+
+The command is additive: nothing calls it yet (gates arrive in E-267), and the GitHub
+workflow is untouched by this task. Reverting the commit removes it; `rm -rf ~/.ai-os/ci`
+removes its caches, logs and locks. `AI_OS_CI=local` semantics are inert when the variable
+is unset.
+
+### Branch-first validation
+
+Built on `engineer/e265-local-ci-runner` and exercised by the still-present GitHub workflow
+on the PR, plus a first real `ai ci run` on the branch head whose duration is recorded in
+LOG.md.
