@@ -5,6 +5,8 @@
 > provider-adapter.mjs) as a single-entry mechanism. Archived on completion: antigravity-migration,
 > native-subagents, agy-subagent-robustness, agent-invocation-robustness, may-2026-upgrades.
 > Task ids corrected 2026-09-13: the release task is **E-263** (D-070 took E-257..E-262).
+> The five blueprints above were archived to `.ai/archive/2026-09/blueprints/` on 2026-09-16
+> (after E-254 merged); `_INDEX.md` regenerated.
 
 ## Goal & Architecture
 AI-OS carries two provider adapters nobody runs any more. The Architect and the Engineer both

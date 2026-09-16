@@ -1310,3 +1310,35 @@ E-249's task text named a specification (`mcp.md §Booted-Build Staleness`) that
 §4 `AI_OS_TEST_KEEP_LAUNCH_ENV=1` skips the strip. §1, §2, §3 and §5 are documentation of shipped behaviour; their rollbacks are E-249's `AI_OS_BUILD_STAMP=0` and E-250's own.
 
 ---
+
+## D-072 — Continuous Integration Moves Off GitHub Onto the Operator's Machine (`ai ci`)
+
+**Date**: 2026-09-16
+**Task**: E-265..E-268 (operator instruction 2026-09-16: "we won't do the project's CI on GitHub anymore; we will do it locally on our machine")
+**Decision**: Retire `.github/workflows/test.yml`. Its two jobs become `ai ci run`, which tests a COMMITTED sha in a detached `git worktree` under a throwaway `$HOME` with `install-ai-os.sh` run from that sha, and writes a `ci_runs` row in `state.sqlite` plus a log under `~/.ai-os/ci/`. "CI green" now means a non-dirty PASS row for the commit. The `update_task_status(DONE)` gate and a new `pre-push` hook read that row (bookkeeping-only `.ai/**` commits ride on their tested ancestor; bypasses are recorded as SKIPPED rows with a reason). `AI_OS_CI=local` keeps E-240's leak-fails rule and E-239's host-relative perf budgets. Blueprint: `.ai/blueprints/local-ci.md`.
+
+### Why needed
+The operator is discontinuing GitHub-hosted CI. D-060 made "nobody looked at CI" a named failure and put a `gh run` read in front of every DONE; removing the workflow without replacing the READ would silently return the project to a hard-coded green badge. The workflow also did three things a laptop run does not: a clean checkout, a fresh mirror installed from the commit under test, and a record. The DIGEST's own Known Risks (the lagging mirror, a server serving a stale build) are the failures a bare `bash tests/run.sh` cannot see.
+
+### Alternatives considered
+1. **Keep GitHub Actions and add a local runner beside it** — rejected; the operator's instruction is to stop using GitHub CI, and two sources of "green" is the D-067 §2 two-transformations problem applied to verification.
+2. **`bash tests/run.sh` on the working tree as "CI"** — rejected; it tests uncommitted files against the laptop's lagging `~/.ai-os` mirror (Known Risk since E-244) and leaves no record a gate can read (D-071 §1: gates read state, not prose).
+3. **Run the suite in a `pre-push` hook synchronously** — rejected as the primary mechanism; a multi-minute blocking push invites `--no-verify`. The hook CHECKS for a record (fast); the run is an explicit, recorded step.
+4. **`act` or another GitHub-Actions emulator** — rejected; it needs Docker, which E-258 shows is absent on this machine 935/935 times, and it would keep the workflow YAML as a second description of the pipeline.
+5. **`CI=true` for local runs** — rejected; the absolute performance budgets were calibrated on the ubuntu runner and fail on this host (E-239's 381 ms). A distinct `AI_OS_CI=local` keeps leak-fails and host-relative budgets.
+6. **Gate DONE on the run everywhere** — rejected for downstream projects; the gate activates only once a project has a `ci_runs` row, so an upgrade cannot break a project that never adopted `ai ci`.
+
+### Constraints driving this decision
+- A gate takes its evidence from state (D-062, D-067, D-071 lineage): the row, never a log line or a badge.
+- Isolation is the property that made the GitHub run trustworthy (fresh checkout, fresh HOME); the local runner must reproduce it or it measures the laptop (test-harness-isolation.md, varieties 1 and 3).
+- Bypasses are explicit and recorded (D-065): `AI_OS_CI_SKIP` requires a reason and writes a row.
+- Linux coverage is lost: E-230's three defects reproduced only on ubuntu. `ai ci run --linux` inside a `node:22` container is DEFERRED until Docker exists on the operator's machine; the recorded toolchain and E-236 SKIP accounting are the interim mitigation. Open risk.
+
+### Impact
+- Unlocks: E-265 (runner + `AI_OS_CI=local`), E-266 (`ci_runs` + readers), E-267 (gates + consumers), E-268 (decommission). Sequenced after E-255 and before E-256; E-263's BREAKING list gains the workflow removal.
+- Risk if wrong: an isolation gap in the runner would let a green row certify code that only passes on this laptop, with nobody else running it — exactly the pre-D-060 state, now with a row that looks authoritative. The first-run duration measurement and the toolchain columns exist to make that drift visible.
+
+### Rollback
+Revert the E-268 deletion commit (the workflow stays in git history); `AI_OS_CI_GATE=0` and `AI_OS_CI_SKIP=1` disable the two gates; drop `ci_runs` via the migration's down path; delete `~/.ai-os/ci/`. GitHub branch protection is restored by the operator.
+
+---
