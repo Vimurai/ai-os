@@ -448,12 +448,12 @@
     {
       "id": "E-265",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Build the local CI runner per D-072 and .ai/blueprints/local-ci.md §Components 1-2 (execute AFTER E-255 merges, BEFORE E-256): run skill: ci_gate first and record the pipeline change in .ai/DEVOPS.md; add 'ai ci run [--ref <sha>|HEAD] [--dirty] [--suite-only|--unit-only] [--keep]' to src/bin/ai that checks the ref out into a detached git worktree under $TMPDIR (--dirty uses the working tree and marks the run dirty), builds a curated environment (throwaway HOME, AI_OS_CI=local, CI/TMUX and every E-264 LAUNCH_VARS entry unset, PLAYWRIGHT_BROWSERS_PATH and npm_config_cache under ~/.ai-os/ci/ caches), runs the steps worktree -> env -> deps (npm ci --ignore-scripts + per-server npm install loop) -> browsers -> install (bash install-ai-os.sh into the throwaway HOME) -> toolchain (node/bash/patch/uname recorded) -> suite (/bin/bash tests/run.sh teed to ~/.ai-os/ci/logs/<sha>-<started>.log) -> unit (UNIT_COVERAGE=1 tests/suites/node_unit_test.sh) -> secrets (git check-ignore .env node_modules), prints each step's status, exits 0 PASS / 1 FAIL / 2 ERROR, refuses a concurrent run via a lock file, and removes the worktree and HOME on exit unless --keep; teach tests/run.sh and tests/lib/assert.sh AI_OS_CI=local: a leak FAILS the run as under CI=true, perf budgets stay host-relative with both numbers printed (CI=true and AI_OS_PERF_ABSOLUTE=1 unchanged). Acceptance: fixture repo with a stub tests/run.sh proves an uncommitted file is NOT visible to a non-dirty run and IS visible under --dirty; the real ~/.ai-os (telemetry row count, mirror mtimes) is unchanged by a run; the lock refuses a second run with exit 2; AI_OS_CI=local leak and perf semantics covered in leaked_state_test and perf_budget_test; first real 'ai ci run' on HEAD is green and its wall-clock duration is recorded in LOG.md; full suite green; bash install-ai-os.sh + server restart.",
       "created_at": "2026-09-16T17:58:32.533Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-16T23:17:24.084Z",
+      "summary": "ai ci run local CI runner (worktree, env -i, throwaway HOME, lock, exit 0/1/2) + AI_OS_CI=local semantics; first real run PASS 610s on 321cbcb; PR #62 merged",
       "depends_on": [],
       "ready": true,
       "blocked_by": []
@@ -461,7 +461,7 @@
     {
       "id": "E-266",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "OPEN",
       "tier": 2,
       "description": "Record local CI runs and expose them per D-072 and .ai/blueprints/local-ci.md §Components 3-4: add the ci_runs table to state.sqlite through skill: ai-migration (columns per the blueprint Data Model: sha, ref, branch, dirty, status PASS|FAIL|ERROR|SKIPPED, started_at/finished_at ISO-8601 T-form, duration_ms, suite_pass/fail/skip, leaked, unit_status, unit_coverage, secrets_status, node/bash/patch versions, os, perf_json, skip_reason, log_path; index on (sha, started_at DESC); down-migration drops both), write recordCiRun/latestCiRun helpers in the shared state-db owner (not hot-reloaded, asserted like E-249), make 'ai ci run' write its row via them, add 'ai ci status [--ref <sha>] [--short]' (exit 0 PASS / 1 FAIL-ERROR-SKIPPED / 2 no row; --short prints one line for skill injection), 'ai ci list [-n]' and 'ai ci log [<sha>] [--failed]' (failing suites' sections only), add get_ci_status({sha?}) to task-synchronizer-mcp returning the newest row or {status:'NONE'}, add the 'ai doctor' line ('✓ local CI: HEAD <sha7> PASS <age>' / '✗ local CI: no run for HEAD — run: ai ci run'), and prune ~/.ai-os/ci/logs/ to the newest 14 runs or 14 days. Acceptance: migration up/down covered with PRAGMA integrity_check; a fixture run produces a row whose every column is populated and whose log_path exists; status exit codes and --short line covered for PASS, FAIL, dirty-only and no-row; get_ci_status covered via tests/lib/mcp-client.sh; doctor line covered for both branches; retention covered with 16 synthetic logs; full suite green; bash install-ai-os.sh + server restart.",
       "created_at": "2026-09-16T17:58:49.175Z",
@@ -470,10 +470,8 @@
       "depends_on": [
         "E-265"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-265"
-      ]
+      "ready": true,
+      "blocked_by": []
     },
     {
       "id": "E-267",
