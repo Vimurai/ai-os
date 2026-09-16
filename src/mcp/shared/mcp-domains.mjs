@@ -45,8 +45,8 @@ export const DOMAINS = {
     ],
   },
   Quality: {
-    description: "Test generation, visual audit, OS-level computer use.",
-    servers: ["TestSprite", "vibe-check-mcp", "computer-use-mcp"],
+    description: "Visual audit and OS-level computer use (tests run headless via skill: ai-test, E-255).",
+    servers: ["vibe-check-mcp", "computer-use-mcp"],
   },
   Interop: {
     description: "A2A bridge to the Architect and HITL approval gate.",

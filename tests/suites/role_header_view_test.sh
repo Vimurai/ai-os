@@ -14,11 +14,11 @@ STATE_DB="${REPO_ROOT}/src/mcp/shared/state-db.js"
 echo "── Suite: role_header_view_test (E-136) ────────────────────────────"
 
 # ── E-136.10: roleFromOwner strips the provider suffix (pure unit) ───────────
-roles=$(node --input-type=module -e "import {roleFromOwner} from 'file://${STATE_DB}'; process.stdout.write([roleFromOwner('Engineer (Claude)'),roleFromOwner('Architect (Claude)'),roleFromOwner('Engineer'),roleFromOwner('Tester (TestSprite)'),roleFromOwner('')].join('|'))")
+roles=$(node --input-type=module -e "import {roleFromOwner} from 'file://${STATE_DB}'; process.stdout.write([roleFromOwner('Engineer (Claude)'),roleFromOwner('Architect (Claude)'),roleFromOwner('Engineer'),roleFromOwner('Tester (claude · sonnet)'),roleFromOwner('')].join('|'))")
 assert_contains "E-136.10a: 'Engineer (Claude)' -> Engineer" "Engineer|" "$roles"
 assert_contains "E-136.10b: 'Architect (Claude)' -> Architect" "|Architect|" "$roles"
 assert_contains "E-136.10c: bare 'Engineer' -> Engineer" "|Engineer|" "$roles"
-assert_contains "E-136.10d: 'Tester (TestSprite)' -> Tester" "|Tester|" "$roles"
+assert_contains "E-136.10d: 'Tester (claude · sonnet)' -> Tester" "|Tester|" "$roles"
 assert_contains "E-136.10e: '' -> Unassigned" "|Unassigned" "$roles"
 
 # ── E-136.11: regenerated TASKS.md uses provider-agnostic headers ────────────

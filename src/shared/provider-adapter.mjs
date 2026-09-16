@@ -10,7 +10,7 @@
 //   both come from .ai/roles.json × .ai/providers.json.
 //
 // DATA MODEL (role-abstraction.md §Data Model):
-//   .ai/roles.json     { roles: { <role>: { provider, pane_identifier, model? } } }
+//   .ai/roles.json     { roles: { <role>: { provider, pane_identifier?, model?, headless? } } }
 //   .ai/providers.json { providers: { <name>: { launch[], print_mode[],
 //                                               child_env_unset[] } } }
 //   Templates substitute {role} {rulefile} {model} {prompt}. An entry whose
@@ -23,10 +23,15 @@ import { resolve as resolvePath, join } from "node:path";
 
 // D-066 defaults — used when .ai/roles.json is absent or malformed. Kept in sync with
 // src/templates/roles.json (architect=claude:1 · fable, engineer=claude:0 · opus).
-export const DEFAULT_ROLE_PROVIDERS = { architect: "claude", engineer: "claude" };
+// E-255 (D-069): the Tester is the third Claude role — headless, no pane.
+export const DEFAULT_ROLE_PROVIDERS = { architect: "claude", engineer: "claude", tester: "claude" };
 // Per-role model fallbacks, applied only when the role's provider is claude — another
 // provider has no use for a claude model name.
-export const DEFAULT_ROLE_MODELS = { architect: "fable", engineer: "opus" };
+export const DEFAULT_ROLE_MODELS = { architect: "fable", engineer: "opus", tester: "sonnet" };
+// Roles that are headless when roles.json does not say otherwise. A headless role is
+// dispatched as a subagent (the Tester via skill: ai-test) and is never laid out as a
+// pane, never bound by `ai pane`, and never minted a role token (claude-native-consolidation.md §Security).
+export const DEFAULT_HEADLESS_ROLES = new Set(["tester"]);
 
 // Built-in adapter fallbacks, so a project whose .ai/providers.json predates E-210
 // (no launch/print_mode keys) still resolves a working argv instead of throwing.
@@ -64,6 +69,26 @@ export function roleProvider(aiDir, role) {
 export function roleModel(aiDir, role) {
   const m = roleEntry(aiDir, role).model;
   return (typeof m === "string" && m.trim()) ? m.trim() : "";
+}
+
+/** True when `role` has no pane: an explicit `headless` in roles.json wins over the default. */
+export function isHeadless(aiDir, role) {
+  const h = roleEntry(aiDir, role).headless;
+  return typeof h === "boolean" ? h : DEFAULT_HEADLESS_ROLES.has(role);
+}
+
+/**
+ * Human label for a role, DERIVED from roles.json (E-255, D-066 lineage):
+ * "Tester (claude · sonnet)". The model falls back to the default only for a claude
+ * binding; an unmodelled role renders as "Tester (claude)". Never a vendor literal.
+ */
+export function roleLabel(aiDir, role) {
+  const name = String(role || "");
+  const title = name.charAt(0).toUpperCase() + name.slice(1);
+  const provider = roleProvider(aiDir, name);
+  const model = roleModel(aiDir, name) || (provider === "claude" ? (DEFAULT_ROLE_MODELS[name] ?? "") : "");
+  if (!provider) return title;
+  return model ? `${title} (${provider} · ${model})` : `${title} (${provider})`;
 }
 
 /** Adapter for `provider`, merged over the built-in default. */

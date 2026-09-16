@@ -7,7 +7,7 @@
 > [!IMPORTANT]
 > This document maps every AI-OS Model Context Protocol (MCP) server, grouped by routing domain. It is generated from `src/config/registry.json` — edit the registry, then re-run the generator. Never edit this file directly.
 
-Total registered servers: **25**. The Architect curates DOMAINS; the Engineer wires them into the registry.
+Total registered servers: **24**. The Architect curates DOMAINS; the Engineer wires them into the registry.
 
 ## State
 State and task management — TASKS.md, state.json, archives, semantic memory.
@@ -43,11 +43,10 @@ Skill/agent loading, blueprint alignment, GitHub bridge, token budgeting.
 - **`token-budget-mcp`** (WRITE) — §27 Token Budget & Cost Governance: real-time LLM spend tracking persisted in ~/.ai-os/usage.sqlite.
 
 ## Quality
-Test generation, visual audit, OS-level computer use.
+Visual audit and OS-level computer use (tests run headless via skill: ai-test, E-255).
 
-- **`TestSprite`** (EXECUTE) — EXECUTE server.
 - **`vibe-check-mcp`** (EXECUTE) — EXECUTE server.
-- **`computer-use-mcp`** (EXECUTE) — E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for TestSprite visual QA.
+- **`computer-use-mcp`** (EXECUTE) — E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for visual QA (ux_reviewer / vibe_sentinel).
 
 ## Interop
 A2A bridge to the Architect and HITL approval gate.

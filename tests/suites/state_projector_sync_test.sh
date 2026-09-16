@@ -321,7 +321,7 @@ node --input-type=module -e "
     );
     INSERT INTO tasks VALUES ('X-1','Engineer (Claude)','OPEN',2,'d','t',NULL,NULL);
     INSERT INTO tasks VALUES ('X-2','Architect (Claude)','OPEN',2,'d','t',NULL,NULL);
-    INSERT INTO tasks VALUES ('X-3','Tester (TestSprite)','OPEN',2,'d','t',NULL,NULL);
+    INSERT INTO tasks VALUES ('X-3','Tester (claude · sonnet)','OPEN',2,'d','t',NULL,NULL);
     INSERT INTO tasks VALUES ('X-4','SomethingElse','OPEN',2,'d','t',NULL,NULL);
   \`);
   db.close();
@@ -333,7 +333,7 @@ out="$(node --input-type=module -e "
 " 2>/dev/null)"
 assert_status 0 "Engineer (Claude) → Engineer"        bash -c "echo '$out' | grep -q '\"id\":\"X-1\",\"status\":\"OPEN\",\"owner\":\"Engineer\"'"
 assert_status 0 "Architect (Claude) → Architect"      bash -c "echo '$out' | grep -q '\"id\":\"X-2\",\"status\":\"OPEN\",\"owner\":\"Architect\"'"
-assert_status 0 "Tester (TestSprite) → Tester"        bash -c "echo '$out' | grep -q '\"id\":\"X-3\",\"status\":\"OPEN\",\"owner\":\"Tester\"'"
+assert_status 0 "Tester (claude · sonnet) → Tester"        bash -c "echo '$out' | grep -q '\"id\":\"X-3\",\"status\":\"OPEN\",\"owner\":\"Tester\"'"
 assert_status 0 "Unknown owner passes through"        bash -c "echo '$out' | grep -q '\"id\":\"X-4\",\"status\":\"OPEN\",\"owner\":\"SomethingElse\"'"
 
 # ── T-STP-S13: CLI smoke — --project + --sync exit codes ─────────────────────

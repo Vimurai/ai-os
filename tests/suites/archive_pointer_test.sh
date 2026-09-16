@@ -88,8 +88,6 @@ assert_status 0 "E-245.04b: .DS_Store is gitignored at every depth" \
   bash -c "grep -qx '\*\*/.DS_Store' '${REPO_ROOT}/.gitignore'"
 assert_status 1 "E-245.04c: and no .DS_Store is tracked" \
   bash -c "cd '$REPO_ROOT' && git ls-files | grep -q 'DS_Store'"
-assert_status 0 "E-245.04d: the testsprite scratch dir is ignored" \
-  bash -c "grep -q 'testsprite_tests/tmp/' '${REPO_ROOT}/.gitignore'"
 # The live view carries the pointer WHEN THIS CHECKOUT HAS AN ARCHIVE. It usually does not:
 # .ai/archive/ is untracked, so a CI checkout has no archive files at all — and the
 # projector is then CORRECT to emit no section. Asserting unconditionally made this test

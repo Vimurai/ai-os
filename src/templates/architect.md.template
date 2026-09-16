@@ -36,7 +36,7 @@
 ## 7. Development Cycle (Plan-Build-Test)
 1. **Plan**: Architects the vision in `architect.md` (Architect). Mandatory: Ask questions to clarify ambiguities before finalizing the plan. Do not be lazy.
 2. **Build**: Implements the technical logic (Engineer).
-3. **Test**: Verifies quality and performance (TestSprite).
+3. **Test**: Verifies quality and performance (Tester — headless Claude role via `skill: ai-test`).
 
 ## 30. Bootloader Resilience
 - **Concept**: Ensure the Triad maintains operational context even if the primary `orchestrator-mcp` is unavailable.

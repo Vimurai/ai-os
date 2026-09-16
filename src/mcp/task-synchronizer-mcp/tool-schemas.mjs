@@ -27,7 +27,7 @@ export function buildToolSchemas({ DONE_KEEP_RECENT, DONE_ARCHIVE_THRESHOLD }) {
       inputSchema: {
         type: "object",
         properties: {
-          owner:             { type: "string",  description: "Task owner: 'Architect (Claude)', 'Engineer (Claude)', or 'Tester (TestSprite)'" },
+          owner:             { type: "string",  description: "Task owner label, derived from .ai/roles.json: e.g. 'Architect (Claude)', 'Engineer (Claude)', 'Tester (claude · sonnet)'" },
           description:       { type: "string",  description: "Task description" },
           tier:              { type: "number",  description: "Risk tier (1, 2, or 3)", enum: [1, 2, 3] },
           prefix:            { type: "string",  description: "ID prefix: P (architect), E (engineer), T (tester)", enum: ["P", "E", "T"], default: "E" },

@@ -47,15 +47,6 @@
         "*"
       ]
     },
-    "TestSprite": {
-      "package": "@testsprite/testsprite-mcp",
-      "capability": "EXECUTE",
-      "status": "approved",
-      "allowed-tools": [
-        "*"
-      ],
-      "requires_api_key": true
-    },
     "vibe-check-mcp": {
       "path": "src/mcp/vibe-check-mcp/index.js",
       "capability": "EXECUTE",
@@ -288,7 +279,7 @@
         "DISPLAY": ":99",
         "HOME": "/tmp/computer-use-sandbox"
       },
-      "_note": "E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for TestSprite visual QA. Linux: Xvfb DISPLAY=:99. macOS: host display with warning. Decision D-002.",
+      "_note": "E-8 Native Computer Use: sandboxed OS-level screen/keyboard/mouse for visual QA (ux_reviewer / vibe_sentinel). Linux: Xvfb DISPLAY=:99. macOS: host display with warning. Decision D-002.",
       "_security": "SEC_CLEARED E-8 2026-04-21 — DISPLAY hardcoded to :99, HOME=/tmp/computer-use-sandbox, keyboard input sanitized, no persistent screenshots. See .ai/SECURITY.md T-CU-001..T-CU-005. E-38: env block carried in registry so `ai sync` cannot regress the sandbox."
     },
     "cache-manager-mcp": {

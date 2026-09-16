@@ -1,6 +1,6 @@
 ---
 name: ai-test
-description: Use activate_skill with this name when asked to run tests, before committing, or for Tier 3 releases (use --vibe flag). Runs TestSprite for E2E tests or triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey).
+description: Use activate_skill with this name when asked to run tests, before committing, or for Tier 3 releases. Runs the project's real test command by default; --generate dispatches the headless test_engineer Tester (Claude, sonnet) to write tests; --fast runs the Tester on haiku; --vibe triggers the two-phase Vibe & Chaos audit (ux_reviewer + chaos_monkey).
 disable-model-invocation: false
 user-invocable: true
 allowed-tools: Read, Bash, Glob
@@ -8,23 +8,53 @@ context: default
 agent: default
 ---
 
-# AI-OS Test
+# AI-OS Test — the headless Tester
+
+The Tester is the third Claude role (D-069): `tester` in `.ai/roles.json`, `headless: true`,
+model `sonnet`. It has no pane — `ai pane tester` exits 2 and points here.
 
 ## Dynamic Context Injection
-Test framework: !cat package.json 2>/dev/null | grep -E '"(test|dev|start)"' | head -5 || echo "(no package.json)"
+Test command: !AI_OS_LOCATE_UNTRUSTED_ENV=1; unset -f ai_os_locate ai_os_locate_enable_dev_tree ai_os_is_framework_clone 2>/dev/null; [ -f "${HOME}/.ai-os/shared/locate.sh" ] && . "${HOME}/.ai-os/shared/locate.sh"; c="$(ai_os_locate shared/test-command.mjs 2>/dev/null)"; [ -n "$c" ] && node "$c" 2>/dev/null || echo '{"command":null,"note":"helper unavailable — reinstall AI-OS"}'
 Open tasks requiring tests: !grep -n "E-[0-9]" .ai/TASKS.md 2>/dev/null | grep -v "\[x\]" | head -5 || echo "(all tasks complete)"
 
-## Standard Test Run
-
-Run the full TestSprite suite:
+## Resolve the command and the model
 
 ```bash
-npx testsprite run
+AI_OS_LOCATE_UNTRUSTED_ENV=1
+unset -f ai_os_locate ai_os_locate_enable_dev_tree ai_os_is_framework_clone 2>/dev/null
+[ -f "${HOME}/.ai-os/shared/locate.sh" ] && . "${HOME}/.ai-os/shared/locate.sh"
+HELPER="$(ai_os_locate shared/test-command.mjs 2>/dev/null)"
+node "$HELPER"           # default:  {"command":"npm test","source":"package.json","model":"sonnet"}
+node "$HELPER" --fast    # --fast:   same command, "model":"haiku"
 ```
 
-If TestSprite is not installed: `npm install -g testsprite` or use `npx @testsprite/testsprite-mcp`.
+Run from the project root — the helper inspects the current directory. Detection order
+(first match wins): `package.json` `scripts.test` (the `npm init`
+placeholder does not count) → `tests/run.sh` → `pytest` (pytest.ini, conftest.py,
+`[tool.pytest…]` in pyproject.toml, setup.cfg, tox.ini, or `tests/test_*.py`) → `go test ./...`
+(go.mod). Exit 3 with `"command": null` means the project has no test command — say so and
+stop; never invent one.
 
-Gate: All tests must pass at 100% before any commit. If a test fails, you are **LOCKED** — fix the failure before proceeding.
+## Default run (no flag)
+
+Run the resolved `command` from the project root and report the harness's own pass / fail /
+skip counts. A SKIP is not a pass.
+
+Gate: all tests must pass before any commit. If a test fails, you are **LOCKED** — exit
+non-zero, report `[LOCKED]` with the failing assertion, and fix the failure (`skill: ai-debug`)
+before proceeding.
+
+## --generate — dispatch the Tester
+
+Dispatch the `test_engineer` agent with the Agent tool, passing the task id, the resolved test
+command and the model from the helper (`sonnet`, or `haiku` with `--fast`). It writes a test
+plan, adds tests **only under `tests/`**, runs them and stamps `[TESTS_PASS]` / `[TESTS_FAIL]`
+via `add_stamp`. Relay its counts and stamp; do not re-stamp.
+
+## --fast
+
+Same as the default or `--generate`, with the Tester on `haiku` — a smoke tier for quick
+checks, not a release gate.
 
 ---
 

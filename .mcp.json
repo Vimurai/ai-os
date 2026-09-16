@@ -17,16 +17,6 @@
       ],
       "description": "Knowledge-graph memory store. Queryable alternative/supplement to DIGEST.md for semantic lookups."
     },
-    "TestSprite": {
-      "command": "npx",
-      "args": [
-        "@testsprite/testsprite-mcp@latest"
-      ],
-      "env": {
-        "API_KEY": "your-testsprite-api-key"
-      },
-      "description": "TestSprite MCP \u2014 AI-powered test generation and verification. Third brain in the Tripartite Engine (Plan->Build->Test)."
-    },
     "vibe-check-mcp": {
       "command": "node",
       "args": [

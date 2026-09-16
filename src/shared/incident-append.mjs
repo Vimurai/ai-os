@@ -8,7 +8,7 @@
 //   incident_type    string  required   ("MCP_CRASH" | "DRIFT_DETECTED" | "ENV_ERROR" | …)
 //   message          string  required   short human description
 //   stack_signature  string  required   stable grouping key, e.g. "task-synchronizer-mcp/index.js:45"
-//   source_agent     string  optional   "Claude" | "TestSprite"
+//   source_agent     string  optional   "Claude" | "Tester"
 //
 // Sanitization (incident-tracker.md §Security):
 //   - $HOME → "~"  (every occurrence)
@@ -110,7 +110,8 @@ function main(argv) {
       return 1;
     }
   }
-  const allowedAgents = new Set(["Claude", "TestSprite", "unknown"]);
+  // E-255: "Tester" is the headless Claude Tester role (D-069).
+  const allowedAgents = new Set(["Claude", "Tester", "unknown"]);
   const agent = parsed.source_agent && allowedAgents.has(parsed.source_agent)
     ? parsed.source_agent
     : "unknown";
