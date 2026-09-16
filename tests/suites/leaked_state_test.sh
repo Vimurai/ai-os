@@ -117,6 +117,36 @@ assert_status 0 "E-240.05e: AI_OS_TEST_NO_SWEEP=1 disables the check" \
 assert_status 0 "E-240.05f: the sweep re-checks the prefix before killing" \
   bash -c "sed -n '/^_leak_sweep() {/,/^}/p' '$RUNNER' | grep -q 'AIOS_TEST_SOCK_PREFIX}\"\\*'"
 
+# ── E-265: a leak FAILS a local CI run (AI_OS_CI=local) too ─────────────
+# Behavioural, not a grep: a copy of the real runner drives one suite that leaks a
+# test-prefixed temp dir. Without a CI flag the run passes and offers --sweep; under
+# AI_OS_CI=local (what `ai ci run` sets) the same leak fails the run.
+_LK="$(test_tmpdir leakrun)"
+mkdir -p "${_LK}/tests/suites" "${_LK}/tmp"
+cp "$RUNNER" "${_LK}/tests/run.sh"
+cp -R "${REPO_ROOT}/tests/lib" "${_LK}/tests/lib"
+cat > "${_LK}/tests/suites/leaky_test.sh" <<'LEAKY'
+#!/usr/bin/env bash
+mkdir -p "${TMPDIR%/}/aios-t-leaky-fixture"
+echo "SUITE_RESULT PASS=1 FAIL=0 SKIP=0"
+LEAKY
+_lk_run() {  # <env-assignments...> → "<exit> <output>"
+  local out rc
+  out="$(env -u CI -u AI_OS_CI -u AI_OS_TEST_NO_SWEEP TMPDIR="${_LK}/tmp" "$@" \
+         bash "${_LK}/tests/run.sh" 2>&1)"; rc=$?
+  rm -rf "${_LK}/tmp/aios-t-leaky-fixture"
+  printf '%s %s' "$rc" "$out"
+}
+_lk_plain="$(_lk_run AI_OS_CI=)"
+assert_contains "E-265.L1: the fixture really leaks (non-vacuity)" "LEAKED external state: 1" "$_lk_plain"
+assert_contains "E-265.L2: without a CI flag the leak is reported, the run passes" "0 " "${_lk_plain:0:2}"
+_lk_local="$(_lk_run AI_OS_CI=local)"
+assert_contains "E-265.L3: under AI_OS_CI=local the leak FAILS the run" "[LEAK_FAILED]" "$_lk_local"
+assert_contains "E-265.L4: and the run exits 1" "1 " "${_lk_local:0:2}"
+# Removed HERE as well as registered: a later block re-sources the library in a subshell
+# with the same $$, which truncates the registry file and would drop this handler.
+rm -rf "${_LK}"
+
 # ── E-240.6: the previously-leaking suites are converted ──────────────────
 for f in ai_start_test ai_start_surface_test; do
   assert_status 0 "E-240.06: ${f} uses test_tmux_socket" \

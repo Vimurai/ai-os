@@ -664,6 +664,20 @@
       "task_id": "E-255",
       "timestamp": "2026-09-14T23:28:58.288Z",
       "summary": "[TIER_2] E-255 (D-069 §3): headless Claude Tester — roles.json tester {claude, sonnet, headless}; ai start/overlays skip headless roles, ai pane tester exits 2; Tester label derived; test_engineer agent (model: sonnet); ai-test rewritten over test-command.mjs (--generate/--fast/--vibe); third-party test MCP removed from registry, .mcp.json, domains, doctor, key preservation. run_review Tier 2: P0 = generated .ai/blueprints/mcp.md (registry projection, as in E-254), P1 dep = false positive. New headless_tester_test 44/0; full suite 4690 passed / 0 failed / 1 skipped after fixes."
+    },
+    {
+      "type": "ALIGN_PASS",
+      "agent": "blueprint-aligner",
+      "task_id": "E-265",
+      "timestamp": "2026-09-16T18:49:34.457Z",
+      "summary": "[TIER_2] E-265 aligned with local-ci.md §Components 1-2; WARNs addressed (LOG updated; tests covered by local-ci.md)"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-265",
+      "timestamp": "2026-09-16T18:49:34.778Z",
+      "summary": "[TIER_2] Blueprint aligned — ai ci run runner + AI_OS_CI=local harness semantics"
     }
   ],
   "deltas": [

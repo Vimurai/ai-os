@@ -199,6 +199,9 @@ perf_time_ms() {
 # known and a real regression must not hide behind a slow runner.
 # Anywhere else → elapsed <= k*baseline + slack, which asks the question that actually
 # matters off CI: is this code slow RELATIVE to what this machine can do at all?
+# E-265 (D-072): AI_OS_CI=local (`ai ci run`) deliberately stays RELATIVE. The absolute
+# budgets were calibrated on the ubuntu runner, and a local CI host is not that machine;
+# the runner unsets CI, so only AI_OS_PERF_ABSOLUTE=1 switches a local run to absolute.
 assert_perf() {
   local label="$1" elapsed="$2" absolute="$3" baseline="$4" k="${5:-2}" slack="${6:-50}"
   local mode limit

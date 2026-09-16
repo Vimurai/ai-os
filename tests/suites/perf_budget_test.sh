@@ -98,6 +98,16 @@ assert_match "E-239.06d: the hook baseline is a number" '^[0-9]+$' "$_h"
 assert_status 0 "E-239.06e: the baseline is a MEDIAN, not a mean" \
   grep -q 'runs\[len(runs) // 2\]' "${REPO_ROOT}/tests/lib/assert.sh"
 
+# ── E-265: a local CI run (AI_OS_CI=local) stays host-relative ───────────
+# `ai ci run` unsets CI and sets AI_OS_CI=local. This host is not the ubuntu reference
+# machine the absolute budgets were calibrated on, so the incident case must still PASS.
+assert_contains "E-265.P1: AI_OS_CI=local keeps the relative budget (the 381ms incident passes)" \
+  "PASS" "$(_verdict 'CI=; AI_OS_CI=local' 381 200 197)"
+assert_contains "E-265.P2: AI_OS_CI=local still fails a genuinely slow path" \
+  "FAIL" "$(_verdict 'CI=; AI_OS_CI=local' 500 200 35)"
+assert_contains "E-265.P3: AI_OS_PERF_ABSOLUTE=1 still wins under AI_OS_CI=local" \
+  "FAIL" "$(_verdict 'CI=; AI_OS_CI=local; AI_OS_PERF_ABSOLUTE=1' 381 200 197)"
+
 # ── E-239.7: the converted assertions, and the checklist ─────────────────
 assert_status 0 "E-239.07a: incident_aggregator uses assert_perf" \
   grep -q 'assert_perf "aggregator on a 100-record log"' "${REPO_ROOT}/tests/suites/incident_aggregator_test.sh"

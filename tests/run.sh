@@ -204,7 +204,9 @@ if [[ "${TOTAL_LEAKED:-0}" -gt 0 ]]; then
   echo ""
   echo "   LEAKED external state: ${TOTAL_LEAKED} item(s)"
   for _r in "${LEAK_REPORTS[@]}"; do echo "     - ${_r}"; done
-  if [[ "${CI:-}" == "true" ]]; then
+  # E-265 (D-072): `ai ci run` sets AI_OS_CI=local and has no operator to sweep either, so
+  # a leak fails a local CI run exactly as it fails a hosted one.
+  if [[ "${CI:-}" == "true" || "${AI_OS_CI:-}" == "local" ]]; then
     echo "   [LEAK_FAILED] a test run must leave nothing behind (E-240 / D-063 §2)"
     TOTAL_FAIL=$(( TOTAL_FAIL + 1 ))
   else

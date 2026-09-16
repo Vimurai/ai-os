@@ -105,6 +105,9 @@ Commands:
   ai watch       Run the Interactive Bridge tmux watcher — routes queued
                  handoff signals to the Architect/Engineer pane to drive the
                  autonomous ping-pong loop (E-115). Run in a dedicated pane.
+  ai ci run [--ref <sha>] [--dirty] [--suite-only|--unit-only] [--keep]
+                 Local CI (D-072): test a committed sha in a detached worktree
+                 with a throwaway HOME; exit 0 PASS / 1 FAIL / 2 ERROR
   ai version     Print version
 
 Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
@@ -4236,6 +4239,339 @@ _locate_resolve_launch() {
   return 1
 }
 
+# ── E-265 (D-072, local-ci.md §Components 1-2): `ai ci run` ──────────────────
+#
+# GitHub-hosted CI gave us three things a bare `bash tests/run.sh` on a laptop does not: a
+# CLEAN CHECKOUT (uncommitted files are invisible), a FRESH MIRROR installed from the
+# commit under test (not the laptop's lagging ~/.ai-os), and a RECORD. This runner
+# reproduces the first two and writes the log the third is built from (E-266 adds the row).
+#
+# Isolation is by construction, not by list: the steps run under `env -i` with a curated
+# environment, so CI, TMUX and every launch variable `ai pane`/`ai start` export are simply
+# absent — there is no strip list to fall out of date. HOME and TMPDIR are throwaway, so a
+# run cannot write the operator's telemetry store, mirror or shell rc files.
+#
+# Exit codes: 0 PASS, 1 FAIL (suite, unit layer or secrets check failed), 2 ERROR (a step
+# could not start: bad ref, lock held, deps/install failed). Unknown is not green (D-060).
+
+_ci_usage() {
+  cat <<'CIUSAGE'
+Usage: ai ci run [--ref <sha>|HEAD] [--dirty] [--suite-only|--unit-only] [--keep]
+
+  --ref <rev>    Commit to test (default HEAD). Tested in a detached git worktree, so
+                 uncommitted files are invisible to the run.
+  --dirty        Test HEAD plus the working tree's uncommitted changes (the run is
+                 marked dirty; a dirty run never certifies a commit).
+  --suite-only   Run the bash suite only (skip the node:test unit layer).
+  --unit-only    Run the node:test unit layer only (skip the bash suite).
+  --keep         Keep the worktree and throwaway HOME for debugging.
+
+Exit: 0 PASS, 1 FAIL, 2 ERROR. Logs: ~/.ai-os/ci/logs/
+CIUSAGE
+}
+
+do_ci() {
+  local sub="${1:-}"
+  case "$sub" in
+    run) shift; _ci_run "$@" ;;
+    ""|-h|--help|help) _ci_usage ;;
+    *) echo "ai ci: unknown subcommand '${sub}'" >&2; _ci_usage >&2; return 2 ;;
+  esac
+}
+
+# _ci_step <name> <status> [detail] — one aligned status line per step.
+_ci_step() {
+  printf '  %-10s %-7s %s\n' "$1" "$2" "${3:-}"
+  printf '[ci] step=%s status=%s %s\n' "$1" "$2" "${3:-}" >> "$CI_LOG"
+}
+
+# _ci_exec <label> <cmd...> — run a step command inside the curated env, cwd = worktree,
+# output to the log only.
+_ci_exec() {
+  local label="$1"; shift
+  printf '\n[ci] ── %s: %s\n' "$label" "$*" >> "$CI_LOG"
+  ( cd "$CI_WT" && env -i "${CI_ENV[@]}" "$@" ) >> "$CI_LOG" 2>&1
+}
+
+# _ci_fail_tail — show the end of the log when a setup step dies, so the operator does not
+# have to go find it.
+_ci_fail_tail() {
+  echo "  ── last 20 log lines ──"
+  tail -20 "$CI_LOG" | sed 's/^/  | /'
+}
+
+# _ci_clean_path — the caller's PATH minus any entry inside the operator's ~/.ai-os: the run
+# must use the mirror it installed from the commit under test, never the laptop's.
+_ci_clean_path() {
+  local out="" p
+  local IFS=':'
+  for p in $PATH; do
+    [[ -z "$p" || "$p" == "${AIOS}" || "$p" == "${AIOS}/"* ]] && continue
+    out="${out:+${out}:}${p}"
+  done
+  printf '%s' "$out"
+}
+
+# _ci_lock_acquire <lockdir> — atomic mkdir lock holding the owner pid. A lock whose owner
+# is dead is reclaimed; a live one refuses (two runs race on tmux sockets and ports).
+_ci_lock_acquire() {
+  local lock="$1" owner
+  if mkdir "$lock" 2>/dev/null; then
+    echo "$$" > "${lock}/pid"; return 0
+  fi
+  owner="$(cat "${lock}/pid" 2>/dev/null || true)"
+  if [[ "$owner" =~ ^[0-9]+$ ]] && kill -0 "$owner" 2>/dev/null; then
+    echo "ai ci: another run is in progress for this project (pid ${owner}, lock ${lock})" >&2
+    return 1
+  fi
+  # Stale: the owner is gone. Reclaim it, then take it atomically like a fresh lock.
+  rm -rf "$lock"
+  if mkdir "$lock" 2>/dev/null; then
+    echo "$$" > "${lock}/pid"; return 0
+  fi
+  echo "ai ci: could not take the run lock ${lock}" >&2
+  return 1
+}
+
+_ci_run() {
+  local ref="" dirty=0 do_suite=1 do_unit=1 keep=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --ref) [[ $# -ge 2 && -n "$2" ]] || { echo "ai ci run: --ref needs a value" >&2; return 2; }
+             ref="$2"; shift 2 ;;
+      --ref=*) ref="${1#--ref=}"; shift ;;
+      --dirty) dirty=1; shift ;;
+      --suite-only) do_unit=0; shift ;;
+      --unit-only) do_suite=0; shift ;;
+      --keep) keep=1; shift ;;
+      -h|--help) _ci_usage; return 0 ;;
+      *) echo "ai ci run: unknown option '$1'" >&2; _ci_usage >&2; return 2 ;;
+    esac
+  done
+  if [[ "$do_suite" -eq 0 && "$do_unit" -eq 0 ]]; then
+    echo "ai ci run: --suite-only and --unit-only are mutually exclusive" >&2; return 2
+  fi
+  # A dirty run tests HEAD plus the working tree; testing another ref "dirty" has no meaning.
+  if [[ "$dirty" -eq 1 && -n "$ref" ]]; then
+    echo "ai ci run: --dirty tests HEAD plus the working tree; it cannot be combined with --ref" >&2
+    return 2
+  fi
+  ref="${ref:-HEAD}"
+
+  local root sha
+  root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+    echo "ai ci run: not inside a git repository" >&2; return 2; }
+  sha="$(git -C "$root" rev-parse --verify --quiet "${ref}^{commit}")" || {
+    echo "ai ci run: '${ref}' is not a commit in ${root}" >&2; return 2; }
+
+  local ci_home="${AIOS}/ci"
+  mkdir -p "${ci_home}/logs" "${ci_home}/cache/npm" "${ci_home}/cache/ms-playwright" || {
+    echo "ai ci run: cannot create ${ci_home}" >&2; return 2; }
+
+  # One lock per project, keyed by the repository path.
+  local key lock
+  key="$(printf '%s' "$root" | cksum | awk '{print $1}')"
+  lock="${ci_home}/run-${key}.lock"
+  _ci_lock_acquire "$lock" || return 2
+
+  local started started_iso t0 work
+  started="$(date -u +%Y%m%dT%H%M%SZ)"
+  started_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  t0="$(date +%s)"
+  CI_LOG="${ci_home}/logs/${sha}-${started}.log"
+  local tmpbase="${TMPDIR:-/tmp}"
+  work="$(mktemp -d "${tmpbase%/}/ai-os-ci.XXXXXX")" || {
+    rm -rf "$lock"; echo "ai ci run: mktemp failed" >&2; return 2; }
+  # PHYSICAL path. macOS TMPDIR is /var/folders/…, a symlink to /private/var/folders/…, and
+  # the node helpers' "am I the main module?" checks compare argv[1] against the resolved
+  # import.meta.url — so under the symlinked spelling every `node <mirror>/shared/*.mjs`
+  # CLI entry silently did nothing (the first real run failed 20 sync/handoff assertions).
+  work="$(cd "$work" && pwd -P)"
+  CI_WT="${work}/wt"
+  local ci_homedir="${work}/home" ci_tmp="${work}/tmp"
+  mkdir -p "$ci_homedir" "$ci_tmp"
+
+  # Cleanup runs on every exit path. The lock is always released; the worktree and HOME
+  # only without --keep.
+  _CI_CLEAN_ROOT="$root" _CI_CLEAN_WORK="$work" _CI_CLEAN_LOCK="$lock" _CI_CLEAN_KEEP="$keep"
+  trap '_ci_cleanup' EXIT
+  trap '_ci_cleanup; exit 130' INT TERM
+
+  {
+    echo "[ci] ai ci run — AI-OS ${VERSION}"
+    echo "[ci] sha=${sha} ref=${ref} dirty=${dirty} started_at=${started_iso}"
+    echo "[ci] repo=${root}"
+  } > "$CI_LOG"
+
+  echo "ai ci run: ${sha:0:7} (${ref}$([[ $dirty -eq 1 ]] && echo ', dirty'))"
+  local status="PASS" rc
+
+  # ── worktree ──
+  if ! git -C "$root" worktree add --detach --quiet "$CI_WT" "$sha" >> "$CI_LOG" 2>&1; then
+    _ci_step worktree ERROR "git worktree add failed"; _ci_fail_tail
+    _ci_finish ERROR "$sha" "$t0"; return 2
+  fi
+  if [[ "$dirty" -eq 1 ]]; then
+    # Overlay the working tree onto the HEAD checkout: modified and untracked (non-ignored)
+    # files are copied, deleted files removed. The operator's tree is only read.
+    local f n_copy=0 n_del=0
+    while IFS= read -r -d '' f; do
+      [[ -e "${root}/${f}" || -L "${root}/${f}" ]] || continue
+      mkdir -p "$(dirname "${CI_WT}/${f}")"
+      cp -Pp "${root}/${f}" "${CI_WT}/${f}" && n_copy=$((n_copy + 1))
+    done < <(git -C "$root" ls-files -z --modified --others --exclude-standard)
+    while IFS= read -r -d '' f; do
+      rm -f "${CI_WT}/${f}" && n_del=$((n_del + 1))
+    done < <(git -C "$root" ls-files -z --deleted)
+    _ci_step worktree ok "${CI_WT} (dirty: ${n_copy} copied, ${n_del} removed)"
+  else
+    _ci_step worktree ok "${CI_WT}"
+  fi
+
+  # ── env ──
+  CI_ENV=(
+    "PATH=$(_ci_clean_path)"
+    "HOME=${ci_homedir}"
+    "TMPDIR=${ci_tmp}/"
+    "LANG=${LANG:-en_US.UTF-8}"
+    "USER=${USER:-$(id -un)}"
+    "LOGNAME=${LOGNAME:-$(id -un)}"
+    "SHELL=/bin/bash"
+    "TERM=dumb"
+    "AI_OS_CI=local"
+    "PLAYWRIGHT_BROWSERS_PATH=${ci_home}/cache/ms-playwright"
+    "npm_config_cache=${ci_home}/cache/npm"
+  )
+  _ci_step env ok "HOME=${ci_homedir} AI_OS_CI=local"
+
+  # ── deps ──
+  if [[ -f "${CI_WT}/package.json" ]]; then
+    if [[ -f "${CI_WT}/package-lock.json" ]]; then
+      _ci_exec deps npm ci --ignore-scripts || {
+        _ci_step deps ERROR "npm ci failed"; _ci_fail_tail; _ci_finish ERROR "$sha" "$t0"; return 2; }
+    else
+      _ci_exec deps npm install --ignore-scripts || {
+        _ci_step deps ERROR "npm install failed"; _ci_fail_tail; _ci_finish ERROR "$sha" "$t0"; return 2; }
+    fi
+    # Per-server installs, best-effort exactly as the workflow ran them.
+    local d n_srv=0
+    for d in "${CI_WT}"/src/mcp/*/; do
+      [[ -f "${d}package.json" ]] || continue
+      _ci_exec "deps ${d#"${CI_WT}/"}" npm install --prefix "$d" --ignore-scripts || true
+      n_srv=$((n_srv + 1))
+    done
+    _ci_step deps ok "root + ${n_srv} server(s)"
+  else
+    _ci_step deps skip "no package.json"
+  fi
+
+  # ── browsers ──
+  local vibe="${CI_WT}/src/mcp/vibe-check-mcp"
+  if [[ -f "${vibe}/package.json" ]]; then
+    local cached="download"
+    compgen -G "${ci_home}/cache/ms-playwright/chromium-*" >/dev/null && cached="cache hit"
+    if ( cd "$vibe" && env -i "${CI_ENV[@]}" npx --no-install playwright install chromium ) >> "$CI_LOG" 2>&1; then
+      _ci_step browsers ok "chromium (${cached})"
+    else
+      _ci_step browsers ERROR "playwright install chromium failed"; _ci_fail_tail
+      _ci_finish ERROR "$sha" "$t0"; return 2
+    fi
+  else
+    _ci_step browsers skip "no src/mcp/vibe-check-mcp"
+  fi
+
+  # ── install ── the mirror under test is built from the commit under test.
+  if [[ -f "${CI_WT}/install-ai-os.sh" ]]; then
+    _ci_exec install bash install-ai-os.sh || {
+      _ci_step install ERROR "install-ai-os.sh failed"; _ci_fail_tail; _ci_finish ERROR "$sha" "$t0"; return 2; }
+    _ci_step install ok "${ci_homedir}/.ai-os"
+  else
+    _ci_step install skip "no install-ai-os.sh"
+  fi
+
+  # ── toolchain ──
+  local v_node v_bash v_patch v_os
+  v_node="$(env -i "${CI_ENV[@]}" node --version 2>/dev/null || echo none)"
+  v_bash="$(/bin/bash -c 'echo $BASH_VERSION' 2>/dev/null || echo none)"
+  v_patch="$(env -i "${CI_ENV[@]}" patch --version 2>/dev/null | head -1 || echo none)"
+  v_os="$(uname -sr)"
+  printf '[ci] toolchain node=%s bash=%s patch=%s os=%s\n' "$v_node" "$v_bash" "${v_patch:-none}" "$v_os" >> "$CI_LOG"
+  _ci_step toolchain ok "node ${v_node}, bash ${v_bash}, ${v_os}"
+
+  # ── suite ──
+  local suite_status="SKIP" s_pass=0 s_fail=0 s_skip=0 leaked=0
+  if [[ "$do_suite" -eq 1 && -f "${CI_WT}/tests/run.sh" ]]; then
+    printf '\n[ci] ── suite: /bin/bash tests/run.sh\n' >> "$CI_LOG"
+    set +e
+    ( cd "$CI_WT" && env -i "${CI_ENV[@]}" /bin/bash tests/run.sh ) 2>&1 | tee -a "$CI_LOG"
+    rc="${PIPESTATUS[0]}"
+    set -e
+    local totals
+    totals="$(grep -E '^ *Total: [0-9]+ passed' "$CI_LOG" | tail -1 || true)"
+    s_pass="$(sed -nE 's/.*Total: ([0-9]+) passed.*/\1/p' <<< "$totals")"
+    s_fail="$(sed -nE 's/.* ([0-9]+) failed.*/\1/p' <<< "$totals")"
+    s_skip="$(sed -nE 's/.* ([0-9]+) skipped.*/\1/p' <<< "$totals")"
+    leaked="$(sed -nE 's/.*LEAKED external state: ([0-9]+) item.*/\1/p' "$CI_LOG" | tail -1)"
+    s_pass="${s_pass:-0}"; s_fail="${s_fail:-0}"; s_skip="${s_skip:-0}"; leaked="${leaked:-0}"
+    if [[ "$rc" -eq 0 ]]; then suite_status="PASS"; else suite_status="FAIL"; status="FAIL"; fi
+    _ci_step suite "$suite_status" "${s_pass} passed, ${s_fail} failed, ${s_skip} skipped, leaked ${leaked}"
+  elif [[ "$do_suite" -eq 1 ]]; then
+    _ci_step suite skip "no tests/run.sh"
+  else
+    _ci_step suite skip "--unit-only"
+  fi
+
+  # ── unit ──
+  local unit_status="SKIP"
+  if [[ "$do_unit" -eq 1 && -f "${CI_WT}/tests/suites/node_unit_test.sh" ]]; then
+    if _ci_exec unit /usr/bin/env UNIT_COVERAGE=1 /bin/bash tests/suites/node_unit_test.sh; then
+      unit_status="PASS"
+    else
+      unit_status="FAIL"; status="FAIL"
+    fi
+    _ci_step unit "$unit_status" "node:test (coverage)"
+  elif [[ "$do_unit" -eq 1 ]]; then
+    _ci_step unit skip "no tests/suites/node_unit_test.sh"
+  else
+    _ci_step unit skip "--suite-only"
+  fi
+
+  # ── secrets ── the workflow's .gitignore check, unchanged.
+  local secrets_status="PASS"
+  if git -C "$CI_WT" check-ignore -q .env && git -C "$CI_WT" check-ignore -q node_modules; then
+    _ci_step secrets PASS ".env and node_modules are ignored"
+  else
+    secrets_status="FAIL"; status="FAIL"
+    _ci_step secrets FAIL ".gitignore must cover .env and node_modules"
+  fi
+
+  printf '[ci] result status=%s suite=%s pass=%s fail=%s skip=%s leaked=%s unit=%s secrets=%s\n' \
+    "$status" "$suite_status" "$s_pass" "$s_fail" "$s_skip" "$leaked" "$unit_status" "$secrets_status" >> "$CI_LOG"
+  _ci_finish "$status" "$sha" "$t0"
+  [[ "$status" == "PASS" ]] && return 0 || return 1
+}
+
+# _ci_finish <status> <sha> <t0> — duration + the one summary line.
+_ci_finish() {
+  local st="$1" sha="$2" t0="$3" dur
+  dur=$(( $(date +%s) - t0 ))
+  printf '[ci] finished status=%s duration_s=%s finished_at=%s\n' \
+    "$st" "$dur" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$CI_LOG"
+  echo "ai ci: ${st} ${sha:0:7} in ${dur}s — log: ${CI_LOG}"
+}
+
+_ci_cleanup() {
+  trap - EXIT INT TERM
+  if [[ "${_CI_CLEAN_KEEP:-0}" == "1" ]]; then
+    echo "ai ci: kept ${_CI_CLEAN_WORK} (--keep); remove with: git -C '${_CI_CLEAN_ROOT}' worktree remove --force '${_CI_CLEAN_WORK}/wt' && rm -rf '${_CI_CLEAN_WORK}'"
+  else
+    git -C "$_CI_CLEAN_ROOT" worktree remove --force "${_CI_CLEAN_WORK}/wt" >/dev/null 2>&1 || true
+    rm -rf "$_CI_CLEAN_WORK" 2>/dev/null || true
+    git -C "$_CI_CLEAN_ROOT" worktree prune >/dev/null 2>&1 || true
+  fi
+  rm -rf "$_CI_CLEAN_LOCK" 2>/dev/null || true
+}
+
 cmd="${1:-}"
 case "$cmd" in
   # Bootloader / installer surface (the only working commands)
@@ -4258,6 +4594,8 @@ case "$cmd" in
   # and launch that role's provider CLI. Usage: ai pane <architect|engineer>.
   pane)          do_pane "${@:2}" ;;
   start)         do_start "${@:2}" ;;
+  # E-265 (D-072, local-ci.md): local CI — tests a committed sha in an isolated worktree.
+  ci)            do_ci "${@:2}" ;;
   # E-254 (D-069): `ai provider` is removed. v4 ships ONE provider, and a subcommand whose
   # whole purpose was registering a second one is dead surface — the registry file remains
   # the place to edit, so the exit says where rather than only that the command is gone.
