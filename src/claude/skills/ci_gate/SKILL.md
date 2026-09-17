@@ -23,7 +23,9 @@ Before altering CI/deploy config, document in `.ai/DEVOPS.md`:
 4. `build` (only if tests pass)
 5. `deploy` (only if build passes, and only on protected branches)
 
-Never merge if CI is red. Never skip CI with `--no-verify` or equivalent.
+Never merge or push a commit without a green `ai ci run` (`ai ci status`). Never skip it with
+`--no-verify` or equivalent; a deliberate skip is `AI_OS_CI_SKIP=1 AI_OS_CI_SKIP_REASON="<why>"`,
+and it is recorded (D-072).
 
 ## Dynamic Context Injection
 Current CI config files: !find . -name "*.yml" -path "*/.github/workflows/*" -o -name "*.yaml" -path "*/.github/workflows/*" 2>/dev/null | head -10

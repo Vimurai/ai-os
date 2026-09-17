@@ -25,3 +25,4 @@
 [ALIGN_PASS] 2026-09-16 | [TIER_2] E-265 aligned with local-ci.md §Components 1-2; WARNs addressed (LOG updated; tests covered by local-ci.md)
 [CRITIC_STAMP] 2026-09-16 | [TIER_2] Blueprint aligned — ai ci run runner + AI_OS_CI=local harness semantics
 [CRITIC_STAMP] 2026-09-16 | [TIER_2] E-266 aligned with local-ci.md §Components 3-4; ci_runs helpers in ci-runs.js beside state-db.js (size limit) — flagged in handover
+[CRITIC_STAMP] 2026-09-17 | [TIER_2] E-267 aligned (local-ci.md §5-6a); CAPABILITIES_BYPASS resolved by dropping pre-push script-relative fallback; DONE-gate ancestor rule flagged

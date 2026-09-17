@@ -8,8 +8,10 @@
 //   node ci-record.mjs status  --ai-dir <d> --sha <sha> [--short]   exit 0 PASS / 1 not green / 2 no certifying row
 //   node ci-record.mjs list    --ai-dir <d> [-n <N>]
 //   node ci-record.mjs log     --ai-dir <d> --sha <sha> [--failed]  exit 2 when no row / log gone
+//   node ci-record.mjs gate    --ai-dir <d> --sha <sha> [--ref <r>]  exit 0 certified / 1 refused (pre-push, E-267)
+//   node ci-record.mjs skip    --ai-dir <d> --sha <sha> --reason <text> [--ref <r>]
 //
-// Only `record` writes, and only the runner calls it.
+// Only `record` (the runner) and `skip` (the pre-push bypass) write.
 
 import { realpathSync, existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -17,7 +19,7 @@ import { resolve } from "node:path";
 import { getDb } from "../mcp/shared/state-db.js";
 import {
   recordCiRunFromLog, ciVerdict, shortLine, listCiRuns, latestCiRun, failedSections,
-  pruneCiLogs, ageOf,
+  pruneCiLogs, ageOf, certifyingRunFor, ciRunCount, recordCiSkip,
 } from "../mcp/shared/ci-runs.js";
 
 function parseArgs(argv) {
@@ -116,8 +118,45 @@ export function run(argv) {
       process.stdout.write(secs.length ? secs.join("\n\n") + "\n" : "(no failing sections)\n");
       return 0;
     }
+    case "gate": {
+      // pre-push: may this sha leave the machine? Inactive (exit 0, with a notice) until
+      // the project has recorded a run, like the DONE gate.
+      const db = _db(o["ai-dir"]);
+      const sha7 = o.sha.slice(0, 7);
+      const label = o.ref || sha7;
+      if (ciRunCount(db) === 0) {
+        process.stderr.write(`[CI_GATE] ${label}: not enforced — no ai ci run recorded in this project yet\n`);
+        return 0;
+      }
+      const repo = resolve(o["ai-dir"], "..");
+      const c = certifyingRunFor(db, repo, o.sha, { allowSkipped: true });
+      if (c.ok) {
+        const how = c.via === "self" ? `${c.kind} run` : `tested ancestor ${c.row.sha.slice(0, 7)}, only .ai/ differs`;
+        process.stderr.write(`[CI_GATE] ${label}: ${sha7} ok (${how})\n`);
+        return 0;
+      }
+      let why;
+      if (c.via === "self") why = `its run is ${c.kind}`;
+      else if (c.row) why = `nearest tested ancestor ${c.row.sha.slice(0, 7)} differs outside .ai/: ${c.differs.slice(0, 3).join(", ")}${c.differs.length > 3 ? ", …" : ""}`;
+      else why = "no run for it or for a tested ancestor";
+      process.stderr.write(
+        `[CI_GATE] ${label}: no green local CI run for ${sha7} (${why}) — run: ai ci run, ` +
+        "or AI_OS_CI_SKIP=1 AI_OS_CI_SKIP_REASON=\"<why>\" git push\n");
+      return 1;
+    }
+    case "skip": {
+      const reason = String(o.reason || "").trim();
+      if (!reason) {
+        process.stderr.write("[CI_GATE] AI_OS_CI_SKIP=1 needs AI_OS_CI_SKIP_REASON=\"<why>\" — a skip is recorded, never silent\n");
+        return 1;
+      }
+      const db = _db(o["ai-dir"]);
+      recordCiSkip(db, { sha: o.sha, ref: o.ref || null, reason });
+      process.stderr.write(`[CI_GATE] ${o.ref || o.sha.slice(0, 7)}: SKIPPED (recorded) — ${reason}\n`);
+      return 0;
+    }
     default:
-      process.stderr.write("usage: ci-record.mjs <record|status|list|log> --ai-dir <d> …\n");
+      process.stderr.write("usage: ci-record.mjs <record|status|list|log|gate|skip> --ai-dir <d> …\n");
       return 2;
   }
 }

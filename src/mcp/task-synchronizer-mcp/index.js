@@ -29,7 +29,7 @@ import { resolve, dirname } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, addTask as _addTask, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
 // E-266 (D-072): read-only view of the local CI run record.
-import { getCiStatus } from "../shared/ci-runs.js";
+import { getCiStatus, checkCiDoneGate } from "../shared/ci-runs.js";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 // E-158 (cli-agnostic-handoff): shared handoff primitive — the SAME locked signal.json
 // append is used by this MCP tool AND by the provider-agnostic `ai handoff` CLI so the
@@ -420,6 +420,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (args.status === "DONE") {
         const gate = checkCompletionBuildGate({ repoRoot: dirname(aiDir) });
         if (!gate.ok) return rejection(gate.message);
+        // E-267 (D-072 §5a): a green local CI run for HEAD (or a tested ancestor that
+        // differs only in .ai/). Inactive until the project has run `ai ci` once.
+        const ci = checkCiDoneGate(db, dirname(aiDir));
+        if (!ci.ok) return rejection(ci.message);
       }
 
       // E-91: optional dependency revision — validate the new edge set

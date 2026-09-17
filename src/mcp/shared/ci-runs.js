@@ -220,6 +220,10 @@ export function recordCiRunFromLog(db, logPath) {
  * SUITE_RESULT reports FAIL>0 (or which contains a ✗ line), the leak report, the unit
  * section when it failed, and the tail when the run ERRORed before the suite.
  */
+// A failing assertion line, as assert.sh prints it. Matching "✗" anywhere was wrong: an
+// assertion LABEL may contain the glyph ("doctor reports ✗ …") and dragged passing suites in.
+const _isFailLine = (l) => /^\s*✗ /.test(l);
+
 export function failedSections(text) {
   const lines = String(text).split("\n");
   const out = [];
@@ -232,13 +236,13 @@ export function failedSections(text) {
       block.push(lines[i]);
       if (lines[i].startsWith("SUITE_RESULT")) {
         const fail = _int((lines[i].match(/FAIL=(\d+)/) || [])[1]);
-        if (fail > 0 || block.some((l) => l.includes("✗"))) out.push(block.join("\n"));
+        if (fail > 0 || block.some(_isFailLine)) out.push(block.join("\n"));
         block = [];
       }
     }
-    if (block.some((l) => l.includes("✗"))) out.push(block.join("\n"));
+    if (block.some(_isFailLine)) out.push(block.join("\n"));
     if (results >= 0) {
-      const summary = lines.slice(results).filter((l) => /✗|LEAK|Total:|\[TEST_/.test(l));
+      const summary = lines.slice(results).filter((l) => _isFailLine(l) || /LEAK|Total:|\[TEST_FAILED/.test(l));
       if (summary.length) out.push(summary.join("\n"));
     }
   }
@@ -298,4 +302,83 @@ export function getCiStatus(db, projectRoot, sha = null) {
   if (!row) return { status: "NONE", sha: target };
   const verdict = ciVerdict(db, row.sha);
   return { ...row, dirty: !!row.dirty, verdict: verdict.kind, summary: shortLine(verdict, row.sha) };
+}
+
+// ── E-267 (D-072 §5): the gates ─────────────────────────────────────────────
+
+function _git(root, args) {
+  return execFileSync("git", ["-C", root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+}
+
+function _isAncestor(root, a, b) {
+  try { execFileSync("git", ["-C", root, "merge-base", "--is-ancestor", a, b], { stdio: "ignore" }); return true; }
+  catch { return false; }
+}
+
+// How many recent PASS rows the ancestor search considers. Bookkeeping commits sit a few
+// commits above the tested tip; a bound keeps the gate fast on a long history.
+const ANCESTOR_SEARCH_ROWS = 50;
+
+/**
+ * Is `sha` certified by local CI?
+ *
+ *   1. its own newest non-dirty row decides, if it has one (PASS → ok; anything else → no;
+ *      a SKIPPED row counts only with allowSkipped — the pre-push bypass);
+ *   2. otherwise the newest non-dirty PASS row for an ANCESTOR counts when every path
+ *      that differs between the two is under .ai/ — the bookkeeping commits ai-task makes
+ *      after a DONE, and a merge commit whose tree equals the tested tip, are never CI'd
+ *      on their own and must not block (local-ci.md §Components 5b).
+ *
+ * Returns { ok, kind, via: "self"|"ancestor"|null, row, differs: [paths] }.
+ */
+export function certifyingRunFor(db, repoRoot, sha, { allowSkipped = false } = {}) {
+  const own = latestCiRun(db, sha, { certifying: true });
+  if (own) {
+    const ok = own.status === "PASS" || (allowSkipped && own.status === "SKIPPED");
+    return { ok, kind: own.status, via: "self", row: own, differs: [] };
+  }
+  const rows = db.prepare(
+    "SELECT * FROM ci_runs WHERE dirty = 0 AND status = 'PASS' AND sha != ? ORDER BY started_at DESC, id DESC LIMIT ?",
+  ).all(sha, ANCESTOR_SEARCH_ROWS);
+  let nearest = null;
+  for (const r of rows) {
+    if (!_isAncestor(repoRoot, r.sha, sha)) continue;
+    let differs;
+    try {
+      differs = _git(repoRoot, ["diff", "--name-only", r.sha, sha]).split("\n").filter(Boolean);
+    } catch { continue; }
+    const outside = differs.filter((p) => !p.startsWith(".ai/"));
+    if (!outside.length) return { ok: true, kind: "PASS", via: "ancestor", row: r, differs };
+    if (!nearest) nearest = { row: r, differs: outside };
+  }
+  return { ok: false, kind: "NONE", via: null, row: nearest ? nearest.row : null, differs: nearest ? nearest.differs : [] };
+}
+
+/**
+ * The update_task_status(DONE) gate. Active only in a project that has adopted `ai ci`
+ * (ci_runs holds at least one row), so an upgrade never breaks a project that has not;
+ * AI_OS_CI_GATE=0 disables it. Returns { ok, active, message }.
+ */
+export function checkCiDoneGate(db, repoRoot, env = process.env) {
+  if (env.AI_OS_CI_GATE === "0") return { ok: true, active: false, message: "CI gate disabled (AI_OS_CI_GATE=0)" };
+  if (ciRunCount(db) === 0) return { ok: true, active: false, message: "CI gate inactive (no ai ci run recorded yet)" };
+  let head;
+  try { head = _git(repoRoot, ["rev-parse", "--verify", "HEAD"]); }
+  catch { return { ok: true, active: false, message: "CI gate inactive (not a git repository)" }; }
+  const c = certifyingRunFor(db, repoRoot, head);
+  if (c.ok) return { ok: true, active: true, message: `CI gate: ${head.slice(0, 7)} certified (${c.via})` };
+  const why = c.via === "self" ? `its run is ${c.kind}` : "no run for it or for an ancestor that differs only in .ai/";
+  return {
+    ok: false, active: true,
+    message: `[CI_GATE] no green local CI run for HEAD ${head.slice(0, 7)} (${why}) — run: ai ci run` +
+      " (bypass: AI_OS_CI_GATE=0)",
+  };
+}
+
+/** Record a pre-push bypass. A skip is written, never silent; a reason is mandatory. */
+export function recordCiSkip(db, { sha, ref = null, branch = null, reason }) {
+  return recordCiRun(db, {
+    sha, ref, branch, status: "SKIPPED", skip_reason: reason,
+    started_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+  });
 }

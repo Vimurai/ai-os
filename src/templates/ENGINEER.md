@@ -117,9 +117,12 @@ The corruption above surfaced as two CI failures (`resilience` T-RES-14,
 `managed_agents_spike`) that were **nearly dismissed as flakes**, because the preceding
 several genuinely had been environmental. They were reporting real, committed corruption.
 
-- Read `gh run view <id> --log-failed` **before** forming a theory.
-- "It passed locally" is not evidence about CI — see the environment-dependence rule in
-  `critic_tests` (E-236).
+- Read `ai ci log --failed` **before** forming a theory (CI runs locally since D-072;
+  `ai ci status` says which commit the record is for).
+- "It passed in my working tree" is not evidence about the commit — only a clean
+  `ai ci run` is; see the environment-dependence rule in `critic_tests` (E-236). When an
+  `ai ci run` failure does not reproduce, rebuild its layout (worktree and throwaway HOME
+  under the system temp dir, deps installed) before theorising (E-265).
 - Call something a flake only once you can say WHY it is one: a named nondeterminism
   (timing, ordering, network, host speed), not merely "it passed on the rerun".
 

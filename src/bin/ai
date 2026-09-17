@@ -1476,6 +1476,48 @@ STUB
   chmod +x "$dst"
 }
 
+# E-267 (D-072 §5b): pre-push execution stub. Fails CLOSED like pre-commit — a local CI
+# gate that vanishes when its canonical is missing would wave every push through. stdin
+# (git's ref lines) and "$@" (remote name, url) are preserved: `exec` hands both over, and
+# a chained user hook gets its own copy of stdin.
+_write_pre_push_stub() {
+  local dst="$1" backup="${2:-}"
+  cat > "$dst" <<STUB
+#!/usr/bin/env bash
+${AIOS_STUB_MARKER} — Local CI pre-push
+# This file is a thin redirector. The canonical script lives at
+# \$HOME/.ai-os/hooks/pre-push.sh and is always upgraded by 'ai sync'.
+set -uo pipefail
+
+CANONICAL="\$HOME/.ai-os/hooks/pre-push.sh"
+STUB
+
+  if [[ -n "$backup" ]]; then
+    cat >> "$dst" <<STUB
+# Chained execution — the user's pre-AI-OS hook sees the same stdin first.
+USER_HOOK="\$(dirname "\$0")/${backup##*/}"
+_REFS="\$(cat)"
+if [[ -x "\$USER_HOOK" ]]; then
+  printf '%s\\n' "\$_REFS" | bash "\$USER_HOOK" "\$@" || exit \$?
+fi
+if [[ ! -f "\$CANONICAL" ]]; then
+  echo "[AI-OS] pre-push canonical missing: \$CANONICAL — run: bash install-ai-os.sh" >&2
+  exit 1   # fail closed (local CI gate)
+fi
+printf '%s\\n' "\$_REFS" | exec bash "\$CANONICAL" "\$@"
+STUB
+  else
+    cat >> "$dst" <<'STUB'
+if [[ ! -f "$CANONICAL" ]]; then
+  echo "[AI-OS] pre-push canonical missing: $CANONICAL — run: bash install-ai-os.sh" >&2
+  exit 1   # fail closed (local CI gate)
+fi
+exec bash "$CANONICAL" "$@"
+STUB
+  fi
+  chmod +x "$dst"
+}
+
 # Writes a post-commit execution stub. Fails open: post-commit work is
 # advisory (TASKS.md auto-sync), so a missing canonical must not break a
 # successful commit.
@@ -1554,6 +1596,24 @@ install_git_hooks() {
   else
     _write_pre_commit_stub "$HOOK_DST"
     echo "  ✓ Installed Gate 2 (Quality Gate) pre-commit stub → ${HOOK_DST}"
+  fi
+
+  # E-267 (D-072 §5b): pre-push local CI gate — same stub model, fails closed.
+  local PP_SRC="${AIOS}/hooks/pre-push.sh"
+  local PP_DST="${GIT_HOOKS_DIR}/pre-push"
+  if [[ ! -f "$PP_SRC" ]]; then
+    echo "  ⚠  pre-push.sh not found at ${PP_SRC} — run: ai install"
+  elif [[ -f "$PP_DST" ]] && _is_aios_stub "$PP_DST"; then
+    echo "  ✓ pre-push stub already installed (local CI gate)"
+  elif [[ -f "$PP_DST" ]]; then
+    local PP_BACKUP="${PP_DST}.pre-aios"
+    mv "$PP_DST" "$PP_BACKUP"
+    echo "  ✓ Backed up existing pre-push hook → pre-push.pre-aios"
+    _write_pre_push_stub "$PP_DST" "$PP_BACKUP"
+    echo "  ✓ Installed local CI gate stub (chained → pre-push.pre-aios) → ${PP_DST}"
+  else
+    _write_pre_push_stub "$PP_DST"
+    echo "  ✓ Installed local CI gate pre-push stub → ${PP_DST}"
   fi
 
   # E-55: Install post-commit hook (TASKS.md auto-sync) — same stub model.
@@ -3355,7 +3415,7 @@ Will be deleted:
 Will NOT be touched (manual cleanup):
   ~/.claude/      (your Claude settings + agents — may contain unrelated data)
   ~/.config/github-copilot/
-  any project's .ai/, .mcp.json, .git/hooks/pre-commit
+  any project's .ai/, .mcp.json, .git/hooks/pre-commit, .git/hooks/pre-push
   PATH entry in your shell rc (you must remove ~/.ai-os/bin manually)
 
 WARN
@@ -3372,6 +3432,7 @@ WARN
   echo "  1. Edit ~/.zshrc or ~/.bashrc and remove:  export PATH=\"\$HOME/.ai-os/bin:\$PATH\""
   echo "  2. Review ~/.claude/agents/ for AI-OS-specific files"
   echo "  3. In each project: \`rm .git/hooks/pre-commit\` if it sources hooks/pre-commit.sh"
+  echo "  4. In each project: \`rm .git/hooks/pre-push\` — the local CI stub fails closed, so it blocks every push once ~/.ai-os is gone"
 }
 
 # E-158 (cli-agnostic-handoff): provider-agnostic handoff primitive. Writes the SAME
