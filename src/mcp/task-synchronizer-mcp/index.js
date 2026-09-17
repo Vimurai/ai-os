@@ -28,6 +28,8 @@ import { readFileSync, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { getDb, readState as _readState, regenerateViews as _regenerateViews, nextId as _nextId, addTask as _addTask, nextTopicSeedId as _nextTopicSeedId, nextClusterPageId as _nextClusterPageId, validateDag as _validateDag, readDependencyGraph as _readDependencyGraph, parseDeps as _parseDeps, archiveDoneTasks as _archiveDoneTasks, archiveStamps as _archiveStamps, DONE_ARCHIVE_THRESHOLD, DONE_KEEP_RECENT, STAMP_ARCHIVE_THRESHOLD } from "../shared/state-db.js";
 import { buildToolSchemas } from "./tool-schemas.mjs";
+// E-266 (D-072): read-only view of the local CI run record.
+import { getCiStatus } from "../shared/ci-runs.js";
 import { validateNamed, loadSchemas } from "../../shared/schema-validator.js";
 // E-158 (cli-agnostic-handoff): shared handoff primitive — the SAME locked signal.json
 // append is used by this MCP tool AND by the provider-agnostic `ai handoff` CLI so the
@@ -608,6 +610,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }],
         isError: true,
       };
+    }
+
+    // ── get_ci_status (E-266) ─────────────────────────────────────────────────
+    case "get_ci_status": {
+      const res = getCiStatus(db, dirname(aiDir), args?.sha || null);
+      return { content: [{ type: "text", text: JSON.stringify(res, null, 2) }] };
     }
 
     // ── verify_markdown_sync ──────────────────────────────────────────────────

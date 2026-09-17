@@ -17,6 +17,7 @@
       "mcp__task-synchronizer-mcp__add_stamp",
       "mcp__task-synchronizer-mcp__set_project_focus",
       "mcp__task-synchronizer-mcp__verify_markdown_sync",
+      "mcp__task-synchronizer-mcp__get_ci_status",
       "mcp__task-synchronizer-mcp__archive_done_tasks",
       "mcp__safe-exec-mcp__analyze_command",
       "mcp__blueprint-aligner-mcp__align_diff",
