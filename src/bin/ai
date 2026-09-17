@@ -3871,9 +3871,11 @@ do_start() {
     fi
   fi
 
-  # Re-pin titles on every run, including an idempotent re-run over live panes.
+  # Re-pin the role binding on every run, including an idempotent re-run over live panes.
+  # E-269 (D-073): the @ai_os_role option is what ai-watch routes by; the title is cosmetic.
   idx=0
   for r in "${roles[@]}"; do
+    _run set-option -p -t "$(_pane_at "$idx")" @ai_os_role "$r"
     _run select-pane -t "$(_pane_at "$idx")" -T "$r"
     idx=$((idx + 1))
   done
@@ -4092,11 +4094,13 @@ _start_status() {  # <session> <window> <project> [origin]
     # one answer, and an operator debugging a cross-project collision needs to know whether
     # they are looking at an owned session or a leftover shared one.
     echo "ai start --status: ${session}:${window} (${wid}) [${origin}]"
-    local idx title cmd
-    while IFS='|' read -r idx title cmd; do
+    # E-269 (D-073): the role column is the @ai_os_role option ai-watch routes by, not the
+    # title (Claude Code overwrites titles with its conversation summary).
+    local idx role cmd
+    while IFS='|' read -r idx role cmd; do
       [[ -z "$idx" ]] && continue
-      printf '  pane %-3s %-12s %s\n' "$idx" "${title:-(untitled)}" "${cmd:-(no command)}"
-    done < <(tmux list-panes -t "$wid" -F '#{pane_index}|#{pane_title}|#{pane_current_command}' 2>/dev/null | sort -n || true)
+      printf '  pane %-3s %-12s %s\n' "$idx" "${role:-(no role)}" "${cmd:-(no command)}"
+    done < <(tmux list-panes -t "$wid" -F '#{pane_index}|#{@ai_os_role}|#{pane_current_command}' 2>/dev/null | sort -n || true)
   fi
 
   # The watcher is reported by its LOCK, not by a pane title: a pane can be titled
@@ -4285,14 +4289,16 @@ do_pane() {
     return 2
   fi
 
-  # Pin the pane title BEFORE exec so ai-watch resolves this pane by exact title
-  # (E-209 Pass 1). Claude Code rewrites pane titles from the conversation summary,
-  # so also turn off automatic renaming for this window — without that the pin is
-  # overwritten within a few turns and routing silently degrades to the ordinal.
+  # E-269 (D-073): bind THIS pane — the role is a pane OPTION, which ai-watch routes by
+  # (Pass 1); the title is only for humans. Both are TARGETED at $TMUX_PANE: the untargeted
+  # `select-pane -T` this replaced wrote the title on the ACTIVE pane, which after
+  # `ai start`'s split is the watcher's bash pane, and ai-watch then held handoffs for that
+  # bash pane forever. Claude Code rewrites titles anyway; the option survives that.
   # No-op outside tmux; never fatal.
-  if [[ -n "${TMUX:-}" ]] && command -v tmux >/dev/null 2>&1; then
-    tmux select-pane -T "$role" 2>/dev/null || true
-    tmux set -w allow-rename off 2>/dev/null || true
+  if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]] && command -v tmux >/dev/null 2>&1; then
+    tmux set-option -p -t "$TMUX_PANE" @ai_os_role "$role" 2>/dev/null || true
+    tmux select-pane -t "$TMUX_PANE" -T "$role" 2>/dev/null || true
+    tmux set -w -t "$TMUX_PANE" allow-rename off 2>/dev/null || true
   fi
 
   echo "ai pane: binding this pane to '${role}' via provider '${provider}'"

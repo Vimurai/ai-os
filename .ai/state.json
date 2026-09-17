@@ -780,6 +780,13 @@
       "task_id": "E-267",
       "timestamp": "2026-09-17T10:23:21.741Z",
       "summary": "[TIER_2] E-267 aligned (local-ci.md §5-6a); CAPABILITIES_BYPASS resolved by dropping pre-push script-relative fallback; DONE-gate ancestor rule flagged"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-269",
+      "timestamp": "2026-09-17T17:21:25.764Z",
+      "summary": "[TIER_2] E-269 aligned with interactive-bridge.md §Binding by Pane Option (rule 1); warnings expected (LOG ignored; ai-watch covered by the bridge blueprint)"
     }
   ],
   "deltas": [

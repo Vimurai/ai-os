@@ -540,10 +540,17 @@ assert_contains "E-123.INT: architect → node agent pane %2 (real chain, shells
 _int_legacy="$(_integration_drain '[{"timestamp":"1","target":"claude","message":"hello"}]' "$_panes_live")"
 assert_status 0 "E-254.INT: legacy claude entry refused under the all-claude default — nothing sent" \
   test -z "$_int_legacy"
-# title-matched pane that is mid-tool (bash) → real busy gate holds it.
+# E-269 (D-073): this case used to assert that a bash pane TITLED "architect" is the route
+# and is merely held as busy — the exact failure that stranded two Engineer handoffs for a
+# day (the watcher's own bash pane carried the role title). A bash pane is never a route now.
 _panes_titlebusy='%9\t1\tarchitect\twin\t/proj\tbash\n'
 _int_busy="$(_integration_drain '[{"timestamp":"1","target":"architect","message":"x"}]' "$_panes_titlebusy")"
-assert_status 0 "E-123.INT: title-matched but busy (bash) holds — nothing sent" test -z "$_int_busy"
+assert_status 0 "E-269.INT: a bash pane titled for the role is not a route — nothing sent" test -z "$_int_busy"
+# The live layout: the WATCHER's bash pane carries the title "engineer", the claude pane
+# carries @ai_os_role=engineer (7th field). The handoff reaches the claude pane.
+_panes_d073='%5\t0\tengineer\twin\t/proj\tbash\tengineer\n%6\t1\t✳ Summarise the diff\twin\t/proj\t2.1.161\tarchitect\n%7\t2\t✳ Fix the watcher\twin\t/proj\t2.1.161\tengineer\n'
+assert_contains "E-269.INT: watcher titled 'engineer' + claude pane with @ai_os_role=engineer → claude pane" \
+  "%7 -l -- x" "$(_integration_drain '[{"timestamp":"1","target":"engineer","message":"x"}]' "$_panes_d073")"
 # title-matched pane that is ready (node) → delivered through the real gate.
 _panes_titleready='%9\t1\tarchitect\twin\t/proj\tnode\n'
 assert_contains "E-123.INT: title-matched + ready delivers (real gate)" \
