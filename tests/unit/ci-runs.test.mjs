@@ -20,6 +20,7 @@ import { getDb } from "../../src/mcp/shared/state-db.js";
 import {
   migrateCiRuns, downCiRuns, recordCiRun, latestCiRun, listCiRuns, ciRunCount, ciVerdict,
   shortLine, parseCiLog, recordCiRunFromLog, failedSections, pruneCiLogs, getCiStatus, ageOf,
+  certifyingRunFor, checkCiDoneGate, recordCiSkip,
 } from "../../src/mcp/shared/ci-runs.js";
 
 function tmp() {
@@ -214,5 +215,103 @@ test("getCiStatus: HEAD default, abbreviated sha, NONE", () => {
     assert.match(s.summary, /^PASS /);
     assert.equal(getCiStatus(db, d, head.slice(0, 7)).sha, head);
     assert.equal(getCiStatus(db, d, "not-a-sha").status, "NONE");
+  } finally { done(); }
+});
+
+// ── E-267: the gates ─────────────────────────────────────────────────────────
+
+function gitRepo(d) {
+  const g = (...a) => execFileSync("git", ["-C", d, "-c", "user.name=t", "-c", "user.email=t@t",
+    "-c", "commit.gpgsign=false", ...a], { encoding: "utf8" }).trim();
+  g("init", "-q");
+  const commit = (path, body, msg) => {
+    mkdirSync(join(d, path, ".."), { recursive: true });
+    writeFileSync(join(d, path), body);
+    g("add", "-A");
+    g("commit", "-q", "-m", msg);
+    return g("rev-parse", "HEAD");
+  };
+  return { g, commit };
+}
+
+test("certifyingRunFor: self, bookkeeping ancestor, code-changing ancestor", () => {
+  const { d, db, done } = freshDb();
+  try {
+    const { commit } = gitRepo(d);
+    const tested = commit("src/a.js", "1", "code");
+    const book = commit(".ai/TASKS.md", "done", "bookkeeping");
+    const code = commit("src/a.js", "2", "more code");
+
+    assert.equal(certifyingRunFor(db, d, tested).ok, false, "nothing recorded yet");
+    recordCiRun(db, base({ sha: tested }));
+    assert.deepEqual(
+      (({ ok, via }) => ({ ok, via }))(certifyingRunFor(db, d, tested)), { ok: true, via: "self" });
+    const b = certifyingRunFor(db, d, book);
+    assert.deepEqual({ ok: b.ok, via: b.via, sha: b.row.sha, differs: b.differs },
+      { ok: true, via: "ancestor", sha: tested, differs: [".ai/TASKS.md"] });
+    const c = certifyingRunFor(db, d, code);
+    assert.equal(c.ok, false);
+    assert.equal(c.row.sha, tested, "the nearest tested ancestor is reported");
+    assert.deepEqual(c.differs, ["src/a.js"]);
+
+    // A dirty PASS on the ancestor would not have counted either.
+    const { db: db2, d: d2, done: done2 } = freshDb();
+    try {
+      const r2 = gitRepo(d2);
+      const t2 = r2.commit("x", "1", "x");
+      const b2 = r2.commit(".ai/y", "1", "y");
+      recordCiRun(db2, base({ sha: t2, dirty: true }));
+      assert.equal(certifyingRunFor(db2, d2, b2).ok, false);
+    } finally { done2(); }
+  } finally { done(); }
+});
+
+test("certifyingRunFor: the commit's own FAIL is not rescued by an ancestor; SKIPPED only with allowSkipped", () => {
+  const { d, db, done } = freshDb();
+  try {
+    const { commit } = gitRepo(d);
+    const tested = commit("src/a.js", "1", "code");
+    const book = commit(".ai/TASKS.md", "x", "book");
+    recordCiRun(db, base({ sha: tested }));
+    recordCiRun(db, base({ sha: book, status: "FAIL" }));
+    assert.deepEqual((({ ok, kind, via }) => ({ ok, kind, via }))(certifyingRunFor(db, d, book)),
+      { ok: false, kind: "FAIL", via: "self" });
+
+    const skipped = commit("src/b.js", "1", "hotfix");
+    recordCiSkip(db, { sha: skipped, ref: "refs/heads/main", reason: "prod is down" });
+    assert.equal(certifyingRunFor(db, d, skipped).ok, false);
+    assert.equal(certifyingRunFor(db, d, skipped, { allowSkipped: true }).ok, true);
+    assert.equal(latestCiRun(db, skipped).skip_reason, "prod is down");
+    assert.throws(() => recordCiSkip(db, { sha: skipped, reason: "  " }), /skip_reason/);
+  } finally { done(); }
+});
+
+test("checkCiDoneGate: adoption-off, AI_OS_CI_GATE=0, no-row, FAIL, dirty-only, PASS", () => {
+  const { d, db, done } = freshDb();
+  try {
+    const { commit } = gitRepo(d);
+    const head = commit("src/a.js", "1", "code");
+    let g = checkCiDoneGate(db, d, {});
+    assert.deepEqual({ ok: g.ok, active: g.active }, { ok: true, active: false }, "no rows → inactive");
+
+    const other = "f".repeat(40);
+    recordCiRun(db, base({ sha: other }));             // adopted, but nothing for HEAD
+    g = checkCiDoneGate(db, d, {});
+    assert.equal(g.ok, false);
+    assert.equal(g.message,
+      `[CI_GATE] no green local CI run for HEAD ${head.slice(0, 7)} (no run for it or for an ancestor that differs only in .ai/) — run: ai ci run (bypass: AI_OS_CI_GATE=0)`);
+    assert.equal(checkCiDoneGate(db, d, { AI_OS_CI_GATE: "0" }).ok, true);
+
+    recordCiRun(db, base({ sha: head, dirty: true }));
+    assert.equal(checkCiDoneGate(db, d, {}).ok, false, "dirty-only does not certify");
+
+    recordCiRun(db, base({ sha: head, status: "FAIL", started_at: "2026-09-17T11:00:00Z" }));
+    g = checkCiDoneGate(db, d, {});
+    assert.equal(g.ok, false);
+    assert.match(g.message, /its run is FAIL/);
+
+    recordCiRun(db, base({ sha: head, started_at: "2026-09-17T12:00:00Z" }));
+    g = checkCiDoneGate(db, d, {});
+    assert.deepEqual({ ok: g.ok, active: g.active }, { ok: true, active: true });
   } finally { done(); }
 });

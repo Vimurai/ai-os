@@ -44,7 +44,8 @@ If new tests were added in this diff:
 > `~/.ai-os` mirror, an inherited environment variable.
 
 If yes, the test is not measuring the code — it is measuring the host, and it will pass on
-a developer machine and fail on CI (or, far worse, pass on CI while asserting nothing).
+a developer machine and fail under `ai ci` (or, far worse, pass under `ai ci` while asserting
+nothing).
 
 Five defects in the 2026-09-09 sprint were exactly this, and each was invisible locally:
 
@@ -78,7 +79,7 @@ on that laptop once 54 leaked tmux servers and a wedged download were cleared. I
 tracking machine load the entire time.
 
 Required shape: `assert_perf <label> <elapsed> <absolute> <baseline>` — absolute enforced
-on CI where the hardware is known, `elapsed <= k*baseline + slack` elsewhere, and **both
+where the hardware is known (`CI=true` or `AI_OS_PERF_ABSOLUTE=1`; `ai ci` stays relative), `elapsed <= k*baseline + slack` elsewhere, and **both
 numbers printed every run**. A perf assertion that prints only a verdict cannot distinguish
 "the code got slower" from "the machine is busy", which is the whole question.
 
@@ -98,7 +99,8 @@ the state exists**: tmux servers, background processes, temp dirs outside the sa
 `.ai/` lock dirs, `~/.ai-os` writes, `.ai/signal.json` entries.
 
 Required shape: `register_cleanup "…"` FIRST, then create; names from `mktemp` entropy,
-**never `$$`**. `tests/run.sh` reports `LEAKED n <kind>` per suite and fails the run on CI.
+**never `$$`**. `tests/run.sh` reports `LEAKED n <kind>` per suite and fails the run under `ai ci`
+(`AI_OS_CI=local`), as on any hosted CI.
 
 This is the third variety of environment dependence, alongside "what the machine has"
 (E-236) and "how fast it is" (E-239).

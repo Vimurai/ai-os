@@ -86,7 +86,8 @@ Commit (only after PASS): `git commit -m "[TIER_2] <description>"`
 > `~/.ai-os` mirror, an inherited environment variable.
 
 If yes, the test is not measuring the code — it is measuring the host, and it will pass on
-a developer machine and fail on CI (or, far worse, pass on CI while asserting nothing).
+a developer machine and fail under `ai ci` (or, far worse, pass under `ai ci` while asserting
+nothing).
 
 Five defects in the 2026-09-09 sprint were exactly this, and each was invisible locally:
 
@@ -125,7 +126,8 @@ the state exists**: tmux servers, background processes, temp dirs outside the sa
 `.ai/` lock dirs, `~/.ai-os` writes, `.ai/signal.json` entries.
 
 Required shape: `register_cleanup "…"` FIRST, then create; names from `mktemp` entropy,
-**never `$$`**. `tests/run.sh` reports `LEAKED n <kind>` per suite and fails the run on CI.
+**never `$$`**. `tests/run.sh` reports `LEAKED n <kind>` per suite and fails the run under `ai ci`
+(`AI_OS_CI=local`), as on any hosted CI.
 
 This is the third variety of environment dependence, alongside "what the machine has"
 (E-236) and "how fast it is" (E-239).

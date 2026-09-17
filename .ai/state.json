@@ -681,6 +681,13 @@
       "task_id": "E-266",
       "timestamp": "2026-09-16T23:44:41.412Z",
       "summary": "[TIER_2] E-266 aligned with local-ci.md §Components 3-4; ci_runs helpers in ci-runs.js beside state-db.js (size limit) — flagged in handover"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-267",
+      "timestamp": "2026-09-17T10:23:21.741Z",
+      "summary": "[TIER_2] E-267 aligned (local-ci.md §5-6a); CAPABILITIES_BYPASS resolved by dropping pre-push script-relative fallback; DONE-gate ancestor rule flagged"
     }
   ],
   "deltas": [

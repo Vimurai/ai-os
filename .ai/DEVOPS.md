@@ -368,3 +368,42 @@ is unset.
 Built on `engineer/e265-local-ci-runner` and exercised by the still-present GitHub workflow
 on the PR, plus a first real `ai ci run` on the branch head whose duration is recorded in
 LOG.md.
+
+---
+
+## DEVOPS-008 — Local CI gates: DONE and pre-push (E-267, D-072)
+
+Blueprint: `.ai/blueprints/local-ci.md` §Components 5-6a.
+
+### What is changing and why
+
+The `ci_runs` record (E-266) becomes evidence two gates act on:
+
+- `update_task_status(DONE)` refuses with `[CI_GATE]` unless HEAD has a green non-dirty run,
+  or descends from one and differs from it only under `.ai/`. Active only once the project
+  has recorded a run. **Deviation, flagged for the Architect:** §5a names HEAD strictly; the
+  ancestor rule from §5b is applied here too, because `ai-task` marks DONE on the merge or
+  bookkeeping commit, which is never CI'd on its own — HEAD-only would refuse every DONE.
+- `hooks/pre-push.sh` (installed by `install_git_hooks` as a fail-closed stub, chained to
+  any existing hook with stdin preserved) applies the same rule per pushed tip.
+  `AI_OS_CI_SKIP=1` + `AI_OS_CI_SKIP_REASON` bypasses one push and records a SKIPPED row.
+- `ai-task` Step 2.5 reads `ai ci status --ref HEAD --short` instead of `gh run list`;
+  ENGINEER.md triage reads `ai ci log --failed`.
+
+### Security implications
+
+No new secrets or network access. The bypass variables are environment variables, and the
+project's `.claude/settings.json` `env` block reaches a hook's environment (E-223): a
+project could pre-set a permanent skip. The mitigation is that every skip is written as a
+SKIPPED row with its reason and printed on every push, and a SKIPPED row never satisfies the
+DONE gate. Flagged for review. A missing canonical, helper or node fails the push closed.
+
+### Rollback plan
+
+`AI_OS_CI_GATE=0` disables the DONE gate; `rm .git/hooks/pre-push` removes the push gate
+(`ai uninstall` now says so — the stub fails closed once `~/.ai-os` is gone); reverting the
+commit restores `gh run` in `ai-task`.
+
+### Branch-first validation
+
+`engineer/e267-ci-gates`; the push of this branch is itself the first live pre-push check.
