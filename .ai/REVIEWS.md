@@ -27,3 +27,4 @@
 [CRITIC_STAMP] 2026-09-16 | [TIER_2] E-266 aligned with local-ci.md §Components 3-4; ci_runs helpers in ci-runs.js beside state-db.js (size limit) — flagged in handover
 [CRITIC_STAMP] 2026-09-17 | [TIER_2] E-267 aligned (local-ci.md §5-6a); CAPABILITIES_BYPASS resolved by dropping pre-push script-relative fallback; DONE-gate ancestor rule flagged
 [CRITIC_STAMP] 2026-09-17 | [TIER_2] E-269 aligned with interactive-bridge.md §Binding by Pane Option (rule 1); warnings expected (LOG ignored; ai-watch covered by the bridge blueprint)
+[CRITIC_STAMP] 2026-09-17 | [TIER_2] E-268 aligned with local-ci.md §Component 6b; workflow deleted, all hosted-CI surfaces repointed at ai ci; warnings expected (LOG ignored, mirrors + CHANGELOG)

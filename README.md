@@ -5,7 +5,6 @@
 
   [![Version](https://img.shields.io/badge/version-v3.1.0-blue.svg)](#)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-  [![Tests](https://github.com/Vimurai/ai-os/actions/workflows/test.yml/badge.svg?branch=master)](https://github.com/Vimurai/ai-os/actions/workflows/test.yml)
 </div>
 
 ---
@@ -471,6 +470,37 @@ Beyond the Triad, AI-OS ships **20 native subagents** as the `ai-os` agent plugi
   SESSION.md         # Per-session preflight stamps.
   archive/YYYY-MM/   # Rotated LOG/COMM/REVIEWS.
 ```
+
+---
+
+## Local CI — `ai ci`
+
+CI runs on your machine (D-072); there is no hosted pipeline. `ai ci run` tests a **committed**
+sha in a detached `git worktree` under a throwaway `HOME`, installs the framework from that
+commit, then runs the suite, the `node:test` unit layer and a `.gitignore` secrets check. It
+records the outcome in `.ai/state.sqlite` and keeps the log under `~/.ai-os/ci/logs/`.
+
+```bash
+ai ci run                 # test HEAD (~10-14 min); 0 PASS / 1 FAIL / 2 ERROR
+ai ci run --dirty         # include uncommitted changes (never certifies a commit)
+ai ci status [--short]    # the recorded verdict for HEAD
+ai ci list -n 10          # recent runs
+ai ci log --failed        # only the failing suites of the last run
+```
+
+"CI green" means a **non-dirty PASS row for that commit**. Two gates read it:
+
+- `update_task_status(DONE)` refuses until HEAD is certified (`AI_OS_CI_GATE=0` disables it);
+- the `pre-push` hook refuses to push an untested tip. A commit that only adds `.ai/`
+  bookkeeping on top of a tested commit is accepted without a new run.
+
+Bypass one push explicitly — it is recorded as a `SKIPPED` run, and a reason is mandatory:
+
+```bash
+AI_OS_CI_SKIP=1 AI_OS_CI_SKIP_REASON="prod outage hotfix" git push
+```
+
+`ai doctor` prints the verdict for HEAD.
 
 ---
 

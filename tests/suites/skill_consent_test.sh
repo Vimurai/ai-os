@@ -71,7 +71,7 @@ npm audit (query only)|Vulns: !npm audit --json 2>/dev/null | jq .x || echo 0
 date|Today: !date "+%Y-%m-%d"
 echo env var|Target: !echo "${TARGET:-(not set)}"
 wc on .ai|Lines: !wc -l < .ai/SESSION.md || echo 0
-find workflows|CI: !find . -name "*.yml" -path "*/.github/workflows/*" | head
+find yml configs|Configs: !find . -name "*.yml" -path "*/deploy/*" | head
 command -v probe|Copilot: !command -v gh &>/dev/null && echo yes || echo no
 test -d|Archive: !test -d .ai/archive && echo YES || echo NO
 ls listing|Structure: !ls -1 . | head -20

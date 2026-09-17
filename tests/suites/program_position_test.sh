@@ -62,7 +62,7 @@ the memory_curator --dlq-show line|Ops: !node "${AIOS}/shared/memory-worker-pool
 the memory_curator --dlq-clear line|Ops: !node "${AIOS}/shared/memory-worker-pool.mjs" --dlq-clear .ai/memory/dlq.json
 a .json argument to a resolved program|Ops: !node "${HOME}/.ai-os/shared/x.mjs" .ai/state.json
 a .md argument|Ops: !node "${HOME}/.ai-os/shared/x.mjs" .ai/TASKS.md
-a .yml argument|Ops: !node "${HOME}/.ai-os/shared/x.mjs" .github/workflows/test.yml
+a .yml argument|Ops: !node "${HOME}/.ai-os/shared/x.mjs" deploy/compose.yml
 a .sqlite argument|Ops: !node "${HOME}/.ai-os/shared/x.mjs" .ai/state.sqlite
 a .ndjson argument|Ops: !node "${HOME}/.ai-os/shared/x.mjs" .ai/incidents.ndjson
 a .csv argument|Ops: !node "${HOME}/.ai-os/shared/x.mjs" data/rows.csv

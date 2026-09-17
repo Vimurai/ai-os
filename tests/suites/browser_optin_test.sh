@@ -91,13 +91,16 @@ assert_status 0 "E-235.05b: and tells the operator how to fix it" \
   bash -c "grep -A12 'Vibe-check browsers' '$AI' | grep -q 'ai mcp-setup --browsers'"
 
 # ── E-235.6: CI installs them explicitly, and caches ──────────────────────
-WF="${REPO_ROOT}/.github/workflows/test.yml"
-assert_status 0 "E-235.06a: the workflow installs Chromium explicitly" \
-  grep -q 'npx playwright install --with-deps chromium' "$WF"
-assert_status 0 "E-235.06b: cached, so it is a download once per version" \
-  grep -q 'ms-playwright' "$WF"
-assert_status 0 "E-235.06c: the cache key tracks the package that pins the version" \
-  grep -q "hashFiles('src/mcp/vibe-check-mcp/package.json')" "$WF"
+# E-268 (D-072): the GitHub workflow that used to do this is gone — `ai ci run` is CI now,
+# and its `browsers` step keeps the same two properties: explicit install, persistent cache.
+AI_BIN="${REPO_ROOT}/src/bin/ai"
+assert_status 0 "E-235.06a: the local CI runner installs Chromium explicitly" \
+  bash -c "sed -n '/── browsers ──/,/── install ──/p' '$AI_BIN' | grep -q 'playwright install chromium'"
+assert_status 0 "E-235.06b: cached under ~/.ai-os/ci, so it is a download once per version" \
+  grep -q 'PLAYWRIGHT_BROWSERS_PATH=\${ci_home}/cache/ms-playwright' "$AI_BIN"
+assert_status 0 "E-235.06c: a cache hit is reported rather than silently re-downloaded" \
+  bash -c "sed -n '/── browsers ──/,/── install ──/p' '$AI_BIN' | grep -q 'cache hit'"
+assert_status 1 "E-235.06d: no GitHub workflow remains" test -e "${REPO_ROOT}/.github/workflows"
 
 # ── E-235.7: DEVOPS.md records the change (ci_gate) ───────────────────────
 assert_status 0 "E-235.07a: DEVOPS-006 exists" \
