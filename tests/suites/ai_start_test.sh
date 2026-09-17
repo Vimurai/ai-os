@@ -53,6 +53,12 @@ assert_match "E-227.01e: REVERSED — engineer=1 → second pane" \
   'send-keys -t pane1 ai.\ pane.\ engineer' "$_out"
 assert_match "E-227.01f: titles are pinned in the same order" \
   'select-pane -t pane0 -T architect' "$_out"
+# E-269 (D-073): the role binding is a TARGETED pane option, set before the cosmetic title.
+assert_match "E-269.S1: the re-pin sets @ai_os_role on the targeted pane" \
+  'set-option -p -t pane0 @ai_os_role architect' "$_out"
+assert_match "E-269.S2: and on the second pane" 'set-option -p -t pane1 @ai_os_role engineer' "$_out"
+assert_status 1 "E-269.S3: no untargeted select-pane -T remains" \
+  bash -c "printf '%s\n' \"\$1\" | grep -E 'select-pane -T'" _ "$_out"
 rm -rf "$_p"
 
 # ── E-227.2: composition only — never a provider, never a project script ───
@@ -177,7 +183,10 @@ if command -v tmux >/dev/null 2>&1; then
     while :; do
       # -J joins wrapped lines. The panes are ~40 columns, so a long prompt (macOS bash 3.2's
       # under `ai ci run`) wrapped "ai pane engineer" across two lines and the match missed it.
-      _body="$("$_tb" -L "$_sock" capture-pane -p -J -t "$_pid" 2>/dev/null || true)"
+      # -S - reads from the start of the scrollback: the watcher pane RUNS `ai watch`, whose
+      # long startup line wraps over several rows and can scroll the typed command off the
+      # visible screen before this capture (intermittent, by watcher start-up timing).
+      _body="$("$_tb" -L "$_sock" capture-pane -p -J -S - -t "$_pid" 2>/dev/null || true)"
       [[ "$_body" == *"$_want"* || $_w -ge 40 ]] && break
       sleep 0.05; _w=$((_w + 1))
     done

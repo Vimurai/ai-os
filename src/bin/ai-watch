@@ -147,8 +147,11 @@ _is_agent_cmd() {
   return 1
 }
 
-# Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>\t<pane_current_command>"
+# Emit "<pane_id>\t<pane_index>\t<pane_title>\t<window_name>\t<pane_current_path>\t<pane_current_command>\t<@ai_os_role>"
 # for every pane, then keep only those rooted in PROJECT_DIR (isolation §Security).
+# E-269 (D-073): the 7th field is the pane's @ai_os_role option, set by `ai pane <role>`
+# on its OWN pane. It is last so a reader that expects six fields still parses, and it is
+# "-" when unset because an empty field between tabs would collapse under IFS.
 #
 # E-253 (D-068): the candidate set is ALSO restricted to the watcher's OWN session when it
 # runs inside tmux. Before D-068 every project lived in one shared `aios` session, so `-a`
@@ -171,10 +174,10 @@ _project_panes() {
   local scope; scope="$(_project_panes_scope)"
   local -a sel=()
   if [[ "$scope" == "-s" ]]; then sel=(-s -t "$WATCH_SESSION"); else sel=(-a); fi
-  tmux list-panes "${sel[@]}" -F '#{pane_id}	#{pane_index}	#{?pane_title,#{pane_title},-}	#{?window_name,#{window_name},-}	#{pane_current_path}	#{pane_current_command}' 2>/dev/null \
-    | while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+  tmux list-panes "${sel[@]}" -F '#{pane_id}	#{pane_index}	#{?pane_title,#{pane_title},-}	#{?window_name,#{window_name},-}	#{pane_current_path}	#{pane_current_command}	#{?#{@ai_os_role},#{@ai_os_role},-}' 2>/dev/null \
+    | while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd prole; do
         case "$ppath" in
-          "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" "$pcmd" ;;
+          "$PROJECT_DIR"|"$PROJECT_DIR"/*) printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$pidx" "$ptitle" "$pwin" "$ppath" "$pcmd" "${prole:--}" ;;
         esac
       done
 }
@@ -229,19 +232,42 @@ _role_to_provider_pane() {
 # without duplicating the matching logic (interactive-bridge.md §Pane Resolution
 # Precedence, D-054).
 
+# _pass_role_option <target> — E-269 (D-073 rule 1): the pane whose @ai_os_role option
+# equals the target AND whose foreground command is an agent. The option is set by
+# `ai pane <role>` on its own pane ($TMUX_PANE), so — unlike a title — it cannot land on the
+# watcher's bash pane, and Claude Code's summary retitling cannot erase it. A non-agent
+# pane is never a match: a handoff typed into bash is lost.
+_pass_role_option() {
+  local target="$1" pid pidx ptitle pwin ppath pcmd prole
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd prole; do
+    [[ "${prole:-}" == "$target" ]] || continue
+    _is_agent_cmd "$pcmd" || continue
+    printf '%s' "$pid"; return 0
+  done < <(_project_panes)
+  return 1
+}
+
+# _agent_only <pcmd> — 0 when the substring passes may consider this pane. Semantic targets
+# (E-269) pass AGENT_ONLY=1 so a title or window name can only ever select an agent pane.
+_agent_only() {
+  [[ "${AGENT_ONLY:-0}" == "1" ]] || return 0
+  _is_agent_cmd "$1"
+}
+
 # _pass_exact_title <target> — case-sensitive exact pane-title match.
 _pass_exact_title() {
-  local target="$1" pid pidx ptitle pwin ppath pcmd
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
-    [[ "$ptitle" == "$target" ]] && { printf '%s' "$pid"; return 0; }
+  local target="$1" pid pidx ptitle pwin ppath pcmd _prole
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd _prole; do
+    [[ "$ptitle" == "$target" ]] && _agent_only "$pcmd" && { printf '%s' "$pid"; return 0; }
   done < <(_project_panes)
   return 1
 }
 
 # _pass_fuzzy_title <lc_target> — case-insensitive pane-title substring.
 _pass_fuzzy_title() {
-  local lc_target="$1" pid pidx ptitle pwin ppath pcmd
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+  local lc_target="$1" pid pidx ptitle pwin ppath pcmd _prole
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd _prole; do
+    _agent_only "$pcmd" || continue
     case "$(_lc "$ptitle")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
   done < <(_project_panes)
   return 1
@@ -249,8 +275,9 @@ _pass_fuzzy_title() {
 
 # _pass_window <lc_target> — case-insensitive window-name substring.
 _pass_window() {
-  local lc_target="$1" pid pidx ptitle pwin ppath pcmd
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+  local lc_target="$1" pid pidx ptitle pwin ppath pcmd _prole
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd _prole; do
+    _agent_only "$pcmd" || continue
     case "$(_lc "$pwin")" in *"$lc_target"*) printf '%s' "$pid"; return 0 ;; esac
   done < <(_project_panes)
   return 1
@@ -264,10 +291,10 @@ _pass_window() {
 # unavailable (older tmux / test mocks) — never when commands are present but none
 # qualify as an agent.
 _pass_ordinal() {
-  local want_idx="$1" ordinal has_cmd pid pidx ptitle pwin ppath pcmd
+  local want_idx="$1" ordinal has_cmd pid pidx ptitle pwin ppath pcmd _prole
   has_cmd=0
   ordinal=0
-  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+  while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd _prole; do
     [[ -n "$pcmd" ]] && has_cmd=1
     _is_agent_cmd "$pcmd" || continue
     if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
@@ -277,7 +304,7 @@ _pass_ordinal() {
   # TIER B degrade: ONLY when no pane reported a command.
   if [[ "$has_cmd" -eq 0 ]]; then
     ordinal=0
-    while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd; do
+    while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd _prole; do
       if [[ "$ordinal" -eq "$want_idx" ]]; then printf '%s' "$pid"; return 0; fi
       ordinal=$((ordinal + 1))
     done < <(_project_panes | sort -t$'\t' -k2,2n -k1,1)
@@ -321,10 +348,16 @@ _warn_legacy_target() {
 # now depends on the target class, because explicit configuration must beat heuristics:
 #
 #   SEMANTIC targets (architect|engineer), mapped via .ai/roles.json:
-#     1. exact pane-title match   (`ai pane <role>` pins this — deterministic opt-in)
+#     1. @ai_os_role pane option on an AGENT pane (`ai pane <role>` sets it — E-269, D-073)
 #     2. roles.json ordinal       (E-122 agent-pane rules unchanged — the safety net)
-#     3. fuzzy pane-title substring   } last resort only, reached solely when no agent
-#     4. window-name substring        } pane exists at the ordinal (pane not running yet)
+#     3. exact / fuzzy pane-title  } last resort only, AGENT panes only, reached solely
+#     4. window-name substring     } when no agent pane exists at the ordinal
+#   AI_WATCH_TITLE_ROUTING=1 restores the E-209 order (exact title first) for one release.
+#
+# WHY D-073 (2026-09-17): `ai pane` pinned its title with an UNTARGETED select-pane, so the
+# title landed on the ACTIVE pane — after `ai start`'s split, the watcher's bash pane. The
+# exact-title pass never checked for an agent, resolved to bash, the ready check said
+# "busy", and two Engineer handoffs were held for a day without a line of output.
 #
 #   The PROVIDER target (claude) keeps the historical E-117 order:
 #     1. exact title → 2. fuzzy title → 3. window name → 4. conventional ordinal
@@ -356,11 +389,20 @@ resolve_pane() {
 
   case "$target" in
     architect|engineer)
-      # D-054 order — configuration before heuristics.
-      _pass_exact_title "$target"  && return 0
+      if [[ "${AI_WATCH_TITLE_ROUTING:-0}" == "1" ]]; then
+        # E-209 order, kept for one release as the D-073 rollback.
+        _pass_exact_title "$target"  && return 0
+        _pass_ordinal     "$want_idx" && return 0
+        _pass_fuzzy_title "$lc_target" && return 0
+        _pass_window      "$lc_target" && return 0
+        return 1
+      fi
+      # D-073 order — the pane option, then the ordinal, then agent-only heuristics.
+      _pass_role_option "$target"   && return 0
       _pass_ordinal     "$want_idx" && return 0
-      _pass_fuzzy_title "$lc_target" && return 0
-      _pass_window      "$lc_target" && return 0
+      AGENT_ONLY=1 _pass_exact_title "$target"    && return 0
+      AGENT_ONLY=1 _pass_fuzzy_title "$lc_target" && return 0
+      AGENT_ONLY=1 _pass_window      "$lc_target" && return 0
       ;;
     *)
       # E-117 order — unchanged for the legacy provider target.

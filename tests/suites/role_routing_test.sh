@@ -119,12 +119,23 @@ assert_contains "E-209.01a: G3 — architect resolves to the ordinal-1 pane, NOT
 assert_contains "E-209.01b: G3 — engineer still resolves to the ordinal-0 pane" "%107" \
   "$(_resolve_with "$MAP_G3" "$PANES_G3" engineer)"
 
-# Exact title still wins over the ordinal (Pass 1) — what `ai pane <role>` pins.
+# E-269 (D-073): Pass 1 is the @ai_os_role pane OPTION (7th field), not the title.
+# A title alone no longer beats the ordinal: with titles but no options, the ordinal decides.
 PANES_TITLED='%a\t1\tarchitect\tWindow\t/p\t2.1.261\n%b\t2\tengineer\tWindow\t/p\t2.1.261\n'
-assert_contains "E-209.02a: exact title beats the ordinal (architect pinned at index 1)" "%a" \
+assert_contains "E-269.R1a: a title alone does not beat the ordinal (architect → ordinal 1 = %b)" "%b" \
   "$(_resolve_with "$MAP_G3" "$PANES_TITLED" architect)"
-assert_contains "E-209.02b: exact title beats the ordinal (engineer pinned at index 2)" "%b" \
-  "$(_resolve_with "$MAP_G3" "$PANES_TITLED" engineer)"
+assert_contains "E-269.R1b: AI_WATCH_TITLE_ROUTING=1 restores title-first for one release" "%a" \
+  "$(AI_WATCH_TITLE_ROUTING=1 _resolve_with "$MAP_G3" "$PANES_TITLED" architect)"
+# The option beats the ordinal, whatever the titles say.
+PANES_OPT='%a\t1\tengineer\tWindow\t/p\t2.1.261\tarchitect\n%b\t2\tarchitect\tWindow\t/p\t2.1.261\tengineer\n'
+assert_contains "E-269.R2a: @ai_os_role=architect wins over the ordinal and a contrary title" "%a" \
+  "$(_resolve_with "$MAP_G3" "$PANES_OPT" architect)"
+assert_contains "E-269.R2b: @ai_os_role=engineer likewise" "%b" \
+  "$(_resolve_with "$MAP_G3" "$PANES_OPT" engineer)"
+# Claude Code overwrote the title with a conversation summary: the option still resolves.
+PANES_SUMMARY='%s1\t1\t✳ Refactor the watcher\tWindow\t/p\t2.1.261\t-\n%s2\t2\t✳ Engineer and architect notes\tWindow\t/p\t2.1.261\tengineer\n'
+assert_contains "E-269.R3: a summary-retitled pane resolves by its option" "%s2" \
+  "$(_resolve_with 'architect:claude:0|engineer:claude:0' "$PANES_SUMMARY" engineer)"
 
 # Fuzzy/window remain reachable as a LAST resort — only when no agent pane sits at
 # the ordinal (e.g. the mapped pane is not running yet). Single agent pane, want_idx=1.
@@ -135,10 +146,13 @@ PANES_WIN='%w\t1\tMac.lan\tarchitect-win\t/p\t2.1.261\n'
 assert_contains "E-209.04: window-name fallback still reachable for semantic targets" "%w" \
   "$(_resolve_with "$MAP_G3" "$PANES_WIN" architect)"
 
-# A handoff must never land in a shell — the E-122 rule is unchanged by the re-order.
-PANES_SHELL='%sh\t1\tarchitect\tWindow\t/p\tbash\n%ag\t2\tMac.lan\tWindow\t/p\t2.1.261\n'
-assert_contains "E-209.05: exact-title pass may match a shell pane (E-122 applies to the ordinal only)" "%sh" \
-  "$(_resolve_with "$MAP_G3" "$PANES_SHELL" architect)"
+# A handoff must never land in a shell (E-269 / D-073: no pass may select one).
+# The live 2026-09-16 failure: the WATCHER's bash pane carried the title AND the option.
+PANES_SHELL='%sh\t1\tarchitect\tWindow\t/p\tbash\tarchitect\n%ag\t2\tMac.lan\tWindow\t/p\t2.1.261\t-\n'
+assert_contains "E-269.R4: a bash pane's title and option are ignored; Pass 2 delivers to the agent" "%ag" \
+  "$(_resolve_with 'architect:claude:0|engineer:claude:1' "$PANES_SHELL" architect)"
+assert_status 0 "E-269.R5: with no agent at the ordinal, the bash pane is still never chosen" \
+  test -z "$(_resolve_with "$MAP_G3" "$PANES_SHELL" architect)"
 PANES_SHELL2='%sh\t1\tMac.lan\tWindow\t/p\tbash\n%ag\t2\tMac.lan\tWindow\t/p\t2.1.261\n'
 assert_status 1 "E-209.06: no agent pane at the ordinal and no title/window hit → no route (never a shell)" \
   bash -c "source '$WATCH' 2>/dev/null; ROLES_MAPPING='architect:claude:5|engineer:claude:0'; _project_panes() { printf '%b' \"$PANES_SHELL2\"; }; resolve_pane architect"
