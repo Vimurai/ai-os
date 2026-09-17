@@ -26,7 +26,9 @@ Target: .ai/DEVOPS.md
   - install, dev, test, lint, typecheck, build, format
   - Run a single test file: <command>
   - Run tests matching pattern: <command>
-- **CI pipeline** (ordered steps):
+- **CI pipeline** (ordered steps). AI-OS itself runs CI locally (D-072): `ai ci run` does
+  `worktree → env → deps → browsers → install → toolchain → suite → unit → secrets` and
+  records the verdict for the commit. For a project with a hosted pipeline:
   1. lint → 2. typecheck → 3. test → 4. build
   Each step must fail fast and output actionable errors.
 - **Release steps**: version bump, changelog, tag, deploy. Scripted, not manual.
@@ -34,11 +36,13 @@ Target: .ai/DEVOPS.md
   - Structured logging (JSON or key=value). No PII, no secrets in logs.
   - At least one metric for the critical path (latency, error rate).
   - Health check endpoint or CLI command.
-- **Environment parity**: local / CI / prod differences documented.
+- **Environment parity**: local / CI / prod differences documented — including the host the
+  CI runner measures (`ai ci` records node, bash and OS per run).
 - **Secret management**: how secrets reach each environment (never hardcoded).
 
 ## CI gate
-Before adding deployment pipeline changes, check with human — this is a CI Gate event.
+Before changing the CI runner, its gates (`hooks/pre-push.sh`, the DONE gate) or deployment
+config, check with human — this is a CI Gate event.
 Record in .ai/DECISIONS.md if the pipeline choice is non-trivial.
 
 ## After writing

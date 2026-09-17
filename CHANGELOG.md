@@ -3,6 +3,32 @@
 All notable changes to **ai-os-v2** are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed — BREAKING
+
+- **GitHub Actions workflow removed; CI runs locally via `ai ci` (D-072).** `.github/workflows/test.yml`
+  is deleted. `ai ci run` tests a committed sha in a detached worktree under a throwaway
+  `HOME`, records the outcome in `.ai/state.sqlite` (`ci_runs`) and keeps the log under
+  `~/.ai-os/ci/logs/`. "CI green" now means a non-dirty PASS row for the commit, read by
+  `ai ci status`, `ai ci list`, `ai ci log [--failed]`, `get_ci_status` and `ai doctor`.
+  Two gates enforce it: `update_task_status(DONE)` (`AI_OS_CI_GATE=0` disables) and a new
+  `pre-push` hook (`AI_OS_CI_SKIP=1` + `AI_OS_CI_SKIP_REASON` bypasses one push and records
+  a SKIPPED run). A commit that only adds `.ai/` bookkeeping above a tested commit is
+  accepted without a new run. `ai uninstall` now tells you to remove `.git/hooks/pre-push`.
+  Linux coverage is lost with the hosted runner: `ai ci run --linux` is deferred until
+  Docker is available (E-265..E-268).
+
+### Fixed
+
+- **Role panes are bound by the `@ai_os_role` tmux pane option, not the pane title** (E-269,
+  D-073). `ai pane <role>` targeted no pane, so the role title landed on the active pane —
+  after `ai start`, the watcher's shell — and `ai-watch` held that role's handoffs
+  indefinitely without output. Routing now matches the pane option on agent panes only;
+  `AI_WATCH_TITLE_ROUTING=1` restores the old order for one release.
+
+---
+
 ## [3.1.0] — 2026-09-10
 
 The **Same-Provider Triad** arc: one vendor can now hold both roles, the Architect is a

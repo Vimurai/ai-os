@@ -26,7 +26,24 @@ bash tests/run.sh         # full suite (should be 100% green)
 bash tests/suites/<name>_test.sh  # single suite
 ```
 
-All PRs must pass `tests/run.sh` at 100% before merge.
+### Local CI (`ai ci`) — what "green" means
+
+There is no hosted pipeline (D-072). `ai ci run` tests a **committed** sha in a detached
+worktree under a throwaway `HOME`, with the framework installed from that commit, and records
+the outcome in `.ai/state.sqlite`:
+
+```bash
+ai ci run              # ~10-14 min; 0 PASS / 1 FAIL / 2 ERROR
+ai ci status --short   # the recorded verdict for HEAD
+ai ci log --failed     # the failing suites of the last run — read this BEFORE theorising
+```
+
+A working-tree run is not evidence about a commit: `ai ci run` exists to exclude the
+machine's own mirror and whatever a previous run left behind. Every PR needs a non-dirty
+PASS row for its head commit; `update_task_status(DONE)` and the `pre-push` hook both refuse
+without one. A commit that only adds `.ai/` bookkeeping above a tested commit is accepted.
+To bypass one push, `AI_OS_CI_SKIP=1 AI_OS_CI_SKIP_REASON="<why>" git push` — recorded as a
+`SKIPPED` run; a skip without a reason is refused.
 
 ---
 

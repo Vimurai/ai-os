@@ -785,6 +785,13 @@
       "task_id": "E-269",
       "timestamp": "2026-09-17T17:21:25.764Z",
       "summary": "[TIER_2] E-269 aligned with interactive-bridge.md §Binding by Pane Option (rule 1); warnings expected (LOG ignored; ai-watch covered by the bridge blueprint)"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-268",
+      "timestamp": "2026-09-17T17:55:12.942Z",
+      "summary": "[TIER_2] E-268 aligned with local-ci.md §Component 6b; workflow deleted, all hosted-CI surfaces repointed at ai ci; warnings expected (LOG ignored, mirrors + CHANGELOG)"
     }
   ],
   "deltas": [

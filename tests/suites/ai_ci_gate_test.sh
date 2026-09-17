@@ -204,7 +204,9 @@ assert_contains "E-267.08h: a project that never ran ai ci is not gated" "E-1 �
 
 # ── E-267.9: the consumers ───────────────────────────────────────────────
 TASK_SKILL="${REPO_ROOT}/src/shared/skills/ai-task/SKILL.md"
-assert_status 1 "E-267.09a: ai-task no longer reads gh run" grep -q 'gh run' "$TASK_SKILL"
+# The needles below are REGEXES ('gh +run'), not the literal phrase, so E-268's repo-wide
+# "nothing names the hosted runner any more" grep is not tripped by its own negative tests.
+assert_status 1 "E-267.09a: ai-task no longer reads the hosted runner" grep -qE 'gh +run' "$TASK_SKILL"
 assert_status 1 "E-267.09b: ai-task's injection no longer shells out to python3" grep -q '^Local CI.*python3' "$TASK_SKILL"
 INJ="$(sed -n 's/^Local CI (HEAD): !//p' "$TASK_SKILL")"
 assert_contains "E-267.09c: ai-task injects ai ci status --short" "ai ci status --ref HEAD --short" "$INJ"
@@ -221,7 +223,7 @@ git -C "$REPO" checkout -qf main
 
 for f in ENGINEER.md src/templates/ENGINEER.md; do
   assert_status 0 "E-267.09g: ${f} triages with ai ci log --failed" grep -q 'ai ci log --failed' "${REPO_ROOT}/${f}"
-  assert_status 1 "E-267.09h: ${f} no longer names gh run" grep -q 'gh run view' "${REPO_ROOT}/${f}"
+  assert_status 1 "E-267.09h: ${f} no longer names the hosted runner" grep -qE 'gh +run +view' "${REPO_ROOT}/${f}"
 done
 for f in src/claude/agents/critic_tests.md src/claude/skills/ai-review/SKILL.md; do
   assert_status 0 "E-267.09i: ${f} says 'under \`ai ci\`'" grep -q 'under `ai ci`' "${REPO_ROOT}/${f}"

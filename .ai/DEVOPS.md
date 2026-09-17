@@ -407,3 +407,39 @@ commit restores `gh run` in `ai-task`.
 ### Branch-first validation
 
 `engineer/e267-ci-gates`; the push of this branch is itself the first live pre-push check.
+
+---
+
+## DEVOPS-009 — GitHub Actions decommissioned (E-268, D-072)
+
+Blueprint: `.ai/blueprints/local-ci.md` §Component 6b. Last task of the runner arc.
+
+### What is changing and why
+
+`.github/workflows/test.yml` is deleted. Its two jobs have been reproduced by `ai ci run`
+since E-265, its record by `ci_runs` since E-266, and its "nobody may merge red" rule by the
+E-267 gates — so the workflow was the second description of a pipeline nobody would read.
+Every surface that pointed at a hosted run now points at `ai ci`: README (badge removed, a
+Local CI section added), CONTRIBUTING, the `ci_gate` skill (its injected context is the local
+verdict, not a workflow `find`), `src/contracts/40_DEVOPS.md`, the `devops_engineer` agent,
+the copilot brief, and `browser_optin_test` (the browser-cache assertions now read the
+runner's `browsers` step). The CHANGELOG carries the BREAKING line for E-263.
+
+### Security implications
+
+None new. One capability is LOST rather than added: the hosted runner was the only thing
+testing on Linux, and `ai ci run --linux` is deferred until Docker exists on this machine
+(D-072 open risk). The recorded toolchain per run and the E-236 SKIP accounting are the
+interim mitigation — and a Node-22-only defect (E-266's `ExperimentalWarning`) already proved
+the gap is real: it surfaced ONLY on the hosted runner, because local CI runs Node 26.
+
+### Rollback plan
+
+`git revert` of this commit restores the workflow unchanged (the file stays in git history).
+Branch protection on GitHub is an operator setting; it must be removed by the operator, or a
+required check that can never report will block merges.
+
+### Branch-first validation
+
+`engineer/e268-decommission-actions`. This is the LAST branch whose PR a hosted run can
+check; from here on the evidence is `ai ci run` and the `pre-push` gate.
