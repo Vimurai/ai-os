@@ -461,12 +461,12 @@
     {
       "id": "E-266",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Record local CI runs and expose them per D-072 and .ai/blueprints/local-ci.md §Components 3-4: add the ci_runs table to state.sqlite through skill: ai-migration (columns per the blueprint Data Model: sha, ref, branch, dirty, status PASS|FAIL|ERROR|SKIPPED, started_at/finished_at ISO-8601 T-form, duration_ms, suite_pass/fail/skip, leaked, unit_status, unit_coverage, secrets_status, node/bash/patch versions, os, perf_json, skip_reason, log_path; index on (sha, started_at DESC); down-migration drops both), write recordCiRun/latestCiRun helpers in the shared state-db owner (not hot-reloaded, asserted like E-249), make 'ai ci run' write its row via them, add 'ai ci status [--ref <sha>] [--short]' (exit 0 PASS / 1 FAIL-ERROR-SKIPPED / 2 no row; --short prints one line for skill injection), 'ai ci list [-n]' and 'ai ci log [<sha>] [--failed]' (failing suites' sections only), add get_ci_status({sha?}) to task-synchronizer-mcp returning the newest row or {status:'NONE'}, add the 'ai doctor' line ('✓ local CI: HEAD <sha7> PASS <age>' / '✗ local CI: no run for HEAD — run: ai ci run'), and prune ~/.ai-os/ci/logs/ to the newest 14 runs or 14 days. Acceptance: migration up/down covered with PRAGMA integrity_check; a fixture run produces a row whose every column is populated and whose log_path exists; status exit codes and --short line covered for PASS, FAIL, dirty-only and no-row; get_ci_status covered via tests/lib/mcp-client.sh; doctor line covered for both branches; retention covered with 16 synthetic logs; full suite green; bash install-ai-os.sh + server restart.",
       "created_at": "2026-09-16T17:58:49.175Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-17T10:12:17.890Z",
+      "summary": "ci_runs record + ai ci status/list/log + get_ci_status + doctor line + log retention; local CI PASS 5eecec0 (772s), GitHub green; PR #63 merged",
       "depends_on": [
         "E-265"
       ],
@@ -476,7 +476,7 @@
     {
       "id": "E-267",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "OPEN",
       "tier": 2,
       "description": "Wire the local CI gates and consumers per D-072 and .ai/blueprints/local-ci.md §Components 5-6a: extend the update_task_status(DONE) completion gate (D-071 §1 lineage) to refuse with '[CI_GATE] no green local CI run for HEAD <sha7> — run: ai ci run' when the newest non-dirty ci_runs row for HEAD is missing or not PASS, active only in a project whose ci_runs table has at least one row, disabled by AI_OS_CI_GATE=0; add hooks/pre-push.sh installed by install_git_hooks with the same fail-closed stub pattern as pre-commit (stdin and \"$@\" preserved per git-hooks.md): each pushed tip needs a green non-dirty row, or a green row for an ancestor where git diff --name-only <tested>..<tip> touches only .ai/** (the ai-task bookkeeping commits), and AI_OS_CI_SKIP=1 with AI_OS_CI_SKIP_REASON bypasses one push while writing a SKIPPED ci_runs row with the reason (a skip without a reason is refused); rewrite ai-task Step 2.5 to inject 'ai ci status --ref HEAD --short' instead of gh run list (PASS / FAIL / no run / dirty-only mapped onto the existing success/failure/pending/unavailable guidance; drop the python3 injection); rewrite the ENGINEER.md triage section (and its src/templates mirror) to read 'ai ci log --failed' before forming a theory; replace 'on CI' wording in ai-review, critic_tests and ci_gate with 'under ai ci' and rebuild the derived critic_tests agent.json; sync all skill/agent mirrors byte-identical. Acceptance: DONE gate covered for no-row, FAIL-row, dirty-only, PASS, adoption-off (empty table) and AI_OS_CI_GATE=0; pre-push covered for tip-tested, bookkeeping-ancestor accepted, non-.ai ancestor diff refused, skip-with-reason recorded, skip-without-reason refused, canonical-missing fails closed; ai-task injection line covered by fixture; grep 'gh run' .claude/skills/ai-task returns nothing; full suite green under ai ci run; bash install-ai-os.sh + server restart.",
       "created_at": "2026-09-16T17:59:21.980Z",
@@ -485,10 +485,8 @@
       "depends_on": [
         "E-266"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-266"
-      ]
+      "ready": true,
+      "blocked_by": []
     },
     {
       "id": "E-268",
