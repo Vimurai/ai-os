@@ -532,12 +532,12 @@
     {
       "id": "E-271",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Make held handoffs visible and the bridge writers safe per D-073 and .ai/blueprints/interactive-bridge.md §Binding by Pane Option rules 2-5 (execute after E-269, before E-270): when src/bin/ai-watch holds an entry it writes hold_reason (no-pane | busy | foreign-session), hold_since and attempts onto the signal.json entry under the lock (once per reason change) and prints one stderr line per change, MAX_HOLD=0 stays the default; 'ai start --status' and 'ai doctor' print 'queued: N (oldest held <age>, reason <r>)'; the watcher re-reads .ai/roles.json when its mtime changes, every tick; src/shared/signal-handoff.mjs writes tmp + rename like the watcher, retries the lock with backoff and fails with [SIGNAL_LOCKED] after 5 s instead of appending unlocked, and both writers reclaim a lock directory older than 10 s whose owner pid is dead; every test suite that starts ai watch registers it with register_cleanup (E-240) and tests/run.sh's leak diff counts ai-watch processes. Acceptance: fixtures cover each hold_reason being written once and cleared on delivery, the stderr line, the status/doctor queued line, a roles.json edit mid-run changing routing without restart, [SIGNAL_LOCKED] on a held lock and reclaim of a dead-owner lock, and a concurrent emit + watcher rewrite losing no entry (100 iterations); a run of the full suite reports LEAKED 0 ai-watch processes; full suite green under ai ci run; bash install-ai-os.sh + watcher restart.",
       "created_at": "2026-09-17T11:36:34.450Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-17T19:50:37.182Z",
+      "summary": "Held handoffs visible: hold_reason/hold_since/attempts + one stderr line per change, cleared on delivery, foreign-session distinguished; queued line in doctor + start --status; roles …[full in LOG.md]",
       "depends_on": [
         "E-269"
       ],
