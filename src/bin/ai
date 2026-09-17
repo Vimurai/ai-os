@@ -2495,6 +2495,13 @@ import(pathToFileURL(process.argv[1]).href).then(m =>
   echo ""
 }
 
+# Flags for every ci-record.mjs call. Two notices would otherwise land on stderr, which
+# `ai ci` callers (and the skills that inject `status --short`) see: state-db.js is ESM in
+# a package.json without "type" (MODULE_TYPELESS_PACKAGE_JSON), and on Node 22 node:sqlite
+# is still experimental (ExperimentalWarning — silent on Node 26, which is why the E-266
+# suite passed locally and failed on the Node 22 runner).
+_CI_NODE_FLAGS=(--disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning)
+
 # _report_local_ci — one doctor line for HEAD's newest certifying ci_runs row.
 _report_local_ci() {
   local sha helper line
@@ -2503,7 +2510,7 @@ _report_local_ci() {
   if [[ -z "$helper" ]] || ! command -v node >/dev/null 2>&1; then
     echo "  ✗ local CI: ci-record.mjs or node unavailable — run: ai install"; return 0
   fi
-  line="$(node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$helper" status --ai-dir ".ai" --sha "$sha" --short 2>/dev/null || true)"
+  line="$(node "${_CI_NODE_FLAGS[@]}" "$helper" status --ai-dir ".ai" --sha "$sha" --short 2>/dev/null || true)"
   set -- $line
   case "${1:-}" in
     PASS) echo "  ✓ local CI: HEAD ${2} PASS ${3} ${4}" ;;
@@ -4608,13 +4615,11 @@ _ci_record() {
     echo "ai ci: not recorded — ci-record.mjs or node unavailable (run: ai install)" >&2
     return 0
   fi
-  node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$helper" record --ai-dir "${CI_ROOT}/.ai" --log "$CI_LOG" --prune-dir "$CI_LOGDIR" >/dev/null \
+  node "${_CI_NODE_FLAGS[@]}" "$helper" record --ai-dir "${CI_ROOT}/.ai" --log "$CI_LOG" --prune-dir "$CI_LOGDIR" >/dev/null \
     || echo "ai ci: WARNING — the run was not recorded in ${CI_ROOT}/.ai/state.sqlite" >&2
 }
 
 # _ci_read <status|list|log> [args] — the E-266 readers; all go through ci-record.mjs.
-# --disable-warning: state-db.js is ESM in a package.json without "type", so node prints a
-# MODULE_TYPELESS_PACKAGE_JSON notice on every call — noise in a line skills inject.
 _ci_read() {
   local sub="$1"; shift
   local ref="HEAD" short=0 failed=0 n=10 root sha helper
@@ -4638,14 +4643,14 @@ _ci_read() {
   helper="$(_ai_os_helper shared/ci-record.mjs || true)"
   [[ -n "$helper" ]] || { echo "ai ci: ci-record.mjs not found (run: ai install)" >&2; return 2; }
   if [[ "$sub" == "list" ]]; then
-    node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$helper" list --ai-dir "${root}/.ai" -n "$n"; return
+    node "${_CI_NODE_FLAGS[@]}" "$helper" list --ai-dir "${root}/.ai" -n "$n"; return
   fi
   sha="$(git -C "$root" rev-parse --verify --quiet "${ref}^{commit}")" || {
     echo "ai ci ${sub}: '${ref}' is not a commit in ${root}" >&2; return 2; }
   local extra=()
   [[ "$short" -eq 1 ]] && extra+=(--short)
   [[ "$failed" -eq 1 ]] && extra+=(--failed)
-  node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$helper" "$sub" --ai-dir "${root}/.ai" --sha "$sha" ${extra[@]+"${extra[@]}"}
+  node "${_CI_NODE_FLAGS[@]}" "$helper" "$sub" --ai-dir "${root}/.ai" --sha "$sha" ${extra[@]+"${extra[@]}"}
 }
 
 _ci_cleanup() {
