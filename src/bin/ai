@@ -2562,6 +2562,50 @@ import(pathToFileURL(process.argv[1]).href).then(m =>
 # suite passed locally and failed on the Node 22 runner).
 _CI_NODE_FLAGS=(--disable-warning=MODULE_TYPELESS_PACKAGE_JSON --disable-warning=ExperimentalWarning)
 
+# _queued_handoffs [project_dir] — one line about the bridge queue (E-271, D-073 rule 2):
+#   "queued: 2 (oldest held 2h 13m, reason no-pane)" / "queued: 0"
+# A held entry carries hold_reason/hold_since from the watcher. "Held forever" is the
+# DEFAULT (MAX_HOLD=0) and was previously invisible: two Engineer handoffs waited a day.
+_queued_handoffs() {
+  local proj sig
+  proj="${1:-$PWD}"
+  sig="${proj%/}/.ai/signal.json"
+  [[ -f "$sig" ]] || { echo "queued: 0 (no signal.json)"; return 0; }
+  python3 - "$sig" <<'PY' 2>/dev/null || echo "queued: ? (signal.json unreadable)"
+import json, sys
+from datetime import datetime, timezone
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print("queued: ? (signal.json unreadable)"); sys.exit(0)
+if isinstance(d, dict): d = [d]
+if not isinstance(d, list): d = []
+pend = [e for e in d if isinstance(e, dict) and e.get("delivered") is not True and e.get("message")]
+if not pend:
+    print("queued: 0"); sys.exit(0)
+held = [e for e in pend if e.get("hold_since")]
+if not held:
+    print("queued: %d (none held yet — the watcher has not tried them)" % len(pend)); sys.exit(0)
+def age(e):
+    try:
+        t = datetime.fromisoformat(e["hold_since"])
+        if t.tzinfo is None: t = t.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - t).total_seconds()
+    except Exception:
+        return -1.0
+oldest = max(held, key=age)
+s = age(oldest)
+if s < 0: human = "unknown"
+elif s < 60: human = "%ds" % int(s)
+elif s < 3600: human = "%dm" % int(s // 60)
+elif s < 86400: human = "%dh %dm" % (int(s // 3600), int((s % 3600) // 60))
+else: human = "%dd %dh" % (int(s // 86400), int((s % 86400) // 3600))
+print("queued: %d (oldest held %s, reason %s, target %s, attempts %s)" % (
+    len(pend), human, oldest.get("hold_reason", "unknown"),
+    oldest.get("target", "?"), oldest.get("attempts", "?")))
+PY
+}
+
 # _report_local_ci — one doctor line for HEAD's newest certifying ci_runs row.
 _report_local_ci() {
   local sha helper line
@@ -2645,6 +2689,12 @@ doctor() {
     echo ""
 
     _report_role_provisioning
+
+    # E-271 (D-073 rule 2): the bridge queue, so a held handoff is visible without reading
+    # signal.json by hand.
+    echo "Handoff bridge:"
+    echo "  $(_queued_handoffs "$PWD")"
+    echo ""
 
     # E-266 (D-072): the local CI verdict for HEAD — the evidence "CI green" now means.
     echo "Local CI:"
@@ -4115,6 +4165,8 @@ _start_status() {  # <session> <window> <project> [origin]
   else
     echo "  watcher: STALE lock — pid ${pid} is gone (${lock})"
   fi
+  # E-271: a running watcher with a wedged queue looked identical to an idle one.
+  echo "  $(_queued_handoffs "$project")"
   return 0
 }
 

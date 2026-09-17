@@ -342,6 +342,28 @@ _warn_legacy_target() {
   return 0
 }
 
+# _roles_mtime → mtime of .ai/roles.json in whole seconds ("" when absent).
+_roles_mtime() {
+  python3 -c 'import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))' \
+    "${PROJECT_DIR}/.ai/roles.json" 2>/dev/null || true
+}
+
+# _refresh_roles_mapping — re-read roles.json when it changed since the last tick (E-271).
+_refresh_roles_mapping() {
+  local mt; mt="$(_roles_mtime)"
+  [[ "$mt" == "${_ROLES_MTIME:-}" ]] && return 0
+  _ROLES_MTIME="$mt"
+  local fresh; fresh="$(_load_roles_mapping)"
+  [[ "$fresh" == "${ROLES_MAPPING:-}" ]] && return 0
+  ROLES_MAPPING="$fresh"
+  if [[ -n "$ROLES_MAPPING" ]]; then
+    echo "ai-watch: role routing RELOADED from .ai/roles.json (${ROLES_MAPPING})" >&2
+  else
+    echo "ai-watch: role routing RELOADED — .ai/roles.json is absent or unreadable; using the default fallback" >&2
+  fi
+  return 0
+}
+
 # resolve_pane <target> → prints the pane id, or nothing.
 #
 # E-209 / D-054 (interactive-bridge.md §Pane Resolution Precedence) — the pass ORDER
@@ -461,14 +483,39 @@ PY
 # watcher's delivered-flag write and the MCP's append are serialised. Bounded spin
 # (~0.5s) then proceed best-effort rather than deadlock (a crash mid-write is rare;
 # writes are idempotent so a missed lock only re-exposes the original tiny race).
+# E-271 (D-073 rule 4): the lock directory carries its owner's pid, and a lock older than
+# SIGNAL_LOCK_STALE_S whose owner is gone is RECLAIMED — a writer killed mid-write used to
+# wedge every later writer into the unlocked fallback path. Reclaim is atomic via rename, so
+# only one reclaimer can win. signal-handoff.mjs implements the identical contract.
+SIGNAL_LOCK_STALE_S="${AI_WATCH_SIGNAL_LOCK_STALE_S:-10}"
+_signal_lock_age() {  # <lock> → age in whole seconds, or "" when unknown
+  local lock="$1" mt now
+  mt="$(python3 -c 'import os,sys; print(int(os.stat(sys.argv[1]).st_mtime))' "$lock" 2>/dev/null)" || return 1
+  now="$(date +%s)"
+  [[ -n "$mt" ]] && printf '%s' $(( now - mt ))
+}
+_signal_lock_reclaim() {  # <lock> → 0 when the lock was stale and has been removed
+  local lock="$1" owner age
+  age="$(_signal_lock_age "$lock" || true)"
+  [[ -n "$age" && "$age" -ge "$SIGNAL_LOCK_STALE_S" ]] || return 1
+  owner="$(cat "${lock}/pid" 2>/dev/null || true)"
+  # An owner that is still alive keeps its lock however old it is.
+  [[ "$owner" =~ ^[0-9]+$ ]] && kill -0 "$owner" 2>/dev/null && return 1
+  mv "$lock" "${lock}.stale.$$" 2>/dev/null || return 1
+  rm -rf "${lock}.stale.$$" 2>/dev/null
+  echo "ai-watch: reclaimed a stale signal lock (age ${age}s, owner ${owner:-unknown} gone)" >&2
+  return 0
+}
 _signal_lock() {  # → 0 if acquired (caller MUST _signal_unlock), 1 if proceeding unlocked
   local lock="${SIGNAL}.lock" i=0
   while ! mkdir "$lock" 2>/dev/null; do
+    _signal_lock_reclaim "$lock" && continue
     i=$((i + 1)); [[ "$i" -ge 25 ]] && return 1; sleep 0.02
   done
+  echo "$$" > "${lock}/pid" 2>/dev/null || true
   return 0
 }
-_signal_unlock() { rmdir "${SIGNAL}.lock" 2>/dev/null; return 0; }
+_signal_unlock() { rm -rf "${SIGNAL}.lock" 2>/dev/null; return 0; }
 
 _next_pending_ts() {  # <target> → timestamp of the EARLIEST undelivered entry, else ""
   TARGET="$1" python3 - "$SIGNAL" <<'PY' 2>/dev/null
@@ -519,6 +566,9 @@ for e in d:
         e["delivered"] = True
         e["delivered_reason"] = reason
         e["delivered_ts"] = datetime.now(timezone.utc).isoformat()
+        # E-271: the hold is over — clear its marks so `--status` counts only live holds.
+        for k in ("hold_reason", "hold_since"):
+            e.pop(k, None)
         try: e["delivered_by"] = int(pid)
         except Exception: pass
         break
@@ -646,6 +696,70 @@ _maybe_expire() {
   fi
 }
 
+# ── Held entries (E-271, D-073 rule 2) ──────────────────────────────────────
+# MAX_HOLD=0 is still the default: nothing expires silently. But "held forever" used to be
+# INVISIBLE — two Engineer handoffs waited a day while a healthy watcher printed nothing.
+# A hold now writes hold_reason / hold_since / attempts onto the entry and prints ONE
+# stderr line per reason CHANGE, so a wedged bridge is visible in the pane and in the file.
+#
+# _hold_reason_for <target> → why the target cannot be reached right now:
+#   no-pane          — no agent pane for the role in this watcher's scope
+#   foreign-session  — the role's pane exists for this project but in ANOTHER tmux session
+#                      (D-068 gave each project its own; a pane left in the old shared one
+#                      is invisible to this watcher, which is not the same fault as "none")
+_hold_reason_for() {
+  local target="$1" pid pidx ptitle pwin ppath pcmd prole
+  if [[ "$(_project_panes_scope)" == "-s" ]]; then
+    while IFS=$'\t' read -r pid pidx ptitle pwin ppath pcmd prole; do
+      case "$ppath" in "$PROJECT_DIR"|"$PROJECT_DIR"/*) ;; *) continue ;; esac
+      _is_agent_cmd "$pcmd" || continue
+      [[ "${prole:-}" == "$target" ]] && { printf 'foreign-session'; return 0; }
+    done < <(tmux list-panes -a -F '#{pane_id}	#{pane_index}	#{?pane_title,#{pane_title},-}	#{?window_name,#{window_name},-}	#{pane_current_path}	#{pane_current_command}	#{?#{@ai_os_role},#{@ai_os_role},-}' 2>/dev/null)
+  fi
+  printf 'no-pane'
+}
+
+# _note_hold <ts> <target> <reason> — record the hold and report a CHANGE once.
+_note_hold() {
+  local ts="$1" target="$2" reason="$3" out _held=0
+  _signal_lock && _held=1
+  out="$(TS="$ts" REASON="$reason" python3 - "$SIGNAL" <<'PY' 2>/dev/null
+import json, os, sys, tempfile
+from datetime import datetime, timezone
+path = sys.argv[1]; ts = os.environ["TS"]; reason = os.environ["REASON"]
+try:
+    d = json.load(open(path))
+    if isinstance(d, dict): d = [d]
+    if not isinstance(d, list): sys.exit(0)
+except Exception:
+    sys.exit(0)
+now = datetime.now(timezone.utc).isoformat()
+for e in d:
+    if not (isinstance(e, dict) and e.get("timestamp", "") == ts and e.get("delivered") is not True):
+        continue
+    changed = e.get("hold_reason") != reason
+    if changed:
+        e["hold_reason"] = reason
+        e["hold_since"] = now
+    e["attempts"] = int(e.get("attempts", 0) or 0) + 1
+    dirn = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=dirn)
+    try:
+        with os.fdopen(fd, "w") as f: json.dump(d, f, indent=2)
+        os.replace(tmp, path)
+        # stdout is the CHANGE signal for the shell: "<reason> <since> <attempts>".
+        if changed: print("%s %s %s" % (reason, e["hold_since"], e["attempts"]))
+    except Exception:
+        try: os.unlink(tmp)
+        except Exception: pass
+    break
+PY
+)"
+  [[ "$_held" -eq 1 ]] && _signal_unlock
+  [[ -n "$out" ]] && echo "ai-watch: HELD ${target} entry ${ts} — reason ${reason} (since $(printf '%s' "$out" | awk '{print $2}')) — nothing expires; run 'ai start --status' to see the queue" >&2
+  return 0
+}
+
 # ── Queue drain (E-123) ───────────────────────────────────────────────────────
 # One delivery pass. For EACH target independently: take its earliest undelivered
 # entry; if the target pane resolves and is ready, inject and flag it delivered;
@@ -664,9 +778,12 @@ _drain_once() {
     fi
     pane="$(resolve_pane "$t")"
     if [[ -z "$pane" ]]; then
+      # E-271: record WHY, once per reason change, before the (default no-op) expiry check.
+      _note_hold "$ts" "$t" "$(_hold_reason_for "$t")"
       _maybe_expire "$ts" "$t" "no-pane"; continue # transient missing pane → hold + retry
     fi
     if ! _pane_ready "$pane"; then
+      _note_hold "$ts" "$t" "busy"
       _maybe_expire "$ts" "$t" "busy"; continue    # busy → hold (other target unaffected)
     fi
     # -l: send the message LITERALLY (no tmux key-name interpretation, no shell
@@ -890,10 +1007,12 @@ main() {
   [[ "$(_project_panes_scope)" == "-s" ]] && _scope_note="session ${WATCH_SESSION}"
   echo "ai-watch: watching ${SIGNAL} (poll ${POLL_INTERVAL}s, scoped to ${PROJECT_DIR} in ${_scope_note}) — Ctrl-C to stop."
 
-  # E-137 (role-abstraction.md): load the semantic role→provider:pane map once at
-  # startup. Empty ⇒ default fallback (architect=claude, engineer=claude). A roles.json
-  # edited mid-run is picked up on the next watcher restart (documented limitation).
+  # E-137 (role-abstraction.md): load the semantic role→provider:pane map at startup —
+  # and, since E-271 (D-073 rule 3), again whenever the file's mtime changes. Empty ⇒
+  # default fallback (architect=claude, engineer=claude). An edited roles.json used to
+  # need a watcher restart, which is a restart nobody knew to perform.
   ROLES_MAPPING="$(_load_roles_mapping)"
+  _ROLES_MTIME="$(_roles_mtime)"
   if [[ -n "$ROLES_MAPPING" ]]; then
     echo "ai-watch: role routing — dynamic from .ai/roles.json (${ROLES_MAPPING})"
   else
@@ -910,6 +1029,7 @@ main() {
   # skip-all if AI_WATCH_DRAIN_BACKLOG=0), then drain per-target each poll.
   [[ -f "$SIGNAL" ]] && _reconcile_startup "$DRAIN_BACKLOG"
   while true; do
+    _refresh_roles_mapping
     [[ -f "$SIGNAL" ]] && _drain_once
     _maybe_reexec "$@"
     sleep "$POLL_INTERVAL"

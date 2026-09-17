@@ -21,7 +21,7 @@
 //   - MAX_QUEUE growth is bounded by evicting only the OLDEST *delivered* entries; an
 //     undelivered handoff is never dropped.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, renameSync, statSync, unlinkSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 // E-200: read-only state access for the `--settle` completion barrier (below).
 import { getDb } from "../mcp/shared/state-db.js";
@@ -59,9 +59,14 @@ export function emitHandoff({ aiDir, target, message } = {}) {
   const signalPath = resolve(aiDir, "signal.json");
   const lockPath = signalPath + ".lock";
 
-  let lockHeld = false;
-  for (let i = 0; i < 25; i++) {
-    try { mkdirSync(lockPath); lockHeld = true; break; } catch { _sleepMs(20); }
+  // E-271 (D-073 rule 4): wait up to LOCK_WAIT_MS with backoff, then FAIL — the old code
+  // gave up after ~0.5s and appended UNLOCKED, which is the one outcome that can lose an
+  // entry (the watcher's rewrite clobbers an append it never saw). A lock older than
+  // LOCK_STALE_MS whose owner pid is gone is reclaimed, atomically, via rename; ai-watch's
+  // _signal_lock implements the identical contract.
+  const lockHeld = _acquireLock(lockPath);
+  if (!lockHeld) {
+    return { ok: false, code: "SIGNAL_LOCKED", error: `signal lock held for more than ${LOCK_WAIT_MS}ms: ${lockPath}` };
   }
   try {
     let queue = [];
@@ -84,14 +89,59 @@ export function emitHandoff({ aiDir, target, message } = {}) {
         });
       }
     }
+    // Atomic, like the watcher's writes: a reader (or a crash) never sees a half-written
+    // queue. Same tmp-then-rename shape as ai-watch's python writers.
     try {
-      writeFileSync(signalPath, JSON.stringify(queue, null, 2) + "\n", "utf8");
+      const tmp = signalPath + `.tmp.${process.pid}`;
+      writeFileSync(tmp, JSON.stringify(queue, null, 2) + "\n", "utf8");
+      try { renameSync(tmp, signalPath); }
+      catch (e) { try { unlinkSync(tmp); } catch { /* ignore */ } throw e; }
     } catch (e) {
       return { ok: false, code: "SIGNAL_WRITE_FAILED", error: e.message };
     }
     return { ok: true, target, message: msg, queueLength: queue.length, signalPath };
   } finally {
-    if (lockHeld) { try { rmdirSync(lockPath); } catch { /* already gone */ } }
+    try { rmSync(lockPath, { recursive: true, force: true }); } catch { /* already gone */ }
+  }
+}
+
+// How long a writer waits for the shared lock before failing, and when an abandoned lock
+// may be reclaimed. Both are contract, shared with ai-watch — keep them in step.
+export const LOCK_WAIT_MS = 5000;
+export const LOCK_STALE_MS = 10000;
+
+/** Try to reclaim a lock whose owner is gone and which is older than LOCK_STALE_MS. */
+function _reclaimStaleLock(lockPath) {
+  let age;
+  try { age = Date.now() - statSync(lockPath).mtimeMs; } catch { return false; }
+  if (age < LOCK_STALE_MS) return false;
+  let owner = null;
+  try { owner = parseInt(readFileSync(resolve(lockPath, "pid"), "utf8").trim(), 10); } catch { /* no pid file */ }
+  if (Number.isInteger(owner)) {
+    try { process.kill(owner, 0); return false; } catch { /* owner is gone */ }
+  }
+  try {
+    const gone = `${lockPath}.stale.${process.pid}`;
+    renameSync(lockPath, gone);          // atomic: only one reclaimer wins
+    rmSync(gone, { recursive: true, force: true });
+    return true;
+  } catch { return false; }
+}
+
+/** mkdir-based lock with backoff; writes our pid so the owner can be checked. */
+function _acquireLock(lockPath) {
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  let waitMs = 10;
+  for (;;) {
+    try {
+      mkdirSync(lockPath);
+      try { writeFileSync(resolve(lockPath, "pid"), String(process.pid), "utf8"); } catch { /* best effort */ }
+      return true;
+    } catch { /* held */ }
+    if (_reclaimStaleLock(lockPath)) continue;
+    if (Date.now() >= deadline) return false;
+    _sleepMs(Math.min(waitMs, Math.max(10, deadline - Date.now())));
+    waitMs = Math.min(waitMs * 2, 200);
   }
 }
 

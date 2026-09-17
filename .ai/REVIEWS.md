@@ -28,3 +28,4 @@
 [CRITIC_STAMP] 2026-09-17 | [TIER_2] E-267 aligned (local-ci.md §5-6a); CAPABILITIES_BYPASS resolved by dropping pre-push script-relative fallback; DONE-gate ancestor rule flagged
 [CRITIC_STAMP] 2026-09-17 | [TIER_2] E-269 aligned with interactive-bridge.md §Binding by Pane Option (rule 1); warnings expected (LOG ignored; ai-watch covered by the bridge blueprint)
 [CRITIC_STAMP] 2026-09-17 | [TIER_2] E-268 aligned with local-ci.md §Component 6b; workflow deleted, all hosted-CI surfaces repointed at ai ci; warnings expected (LOG ignored, mirrors + CHANGELOG)
+[CRITIC_STAMP] 2026-09-17 | [TIER_2] E-271 aligned with interactive-bridge.md §Binding by Pane Option rules 2-5; warnings expected (LOG gitignored; ai-watch/signal-handoff covered by the bridge blueprint)

@@ -104,8 +104,14 @@ _reexec_probe() {
   printf '[{"timestamp":"1","target":"claude","message":"MSG-A"}]' > "$sig"
 
   local outlog="$d/watcher.out"
-  ( cd "$d" && AI_WATCH_NO_REEXEC="${_NO_REEXEC:-0}" bash "$fixture" > "$outlog" 2>&1 ) &
-  local wp=$!
+  # `exec` so $! IS the watcher: `( … ) &` alone leaves a subshell parent, and killing
+  # THAT orphaned the watcher it had spawned (ppid 1). Every run leaked two; 28 were alive
+  # on this machine on 2026-09-17, some over a day old (E-271, D-073 rule 5).
+  # register_cleanup BEFORE the launch, so a failing assertion below still reaps it.
+  local wp
+  ( cd "$d" && exec env AI_WATCH_NO_REEXEC="${_NO_REEXEC:-0}" bash "$fixture" > "$outlog" 2>&1 ) &
+  wp=$!
+  register_cleanup "kill -TERM ${wp} 2>/dev/null || true"
 
   # Three phases, in this order, so each fact is established separately. The first
   # version queued MSG-B and touched the script together, then killed the watcher the
