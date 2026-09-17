@@ -1342,3 +1342,63 @@ The operator is discontinuing GitHub-hosted CI. D-060 made "nobody looked at CI"
 Revert the E-268 deletion commit (the workflow stays in git history); `AI_OS_CI_GATE=0` and `AI_OS_CI_SKIP=1` disable the two gates; drop `ci_runs` via the migration's down path; delete `~/.ai-os/ci/`. GitHub branch protection is restored by the operator.
 
 ---
+
+## D-073 — Role Panes Are Bound by a tmux Pane Option, and a Held Handoff Is Never Silent
+
+**Date**: 2026-09-17
+**Task**: E-269, E-271 (operator report 2026-09-17: "ai watch and handoff is sometimes sluggish and doesn't trigger immediately")
+**Decision**: `ai pane <role>` binds the role with `set-option -p -t "$TMUX_PANE" @ai_os_role <role>`; `resolve_pane` Pass 1 matches that option among AGENT panes only; titles are cosmetic and never routed on. A held entry records `hold_reason`/`hold_since`/`attempts` in `signal.json`, prints one stderr line per change and appears in `ai start --status` and `ai doctor`. `roles.json` is re-read on mtime change; both signal writers are atomic and never write unlocked; suite-started watchers are registered for cleanup and counted by the leak diff. Amendment: `.ai/blueprints/interactive-bridge.md §Binding by Pane Option`.
+
+### Why needed
+The loop is not slow — median delivery is 1 s over 50 signals. It STALLS: two Engineer handoffs from 2026-09-16 are still undelivered under a healthy watcher, and the four multi-hour outliers were each delivered by a different watcher pid than their neighbours, i.e. by a restart. `ai pane` pins the role title with an untargeted `select-pane -T`, which after `ai start`'s untargeted `split-window` lands on the watcher's own bash pane; Pass 1 matches the title without checking for an agent, the ready check says busy, and `MAX_HOLD=0` holds forever with no output. Four other projects on this machine carry the same mis-title, and `ai_watch_test.sh:546` asserts the failure as correct. Independently, Claude Code overwrites pane titles with its conversation summary, so title-based binding never survived on the agent panes anyway.
+
+### Alternatives considered
+1. **Target the title (`-T … -t "$TMUX_PANE"`) and keep title routing** — rejected as sufficient; the title is overwritten by Claude Code within seconds, so Pass 1 degrades to the ordinal pass, which miscounts once subagent panes appear. A pane option is invisible to the program in the pane.
+2. **Expire held entries (`MAX_HOLD>0`)** — rejected; expiry turns a stall into silent loss. Report, do not expire.
+3. **Poll faster / fewer python calls per tick** — rejected as the fix; ticks cost ~1.3 s and were never the cause. Not funded.
+4. **Teach the ready check to detect a thinking Claude** — deferred; no observed failure, no signal to read from `pane_current_command`.
+5. **Write unlocked after the lock timeout (current behaviour)** — rejected; an in-place `writeFileSync` racing the watcher's rename can lose an append. Fail loudly with `[SIGNAL_LOCKED]`.
+
+### Constraints driving this decision
+- Explicit configuration beats heuristics (D-054 precedence) — a pane option is configuration; a title is a heuristic the pane's program can overwrite.
+- A stuck queue must look different from an idle one (D-060/D-071 lineage: the harness tells the truth).
+- Leaked processes are the third environment dependence (D-063): test watchers are external state.
+
+### Impact
+- Unlocks: E-269 (binding + status column + test fix, first after E-267), E-271 (visibility, re-read, atomic writers, watcher hygiene).
+- Risk if wrong: tmux versions without pane options (`set-option -p` needs tmux ≥ 3.0) — `ai start` already requires modern tmux (D-059); the ordinal pass remains as the fallback.
+
+### Rollback
+`AI_WATCH_TITLE_ROUTING=1` restores title-first Pass 1 for one release; the held-entry fields are additive; `register_cleanup` for watchers is per-suite and removable.
+
+---
+
+## D-074 — One Version, Stamped in the Mirror and the Project; `ai init` Upgrades; `ai clean` Removes What Earlier Versions Left
+
+**Date**: 2026-09-17
+**Task**: E-270, E-272, E-273 (operator instruction 2026-09-17: "we have old versions of ai-os running, ai init should update to the new version, ai clean should remove everything unneeded or removed for previous versions")
+**Decision**: `package.json` is the only typed version; the installer writes `~/.ai-os/VERSION`; `ai init`/`ai sync` stamp `project.aios_version` + `provisioned_at` via `state-db`. `ai init` on an existing project is an idempotent upgrade: generated files refreshed, schema-bearing templates (`roles.json`, `providers.json`, `state.json` keys) MERGED, user content never written, `--check` dry run, summary printed. `ai clean` is a new command driven by a data registry (`src/config/legacy-artefacts.json`): dry run by default, `--apply` removes the `safe` class, `--all` the `prompt` class with confirmation, everything moved to a dated trash with `--restore`; processes (orphan watchers) are killed and listed; `not-ours` paths (`~/.gemini/`) and `settings.local.json` are never touched. The installer syncs `mcp/` and `hooks/` with `--delete`; agents get manifests; stale `mcp__*` allows are pruned. Blueprint: `.ai/blueprints/version-lifecycle.md`.
+
+### Why needed
+No version is recorded anywhere except as typed literals in three files; `ai init` only creates MISSING files, so a project provisioned under 3.0 never gains the `tester` role or loses a removed provider; the mirror keeps orphan servers (`~/.ai-os/mcp/intent-refiner-mcp` exists today); `settings.json` keeps allows for removed servers; agents are never pruned; and the D-069 legacy sweep prints `rm -r` hints. "Old versions running" is therefore three distinct things — a stale mirror, a stale project, and stale server processes — and only the last one is already detected (E-249).
+
+### Alternatives considered
+1. **`ai init --force` that overwrites everything** — rejected; it would destroy BRIEF/RULES/architect.md and the `do_migrate_state` history (memory: the lossy rebuild that corrupted the shared tree). Refresh generated, merge schema'd, never touch authored.
+2. **Fold cleanup into `ai sync`** — rejected; sync runs on every session and must stay non-destructive; removal is a separate verb, dry-run by default (D-065: explicit and greppable).
+3. **Hard-code the legacy list in `src/bin/ai`** — rejected; every future removal would need a code change and a test; a registry entry with a hash or a rule is data and is asserted by a test that every D-069 removal has one.
+4. **Delete instead of trash** — rejected; `ai clean --all` may touch user-authored files (`prompt` class); a dated trash with a manifest makes every apply reversible for 30 days.
+5. **Have `ai clean` restart stale MCP servers** — rejected; they are stdio children of live Claude Code sessions, and killing one breaks that session; report with pids, as E-249 does.
+
+### Constraints driving this decision
+- Never rebuild authored state from a lossy view (memory of the `do_migrate_state` corruption).
+- A removal must be reversible and logged (D-065; `ai start --kill` consent pattern for non-interactive stdin).
+- The installer and the project must agree on what "current" means before anything can say "behind": hence the stamps come first (E-271 before E-272).
+
+### Impact
+- Unlocks: E-270 (stamps + upgrade + doctor), E-272 (registry + `ai clean`), E-273 (installer `--delete`, agent manifests, allow pruning, run-dir reaping). Sequenced after E-271 and before E-256; E-263's release notes gain `ai clean` and the `VERSION` file.
+- Risk if wrong: a `safe` registry entry with a wrong rule removes something needed — mitigated by trash + restore and by the loader refusing `safe` without a hash or rule.
+
+### Rollback
+`ai clean --restore <date>`; `AI_OS_CLEAN_DISABLE=1`; `AI_OS_INSTALL_NO_DELETE=1` for the installer; the pre-merge templates are kept as `<name>.pre-<version>.json` for one release; the stamps are informational.
+
+---
