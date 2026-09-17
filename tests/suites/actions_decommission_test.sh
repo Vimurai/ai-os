@@ -24,7 +24,12 @@ assert_status 0 "E-268.01d: the workflow is still in git history — that is the
 
 # ── E-268.2: nothing instructs anyone to read a hosted run ───────────────
 # One grep, the acceptance one. Written as regexes so this suite does not trip itself.
-_hits="$(cd "$REPO_ROOT" && grep -rnE 'gh +run|GITHUB_ACTIONS|actions/workflow|workflows/test\.yml|ubuntu-latest' \
+# --exclude-dir=node_modules: `ai ci run` installs dependencies INSIDE the worktree it
+# tests, and half of npm advertises its own GitHub Actions badge. Without this the assertion
+# measured what the machine happened to have installed (E-236) — it passed on a tree with no
+# vendored deps and failed under the runner, which is the wrong way round.
+_hits="$(cd "$REPO_ROOT" && grep -rnE --exclude-dir=node_modules --exclude-dir=.git \
+  'gh +run|GITHUB_ACTIONS|actions/workflow|workflows/test\.yml|ubuntu-latest' \
   src tests hooks .claude README.md CONTRIBUTING.md ENGINEER.md ARCHITECT.md install-ai-os.sh 2>/dev/null \
   | grep -vE '^tests/suites/actions_decommission_test\.sh:' || true)"
 assert_status 0 "E-268.02a: no hosted-CI instruction remains under src/tests/hooks/.claude/docs" \
