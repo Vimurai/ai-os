@@ -220,6 +220,10 @@ export function recordCiRunFromLog(db, logPath) {
  * SUITE_RESULT reports FAIL>0 (or which contains a ✗ line), the leak report, the unit
  * section when it failed, and the tail when the run ERRORed before the suite.
  */
+// A failing assertion line, as assert.sh prints it. Matching "✗" anywhere was wrong: an
+// assertion LABEL may contain the glyph ("doctor reports ✗ …") and dragged passing suites in.
+const _isFailLine = (l) => /^\s*✗ /.test(l);
+
 export function failedSections(text) {
   const lines = String(text).split("\n");
   const out = [];
@@ -232,13 +236,13 @@ export function failedSections(text) {
       block.push(lines[i]);
       if (lines[i].startsWith("SUITE_RESULT")) {
         const fail = _int((lines[i].match(/FAIL=(\d+)/) || [])[1]);
-        if (fail > 0 || block.some((l) => l.includes("✗"))) out.push(block.join("\n"));
+        if (fail > 0 || block.some(_isFailLine)) out.push(block.join("\n"));
         block = [];
       }
     }
-    if (block.some((l) => l.includes("✗"))) out.push(block.join("\n"));
+    if (block.some(_isFailLine)) out.push(block.join("\n"));
     if (results >= 0) {
-      const summary = lines.slice(results).filter((l) => /✗|LEAK|Total:|\[TEST_/.test(l));
+      const summary = lines.slice(results).filter((l) => _isFailLine(l) || /LEAK|Total:|\[TEST_FAILED/.test(l));
       if (summary.length) out.push(summary.join("\n"));
     }
   }

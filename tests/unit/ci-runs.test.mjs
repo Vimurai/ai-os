@@ -168,6 +168,9 @@ test("failedSections: only the failing suite, the summary, and nothing that pass
   assert.doesNotMatch(secs, /── Suite: good_test/);
   assert.deepEqual(failedSections(LOG.replace("  ✗ broken thing (expected exit=0, got 1)\n", "")
     .replace("PASS=3 FAIL=1", "PASS=3 FAIL=0").replace(/━━ Results[\s\S]*?\[ci\] step=suite/, "[ci] step=suite")), []);
+  // A passing suite whose assertion LABEL contains the glyph is not a failure (E-267).
+  const labelled = LOG.replace("── Suite: good_test ──", "── Suite: good_test ──\n  ✓ doctor reports ✗ for an untested HEAD");
+  assert.doesNotMatch(failedSections(labelled).join("\n"), /good_test/);
   const errored = "[ci] sha=x\n[ci] step=deps status=ERROR npm ci failed\nnpm ERR! boom";
   assert.match(failedSections(errored).join("\n"), /npm ERR! boom/);
 });
