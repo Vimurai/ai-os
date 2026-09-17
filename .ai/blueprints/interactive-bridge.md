@@ -90,3 +90,49 @@ maps both roles to that provider.
 - **E-204**: Auto-trigger `ai handoff` on cross-role task creation. `ai add-task` automatically signals the target role (prefix E -> engineer, P -> architect) unless `AI_OS_NO_AUTO_HANDOFF=1` is set.
 - **E-209**: Re-order `resolve_pane` for semantic targets per §Pane Resolution Precedence (D-054): exact title → roles.json ordinal → fuzzy title → window name.
 - **E-211**: Deprecate legacy `claude`/`gemini` targets — stderr warning; fail closed when both roles map to the same provider.
+
+## Binding by Pane Option, Held Entries Made Visible (D-073 Amendment, 2026-09-17)
+Live evidence 2026-09-17: two Engineer handoffs (2026-09-16 15:01Z and 17:59Z) sat undelivered
+for a day while a healthy watcher ran; the four multi-hour outliers in `signal.json` (3 h to
+50 h) were each delivered by a DIFFERENT watcher pid than their neighbours — they waited for a
+restart, not for a slow tick (median lag is 1 s). Root cause: `ai pane <role>` pins the role
+title with `tmux select-pane -T <role>` and names NO target pane, so the title lands on the
+ACTIVE pane — which, after `ai start`'s untargeted `split-window`, is the watcher's own bash
+pane. Pass 1 (exact title) does not check that the match is an agent pane, resolves to the
+bash pane, the ready check says "busy", and `MAX_HOLD=0` holds the entry forever without a
+line of output. The same mis-titling exists on this machine in four other projects, and
+`ai_watch_test.sh:546` asserts the failure as correct behaviour. A second defect compounds it:
+Claude Code overwrites pane titles with its conversation summary, so the pinned title never
+survives on the agent panes anyway and routing silently falls back to the ordinal pass, which
+miscounts once subagent panes appear in the session.
+
+Rules from D-073:
+1. **The binding is a tmux pane OPTION, not a title.** `ai pane <role>` sets
+   `tmux set-option -p -t "$TMUX_PANE" @ai_os_role <role>` (and `ai start`'s re-pin does the
+   same, targeted). The title is still set for humans, always with `-t "$TMUX_PANE"`, and is
+   never read for routing. Pass 1 of `resolve_pane` becomes: the pane in scope whose
+   `@ai_os_role` equals the target AND whose current command is an agent (`_is_agent_cmd`).
+   A non-agent pane can never be a Pass 1 match. Pass 2 (roles.json ordinal among agent
+   panes) is unchanged. Title and window-name substrings are the last resort only, and only
+   among agent panes. `ai start --status` derives its role column from the option.
+2. **A held entry is never silent.** When the watcher holds an entry it writes
+   `hold_reason` (`no-pane` | `busy` | `foreign-session`), `hold_since` and `attempts` onto
+   the entry (once per reason change, under the lock) and prints one stderr line per change.
+   `ai start --status` and `ai doctor` show `queued: N (oldest held 2h 13m, reason no-pane)`.
+   `MAX_HOLD=0` remains the default — nothing expires silently; it is reported instead.
+3. **Configuration is re-read.** `roles.json` is re-read when its mtime changes, every tick,
+   not only at startup.
+4. **Both writers are atomic and never write unlocked.** `signal-handoff.mjs` writes
+   tmp + rename like the watcher does; on lock timeout a writer retries with backoff and
+   fails with `[SIGNAL_LOCKED]` after 5 s instead of appending without the lock. A lock
+   directory older than 10 s whose owner pid is dead is reclaimed.
+5. **Test watchers die with their suite.** Every suite that starts `ai watch` registers it
+   with `register_cleanup` (E-240); the harness's leak diff counts `ai-watch` processes.
+   Seventeen orphans (ppid 1, cwd under the temp dir, some 16 h old) were running on
+   2026-09-17. `ai clean` (D-074) removes such orphans on demand.
+6. **Ready check — deferred.** `#{pane_current_command}` cannot distinguish a thinking Claude
+   from an idle one; Claude Code's input queue absorbs a mid-turn message today. No change is
+   funded until a failure is observed and reproduced; `SUBMIT_DELAY` stays 0.1 s.
+
+- **E-269**: Bind roles by `@ai_os_role` pane option (targeted `-t "$TMUX_PANE"`), agent-only Pass 1, status column from the option, fix `ai_watch_test.sh:546`.
+- **E-271**: Held-entry visibility (`hold_reason`/`hold_since`/`attempts`, stderr line, status + doctor line), `roles.json` mtime re-read, atomic locked writers with `[SIGNAL_LOCKED]`, test watchers under `register_cleanup` and counted by the leak diff.
