@@ -491,12 +491,12 @@
     {
       "id": "E-268",
       "owner": "Engineer (Claude)",
-      "status": "OPEN",
+      "status": "DONE",
       "tier": 2,
       "description": "Decommission GitHub Actions per D-072 and .ai/blueprints/local-ci.md §Component 6b (execute BEFORE E-256): delete .github/workflows/test.yml and the now-empty .github/workflows directory (the file stays in git history; that is the rollback); remove the Tests badge from README.md and add a short 'Local CI' section (ai ci run / status / log, the pre-push gate, AI_OS_CI_SKIP with a reason) plus the CONTRIBUTING.md equivalent; update the ci_gate skill (config files are hooks/pre-push.sh and the ai ci subcommands; 'never merge if CI is red' becomes 'never push without a green ai ci row'), the devops_engineer agent, src/contracts/40_DEVOPS.md, the copilot instructions (src/copilot/*), src/templates/ENGINEER.md and the mcp-tester.mjs / github-bridge-mcp comments that mention CI runs; add 'GitHub Actions workflow removed; CI runs locally via ai ci (D-072)' to the CHANGELOG Unreleased section so E-263's BREAKING list picks it up; sync mirrors byte-identical. Acceptance: grep -rE 'gh run|GITHUB_ACTIONS|actions/workflows|workflows/test\\.yml|ubuntu-latest' src tests hooks .claude README.md CONTRIBUTING.md ENGINEER.md ARCHITECT.md install-ai-os.sh returns nothing (CHANGELOG history, .ai/DECISIONS.md and .ai/archive/** are the only permitted mentions); test -e .github/workflows fails; ai_start_surface_test README assertions still pass; full suite green under ai ci run; bash install-ai-os.sh.",
       "created_at": "2026-09-16T17:59:31.161Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-17T19:12:29.978Z",
+      "summary": "GitHub Actions decommissioned: workflow deleted (history = rollback), README/CONTRIBUTING/ci_gate/40_DEVOPS/devops_engineer/COPILOT repointed at ai ci, browser assertions moved to th …[full in LOG.md]",
       "depends_on": [
         "E-267"
       ],
@@ -792,6 +792,13 @@
       "task_id": "E-268",
       "timestamp": "2026-09-17T17:55:12.942Z",
       "summary": "[TIER_2] E-268 aligned with local-ci.md §Component 6b; workflow deleted, all hosted-CI surfaces repointed at ai ci; warnings expected (LOG ignored, mirrors + CHANGELOG)"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-271",
+      "timestamp": "2026-09-17T19:33:15.335Z",
+      "summary": "[TIER_2] E-271 aligned with interactive-bridge.md §Binding by Pane Option rules 2-5; warnings expected (LOG gitignored; ai-watch/signal-handoff covered by the bridge blueprint)"
     }
   ],
   "deltas": [

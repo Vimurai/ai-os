@@ -43,6 +43,15 @@ _leak_snapshot() {
     | grep -E "${AIOS_TEST_TMP_PREFIX}|${AIOS_TEST_SOCK_PREFIX}" \
     | grep -v 'grep' \
     | awk '{print "process|" $1}' || true
+  # E-271 (D-073 rule 5): ai-watch processes, by pid. A watcher started by a suite and left
+  # running is a leak — watcher_reexec_test orphaned two per run and 28 were alive on this
+  # machine, some over a day old. The operator's OWN watcher appears in the before AND
+  # after snapshot, so the diff never reports (or sweeps) it: only a watcher that appeared
+  # DURING a suite counts.
+  ps -axo pid=,command= 2>/dev/null \
+    | grep 'ai-watch' \
+    | grep -v 'grep' \
+    | awk '{print "watcher|" $1}' || true
 }
 
 # _leak_diff <before-file> <after-file> → lines present only in "after"
@@ -69,6 +78,10 @@ _leak_sweep() {
         [[ "$id" == *".ai-watch.lock" ]] || continue
         rm -rf "$id" 2>/dev/null || true ;;
       process)
+        [[ "$id" =~ ^[0-9]+$ ]] || continue
+        kill -TERM "$id" 2>/dev/null || true ;;
+      watcher)
+        # Only ever a pid the DIFF produced, i.e. one that appeared during this run.
         [[ "$id" =~ ^[0-9]+$ ]] || continue
         kill -TERM "$id" 2>/dev/null || true ;;
     esac
