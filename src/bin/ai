@@ -110,6 +110,10 @@ Commands:
                  with a throwaway HOME; exit 0 PASS / 1 FAIL / 2 ERROR
   ai ci status [--ref <sha>] [--short] | ai ci list [-n N] | ai ci log [<sha>] [--failed]
                  Read the recorded local CI runs (.ai/state.sqlite ci_runs)
+  ai clean [--apply] [--all] [--yes] [--project-only|--home-only] [--json]
+                 List (and, with --apply, remove) what earlier AI-OS versions left
+                 behind. Dry run by default; removals move to ~/.ai-os/trash/<date>/
+                 and 'ai clean --restore <date>' puts them back
   ai version     Print version
 
 Removed — use the agent skill instead (see .ai/blueprints/cli-collapse.md):
@@ -2624,6 +2628,21 @@ _report_local_ci() {
   esac
 }
 
+# _report_legacy_artefacts — the two E-272 doctor lines (D-074 §Component 6). Runs
+# machine-wide: the mirror and HOME carry findings whether or not this directory is a
+# project, and the count is the only reason an operator would think to run `ai clean`.
+_report_legacy_artefacts() {
+  local helper root=""
+  helper="$(_ai_os_helper shared/ai-clean.mjs || true)"
+  if [[ -z "$helper" ]] || ! command -v node >/dev/null 2>&1; then
+    echo "  ✗ legacy artefacts: ai-clean.mjs or node unavailable — run: ai install"; return 0
+  fi
+  root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  local args=(); [[ -n "$root" ]] && args=(--project "$root")
+  node "${_CI_NODE_FLAGS[@]}" "$helper" doctor ${args[@]+"${args[@]}"} 2>/dev/null \
+    || echo "  ✗ legacy artefacts: the scan failed — run: ai clean"
+}
+
 doctor() {
   local REPAIR=0
   local COMPLIANCE=0
@@ -2679,6 +2698,11 @@ doctor() {
   else
     echo "  ✓ every running server booted the build that is on disk"
   fi
+  echo ""
+
+  # E-272 (D-074 §Component 6): what earlier versions left behind, and the watcher census.
+  echo "Legacy artefacts (ai clean):"
+  _report_legacy_artefacts
   echo ""
 
   if [[ -d ".ai" ]]; then
@@ -4772,6 +4796,138 @@ _ci_read() {
   node "${_CI_NODE_FLAGS[@]}" "$helper" "$sub" --ai-dir "${root}/.ai" --sha "$sha" ${extra[@]+"${extra[@]}"}
 }
 
+# ── E-272 (D-074, version-lifecycle.md §Component 4): `ai clean` ──────────────
+# The shell owns the TERMINAL and nothing else: the scan and every removal live in
+# shared/ai-clean.mjs, and this wrapper's whole job is flag translation plus the
+# confirmation `ai start --kill` established — refuse on a non-interactive stdin rather
+# than assume yes. A housekeeping command that guesses consent is one nobody can trust.
+_clean_usage() {
+  cat <<'CLEANUSAGE'
+Usage: ai clean [--apply] [--all] [--yes] [--project-only|--home-only] [--json]
+       ai clean --restore <YYYY-MM-DD> [--yes]
+       ai clean --purge [--older-than 30d]
+
+Lists what earlier AI-OS versions left behind (src/config/legacy-artefacts.json),
+grouped by class, with the reason and the action it would take:
+
+  safe      provably ours — reproducible from src/, or unmodified since we wrote it
+  prompt    may hold your content — removed only with --all, after confirmation
+  not ours  printed so you can decide; never touched by any flag
+
+  --apply           remove the safe class
+  --all             also the prompt class (confirmed per group; --yes answers)
+  --project-only    this project only     --home-only  ~/ and the mirror only
+  --json            machine-readable findings (the full list, uncollapsed)
+
+Nothing is deleted: removals MOVE to ~/.ai-os/trash/<date>/ with a manifest, and
+'ai clean --restore <date>' puts them back. 'ai clean --purge' empties old trash.
+Exit: 0 nothing (more) to do, 1 findings remain, 2 refused or a trash failure.
+Rollback: AI_OS_CLEAN_DISABLE=1 makes every form a report.
+CLEANUSAGE
+}
+
+# _clean_confirm <prompt> <assume_yes> — 0 confirmed, 1 declined, 2 no terminal to ask.
+_clean_confirm() {
+  local msg="$1" assume_yes="$2" reply=""
+  [[ "$assume_yes" -eq 1 ]] && return 0
+  if [[ ! -t 0 ]]; then
+    echo "ai clean: refusing to ${msg} without --yes." >&2
+    echo "  stdin is not a terminal, so there is no prompt to answer; pass --yes to confirm." >&2
+    return 2
+  fi
+  printf '%s? [y/N] ' "$msg"
+  read -r reply || true
+  case "$reply" in y|Y|yes|YES) return 0 ;; *) echo "ai clean: aborted."; return 1 ;; esac
+}
+
+do_clean() {
+  local apply=0 all=0 assume_yes=0 json=0 scope="all" restore="" purge=0 older=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --apply) apply=1; shift ;;
+      --all) all=1; shift ;;
+      --yes|-y) assume_yes=1; shift ;;
+      --json) json=1; shift ;;
+      --project-only) scope="project"; shift ;;
+      --home-only) scope="home"; shift ;;
+      --restore) [[ $# -ge 2 && -n "$2" ]] || { echo "ai clean: --restore needs a date (YYYY-MM-DD)" >&2; return 2; }
+                 restore="$2"; shift 2 ;;
+      --restore=*) restore="${1#--restore=}"; shift ;;
+      --purge) purge=1; shift ;;
+      --older-than) [[ $# -ge 2 && -n "$2" ]] || { echo "ai clean: --older-than needs a number of days" >&2; return 2; }
+                    older="$2"; shift 2 ;;
+      --older-than=*) older="${1#--older-than=}"; shift ;;
+      -h|--help) _clean_usage; return 0 ;;
+      *) echo "ai clean: unknown option '$1'" >&2; _clean_usage >&2; return 2 ;;
+    esac
+  done
+  if [[ -n "$restore" && "$purge" -eq 1 ]]; then
+    echo "ai clean: --restore and --purge are separate operations — run one at a time" >&2; return 2
+  fi
+  if [[ ( -n "$restore" || "$purge" -eq 1 ) && ( "$apply" -eq 1 || "$all" -eq 1 ) ]]; then
+    echo "ai clean: --restore/--purge do not take --apply or --all" >&2; return 2
+  fi
+
+  local helper
+  helper="$(_ai_os_helper shared/ai-clean.mjs || true)"
+  if [[ -z "$helper" ]] || ! command -v node >/dev/null 2>&1; then
+    echo "ai clean: ai-clean.mjs or node unavailable — run: ai install" >&2; return 2
+  fi
+  # The project is OPTIONAL: `ai clean` outside a repo still cleans the mirror and HOME.
+  local root=""
+  root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ -z "$root" && -d ".ai" ]] && root="$PWD"
+  local proj_args=()
+  [[ -n "$root" ]] && proj_args=(--project "$root")
+  local json_args=(); [[ "$json" -eq 1 ]] && json_args=(--json)
+
+  if [[ -n "$restore" ]]; then
+    _clean_confirm "restore everything trashed on ${restore}" "$assume_yes"; local rc=$?
+    [[ "$rc" -eq 0 ]] || return "$rc"
+    node "${_CI_NODE_FLAGS[@]}" "$helper" restore --date "$restore" ${proj_args[@]+"${proj_args[@]}"}
+    return $?
+  fi
+  if [[ "$purge" -eq 1 ]]; then
+    local older_args=(); [[ -n "$older" ]] && older_args=(--older-than "$older")
+    node "${_CI_NODE_FLAGS[@]}" "$helper" purge ${older_args[@]+"${older_args[@]}"}
+    return $?
+  fi
+  if [[ "$apply" -eq 0 ]]; then
+    [[ "$all" -eq 1 ]] && echo "ai clean: --all only has meaning with --apply; showing the dry run." >&2
+    node "${_CI_NODE_FLAGS[@]}" "$helper" plan --scope "$scope" ${proj_args[@]+"${proj_args[@]}"} ${json_args[@]+"${json_args[@]}"}
+    return $?
+  fi
+
+  # --apply --all: confirm the `prompt` group, and only when it has members. Asking about
+  # an empty group trains the operator to answer without reading.
+  #
+  # An UNKNOWN count asks anyway. The first cut of this read the count through a pipeline
+  # and fell back to `|| echo 0`; `plan` exits 1 when findings remain, pipefail made the
+  # whole pipeline non-zero, and the fallback appended a second line — so `n_prompt` was
+  # "1\n0", the `-gt` test errored out, and `ai clean --apply --all` moved the prompt class
+  # WITH NO CONSENT AT ALL. Consent is the one thing here that must fail closed, so the
+  # count is captured first (never piped through the exit code) and an unreadable count
+  # prompts rather than proceeds. Caught by ai_clean_test's "the refused run changed
+  # nothing" assertion, which is why that assertion exists beside the exit-code one.
+  if [[ "$all" -eq 1 && "${AI_OS_CLEAN_DISABLE:-0}" != "1" ]]; then
+    local plan_json="" n_prompt=""
+    plan_json="$(node "${_CI_NODE_FLAGS[@]}" "$helper" plan --scope "$scope" --json ${proj_args[@]+"${proj_args[@]}"} 2>/dev/null || true)"
+    if [[ -n "$plan_json" ]] && command -v python3 >/dev/null 2>&1; then
+      n_prompt="$(printf '%s' "$plan_json" \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["counts"].get("prompt",0))' 2>/dev/null || true)"
+    fi
+    [[ "$n_prompt" =~ ^[0-9]+$ ]] || n_prompt=""
+    if [[ -z "$n_prompt" || "$n_prompt" -gt 0 ]]; then
+      _clean_confirm "move ${n_prompt:-an unknown number of} item(s) that may hold your content to the trash" "$assume_yes"
+      local rc=$?
+      [[ "$rc" -eq 0 ]] || return "$rc"
+    fi
+  fi
+  local all_args=(); [[ "$all" -eq 1 ]] && all_args=(--all)
+  node "${_CI_NODE_FLAGS[@]}" "$helper" apply --scope "$scope" \
+    ${all_args[@]+"${all_args[@]}"} ${proj_args[@]+"${proj_args[@]}"} ${json_args[@]+"${json_args[@]}"}
+}
+
 _ci_cleanup() {
   trap - EXIT INT TERM
   if [[ "${_CI_CLEAN_KEEP:-0}" == "1" ]]; then
@@ -4808,6 +4964,9 @@ case "$cmd" in
   start)         do_start "${@:2}" ;;
   # E-265 (D-072, local-ci.md): local CI — tests a committed sha in an isolated worktree.
   ci)            do_ci "${@:2}" ;;
+  # E-272 (D-074, version-lifecycle.md §Component 4): remove what earlier versions left
+  # behind. Dry run by default; every removal is reversible via the trash.
+  clean)         do_clean "${@:2}" ;;
   # E-254 (D-069): `ai provider` is removed. v4 ships ONE provider, and a subcommand whose
   # whole purpose was registering a second one is dead surface — the registry file remains
   # the place to edit, so the exit says where rather than only that the command is gone.
