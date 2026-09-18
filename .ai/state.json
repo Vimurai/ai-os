@@ -547,12 +547,12 @@
     {
       "id": "E-272",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "DONE",
       "tier": 2,
       "description": "Add the legacy-artefact registry and 'ai clean' per D-074 and .ai/blueprints/version-lifecycle.md §Components 3-4 (execute after E-270): create src/config/legacy-artefacts.json exactly as the blueprint Data Model specifies (registry_history, entries with kind/class safe|prompt|not-ours/since/known_hashes or rule; the loader rejects a safe entry with neither a hash nor a rule) seeded with every item listed in §Component 3 including ~/.gemini/ as not-ours; implement 'ai clean [--apply] [--all] [--yes] [--project-only|--home-only] [--json]' per §Component 4 and §API (dry run by default grouped safe/prompt/not-ours; --apply removes safe; --all adds prompt with per-group confirmation, --yes answers, non-interactive stdin without --yes exits 2; removals MOVE to ~/.ai-os/trash/<date>/ with manifest.json; process kind TERM then KILL; settings.local.json printed never edited; one LOG.md and one ~/.ai-os/clean.log line per apply; exit 0 clean / 1 findings remain), plus 'ai clean --restore <date> [--yes]' (refuses on an existing path) and 'ai clean --purge [--older-than 30d]'; AI_OS_CLEAN_DISABLE=1 prints findings only; add the doctor lines 'legacy artefacts: N safe / M prompt — run: ai clean' and 'watchers: N live, M orphaned'. Acceptance: a test asserts every D-069 removal has a registry entry; a fixture HOME + project carrying one item of every kind and class: dry run lists all and changes nothing, --apply moves exactly the safe class with a correct manifest, --all --yes moves the prompt class, --restore returns every item byte-identical and refuses on an existing path, the orphan watcher is killed while a lock-holding live watcher is not, ~/.gemini/ and settings.local.json untouched, all exit codes covered; dry run under 3 s; full suite green under ai ci run; bash install-ai-os.sh.",
       "created_at": "2026-09-17T11:37:14.857Z",
-      "completed_at": null,
-      "summary": null,
+      "completed_at": "2026-09-18T09:57:03.265Z",
+      "summary": "Legacy-artefact registry (src/config/legacy-artefacts.json, 18 entries; loader refuses a `safe` path with no rule or known_hashes) + `ai clean` (dry run/--apply/--all/--yes/--project …[full in LOG.md]",
       "depends_on": [
         "E-270"
       ],
@@ -564,7 +564,7 @@
     {
       "id": "E-273",
       "owner": "Engineer (Claude)",
-      "status": "BLOCKED",
+      "status": "OPEN",
       "tier": 2,
       "description": "Bring the install mirror and project provisioning under the same hygiene per D-074 and .ai/blueprints/version-lifecycle.md §Component 5 (execute after E-272, before E-256): sync src/mcp/ and hooks/ into ~/.ai-os with --delete like the other trees (the cp fallback gets an explicit orphan pass; AI_OS_INSTALL_NO_DELETE=1 guards it for one release) and extend purge_orphans to every mirrored tree; drop the deprecated 'ai preflight'/'ai update' lines from the installer's Next steps; give .claude/agents the same _SYNC_MANIFEST.json treatment as skills so _prune_workspace_dir prunes agents no longer in the role manifest; make _configure_project_claude_settings remove mcp__<server>__* allows whose server is absent from registry.json but present in the legacy registry's registry_history (names never shipped are user-added and kept); reap ~/.ai-os/run/role-*.lock and build-*.json whose pid is dead from ai sync and ai clean; add the doctor line 'mirror orphans: N — run: ai clean'. Acceptance: fixture mirror carrying an orphan mcp dir and an orphan hook is cleaned by install and reported by doctor beforehand; a fixture agent removed from the manifest is pruned and a user-added agent is kept; allows for a registry_history server are removed while an allow for an unknown server survives; dead-pid locks and build records are reaped, live ones kept; ~/.ai-os/mcp/intent-refiner-mcp is gone from this machine after install (recorded in LOG); full suite green under ai ci run; bash install-ai-os.sh + server restart.",
       "created_at": "2026-09-17T11:37:28.973Z",
@@ -573,10 +573,8 @@
       "depends_on": [
         "E-272"
       ],
-      "ready": false,
-      "blocked_by": [
-        "E-272"
-      ]
+      "ready": true,
+      "blocked_by": []
     },
     {
       "id": "E-274",
@@ -799,6 +797,13 @@
       "task_id": "E-271",
       "timestamp": "2026-09-17T19:33:15.335Z",
       "summary": "[TIER_2] E-271 aligned with interactive-bridge.md §Binding by Pane Option rules 2-5; warnings expected (LOG gitignored; ai-watch/signal-handoff covered by the bridge blueprint)"
+    },
+    {
+      "type": "CRITIC_STAMP",
+      "agent": "engineer",
+      "task_id": "E-272",
+      "timestamp": "2026-09-18T09:45:04.874Z",
+      "summary": "[TIER_2] E-272 (D-074 §3-4): legacy-artefact registry + `ai clean`. Aligner WARN-only — ORPHANED_WORK names ai-clean.mjs and legacy-artefacts.json, both covered by version-lifecycle.md §3-4; D-057's \"name new shared helpers in architect.md §4\" is Architect-owned, handed over (E-249 precedent). run_review P1s were false positives, resolved not waived: CAPABILITIES parent-hop matches (code AND comment) rewritten with dirname; UNAPPROVED_DEP matched JSON keys. CONSENT BUG found by the suite, fixed to fail closed: `plan --json` exits 1 with findings, pipefail + `|| echo 0` made the count \"1\\n0\", the -gt test errored, and --apply --all moved the prompt class with NO consent. Orphan detection dropped ppid==1 (an unreaped parent keeps the child's ppid), keying on cwd-in-temp-root + holds-no-lock. Three divergences recorded in the registry data. Tests: 22 node:test + ai_clean_test 77/0/0; full suite 5047/0/1, zero leaks; install run, mirror byte-identical."
     }
   ],
   "deltas": [
