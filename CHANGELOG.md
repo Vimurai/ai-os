@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); this project adh
 
 ## [Unreleased]
 
+### Added
+
+- **`ai clean` removes what earlier versions left behind (E-272, D-074).** A new registry,
+  `src/config/legacy-artefacts.json`, is the single list of artefacts AI-OS used to create
+  and no longer does — the D-069 provider workspaces and shims, TestSprite's generated
+  tests, mirror directories `src/` no longer ships, dead `~/.ai-os/run/` locks and build
+  records, abandoned `ai ci run` work dirs, orphaned `ai-watch` processes, retired
+  `mcp__<server>__*` allows — each with the evidence that makes it removable. `ai clean` is
+  a DRY RUN by default, grouped `safe` / `prompt` / `not ours` with the reason and the
+  action per finding. `--apply` removes the safe class; `--all` adds the prompt class after
+  a confirmation (`--yes` answers it; a non-interactive stdin without `--yes` refuses).
+  Nothing is deleted: removals MOVE to `~/.ai-os/trash/<date>/` beside a manifest recording
+  origin, class, entry and sha256, so `ai clean --restore <date>` is a real rollback;
+  `ai clean --purge [--older-than 30d]` empties old trash. Processes are signalled TERM then
+  KILL and never trashed; `~/.gemini/` (Antigravity's own OAuth data) and
+  `settings.local.json` are printed and never touched. `ai doctor` gains
+  `legacy artefacts: N safe / M prompt` and `watchers: N live, M orphaned`. Rollback:
+  `AI_OS_CLEAN_DISABLE=1` makes every form a report.
+
 ### Changed — BREAKING
 
 - **GitHub Actions workflow removed; CI runs locally via `ai ci` (D-072).** `.github/workflows/test.yml`
